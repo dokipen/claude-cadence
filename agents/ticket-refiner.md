@@ -27,7 +27,7 @@ A refined issue must have ALL of the following:
 
 | Criterion | Check Command |
 |-----------|---------------|
-| Clear title (no prefixes) | Manual review |
+| Clear title | Manual review |
 | Acceptance criteria | Manual review |
 | Estimate label | `gh issue view N --json labels --jq '.labels[].name \| select(startswith("estimate:"))'` |
 | Type label | `gh issue view N --json labels --jq '.labels[].name \| select(. == "bug" or . == "enhancement" or . == "documentation" or . == "testing" or . == "performance")'` |
@@ -37,15 +37,8 @@ A refined issue must have ALL of the following:
 
 ## Title Conventions
 
-**DO NOT use prefixes:**
-- ~~feat:~~, ~~chore:~~, ~~ci:~~, ~~bug:~~, ~~fix:~~, ~~docs:~~, ~~perf:~~, ~~test:~~
-
-**DO use:**
 - Clear, descriptive titles
-- Type labels for categorization
-
-**Examples:**
-- Wrong: `feat: Add achievements` — Right: `Add achievements` + `enhancement` label
+- Type labels for categorization (e.g., `Add achievements` + `enhancement` label)
 
 ## Estimate Scale
 
@@ -63,7 +56,7 @@ A refined issue must have ALL of the following:
 1. **Read the issue** using `gh issue view N`
 2. **Check each criterion** using commands above
 3. **Evaluate acceptance criteria quality** — specific, testable, checkbox format?
-4. **Evaluate title** — descriptive without type prefix?
+4. **Evaluate title** — clear and descriptive?
 5. **Check blockers** — if mentioned, are they linked via API?
 
 ## Output Format
@@ -74,7 +67,7 @@ A refined issue must have ALL of the following:
 ### Status: [REFINED | NEEDS WORK]
 
 ### Checklist
-- [x] Clear title (no prefixes)
+- [x] Clear title
 - [x] Acceptance criteria present
 - [ ] Estimate label: MISSING
 - [x] Type label: enhancement

@@ -53,7 +53,7 @@ An issue is refined when it has ALL of:
 
 | Criterion | Description |
 |-----------|-------------|
-| Clear title | Descriptive, NO type prefixes (use labels) |
+| Clear title | Descriptive, categorized via labels |
 | Acceptance criteria | Checkboxes defining "done" |
 | Estimate label | estimate:1 through estimate:13 |
 | Type label | bug, enhancement, documentation, testing, or performance |
@@ -77,4 +77,4 @@ An issue is refined when it has ALL of:
 
 ### Title Conventions
 
-**Wrong:** `feat: Add achievements` | **Right:** `Add achievements` + `enhancement` label
+Example: `Add achievements` + `enhancement` label

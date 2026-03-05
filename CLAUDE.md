@@ -10,6 +10,7 @@ An issue-driven, multi-agent development workflow plugin for Claude Code.
 - `/create-pr` — Create pull requests with pre-flight verification
 - `/refine` — Refine GitHub issues to quality standards
 - `/create-skill` — Bootstrap new Claude Code skills
+- `/update-cadence` — Update plugin to latest version
 - `github-issues` — Background knowledge for `gh` CLI patterns
 
 ### Agents (6 core specialists)
@@ -47,13 +48,19 @@ Agents read the project's `CLAUDE.md` to discover stack-specific commands.
 Scripts are referenced as `cadence <script-name>` in skills. To resolve a script, check these locations in order and use the first match:
 
 1. `./scripts/<script-name>` (project-local override)
-2. `~/.claude/plugins/marketplaces/claude-cadence/scripts/<script-name>` (plugin default)
+2. `.claude-plugins/claude-cadence/scripts/<script-name>` (project-scoped plugin)
+3. `~/.claude/plugins/cache/claude-cadence/claude-cadence/*/scripts/<script-name>` (user-scoped plugin)
+4. `~/.claude/plugins/marketplaces/claude-cadence/scripts/<script-name>` (marketplace source)
+
+## Versioning
+
+Bump the `version` field in `.claude-plugin/plugin.json` with every PR merge. Use semver: patch for fixes, minor for new features/scripts/agents, major for breaking changes.
 
 ## Conventions
 
 - **Git workflow**: All work in worktrees, never on default branch
 - **Branch naming**: `<issue-number>-<description>` (e.g., `42-add-sound-effects`)
-- **Issue titles**: No type prefixes — use labels for categorization
+- **Issue titles**: Descriptive titles, categorized via labels
 - **Estimation**: Fibonacci scale (1, 2, 3, 5, 8, 13)
 - **Communication**: Issue comments pre-PR, PR comments post-PR
 - **GitHub access**: Always use `gh` CLI, never WebFetch for GitHub URLs

@@ -2,10 +2,11 @@
 # List all available Claude Code agents with their frontmatter metadata.
 # The lead agent runs this to discover specialists at runtime.
 #
-# Scans three locations in cascading priority (local wins over global wins over plugin):
+# Scans locations in cascading priority (first match wins):
 #   1. .claude/agents/          (project-local)
 #   2. ~/.claude/agents/        (global user agents)
-#   3. ~/.claude/plugins/marketplaces/claude-cadence/agents/  (plugin defaults)
+#   3. ~/.claude/plugins/cache/claude-cadence/claude-cadence/*/agents/  (installed plugin)
+#   4. ~/.claude/plugins/marketplaces/claude-cadence/agents/  (marketplace source)
 #
 # If an agent name exists in multiple locations, only the highest-priority one is shown.
 #
@@ -15,12 +16,19 @@ set -e
 
 seen=""
 
+# Resolve installed plugin cache path (latest version)
+CACHE_DIR=""
+for d in "$HOME"/.claude/plugins/cache/claude-cadence/claude-cadence/*/agents; do
+  [ -d "$d" ] && CACHE_DIR="$d"
+done
+
 for dir in \
   ".claude/agents" \
   "$HOME/.claude/agents" \
+  "$CACHE_DIR" \
   "$HOME/.claude/plugins/marketplaces/claude-cadence/agents"
 do
-  [ -d "$dir" ] || continue
+  [ -n "$dir" ] && [ -d "$dir" ] || continue
   for f in "$dir"/*.md; do
     [ -f "$f" ] || continue
     name=$(basename "$f")

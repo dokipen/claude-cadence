@@ -27,7 +27,7 @@ This script:
 # Stage all changes
 git add -A
 
-# Commit with descriptive message (no type prefixes — use PR labels)
+# Commit with descriptive message
 git commit -m "<description>
 
 <optional body>
@@ -63,7 +63,6 @@ EOF
 
 **Notes:**
 - The PR body should follow the structure in `.github/PULL_REQUEST_TEMPLATE.md` if it exists.
-- Do NOT use type prefixes in the title (e.g., `feat: Add X`) — use labels instead.
 - Apply a type label: `bug`, `enhancement`, `documentation`, `testing`, or `performance`.
 - Copy estimate and other relevant labels from the linked issue.
 

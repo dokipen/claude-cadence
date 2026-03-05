@@ -50,8 +50,8 @@ EOF
 ```
 
 **Title conventions:**
-- Do NOT use type prefixes (`feat:`, `fix:`, `bug:`, etc.) — convey type via labels only
 - Use clear, descriptive titles
+- Categorize via labels, not title prefixes
 
 ## Updating Issues
 

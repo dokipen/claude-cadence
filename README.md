@@ -16,11 +16,7 @@ Claude Cadence provides a structured development workflow with git worktrees, ph
 
 ## Updating
 
-```bash
-cd ~/.claude/plugins/marketplaces/claude-cadence && git pull
-```
-
-Restart Claude Code to apply changes.
+Run `/update-cadence` to pull the latest version. Restart Claude Code to apply changes.
 
 ## What You Get
 
@@ -33,6 +29,7 @@ Restart Claude Code to apply changes.
 | `/create-pr` | Create a PR with pre-flight verification |
 | `/refine` or `/refine 123` | Refine issues to quality standards |
 | `/create-skill` | Bootstrap new Claude Code skills |
+| `/update-cadence` | Update plugin to latest version |
 
 ### Agents (specialist delegation)
 
@@ -104,7 +101,7 @@ The `/lead` skill orchestrates 7 phases:
 
 - **Git**: All work in worktrees, never on default branch
 - **Branches**: `<issue-number>-<description>` (e.g., `42-add-auth`)
-- **Issues**: No type prefixes in titles — use labels
+- **Issues**: Descriptive titles, categorized via labels
 - **Estimation**: Fibonacci scale (1, 2, 3, 5, 8, 13)
 - **Communication**: Issue comments pre-PR, PR comments post-PR
 - **GitHub**: Always use `gh` CLI

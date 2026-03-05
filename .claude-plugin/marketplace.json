@@ -9,7 +9,7 @@
     {
       "name": "claude-cadence",
       "description": "Issue-driven, multi-agent development workflow with git worktrees, structured phases, and specialist delegation",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "author": { "name": "dokipen" },
       "source": "./",
       "category": "productivity"

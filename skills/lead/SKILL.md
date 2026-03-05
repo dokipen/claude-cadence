@@ -28,7 +28,7 @@ You are now acting as the technical lead, coordinating specialist agents on this
    - Create the issue once criteria are defined:
    ```bash
    gh issue create \
-     --title "Descriptive title without type prefix" \
+     --title "Descriptive title" \
      --label "bug" \
      --body "## Description
    [Clear explanation of the work]
@@ -40,8 +40,6 @@ You are now acting as the technical lead, coordinating specialist agents on this
    ## Notes
    [Any additional context]"
    ```
-
-   > **Title convention:** Do NOT use type prefixes (`feat:`, `fix:`, `bug:`, `chore:`, etc.) in titles — convey type via labels only.
 
 4. **Ensure issue is refined**:
    ```bash
