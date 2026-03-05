@@ -1,6 +1,7 @@
 ---
 name: new-work
-description: Create a new worktree and branch for feature development
+description: Create a new worktree and branch for feature development. Use when starting work on a new issue or feature.
+user-invokable: false
 ---
 
 # New Work Setup
@@ -31,9 +32,7 @@ gh issue create --title "Description of the work" --label "enhancement" --body "
 
 ## Command
 
-```bash
-cadence create-worktree.sh <branch-name>
-```
+Run the `create-worktree.sh` script from the `project-ops` skill.
 
 The script handles:
 - Pre-flight orphan check
@@ -57,9 +56,7 @@ cd .worktrees/${BRANCH_NAME} && git branch --show-current
 
 ## Cleanup (after PR merged)
 
-```bash
-cadence cleanup-worktree.sh ${BRANCH_NAME}
-```
+Run the `cleanup-worktree.sh` script from the `project-ops` skill.
 
 ## Notes
 

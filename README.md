@@ -16,20 +16,26 @@ Claude Cadence provides a structured development workflow with git worktrees, ph
 
 ## Updating
 
-Run `/update-cadence` to pull the latest version. Restart Claude Code to apply changes.
+Run `claude plugin update cadence@claude-cadence` to update, then restart Claude Code.
 
 ## What You Get
 
-### Skills (slash commands)
+### Commands (user-invoked)
 
 | Command | Purpose |
 |---------|---------|
-| `/new-work 42-feature-name` | Create a git worktree for isolated development |
 | `/lead` | Coordinate implementation through 7 structured phases |
-| `/create-pr` | Create a PR with pre-flight verification |
 | `/refine` or `/refine 123` | Refine issues to quality standards |
-| `/create-skill` | Bootstrap new Claude Code skills |
-| `/update-cadence` | Update plugin to latest version |
+
+### Skills (model-invoked)
+
+| Skill | Purpose |
+|-------|---------|
+| `new-work` | Create a git worktree for isolated development |
+| `create-pr` | Create a PR with pre-flight verification |
+| `create-skill` | Bootstrap new Claude Code skills |
+| `github-issues` | GitHub issue management patterns |
+| `project-ops` | Shared worktree and agent discovery utilities |
 
 ### Agents (specialist delegation)
 
@@ -41,17 +47,6 @@ Run `/update-cadence` to pull the latest version. Restart Claude Code to apply c
 | `performance-engineer` | Performance profiling, optimization |
 | `claude-specialist` | Claude Code configuration, agent/skill design |
 | `ticket-refiner` | Issue quality assurance |
-
-### Scripts (shell utilities)
-
-| Script | Purpose |
-|--------|---------|
-| `create-worktree.sh` | Create worktrees with validation |
-| `cleanup-worktree.sh` | Remove worktrees after merge |
-| `check-orphaned-worktrees.sh` | Pre-flight orphan detection |
-| `pr-preflight.sh` | Run verification before PR creation |
-| `list-agents.sh` | List all available agents with metadata |
-| `update-blocked-labels.sh` | Sync `blocked` labels from issue dependencies |
 
 ## Project Integration
 
@@ -87,7 +82,7 @@ Same-name agents in your project override the plugin version.
 
 ## Workflow Overview
 
-The `/lead` skill orchestrates 7 phases:
+The `/lead` command orchestrates 7 phases:
 
 1. **Phase 0**: Worktree setup (isolated branch)
 2. **Phase 0.5**: Estimation (story points)

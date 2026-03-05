@@ -1,6 +1,7 @@
 ---
 name: create-pr
-description: Create a pull request for the current branch
+description: Create a pull request for the current branch. Use when code is ready for review and needs a PR created with pre-flight verification.
+user-invokable: false
 ---
 
 # Create Pull Request
@@ -9,11 +10,7 @@ Creates a PR for the current branch after verification checks pass.
 
 ## Pre-flight Checks
 
-Run the pre-flight script:
-
-```bash
-cadence pr-preflight.sh
-```
+Run the `pr-preflight.sh` script in this skill's `scripts/` directory.
 
 This script:
 1. Verifies you're not on the default branch

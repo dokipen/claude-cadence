@@ -4,14 +4,16 @@ An issue-driven, multi-agent development workflow plugin for Claude Code.
 
 ## What This Plugin Provides
 
-### Skills (6 workflow automations)
-- `/new-work` — Create git worktrees for isolated feature development
+### Commands (user-invoked slash commands)
 - `/lead` — Coordinate implementation through structured phases with specialist agents
-- `/create-pr` — Create pull requests with pre-flight verification
 - `/refine` — Refine GitHub issues to quality standards
-- `/create-skill` — Bootstrap new Claude Code skills
-- `/update-cadence` — Update plugin to latest version
+
+### Skills (model-invoked)
+- `new-work` — Create git worktrees for isolated feature development
+- `create-pr` — Create pull requests with pre-flight verification
+- `create-skill` — Bootstrap new Claude Code skills
 - `github-issues` — Background knowledge for `gh` CLI patterns
+- `project-ops` — Shared worktree management and agent discovery scripts
 
 ### Agents (6 core specialists)
 - `code-reviewer` — PR reviews, code quality, best practices
@@ -20,14 +22,6 @@ An issue-driven, multi-agent development workflow plugin for Claude Code.
 - `performance-engineer` — Performance profiling, optimization recommendations
 - `claude-specialist` — Claude Code configuration, agent/skill design
 - `ticket-refiner` — Issue quality assurance, refinement
-
-### Scripts (shared utilities)
-- `create-worktree.sh` — Create worktrees with issue-number validation
-- `cleanup-worktree.sh` — Remove worktrees and branches after merge
-- `check-orphaned-worktrees.sh` — Pre-flight orphan detection
-- `pr-preflight.sh` — Run verification before PR creation
-- `list-agents.sh` — List all available agents with frontmatter metadata
-- `update-blocked-labels.sh` — Sync `blocked` labels based on issue dependencies
 
 ## Project Integration
 
@@ -43,14 +37,22 @@ Consuming projects provide their own `CLAUDE.md` with:
 
 Agents read the project's `CLAUDE.md` to discover stack-specific commands.
 
-## Script Resolution
+## Plugin Structure
 
-Scripts are referenced as `cadence <script-name>` in skills. To resolve a script, check these locations in order and use the first match:
+```
+commands/           # User-invoked slash commands
+  <name>/SKILL.md
+  <name>/scripts/   # Command-specific scripts
 
-1. `./scripts/<script-name>` (project-local override)
-2. `.claude-plugins/claude-cadence/scripts/<script-name>` (project-scoped plugin)
-3. `~/.claude/plugins/cache/claude-cadence/claude-cadence/*/scripts/<script-name>` (user-scoped plugin)
-4. `~/.claude/plugins/marketplaces/claude-cadence/scripts/<script-name>` (marketplace source)
+skills/             # Model-invoked skills
+  <name>/SKILL.md
+  <name>/scripts/   # Skill-specific scripts
+
+agents/             # Specialist agent definitions
+  <name>.md
+```
+
+Scripts are co-located with the command or skill that owns them. Shared scripts live in `skills/project-ops/scripts/`.
 
 ## Versioning
 

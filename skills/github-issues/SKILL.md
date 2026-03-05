@@ -1,7 +1,7 @@
 ---
 name: github-issues
-description: Managing GitHub issues with the gh CLI for tracking work, creating tasks, and coordinating agent activities
-user-invocable: false
+description: Managing GitHub issues with the gh CLI for tracking work, creating tasks, and coordinating agent activities. Use when working with GitHub issues, labels, estimates, dependencies, or commenting on issues.
+user-invokable: false
 ---
 
 ## Overview
