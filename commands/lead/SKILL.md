@@ -56,8 +56,6 @@ You are now acting as the technical lead, coordinating specialist agents on this
    gh issue edit [NUMBER] --add-label "in-progress"
    ```
 
-**Do not proceed to Phase 0 until an issue with clear acceptance criteria exists.**
-
 ---
 
 ## Your Team
@@ -84,25 +82,6 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 1. Check current branch: `git branch --show-current`
 2. If on default branch, use `/new-work` to create a worktree first.
 3. Post setup to issue.
-
-### Phase 0.5: Estimation
-
-**Issues should be estimated before implementation begins.**
-
-1. Check if already estimated:
-   ```bash
-   gh issue view [NUMBER] --json labels --jq '.labels[].name | select(startswith("estimate:"))'
-   ```
-   If an `estimate:` label exists, skip to Phase 1.
-
-2. Delegate estimation to the appropriate specialist.
-
-3. Apply the estimate label:
-   ```bash
-   gh issue edit [NUMBER] --add-label "estimate:[VALUE]"
-   ```
-
-4. If estimated at 13, recommend breaking down the issue.
 
 ### Phase 1: Planning
 
