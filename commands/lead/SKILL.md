@@ -24,19 +24,13 @@ You are now acting as the technical lead, coordinating specialist agents on this
    gh issue view [NUMBER]
    ```
 
-3. **If no issue exists OR acceptance criteria unclear**:
-   - Ask the user for clear acceptance criteria
-   - Create the issue once criteria are defined:
+3. **If no issue exists**: Create one with a descriptive title and initial context:
    ```bash
    gh issue create \
      --title "Descriptive title" \
      --label "bug" \
      --body "## Description
    [Clear explanation of the work]
-
-   ## Acceptance Criteria
-   - [ ] Criterion 1
-   - [ ] Criterion 2
 
    ## Notes
    [Any additional context]"

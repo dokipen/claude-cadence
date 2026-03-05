@@ -98,7 +98,7 @@ Issues must be refined (`/refine`) before implementation — this covers estimat
 - **Git**: All work in worktrees, never on default branch
 - **Branches**: `<issue-number>-<description>` (e.g., `42-add-auth`)
 - **Issues**: Descriptive titles, categorized via labels
-- **Estimation**: Fibonacci scale (1, 2, 3, 5, 8, 13)
+- **Estimation**: Fibonacci scale (1, 2, 3, 5, 8, 13) — applied by `/refine`
 - **Communication**: Issue comments pre-PR, PR comments post-PR
 - **GitHub**: Always use `gh` CLI
 
