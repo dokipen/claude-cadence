@@ -1,22 +1,18 @@
 {
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "claude-cadence",
+  "description": "Issue-driven, multi-agent development workflow for Claude Code",
   "owner": {
     "name": "dokipen"
-  },
-  "metadata": {
-    "description": "Issue-driven, multi-agent development workflow for Claude Code"
   },
   "plugins": [
     {
       "name": "claude-cadence",
-      "source": ".",
       "description": "Issue-driven, multi-agent development workflow with git worktrees, structured phases, and specialist delegation",
       "version": "1.0.0",
       "author": { "name": "dokipen" },
-      "repository": "https://github.com/dokipen/claude-cadence",
-      "license": "MIT",
-      "category": "productivity",
-      "tags": ["workflow", "agents", "worktrees", "github-issues", "code-review"]
+      "source": ".",
+      "category": "productivity"
     }
   ]
 }
