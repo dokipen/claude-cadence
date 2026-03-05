@@ -12,7 +12,7 @@ Creates a PR for the current branch after verification checks pass.
 Run the pre-flight script:
 
 ```bash
-./scripts/pr-preflight.sh
+cadence pr-preflight.sh
 ```
 
 This script:

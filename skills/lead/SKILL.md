@@ -66,7 +66,7 @@ You are now acting as the technical lead, coordinating specialist agents on this
 Discover available specialists at runtime:
 
 ```bash
-./scripts/list-agents.sh
+cadence list-agents.sh
 ```
 
 This lists all agents in `.claude/agents/` with their frontmatter metadata (name, description, specialties). Use this output to decide which agent to delegate to — do not assume a fixed set of agents.
@@ -175,9 +175,9 @@ Use `/create-pr` to create the pull request. Link to the issue with `Fixes #[NUM
 1. Verify PR checks pass: `gh pr checks`
 2. Merge: `gh pr merge --squash --delete-branch`
 3. Remove in-progress label: `gh issue edit [NUMBER] --remove-label "in-progress"`
-4. Sync blocked labels: `./scripts/update-blocked-labels.sh`
+4. Sync blocked labels: `cadence update-blocked-labels.sh`
 5. Return to default branch and pull latest
-6. Clean up worktree: `./scripts/cleanup-worktree.sh ${BRANCH_NAME}`
+6. Clean up worktree: `cadence cleanup-worktree.sh ${BRANCH_NAME}`
 7. Report completion
 
 ---

@@ -14,11 +14,13 @@ Claude Cadence provides a structured development workflow with git worktrees, ph
 /plugin install claude-cadence
 ```
 
-Or install directly:
+## Updating
 
 ```bash
-/plugin install dokipen/claude-cadence
+cd ~/.claude/plugins/marketplaces/claude-cadence && git pull
 ```
+
+Restart Claude Code to apply changes.
 
 ## What You Get
 

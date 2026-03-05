@@ -42,6 +42,13 @@ Consuming projects provide their own `CLAUDE.md` with:
 
 Agents read the project's `CLAUDE.md` to discover stack-specific commands.
 
+## Script Resolution
+
+Scripts are referenced as `cadence <script-name>` in skills. To resolve a script, check these locations in order and use the first match:
+
+1. `./scripts/<script-name>` (project-local override)
+2. `~/.claude/plugins/marketplaces/claude-cadence/scripts/<script-name>` (plugin default)
+
 ## Conventions
 
 - **Git workflow**: All work in worktrees, never on default branch

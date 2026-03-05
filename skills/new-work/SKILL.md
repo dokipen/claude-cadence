@@ -32,7 +32,7 @@ gh issue create --title "Description of the work" --label "enhancement" --body "
 ## Command
 
 ```bash
-./scripts/create-worktree.sh <branch-name>
+cadence create-worktree.sh <branch-name>
 ```
 
 The script handles:
@@ -58,7 +58,7 @@ cd .worktrees/${BRANCH_NAME} && git branch --show-current
 ## Cleanup (after PR merged)
 
 ```bash
-./scripts/cleanup-worktree.sh ${BRANCH_NAME}
+cadence cleanup-worktree.sh ${BRANCH_NAME}
 ```
 
 ## Notes
