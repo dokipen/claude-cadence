@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Update Claude Cadence
 
-Pull the latest plugin version and report what changed.
+Pull the latest plugin version, update the cache, and report what changed.
 
 ## Steps
 
@@ -26,9 +26,14 @@ Pull the latest plugin version and report what changed.
    git -C "$CADENCE_DIR" pull
    ```
 
-3. **Show what changed:**
+3. **Update the plugin cache:**
+   ```bash
+   claude plugin update claude-cadence@claude-cadence
+   ```
+
+4. **Show what changed:**
    ```bash
    git -C "$CADENCE_DIR" log --oneline -10
    ```
 
-4. **Notify the user** to restart Claude Code to apply changes.
+5. **Notify the user** to restart Claude Code to apply changes.
