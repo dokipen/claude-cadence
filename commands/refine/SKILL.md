@@ -24,11 +24,11 @@ Refine GitHub issues to meet quality standards before implementation begins.
    Review and refine issue #123.
 
    Check all refinement criteria and report findings.
-   For any missing items, suggest fixes.
-   Ask me before making subjective decisions (estimates, title rewrites).
+   For any missing items, apply best-effort fixes directly.
+   Estimate based on scope and complexity — do not ask the user.
    ```
 
-2. **Apply fixes** based on agent recommendations (with user approval for subjective items)
+2. **Apply all fixes** including estimates, labels, and title improvements
 
 3. **Mark refined** when all criteria pass:
    ```bash
@@ -55,7 +55,7 @@ An issue is refined when it has ALL of:
 |-----------|-------------|
 | Clear title | Descriptive, categorized via labels |
 | Acceptance criteria | Checkboxes defining "done" |
-| Estimate label | estimate:1 through estimate:13 |
+| Estimate label | estimate:1 through estimate:13 (best-effort guess) |
 | Type label | bug, enhancement, documentation, testing, or performance |
 | Assigned | Assigned to a developer |
 | Blockers linked | Via GitHub dependencies API (not just markdown) |
