@@ -35,7 +35,7 @@ Run `claude plugin update cadence@claude-cadence` to update, then restart Claude
 | `create-pr` | Create a PR with pre-flight verification |
 | `create-skill` | Bootstrap new Claude Code skills |
 | `github-issues` | GitHub issue management patterns |
-| `project-ops` | Shared worktree and agent discovery utilities |
+| `project-ops` | Shared worktree management utilities |
 
 ### Agents (specialist delegation)
 

@@ -1,12 +1,12 @@
 ---
 name: project-ops
-description: Shared project operations including git worktree management and agent discovery. Use when creating worktrees, cleaning up branches, checking for orphaned worktrees, or listing available agents.
+description: Shared worktree management operations. Use when creating worktrees, cleaning up branches, or checking for orphaned worktrees.
 user-invokable: false
 ---
 
 # Project Operations
 
-Shared utilities for worktree management and agent discovery.
+Shared utilities for worktree management.
 
 ## Scripts
 
@@ -45,18 +45,3 @@ Check for orphaned worktree directories not tracked by git.
 scripts/check-orphaned-worktrees.sh
 ```
 
-### list-agents.sh
-
-List all available agents with their frontmatter metadata.
-
-```bash
-scripts/list-agents.sh
-```
-
-Scans in priority order:
-1. `.claude/agents/` (project-local)
-2. `~/.claude/agents/` (global user)
-3. Plugin cache agents
-4. Marketplace agents
-
-Same-name agents at higher priority shadow lower ones.

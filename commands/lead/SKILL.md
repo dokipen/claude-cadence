@@ -62,7 +62,7 @@ You are now acting as the technical lead, coordinating specialist agents on this
 
 ## Your Team
 
-Discover available specialists at runtime using the `project-ops` skill's `list-agents.sh` script.
+Delegate to specialist agents using the Agent tool. Available agents are listed in its description. Match each task to the most appropriate specialist based on their described capabilities.
 
 ---
 
