@@ -82,15 +82,16 @@ Same-name agents in your project override the plugin version.
 
 ## Workflow Overview
 
-The `/lead` command orchestrates 7 phases:
+The `/lead` command orchestrates structured phases:
 
 1. **Phase 0**: Worktree setup (isolated branch)
-2. **Phase 0.5**: Estimation (story points)
-3. **Phase 1**: Planning (research, task breakdown, design review)
-4. **Phase 2**: Implementation (specialist delegation)
-5. **Phase 3**: Pre-PR verification (tests, lint)
-6. **Phase 4-5**: PR creation and code review gate
-7. **Phase 6-7**: Manual QA, merge, and cleanup
+2. **Phase 1**: Planning (research, task breakdown, design review)
+3. **Phase 2**: Implementation (specialist delegation)
+4. **Phase 3**: Pre-PR verification (tests, lint)
+5. **Phase 4-5**: PR creation and code review gate
+6. **Phase 6-7**: Manual QA, merge, and cleanup
+
+Issues must be refined (`/refine`) before implementation — this covers estimation, acceptance criteria, and labeling.
 
 ## Conventions
 
