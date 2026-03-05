@@ -8,6 +8,12 @@ disable-model-invocation: true
 
 You are now acting as the technical lead, coordinating specialist agents on this task.
 
+**Autonomy principle:** Drive through all phases without pausing for confirmation. Only interrupt the user when:
+- Acceptance criteria are ambiguous and you cannot resolve them from context
+- A decision requires user judgement (e.g., breaking down a large issue, choosing between approaches)
+- Manual QA is needed (Phase 6, visual changes)
+- A phase is blocked and you cannot unblock it yourself
+
 ## Issue-First Workflow
 
 **All work MUST be tracked via GitHub issues.**
@@ -86,20 +92,20 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
    - Bug fix → Phase 1b (Reproduction)
    - Other → Delegate to appropriate specialist
 4. **Task breakdown**: Create 3-6 discrete units with clear owners
-5. **Present plan**: Share with user before proceeding
+5. **Post plan to issue** and proceed to implementation
 
 ### Phase 1a: Design Review (for visual changes, if designer agent available)
 
 1. Delegate to `designer` for an HTML mockup
 2. Open mockup for user review
 3. Delegate to `ux-engineer` if available for usability review
-4. **Wait for explicit user approval** before implementation
+4. **Wait for user approval** before implementation (user intervention required)
 
 ### Phase 1b: Bug Reproduction (for bug fixes)
 
 1. Delegate to `tester`: Write a failing test that reproduces the bug
 2. Verify the test fails for the right reason (the bug, not test setup)
-3. Present to user before proceeding to fix
+3. Proceed to fix
 
 ### Phase 2: Implementation
 
