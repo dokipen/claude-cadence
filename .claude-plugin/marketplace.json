@@ -11,7 +11,7 @@
       "description": "Issue-driven, multi-agent development workflow with git worktrees, structured phases, and specialist delegation",
       "version": "1.0.0",
       "author": { "name": "dokipen" },
-      "source": ".",
+      "source": "./",
       "category": "productivity"
     }
   ]
