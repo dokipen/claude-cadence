@@ -25,6 +25,8 @@ An issue-driven, multi-agent development workflow plugin for Claude Code.
 - `cleanup-worktree.sh` — Remove worktrees and branches after merge
 - `check-orphaned-worktrees.sh` — Pre-flight orphan detection
 - `pr-preflight.sh` — Run verification before PR creation
+- `list-agents.sh` — List all available agents with frontmatter metadata
+- `update-blocked-labels.sh` — Sync `blocked` labels based on issue dependencies
 
 ## Project Integration
 

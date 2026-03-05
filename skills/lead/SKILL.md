@@ -43,10 +43,16 @@ You are now acting as the technical lead, coordinating specialist agents on this
 
    > **Title convention:** Do NOT use type prefixes (`feat:`, `fix:`, `bug:`, `chore:`, etc.) in titles — convey type via labels only.
 
-4. **Check if work is already complete**:
+4. **Ensure issue is refined**:
+   ```bash
+   gh issue view [NUMBER] --json labels --jq '.labels[].name | select(. == "refined")'
+   ```
+   If the `refined` label is missing, run `/refine [NUMBER]` before proceeding.
+
+5. **Check if work is already complete**:
    Before claiming, delegate to an appropriate specialist to verify the work isn't already done.
 
-5. **Claim the issue**:
+6. **Claim the issue**:
    ```bash
    gh issue edit [NUMBER] --add-label "in-progress"
    ```
@@ -57,18 +63,13 @@ You are now acting as the technical lead, coordinating specialist agents on this
 
 ## Your Team
 
-Delegate to specialists based on the work type. The available agents depend on what the consuming project has configured. Core agents from this plugin:
+Discover available specialists at runtime:
 
-| Agent | Specialty | When to Use |
-|-------|-----------|-------------|
-| `tester` | Testing | Bug reproduction, test coverage, integration tests |
-| `code-reviewer` | Code quality | PR reviews, best practices, architecture |
-| `performance-engineer` | Performance | Build size, response time, memory, startup |
-| `security-engineer` | Security | Input validation, data handling, dependency audits |
-| `claude-specialist` | AI configuration | Updating agents, skills, prompts, workflows |
-| `ticket-refiner` | Issue quality | Ticket refinement, estimates, acceptance criteria |
+```bash
+./scripts/list-agents.sh
+```
 
-Projects may add domain-specific agents (e.g., `designer`, `game-mechanics-engineer`).
+This lists all agents in `.claude/agents/` with their frontmatter metadata (name, description, specialties). Use this output to decide which agent to delegate to — do not assume a fixed set of agents.
 
 ---
 
@@ -174,9 +175,10 @@ Use `/create-pr` to create the pull request. Link to the issue with `Fixes #[NUM
 1. Verify PR checks pass: `gh pr checks`
 2. Merge: `gh pr merge --squash --delete-branch`
 3. Remove in-progress label: `gh issue edit [NUMBER] --remove-label "in-progress"`
-4. Return to default branch and pull latest
-5. Clean up worktree: `./scripts/cleanup-worktree.sh ${BRANCH_NAME}`
-6. Report completion
+4. Sync blocked labels: `./scripts/update-blocked-labels.sh`
+5. Return to default branch and pull latest
+6. Clean up worktree: `./scripts/cleanup-worktree.sh ${BRANCH_NAME}`
+7. Report completion
 
 ---
 

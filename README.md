@@ -51,6 +51,8 @@ Or install directly:
 | `cleanup-worktree.sh` | Remove worktrees after merge |
 | `check-orphaned-worktrees.sh` | Pre-flight orphan detection |
 | `pr-preflight.sh` | Run verification before PR creation |
+| `list-agents.sh` | List all available agents with metadata |
+| `update-blocked-labels.sh` | Sync `blocked` labels from issue dependencies |
 
 ## Project Integration
 

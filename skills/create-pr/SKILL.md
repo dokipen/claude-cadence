@@ -27,8 +27,8 @@ This script:
 # Stage all changes
 git add -A
 
-# Commit with conventional commit message
-git commit -m "<type>: <description>
+# Commit with descriptive message (no type prefixes — use PR labels)
+git commit -m "<description>
 
 <optional body>
 
@@ -37,14 +37,6 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 # Push with upstream tracking
 git push -u origin HEAD
 ```
-
-### Commit Types
-- `feat`: New feature
-- `fix`: Bug fix
-- `refactor`: Code change that neither fixes a bug nor adds a feature
-- `test`: Adding or updating tests
-- `docs`: Documentation changes
-- `chore`: Maintenance tasks
 
 ## Create PR
 
@@ -66,10 +58,14 @@ Fixes #<issue-number>
 ## Screenshots
 (if applicable, otherwise delete this section)
 EOF
-)"
+)" --label "<type>"
 ```
 
-**Note:** The PR body should follow the structure in `.github/PULL_REQUEST_TEMPLATE.md` if it exists.
+**Notes:**
+- The PR body should follow the structure in `.github/PULL_REQUEST_TEMPLATE.md` if it exists.
+- Do NOT use type prefixes in the title (e.g., `feat: Add X`) — use labels instead.
+- Apply a type label: `bug`, `enhancement`, `documentation`, `testing`, or `performance`.
+- Copy estimate and other relevant labels from the linked issue.
 
 ## After PR Creation
 

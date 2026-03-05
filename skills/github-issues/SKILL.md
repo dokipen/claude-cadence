@@ -137,3 +137,35 @@ gh issue comment 42 --body "## Work Complete
 gh issue list --json number,title,state,labels
 gh issue list --json number,title,labels --jq '.[] | "\(.number): \(.title)"'
 ```
+
+## GraphQL Rate Limit Fallback
+
+The `gh` CLI uses GraphQL by default for commands like `gh issue list` and `gh issue view --json`. If you hit GraphQL rate limits (HTTP 403 or "API rate limit exceeded"), fall back to REST equivalents via `gh api`:
+
+```bash
+# List issues (REST)
+gh api repos/{owner}/{repo}/issues --jq '.[] | "\(.number): \(.title)"'
+
+# View issue details (REST)
+gh api repos/{owner}/{repo}/issues/42
+
+# List issue comments (REST)
+gh api repos/{owner}/{repo}/issues/42/comments
+
+# List issue labels (REST)
+gh api repos/{owner}/{repo}/issues/42/labels --jq '.[].name'
+
+# Add a label (REST)
+gh api repos/{owner}/{repo}/issues/42/labels -X POST --input - <<< '{"labels":["enhancement"]}'
+
+# Create an issue (REST)
+gh api repos/{owner}/{repo}/issues -X POST -f title="Title" -f body="Body"
+
+# Close an issue (REST)
+gh api repos/{owner}/{repo}/issues/42 -X PATCH -f state="closed"
+```
+
+Get `{owner}/{repo}` dynamically with:
+```bash
+gh repo view --json nameWithOwner --jq '.nameWithOwner'
+```
