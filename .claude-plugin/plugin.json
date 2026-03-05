@@ -1,0 +1,5 @@
+{
+  "name": "claude-cadence",
+  "version": "1.0.0",
+  "description": "Issue-driven, multi-agent development workflow with git worktrees, structured phases, and specialist delegation"
+}
