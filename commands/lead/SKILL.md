@@ -8,6 +8,12 @@ disable-model-invocation: true
 
 You are now acting as the technical lead, coordinating specialist agents on this task.
 
+**Autonomy principle:** Drive through all phases without pausing for confirmation. Only interrupt the user when:
+- Acceptance criteria are ambiguous and you cannot resolve them from context
+- A decision requires user judgement (e.g., breaking down a large issue, choosing between approaches)
+- Manual QA is needed (Phase 6, visual changes)
+- A phase is blocked and you cannot unblock it yourself
+
 ## Issue-First Workflow
 
 **All work MUST be tracked via GitHub issues.**
@@ -24,19 +30,13 @@ You are now acting as the technical lead, coordinating specialist agents on this
    gh issue view [NUMBER]
    ```
 
-3. **If no issue exists OR acceptance criteria unclear**:
-   - Ask the user for clear acceptance criteria
-   - Create the issue once criteria are defined:
+3. **If no issue exists**: Create one with a descriptive title and initial context:
    ```bash
    gh issue create \
      --title "Descriptive title" \
      --label "bug" \
      --body "## Description
    [Clear explanation of the work]
-
-   ## Acceptance Criteria
-   - [ ] Criterion 1
-   - [ ] Criterion 2
 
    ## Notes
    [Any additional context]"
@@ -55,8 +55,6 @@ You are now acting as the technical lead, coordinating specialist agents on this
    ```bash
    gh issue edit [NUMBER] --add-label "in-progress"
    ```
-
-**Do not proceed to Phase 0 until an issue with clear acceptance criteria exists.**
 
 ---
 
@@ -85,25 +83,6 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 2. If on default branch, use `/new-work` to create a worktree first.
 3. Post setup to issue.
 
-### Phase 0.5: Estimation
-
-**Issues should be estimated before implementation begins.**
-
-1. Check if already estimated:
-   ```bash
-   gh issue view [NUMBER] --json labels --jq '.labels[].name | select(startswith("estimate:"))'
-   ```
-   If an `estimate:` label exists, skip to Phase 1.
-
-2. Delegate estimation to the appropriate specialist.
-
-3. Apply the estimate label:
-   ```bash
-   gh issue edit [NUMBER] --add-label "estimate:[VALUE]"
-   ```
-
-4. If estimated at 13, recommend breaking down the issue.
-
 ### Phase 1: Planning
 
 1. **Clarify requirements**: Review the acceptance criteria
@@ -113,20 +92,20 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
    - Bug fix → Phase 1b (Reproduction)
    - Other → Delegate to appropriate specialist
 4. **Task breakdown**: Create 3-6 discrete units with clear owners
-5. **Present plan**: Share with user before proceeding
+5. **Post plan to issue** and proceed to implementation
 
 ### Phase 1a: Design Review (for visual changes, if designer agent available)
 
 1. Delegate to `designer` for an HTML mockup
 2. Open mockup for user review
 3. Delegate to `ux-engineer` if available for usability review
-4. **Wait for explicit user approval** before implementation
+4. **Wait for user approval** before implementation (user intervention required)
 
 ### Phase 1b: Bug Reproduction (for bug fixes)
 
 1. Delegate to `tester`: Write a failing test that reproduces the bug
 2. Verify the test fails for the right reason (the bug, not test setup)
-3. Present to user before proceeding to fix
+3. Proceed to fix
 
 ### Phase 2: Implementation
 
