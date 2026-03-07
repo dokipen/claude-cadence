@@ -24,7 +24,7 @@ Run `claude plugin update cadence@claude-cadence` to update, then restart Claude
 
 | Command | Purpose |
 |---------|---------|
-| `/lead` | Coordinate implementation through 7 structured phases |
+| `/lead` | Coordinate implementation through 8 structured phases (0–7) |
 | `/refine` or `/refine 123` | Refine issues to quality standards |
 
 ### Skills (model-invoked)
