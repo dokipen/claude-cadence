@@ -1,0 +1,26 @@
+import { ApolloServer } from "@apollo/server";
+import { startStandaloneServer } from "@apollo/server/standalone";
+import { PrismaClient } from "@prisma/client";
+import { DateTimeResolver } from "graphql-scalars";
+import { typeDefs, resolvers } from "./schema/index.js";
+
+const prisma = new PrismaClient();
+
+const server = new ApolloServer({
+  typeDefs,
+  resolvers: [
+    ...resolvers,
+    { DateTime: DateTimeResolver },
+  ],
+});
+
+const port = parseInt(process.env.PORT || "4000", 10);
+
+const { url } = await startStandaloneServer(server, {
+  listen: { port },
+  context: async () => ({
+    prisma,
+  }),
+});
+
+console.log(`Server ready at ${url}`);
