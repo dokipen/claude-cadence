@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String    @id @default(cuid())
+  githubId    Int       @unique
+  login       String    @unique
+  displayName String
+  avatarUrl   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  assignedTickets Ticket[]
+  comments        Comment[]
+}
+
+// SQLite does not support enums natively — we store them as strings
+// and validate at the application layer.
+//
+// TicketState: BACKLOG | REFINED | IN_PROGRESS | CLOSED
+// Priority:    HIGHEST | HIGH | MEDIUM | LOW | LOWEST
+
+model Ticket {
+  id                 String   @id @default(cuid())
+  title              String
+  description        String?
+  acceptanceCriteria String?
+  state              String   @default("BACKLOG")
+  storyPoints        Int?
+  priority           String   @default("MEDIUM")
+  assigneeId         String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  assignee    User?          @relation(fields: [assigneeId], references: [id])
+  labels      TicketLabel[]
+  comments    Comment[]
+  blocks      BlockRelation[] @relation("blocker")
+  blockedBy   BlockRelation[] @relation("blocked")
+}
+
+model Label {
+  id        String        @id @default(cuid())
+  name      String        @unique
+  color     String
+  createdAt DateTime      @default(now())
+
+  tickets   TicketLabel[]
+}
+
+model TicketLabel {
+  ticketId String
+  labelId  String
+
+  ticket Ticket @relation(fields: [ticketId], references: [id])
+  label  Label  @relation(fields: [labelId], references: [id])
+
+  @@id([ticketId, labelId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  body      String
+  ticketId  String
+  authorId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ticket Ticket @relation(fields: [ticketId], references: [id])
+  author User   @relation(fields: [authorId], references: [id])
+}
+
+model BlockRelation {
+  id        String   @id @default(cuid())
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+
+  blocker Ticket @relation("blocker", fields: [blockerId], references: [id])
+  blocked Ticket @relation("blocked", fields: [blockedId], references: [id])
+
+  @@unique([blockerId, blockedId])
+}
