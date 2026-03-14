@@ -55,6 +55,7 @@ Users can create, list, inspect, and destroy agent sessions through the gRPC API
 | `TestListSessions_Empty` | No sessions returns empty list |
 | `TestListSessions_Multiple` | Multiple sessions appear in list |
 | `TestListSessions_FilterByProfile` | Profile filter works |
+| `TestDestroySession_RunningWithoutForce` | Running session without force returns FAILED_PRECONDITION |
 | `TestDestroySession_Force` | force=true kills running session |
 | `TestDestroySession_NotFound` | Unknown ID returns NOT_FOUND |
 

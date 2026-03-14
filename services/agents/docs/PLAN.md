@@ -26,6 +26,8 @@ services/agents/
 ├── proto/
 │   └── agents/v1/
 │       └── agents.proto              # gRPC service definition
+├── gen/
+│   └── agents/v1/                        # Generated proto Go code (protoc output)
 ├── cmd/
 │   └── agentd/
 │       └── main.go                   # Entry point, config load, graceful shutdown
