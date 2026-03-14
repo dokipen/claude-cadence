@@ -69,6 +69,23 @@ Before analyzing, read `CLAUDE.md` for:
 - Pagination for large datasets
 - Resource pooling
 
+## Deferred Findings
+
+Not every finding needs to block the current PR. For non-blocking findings (typically Low impact), recommend a tracking plan:
+
+- **Fix now** — High impact findings and Medium findings that are cheap to fix
+- **Defer** — Findings that are out of scope or would require significant rework. For each deferred finding:
+  1. Recommend whether it fits an existing issue/phase or needs a new issue
+  2. Reference the current PR: "Discovered in #[PR-NUMBER] review"
+  3. Clearly label it as deferred in your review output so the lead can triage
+
+Example in review output:
+```
+**Deferred**:
+- N+1 query in `fetchUsers()` → fits #10 (query optimization phase), discovered in #14 review
+- Bundle includes unused locale data → new issue recommended, discovered in #14 review
+```
+
 ## Output Format
 
 **Findings**:

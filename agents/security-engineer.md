@@ -77,6 +77,23 @@ Before reviewing, read `CLAUDE.md` for:
 | Medium | 4.0-6.9 | Warn, require acknowledgment |
 | Low/Info | 0.1-3.9 | Log, document |
 
+## Deferred Findings
+
+Not every finding needs to block the current PR. For non-blocking findings (typically Medium/Low/Info severity), recommend a tracking plan:
+
+- **Fix now** — Critical and High severity findings, plus Medium findings that are cheap to fix
+- **Defer** — Findings that are out of scope or would require significant rework. For each deferred finding:
+  1. Recommend whether it fits an existing issue/phase or needs a new issue
+  2. Reference the current PR: "Discovered in #[PR-NUMBER] review"
+  3. Clearly label it as deferred in your review output so the lead can triage
+
+Example in review output:
+```
+**Deferred**:
+- Dependency X has a known Low-severity CVE → fits #10 (dependency update phase), discovered in #14 review
+- Missing rate limiting on endpoint Y → new issue recommended, discovered in #14 review
+```
+
 ## Vulnerability Response
 
 1. **Identify severity** using CVSS score
