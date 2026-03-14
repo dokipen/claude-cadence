@@ -104,10 +104,17 @@ export const ticketTypeDefs = `
       first: Int
       after: String
     ): TicketConnection!
+    labels: [Label!]!
   }
 
   type Mutation {
     createTicket(input: CreateTicketInput!): Ticket!
     updateTicket(id: ID!, input: UpdateTicketInput!): Ticket!
+    createLabel(name: String!, color: String!): Label!
+    addLabel(ticketId: ID!, labelId: ID!): Ticket!
+    removeLabel(ticketId: ID!, labelId: ID!): Ticket!
+    assignTicket(ticketId: ID!, userId: ID!): Ticket!
+    unassignTicket(ticketId: ID!): Ticket!
+    createUser(githubId: Int!, login: String!, displayName: String!, avatarUrl: String): User!
   }
 `;
