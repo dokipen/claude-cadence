@@ -186,6 +186,9 @@ export const ticketResolvers = {
       { name, color }: { name: string; color: string },
       { prisma }: Context
     ) => {
+      if (!/^#[0-9a-fA-F]{6}$/.test(color)) {
+        throw new Error(`Invalid color: ${color}. Must be a hex color (e.g. #ff0000)`);
+      }
       return prisma.label.create({ data: { name, color } });
     },
 
@@ -194,10 +197,16 @@ export const ticketResolvers = {
       { ticketId, labelId }: { ticketId: string; labelId: string },
       { prisma }: Context
     ) => {
+      const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+      if (!ticket) throw new Error(`Ticket not found: ${ticketId}`);
+
+      const label = await prisma.label.findUnique({ where: { id: labelId } });
+      if (!label) throw new Error(`Label not found: ${labelId}`);
+
       await prisma.ticketLabel.create({
         data: { ticketId, labelId },
       });
-      return prisma.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+      return ticket;
     },
 
     removeLabel: async (
@@ -205,10 +214,18 @@ export const ticketResolvers = {
       { ticketId, labelId }: { ticketId: string; labelId: string },
       { prisma }: Context
     ) => {
+      const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+      if (!ticket) throw new Error(`Ticket not found: ${ticketId}`);
+
+      const existing = await prisma.ticketLabel.findUnique({
+        where: { ticketId_labelId: { ticketId, labelId } },
+      });
+      if (!existing) throw new Error(`Label ${labelId} is not on ticket ${ticketId}`);
+
       await prisma.ticketLabel.delete({
         where: { ticketId_labelId: { ticketId, labelId } },
       });
-      return prisma.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+      return ticket;
     },
 
     assignTicket: async (

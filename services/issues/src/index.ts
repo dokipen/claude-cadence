@@ -19,6 +19,7 @@ const port = parseInt(process.env.PORT || "4000", 10);
 
 const { url } = await startStandaloneServer(server, {
   listen: { port },
+  // Fresh loaders per request to avoid cross-request cache pollution
   context: async () => ({
     prisma,
     loaders: createLoaders(prisma),
