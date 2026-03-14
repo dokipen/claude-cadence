@@ -52,7 +52,7 @@ export function getAuthToken(): string | undefined {
 export function setAuthToken(token: string): void {
   ensureConfigDir();
   const auth: AuthFile = { token };
-  writeFileSync(AUTH_FILE, JSON.stringify(auth, null, 2) + "\n", "utf-8");
+  writeFileSync(AUTH_FILE, JSON.stringify(auth, null, 2) + "\n", { encoding: "utf-8", mode: 0o600 });
 }
 
 export function clearAuthToken(): void {

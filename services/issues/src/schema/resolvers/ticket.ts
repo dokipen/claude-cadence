@@ -4,6 +4,10 @@ export interface Context {
   prisma: PrismaClient;
 }
 
+const VALID_STATES = new Set(["BACKLOG", "REFINED", "IN_PROGRESS", "CLOSED"]);
+const VALID_PRIORITIES = new Set(["HIGHEST", "HIGH", "MEDIUM", "LOW", "LOWEST"]);
+const MAX_PAGE_SIZE = 100;
+
 export const ticketResolvers = {
   Query: {
     ticket: async (_: unknown, { id }: { id: string }, { prisma }: Context) => {
@@ -23,7 +27,8 @@ export const ticketResolvers = {
       },
       { prisma }: Context
     ) => {
-      const { state, labelName, assigneeLogin, isBlocked, priority, first = 20, after } = args;
+      const { state, labelName, assigneeLogin, isBlocked, priority, after } = args;
+      const first = Math.min(args.first ?? 20, MAX_PAGE_SIZE);
 
       // Build where clause
       const where: Record<string, unknown> = {};
@@ -108,6 +113,10 @@ export const ticketResolvers = {
     ) => {
       const { title, description, acceptanceCriteria, labelIds, assigneeId, storyPoints, priority } = input;
 
+      if (priority && !VALID_PRIORITIES.has(priority)) {
+        throw new Error(`Invalid priority: ${priority}. Must be one of: ${[...VALID_PRIORITIES].join(", ")}`);
+      }
+
       const data: Record<string, unknown> = {
         title,
         description: description ?? null,
@@ -144,6 +153,15 @@ export const ticketResolvers = {
       },
       { prisma }: Context
     ) => {
+      if (input.priority && !VALID_PRIORITIES.has(input.priority)) {
+        throw new Error(`Invalid priority: ${input.priority}. Must be one of: ${[...VALID_PRIORITIES].join(", ")}`);
+      }
+
+      const existing = await prisma.ticket.findUnique({ where: { id } });
+      if (!existing) {
+        throw new Error(`Ticket not found: ${id}`);
+      }
+
       const data: Record<string, unknown> = {};
 
       if (input.title !== undefined) data.title = input.title;

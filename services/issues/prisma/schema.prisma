@@ -61,7 +61,7 @@ model TicketLabel {
   ticket Ticket @relation(fields: [ticketId], references: [id])
   label  Label  @relation(fields: [labelId], references: [id])
 
-  @@unique([ticketId, labelId])
+  @@id([ticketId, labelId])
 }
 
 model Comment {
