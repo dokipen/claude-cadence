@@ -3,6 +3,7 @@ import { startStandaloneServer } from "@apollo/server/standalone";
 import { PrismaClient } from "@prisma/client";
 import { DateTimeResolver } from "graphql-scalars";
 import { typeDefs, resolvers } from "./schema/index.js";
+import { createLoaders } from "./loaders.js";
 
 const prisma = new PrismaClient();
 
@@ -20,6 +21,7 @@ const { url } = await startStandaloneServer(server, {
   listen: { port },
   context: async () => ({
     prisma,
+    loaders: createLoaders(prisma),
   }),
 });
 

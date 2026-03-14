@@ -1,7 +1,9 @@
-import type { PrismaClient, Ticket } from "@prisma/client";
+import type { PrismaClient, Ticket, Prisma } from "@prisma/client";
+import type { Loaders } from "../../loaders.js";
 
 export interface Context {
   prisma: PrismaClient;
+  loaders: Loaders;
 }
 
 const VALID_STATES = new Set(["BACKLOG", "REFINED", "IN_PROGRESS", "CLOSED"]);
@@ -30,8 +32,7 @@ export const ticketResolvers = {
       const { state, labelName, assigneeLogin, isBlocked, priority, after } = args;
       const first = Math.min(args.first ?? 20, MAX_PAGE_SIZE);
 
-      // Build where clause
-      const where: Record<string, unknown> = {};
+      const where: Prisma.TicketWhereInput = {};
 
       if (state) {
         where.state = state;
@@ -65,19 +66,18 @@ export const ticketResolvers = {
         };
       }
 
-      // Cursor pagination
-      const queryArgs: Record<string, unknown> = {
+      const queryArgs: Prisma.TicketFindManyArgs = {
         where,
-        take: first + 1, // Fetch one extra to determine hasNextPage
-        orderBy: { createdAt: "asc" as const },
+        take: first + 1,
+        orderBy: { createdAt: "asc" },
       };
 
       if (after) {
         queryArgs.cursor = { id: after };
-        queryArgs.skip = 1; // Skip the cursor item itself
+        queryArgs.skip = 1;
       }
 
-      const tickets = await prisma.ticket.findMany(queryArgs as Parameters<typeof prisma.ticket.findMany>[0]);
+      const tickets = await prisma.ticket.findMany(queryArgs);
 
       const hasNextPage = tickets.length > first;
       const edges = tickets.slice(0, first).map((ticket: Ticket) => ({
@@ -92,6 +92,10 @@ export const ticketResolvers = {
           endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
         },
       };
+    },
+
+    labels: async (_: unknown, __: unknown, { prisma }: Context) => {
+      return prisma.label.findMany({ orderBy: { name: "asc" } });
     },
   },
 
@@ -117,14 +121,17 @@ export const ticketResolvers = {
         throw new Error(`Invalid priority: ${priority}. Must be one of: ${[...VALID_PRIORITIES].join(", ")}`);
       }
 
-      const data: Record<string, unknown> = {
+      const data: Prisma.TicketCreateInput = {
         title,
         description: description ?? null,
         acceptanceCriteria: acceptanceCriteria ?? null,
         storyPoints: storyPoints ?? null,
         priority: priority ?? "MEDIUM",
-        assigneeId: assigneeId ?? null,
       };
+
+      if (assigneeId) {
+        data.assignee = { connect: { id: assigneeId } };
+      }
 
       if (labelIds && labelIds.length > 0) {
         data.labels = {
@@ -134,9 +141,7 @@ export const ticketResolvers = {
         };
       }
 
-      return prisma.ticket.create({
-        data: data as Parameters<typeof prisma.ticket.create>[0]["data"],
-      });
+      return prisma.ticket.create({ data });
     },
 
     updateTicket: async (
@@ -162,7 +167,7 @@ export const ticketResolvers = {
         throw new Error(`Ticket not found: ${id}`);
       }
 
-      const data: Record<string, unknown> = {};
+      const data: Prisma.TicketUpdateInput = {};
 
       if (input.title !== undefined) data.title = input.title;
       if (input.description !== undefined) data.description = input.description;
@@ -175,44 +180,95 @@ export const ticketResolvers = {
         data,
       });
     },
+
+    createLabel: async (
+      _: unknown,
+      { name, color }: { name: string; color: string },
+      { prisma }: Context
+    ) => {
+      return prisma.label.create({ data: { name, color } });
+    },
+
+    addLabel: async (
+      _: unknown,
+      { ticketId, labelId }: { ticketId: string; labelId: string },
+      { prisma }: Context
+    ) => {
+      await prisma.ticketLabel.create({
+        data: { ticketId, labelId },
+      });
+      return prisma.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    },
+
+    removeLabel: async (
+      _: unknown,
+      { ticketId, labelId }: { ticketId: string; labelId: string },
+      { prisma }: Context
+    ) => {
+      await prisma.ticketLabel.delete({
+        where: { ticketId_labelId: { ticketId, labelId } },
+      });
+      return prisma.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+    },
+
+    assignTicket: async (
+      _: unknown,
+      { ticketId, userId }: { ticketId: string; userId: string },
+      { prisma }: Context
+    ) => {
+      return prisma.ticket.update({
+        where: { id: ticketId },
+        data: { assigneeId: userId },
+      });
+    },
+
+    unassignTicket: async (
+      _: unknown,
+      { ticketId }: { ticketId: string },
+      { prisma }: Context
+    ) => {
+      return prisma.ticket.update({
+        where: { id: ticketId },
+        data: { assigneeId: null },
+      });
+    },
+
+    createUser: async (
+      _: unknown,
+      { githubId, login, displayName, avatarUrl }: {
+        githubId: number;
+        login: string;
+        displayName: string;
+        avatarUrl?: string;
+      },
+      { prisma }: Context
+    ) => {
+      return prisma.user.create({
+        data: { githubId, login, displayName, avatarUrl: avatarUrl ?? null },
+      });
+    },
   },
 
   Ticket: {
-    labels: async (parent: Ticket, _: unknown, { prisma }: Context) => {
-      const ticketLabels = await prisma.ticketLabel.findMany({
-        where: { ticketId: parent.id },
-        include: { label: true },
-      });
-      return ticketLabels.map((tl) => tl.label);
+    labels: async (parent: Ticket, _: unknown, { loaders }: Context) => {
+      return loaders.labelsByTicketId.load(parent.id);
     },
 
-    comments: async (parent: Ticket, _: unknown, { prisma }: Context) => {
-      return prisma.comment.findMany({
-        where: { ticketId: parent.id },
-        include: { author: true },
-        orderBy: { createdAt: "asc" },
-      });
+    comments: async (parent: Ticket, _: unknown, { loaders }: Context) => {
+      return loaders.commentsByTicketId.load(parent.id);
     },
 
-    assignee: async (parent: Ticket, _: unknown, { prisma }: Context) => {
+    assignee: async (parent: Ticket, _: unknown, { loaders }: Context) => {
       if (!parent.assigneeId) return null;
-      return prisma.user.findUnique({ where: { id: parent.assigneeId } });
+      return loaders.assigneeByUserId.load(parent.assigneeId);
     },
 
-    blocks: async (parent: Ticket, _: unknown, { prisma }: Context) => {
-      const relations = await prisma.blockRelation.findMany({
-        where: { blockerId: parent.id },
-        include: { blocked: true },
-      });
-      return relations.map((r) => r.blocked);
+    blocks: async (parent: Ticket, _: unknown, { loaders }: Context) => {
+      return loaders.blocksByTicketId.load(parent.id);
     },
 
-    blockedBy: async (parent: Ticket, _: unknown, { prisma }: Context) => {
-      const relations = await prisma.blockRelation.findMany({
-        where: { blockedId: parent.id },
-        include: { blocker: true },
-      });
-      return relations.map((r) => r.blocker);
+    blockedBy: async (parent: Ticket, _: unknown, { loaders }: Context) => {
+      return loaders.blockedByTicketId.load(parent.id);
     },
   },
 };
