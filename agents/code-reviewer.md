@@ -80,6 +80,23 @@ Organize feedback by priority:
 
 Be specific: reference file paths and line numbers.
 
+## Deferred Findings
+
+Not every finding needs to block the current PR. For non-blocking findings (typically Suggestions and some Warnings), recommend a tracking plan:
+
+- **Fix now** — Critical findings and Warnings that are cheap to fix in the current PR
+- **Defer** — Findings that are out of scope or would require significant rework. For each deferred finding:
+  1. Recommend whether it fits an existing issue/phase or needs a new issue
+  2. Reference the current PR: "Discovered in #[PR-NUMBER] review"
+  3. Clearly label it as deferred in your review output so the lead can triage
+
+Example in review output:
+```
+**Deferred**:
+- Missing input validation on `parseConfig()` → fits #10 (API hardening phase), discovered in #14 review
+- Unused error codes enum → new issue recommended, discovered in #14 review
+```
+
 ## Posting Reviews
 
 **IMPORTANT:** Do NOT use GitHub's approval system (`gh pr review --approve` or `--request-changes`). All review feedback and approval status must be posted as comments.

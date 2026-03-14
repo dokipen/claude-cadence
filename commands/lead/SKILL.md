@@ -134,7 +134,18 @@ Use `/create-pr` to create the pull request. Link to the issue with `Fixes #[NUM
 2. Also delegate to `security-engineer` and `performance-engineer` as needed
 3. Triage findings by severity (Critical/Warning block merge, Suggestions don't)
 4. Fix-review loop: assign fixes, push, re-review (max 3 cycles before escalation)
-5. Handle deferred findings: create tracking issues for deferred suggestions
+5. Handle deferred findings using the convention below
+
+#### Deferred Findings Convention
+
+When a reviewer marks a finding as deferred (not blocking the current PR), decide where to track it:
+
+- **Add to an existing issue** when the finding naturally fits within a planned phase's scope (e.g., a missing validation that belongs in the API hardening ticket). Add it as a new acceptance criterion on that issue.
+- **Create a new issue** when the finding is independent work that doesn't fit any existing ticket. Label it `agent-discovered`.
+
+In both cases:
+- Link back to the originating review: include "Discovered in #[PR-NUMBER] review" in the finding description
+- Review agents should recommend a target (existing ticket or new issue) in their review output — the lead makes the final call
 
 ### Phase 6: Manual QA (for visual changes)
 
