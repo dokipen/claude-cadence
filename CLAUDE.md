@@ -56,7 +56,7 @@ Scripts are co-located with the command or skill that owns them. Shared scripts 
 
 ## Versioning
 
-Bump the `version` field in `.claude-plugin/plugin.json` with every PR merge. Use semver: patch for fixes, minor for new features/scripts/agents, major for breaking changes.
+Bump the `version` field in `.claude-plugin/plugin.json` only when preparing a release, not on every PR merge. Use semver: patch for fixes, minor for new features/scripts/agents, major for breaking changes.
 
 ## Conventions
 
