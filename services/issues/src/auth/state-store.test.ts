@@ -50,15 +50,31 @@ describe("OAuthStateStore", () => {
     const now = Date.now();
     vi.spyOn(Date, "now").mockReturnValue(now);
 
-    store.generate();
-    store.generate();
+    const old1 = store.generate();
+    const old2 = store.generate();
 
     // Advance time past TTL and generate a new one (triggers purge)
     vi.spyOn(Date, "now").mockReturnValue(now + 200);
     store.generate();
 
-    // The store's internal map should only have 1 entry (the new one)
-    // We verify this indirectly: the old states should be invalid
-    // (they'd be invalid anyway due to expiry, but purge removes them from memory)
+    // Old states should be rejected (purged from memory)
+    expect(store.validate(old1)).toBe(false);
+    expect(store.validate(old2)).toBe(false);
+  });
+
+  it("should reject generation when max size is reached", () => {
+    const store = new OAuthStateStore(60_000, 3);
+    store.generate();
+    store.generate();
+    store.generate();
+    expect(() => store.generate()).toThrow("Too many pending OAuth state tokens");
+  });
+
+  it("should allow generation after consuming tokens below max size", () => {
+    const store = new OAuthStateStore(60_000, 2);
+    const state = store.generate();
+    store.generate();
+    store.validate(state); // consume one
+    expect(() => store.generate()).not.toThrow();
   });
 });

@@ -5,6 +5,7 @@ interface StateEntry {
 }
 
 const DEFAULT_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const DEFAULT_MAX_SIZE = 10_000;
 
 /**
  * In-memory store for OAuth state parameters.
@@ -13,14 +14,19 @@ const DEFAULT_TTL_MS = 10 * 60 * 1000; // 10 minutes
 export class OAuthStateStore {
   private states = new Map<string, StateEntry>();
   private ttlMs: number;
+  private maxSize: number;
 
-  constructor(ttlMs = DEFAULT_TTL_MS) {
+  constructor(ttlMs = DEFAULT_TTL_MS, maxSize = DEFAULT_MAX_SIZE) {
     this.ttlMs = ttlMs;
+    this.maxSize = maxSize;
   }
 
   /** Generate a cryptographically random state token and store it. */
   generate(): string {
     this.purgeExpired();
+    if (this.states.size >= this.maxSize) {
+      throw new Error("Too many pending OAuth state tokens");
+    }
     const state = randomBytes(32).toString("hex");
     this.states.set(state, { createdAt: Date.now() });
     return state;
@@ -28,11 +34,13 @@ export class OAuthStateStore {
 
   /** Validate and consume a state token (single-use). Returns true if valid. */
   validate(state: string): boolean {
-    this.purgeExpired();
     const entry = this.states.get(state);
     if (!entry) return false;
+    if (Date.now() - entry.createdAt > this.ttlMs) {
+      this.states.delete(state);
+      return false;
+    }
     this.states.delete(state);
-    if (Date.now() - entry.createdAt > this.ttlMs) return false;
     return true;
   }
 
