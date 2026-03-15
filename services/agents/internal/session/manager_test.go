@@ -33,6 +33,79 @@ func TestShellEscapeArg(t *testing.T) {
 	}
 }
 
+func TestRenderCommand(t *testing.T) {
+	m := &Manager{}
+
+	tests := []struct {
+		name      string
+		template  string
+		sess      *Session
+		extraArgs []string
+		want      string
+	}{
+		{
+			name:     "WorktreePath with spaces is escaped",
+			template: "cmd --cwd {{.WorktreePath}}",
+			sess: &Session{
+				ID:           "test-id",
+				Name:         "test-name",
+				WorktreePath: "/path/with spaces/dir",
+			},
+			want: "cmd --cwd '/path/with spaces/dir'",
+		},
+		{
+			name:     "WorktreePath with shell metacharacters is escaped",
+			template: "cmd --cwd {{.WorktreePath}}",
+			sess: &Session{
+				ID:           "test-id",
+				Name:         "test-name",
+				WorktreePath: "/path/$(evil)/dir",
+			},
+			want: "cmd --cwd '/path/$(evil)/dir'",
+		},
+		{
+			name:     "empty WorktreePath produces empty quoted string",
+			template: "cmd --cwd {{.WorktreePath}}",
+			sess: &Session{
+				ID:   "test-id",
+				Name: "test-name",
+			},
+			want: "cmd --cwd ''",
+		},
+		{
+			name:     "SessionID is escaped",
+			template: "cmd --id {{.SessionID}}",
+			sess: &Session{
+				ID:   "id;rm -rf /",
+				Name: "test-name",
+			},
+			want: "cmd --id 'id;rm -rf /'",
+		},
+		{
+			name:     "all fields together",
+			template: "cmd --id {{.SessionID}} --name {{.SessionName}} --cwd {{.WorktreePath}} {{.ExtraArgs}}",
+			sess: &Session{
+				ID:           "test-id",
+				Name:         "test-name",
+				WorktreePath: "/safe/path",
+			},
+			extraArgs: []string{"--flag", "value"},
+			want:      "cmd --id 'test-id' --name test-name --cwd '/safe/path' '--flag' 'value'",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := m.renderCommand(tt.template, tt.sess, tt.extraArgs)
+			if err != nil {
+				t.Fatalf("renderCommand() error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("renderCommand() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestShellJoinArgs(t *testing.T) {
 	tests := []struct {
 		name string
