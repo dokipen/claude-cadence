@@ -51,22 +51,27 @@ Before reviewing, read `CLAUDE.md` for:
 - No test data in production assets
 - Proper signing and obfuscation where applicable
 
-## Output Format
+## Output Constraints
 
-**Risk Assessment**:
-| Finding | Severity | Location | Recommendation |
-|---------|----------|----------|----------------|
-| ... | Critical/High/Medium/Low/Info | file:line | ... |
+**Length budget:** Keep total review output under 60 lines. Exceed only when multiple Critical/High findings require detailed reproduction/fix guidance.
 
-**Dependency Audit**:
-- Outdated packages: X
-- Known vulnerabilities: X
-- Recommendations: ...
+**Cut the noise:**
+- No "no finding" confirmations — omit categories with zero findings entirely (e.g., skip the Dependency Audit section if there are no dependency findings)
+- No positive affirmations ("Good job on X") — focus only on actionable feedback
+- No code examples for Low/Info findings — a one-line description is enough
 
-**Summary**:
-- Overall risk level
-- Key findings
-- Prioritized remediation steps
+**Structure:**
+
+1. Summary table (one row per finding):
+
+| Severity | Location | Finding | Recommendation |
+|----------|----------|---------|----------------|
+| Critical/High/Medium/Low/Info | file:line | ... | ... |
+
+2. Detail sections for Critical and High findings only (brief paragraph each)
+3. Low/Info findings as a one-line bullet list (no detail blocks)
+
+**Deferred findings:** One-line summary with recommended target and priority. No multi-paragraph justification.
 
 ## Severity Assessment
 
