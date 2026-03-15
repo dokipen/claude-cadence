@@ -88,6 +88,7 @@ func sessionToProto(sess *session.Session) *agentsv1.Session {
 		CreatedAt:    timestamppb.New(sess.CreatedAt),
 		ErrorMessage: sess.ErrorMessage,
 		AgentPid:     int32(sess.AgentPID),
+		WebsocketUrl: sess.WebsocketURL,
 	}
 }
 

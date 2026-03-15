@@ -12,6 +12,11 @@ root_dir: "/var/lib/agentd"
 tmux:
   socket_name: "agentd"
 
+# ttyd websocket terminal
+ttyd:
+  enabled: false
+  base_port: 7681
+
 # Logging
 log:
   level: "info"    # debug, info, warn, error
