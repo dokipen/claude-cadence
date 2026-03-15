@@ -37,6 +37,11 @@ detect_os() {
   esac
 }
 
+build_image() {
+  log "Building Docker image (bypassing cache)..."
+  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" build --no-cache
+}
+
 # --- launchd (macOS) ---
 
 launchd_plist_path() {
@@ -64,7 +69,6 @@ launchd_install() {
     <string>-f</string>
     <string>${COMPOSE_FILE}</string>
     <string>up</string>
-    <string>--build</string>
     <string>--wait</string>
   </array>
   <key>RunAtLoad</key>
@@ -142,7 +146,7 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=${SCRIPT_DIR}
-ExecStart=${DOCKER_BIN} compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up --build -d
+ExecStart=${DOCKER_BIN} compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d
 ExecStop=${DOCKER_BIN} compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" down
 
 [Install]
@@ -246,6 +250,7 @@ case "$cmd" in
   install)
     ensure_docker
     ensure_env
+    build_image
     install_cli
     os=$(detect_os)
     case "$os" in
