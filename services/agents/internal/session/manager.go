@@ -102,6 +102,11 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		return nil, &Error{Code: ErrAlreadyExists, Message: fmt.Sprintf("tmux session %q already exists", sessionName)}
 	}
 
+	// Validate baseRef before any state changes.
+	if err := git.ValidateRef(req.BaseRef); err != nil {
+		return nil, &Error{Code: ErrInvalidArgument, Message: fmt.Sprintf("invalid base_ref: %v", err)}
+	}
+
 	sessionID := uuid.New().String()
 	sess := &Session{
 		ID:           sessionID,
@@ -136,8 +141,8 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		}
 
 		worktreeDir := m.git.WorktreeDir(sessionID)
-		baseRef := req.BaseRef
-		if err := m.git.AddWorktree(cloneDir, worktreeDir, baseRef); err != nil {
+		resolvedRef, err := m.git.AddWorktree(cloneDir, worktreeDir, req.BaseRef)
+		if err != nil {
 			errMsg := fmt.Sprintf("failed to create worktree: %v", err)
 			m.store.Update(sessionID, func(s *Session) {
 				s.State = StateError
@@ -146,16 +151,11 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 			return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
 		}
 
-		// Resolve the actual base ref used.
-		if baseRef == "" {
-			baseRef, _ = m.git.DefaultBranch(cloneDir)
-		}
-
 		workdir = worktreeDir
 		m.store.Update(sessionID, func(s *Session) {
 			s.WorktreePath = worktreeDir
 			s.RepoURL = profile.Repo
-			s.BaseRef = baseRef
+			s.BaseRef = resolvedRef
 		})
 	}
 
@@ -325,6 +325,15 @@ func (m *Manager) cleanup(sessionID, tmuxSession, errMsg string) {
 	if m.tmux.HasSession(tmuxSession) {
 		_ = m.tmux.KillSession(tmuxSession)
 	}
+
+	// Clean up worktree if one was created.
+	sess, ok := m.store.Get(sessionID)
+	if ok && sess.WorktreePath != "" && sess.RepoURL != "" && m.git != nil {
+		if cloneDir, err := m.git.CloneDir(sess.RepoURL); err == nil {
+			_ = m.git.RemoveWorktree(cloneDir, sess.WorktreePath)
+		}
+	}
+
 	m.store.Update(sessionID, func(s *Session) {
 		s.State = StateError
 		s.ErrorMessage = errMsg
