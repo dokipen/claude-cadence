@@ -258,26 +258,27 @@ interface TicketNode {
 }
 
 function formatTicketTable(tickets: TicketNode[], maxWidth = 120): string {
-  // Build raw column data per row: [id, state, title, points, assignee]
   const rows = tickets.map((t) => {
     const id = t.number != null ? chalk.bold(`#${t.number}`) : chalk.dim(`#${t.id}`);
     const state = formatState(t.state);
+    const priority = formatPriority(t.priority);
     const points = t.storyPoints != null ? chalk.magenta(`${t.storyPoints}pts`) : chalk.dim("-");
     const assignee = t.assignee ? chalk.cyan(`@${t.assignee.login}`) : chalk.dim("-");
-    return { id, state, title: t.title, points, assignee };
+    return { id, state, priority, title: t.title, points, assignee };
   });
 
   // Measure visible widths (strip ANSI)
-  const widths = { id: 0, state: 0, points: 0, assignee: 0 };
+  const widths = { id: 0, state: 0, priority: 0, points: 0, assignee: 0 };
   for (const r of rows) {
     widths.id = Math.max(widths.id, stripAnsi(r.id).length);
     widths.state = Math.max(widths.state, stripAnsi(r.state).length);
+    widths.priority = Math.max(widths.priority, stripAnsi(r.priority).length);
     widths.points = Math.max(widths.points, stripAnsi(r.points).length);
     widths.assignee = Math.max(widths.assignee, stripAnsi(r.assignee).length);
   }
 
-  // Title gets remaining space (with 2-char gaps between columns, plus 2-char left indent)
-  const fixedWidth = 2 + widths.id + 2 + widths.state + 2 + 2 + widths.points + 2 + widths.assignee;
+  // Title gets remaining space after fixed columns (2-char gaps between each column, 2-char left indent)
+  const fixedWidth = 2 + widths.id + 2 + widths.state + 2 + widths.priority + 2 + 2 + widths.points + 2 + widths.assignee;
   const titleWidth = Math.max(20, maxWidth - fixedWidth);
 
   function pad(s: string, w: number): string {
@@ -287,8 +288,9 @@ function formatTicketTable(tickets: TicketNode[], maxWidth = 120): string {
 
   return rows
     .map((r) => {
-      const visibleTitle = r.title.length > titleWidth ? r.title.slice(0, titleWidth - 1) + "…" : r.title;
-      return `  ${pad(r.id, widths.id)}  ${pad(r.state, widths.state)}  ${pad(visibleTitle, titleWidth)}  ${pad(r.points, widths.points)}  ${r.assignee}`;
+      const chars = Array.from(r.title);
+      const visibleTitle = chars.length > titleWidth ? chars.slice(0, titleWidth - 1).join("") + "…" : r.title;
+      return `  ${pad(r.id, widths.id)}  ${pad(r.state, widths.state)}  ${pad(r.priority, widths.priority)}  ${pad(visibleTitle, titleWidth)}  ${pad(r.points, widths.points)}  ${r.assignee}`;
     })
     .join("\n");
 }
