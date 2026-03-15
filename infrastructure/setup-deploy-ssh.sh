@@ -39,6 +39,13 @@ echo "  mkdir -p ~/.ssh && chmod 700 ~/.ssh"
 echo "  echo '$(cat "${KEY_FILE}.pub")' >> ~/.ssh/authorized_keys"
 echo "  chmod 600 ~/.ssh/authorized_keys"
 
+# Pre-populate known_hosts with localhost's host key
+KNOWN_HOSTS="${RUNNER_HOME}/.ssh/known_hosts"
+info "Scanning localhost host key into known_hosts"
+ssh-keyscan -H localhost >> "$KNOWN_HOSTS" 2>/dev/null
+sort -u "$KNOWN_HOSTS" -o "$KNOWN_HOSTS"
+chmod 600 "$KNOWN_HOSTS"
+
 # Configure SSH to use this key for localhost
 SSH_CONFIG="${RUNNER_HOME}/.ssh/config"
 if ! grep -q "Host localhost" "$SSH_CONFIG" 2>/dev/null; then
@@ -48,7 +55,6 @@ if ! grep -q "Host localhost" "$SSH_CONFIG" 2>/dev/null; then
 Host localhost
   User ${DEPLOY_USER}
   IdentityFile ${KEY_FILE}
-  StrictHostKeyChecking accept-new
 EOF
   chmod 600 "$SSH_CONFIG"
 else

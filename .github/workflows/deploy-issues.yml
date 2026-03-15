@@ -28,7 +28,7 @@ jobs:
     steps:
       - name: Deploy issues service
         run: |
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "${DEPLOY_USER}@localhost" bash -s <<'DEPLOY_SCRIPT'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "${DEPLOY_USER}@localhost" bash -s <<'DEPLOY_SCRIPT'
           set -euo pipefail
           cd "$HOME/src/claude-cadence"
           echo "==> Pulling latest changes..."
@@ -40,7 +40,7 @@ jobs:
 
       - name: Verify service is healthy
         run: |
-          ssh -o BatchMode=yes "${DEPLOY_USER}@localhost" bash -s <<'HEALTH_SCRIPT'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "${DEPLOY_USER}@localhost" bash -s <<'HEALTH_SCRIPT'
           set -euo pipefail
 
           echo "==> Waiting for service to be ready..."
@@ -61,23 +61,29 @@ jobs:
           exit 1
           HEALTH_SCRIPT
 
-      - name: Post deployment summary
-        if: always()
+      - name: Post success summary
+        if: success()
+        env:
+          COMMIT_SHA: ${{ github.sha }}
         run: |
-          if [ "${{ job.status }}" = "success" ]; then
-            echo "### Issues service deployed successfully" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "- **Commit:** \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
-            echo "- **Service:** https://cadence.bootsy.internal/graphql" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "### Issues service deployment failed" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "- **Commit:** \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
-            echo "- Check the logs above for details." >> "$GITHUB_STEP_SUMMARY"
-          fi
+          echo "### Issues service deployed successfully" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Commit:** \`${COMMIT_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Service:** https://cadence.bootsy.internal/graphql" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post failure summary
+        if: failure()
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          echo "### Issues service deployment failed" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Commit:** \`${COMMIT_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Check the logs above for details." >> "$GITHUB_STEP_SUMMARY"
 
   notify-cli-update:
-    # Remind dev machines to rebuild the CLI after deploys.
+    needs: deploy
+    # Remind dev machines to rebuild the CLI after successful deploys.
     # install.sh handles the Bootsy CLI rebuild; this is for other machines.
     runs-on: ubuntu-latest
     steps:
