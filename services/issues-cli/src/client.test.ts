@@ -2,12 +2,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock graphql-request before importing the module under test
 const mockRequest = vi.fn();
-vi.mock("graphql-request", () => ({
-  GraphQLClient: vi.fn().mockImplementation(() => ({
-    request: mockRequest,
-  })),
-  gql: (strings: TemplateStringsArray) => strings.join(""),
-}));
+vi.mock("graphql-request", () => {
+  class MockGraphQLClient {
+    request = mockRequest;
+    constructor() {}
+  }
+  return {
+    GraphQLClient: MockGraphQLClient,
+    gql: (strings: TemplateStringsArray) => strings.join(""),
+  };
+});
 
 // Mock config
 const mockGetApiUrl = vi.fn().mockReturnValue("http://localhost:4000");
@@ -125,6 +129,16 @@ describe("getClient", () => {
     const client = getClient();
     await expect(client.request("query { me { id } }")).rejects.toEqual(authError);
     expect(mockSetAuthTokens).not.toHaveBeenCalled();
+  });
+
+  it("works with no initial auth token (unauthenticated client)", async () => {
+    mockGetAuthToken.mockReturnValue(undefined);
+    mockRequest.mockResolvedValue({ data: "public" });
+
+    const client = getClient();
+    const result = await client.request("query { publicField }");
+
+    expect(result).toEqual({ data: "public" });
   });
 
   it("throws original error when refresh mutation fails", async () => {
