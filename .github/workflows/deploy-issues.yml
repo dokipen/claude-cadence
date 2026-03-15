@@ -87,7 +87,7 @@ jobs:
 
       - name: Cleanup workspace
         if: always()
-        run: rm -rf "$GITHUB_WORKSPACE"/*
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
 
   notify-cli-update:
     needs: deploy

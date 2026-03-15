@@ -37,7 +37,7 @@ jobs:
               - 'services/agents/**'
       - name: Cleanup workspace
         if: always()
-        run: rm -rf "$GITHUB_WORKSPACE"/*
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
 
   issues-service-test:
     needs: changes
@@ -62,7 +62,7 @@ jobs:
       - run: npm run build
       - name: Cleanup workspace
         if: always()
-        run: rm -rf "$GITHUB_WORKSPACE"/*
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
 
   issues-cli-test:
     needs: [changes, issues-service-test]
@@ -85,7 +85,7 @@ jobs:
         run: cd services/issues-cli && npm ci && npm run typecheck && npm test
       - name: Cleanup workspace
         if: always()
-        run: rm -rf "$GITHUB_WORKSPACE"/*
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
 
   issues-service-docker:
     needs: [changes, issues-service-test, issues-cli-test]
@@ -96,13 +96,17 @@ jobs:
         with:
           clean: true
       - name: Build Docker image
-        run: docker build services/issues/
-      - name: Cleanup Docker artifacts
+        run: docker build --iidfile /tmp/ci-docker-iid services/issues/
+      - name: Cleanup Docker image
         if: always()
-        run: docker image prune -f --filter "dangling=true"
+        run: |
+          if [ -f /tmp/ci-docker-iid ]; then
+            docker rmi "$(cat /tmp/ci-docker-iid)" 2>/dev/null || true
+            rm -f /tmp/ci-docker-iid
+          fi
       - name: Cleanup workspace
         if: always()
-        run: rm -rf "$GITHUB_WORKSPACE"/*
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
 
   agent-service-test:
     needs: changes
@@ -126,7 +130,7 @@ jobs:
         run: go test -v -count=1 -timeout 120s ./test/e2e/
       - name: Cleanup workspace
         if: always()
-        run: rm -rf "$GITHUB_WORKSPACE"/*
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
 
   agent-service-build:
     needs: [changes, agent-service-test]
@@ -144,7 +148,7 @@ jobs:
         run: go build -o agentd ./cmd/agentd
       - name: Cleanup workspace
         if: always()
-        run: rm -rf "$GITHUB_WORKSPACE"/*
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
 
   ci-status:
     if: always()

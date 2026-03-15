@@ -51,7 +51,7 @@ This prevents repository content from persisting between runs on the self-hosted
 
 The self-hosted runner has direct access to the host Docker daemon. This is an accepted risk with the following justification:
 
-- **CI docker jobs** (`issues-service-docker`) only run `docker build` to verify the image builds. No containers are started, no volumes are mounted, and no network access is granted. Dangling images are pruned after each build.
+- **CI docker jobs** (`issues-service-docker`) only run `docker build` to verify the image builds. No containers are started and no volumes are mounted. The built image is explicitly removed via `--iidfile` + `docker rmi` after each run.
 - **Deploy jobs** (`deploy-issues.yml`) use `docker compose` to build and deploy the issues service. This job only runs on pushes to `main` — never on PRs — so only trusted, reviewed code reaches it.
 - **Fork PRs never reach the self-hosted runner**, eliminating the primary attack vector (arbitrary Docker commands from untrusted code).
 
