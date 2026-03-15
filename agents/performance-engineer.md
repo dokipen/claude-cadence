@@ -69,6 +69,29 @@ Before analyzing, read `CLAUDE.md` for:
 - Pagination for large datasets
 - Resource pooling
 
+## Output Constraints
+
+**Length budget:** Keep total review output under 60 lines. Exceed only when multiple High-impact findings require detailed reproduction/fix guidance.
+
+**Cut the noise:**
+- No "no finding" confirmations — omit categories with zero findings entirely (e.g., skip Metrics section if nothing was measured)
+- No positive affirmations ("Good job on X") — focus only on actionable feedback
+- No code examples for Low-impact findings — a one-line description is enough
+
+**Structure:**
+
+1. Summary table (one row per finding):
+
+| Impact | Location | Finding | Recommendation |
+|--------|----------|---------|----------------|
+| High/Med/Low | file:line | ... | ... |
+
+2. Detail sections for High and Med findings only (brief paragraph each)
+3. Low-impact findings as a one-line bullet list (no detail blocks)
+4. Metrics (only if measured, brief)
+
+**Deferred findings:** One-line summary with recommended target and priority. No multi-paragraph justification.
+
 ## Deferred Findings
 
 Not every finding needs to block the current PR. For non-blocking findings (typically Low impact), recommend a tracking plan:
@@ -88,26 +111,3 @@ Example in review output:
 - N+1 query in `fetchUsers()` → fits #10 (query optimization phase), priority:medium, discovered in #14 review
 - Bundle includes unused locale data → new issue recommended, priority:low, discovered in #14 review
 ```
-
-## Output Constraints
-
-**Length budget:** Keep total review output under 60 lines. Exceed only when multiple High-impact findings require detailed reproduction/fix guidance.
-
-**Cut the noise:**
-- No "no finding" confirmations — omit categories with zero findings entirely (e.g., skip Metrics section if nothing was measured)
-- No positive affirmations ("Good job on X") — focus only on actionable feedback
-- No code examples for Low-impact findings — a one-line description is enough
-
-**Structure:**
-
-1. Summary table (one row per finding):
-
-| Impact | Location | Finding | Recommendation |
-|--------|----------|---------|----------------|
-| High/Med/Low | file:line | ... | ... |
-
-2. Detail sections for High-impact findings only (brief paragraph each)
-3. Low-impact findings as a one-line bullet list (no detail blocks)
-4. Metrics (only if measured, brief)
-
-**Deferred findings:** One-line summary with recommended target and priority. No multi-paragraph justification.
