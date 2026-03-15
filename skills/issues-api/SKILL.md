@@ -41,6 +41,10 @@ issues project update PROJECT_ID --name "New Name"
 issues project update PROJECT_ID --repository "org/new-repo"
 ```
 
+## Project Inference
+
+The CLI can infer the project from the current directory's git remote origin URL. When `--project` is omitted, the CLI reads `git remote get-url origin`, normalizes it to an `owner/repo` slug, and matches it against known projects. Explicit `--project` always takes precedence.
+
 ## Ticket Management
 
 ### Create a ticket
@@ -57,11 +61,15 @@ issues ticket create \
   --priority MEDIUM
 ```
 
+Note: `--project` is optional if you're in a git repo whose origin matches a known project.
+
 ### View a ticket
 
 ```bash
 issues ticket view 42 --project PROJECT_ID
 ```
+
+Note: `--project` is optional when viewing by ticket number if you're in a matching git repo.
 
 Shows: title, state, priority, story points, assignee, labels, description, acceptance criteria, blockers, comments.
 

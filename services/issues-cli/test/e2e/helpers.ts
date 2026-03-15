@@ -137,9 +137,10 @@ export function runCli(
   serverUrl: string,
   args: string[],
   authToken?: string,
+  cwd?: string,
 ): Promise<CliResult> {
   return new Promise((resolve) => {
-    const child = execCliProcess(serverUrl, args, authToken);
+    const child = execCliProcess(serverUrl, args, { authToken, cwd });
 
     let stdout = "";
     let stderr = "";
@@ -162,7 +163,13 @@ export function runCli(
   });
 }
 
-function execCliProcess(serverUrl: string, args: string[], authToken?: string): ChildProcess {
+interface ExecCliOptions {
+  authToken?: string;
+  cwd?: string;
+}
+
+function execCliProcess(serverUrl: string, args: string[], opts: ExecCliOptions = {}): ChildProcess {
+
   // Disable chalk colors and ora spinners for predictable output
   const env: Record<string, string> = {
     ...(process.env as Record<string, string>),
@@ -171,8 +178,8 @@ function execCliProcess(serverUrl: string, args: string[], authToken?: string): 
     NO_COLOR: "1",
   };
 
-  if (authToken) {
-    env.ISSUES_AUTH_TOKEN = authToken;
+  if (opts.authToken) {
+    env.ISSUES_AUTH_TOKEN = opts.authToken;
   }
 
   return spawn(
@@ -180,7 +187,7 @@ function execCliProcess(serverUrl: string, args: string[], authToken?: string): 
     ["tsx", join(ISSUES_CLI_DIR, "src", "index.ts"), ...args],
     {
       env,
-      cwd: ISSUES_CLI_DIR,
+      cwd: opts.cwd ?? ISSUES_CLI_DIR,
       stdio: ["pipe", "pipe", "pipe"],
     }
   );
@@ -196,7 +203,7 @@ export function runCliWithStdin(
   authToken?: string,
 ): Promise<CliResult> {
   return new Promise((resolve) => {
-    const child = execCliProcess(serverUrl, args, authToken);
+    const child = execCliProcess(serverUrl, args, { authToken });
 
     let stdout = "";
     let stderr = "";
@@ -227,6 +234,7 @@ export interface TestSuite {
   authToken: string;
   cleanup: () => void;
   cli: (...args: string[]) => Promise<CliResult>;
+  cliInDir: (cwd: string, ...args: string[]) => Promise<CliResult>;
   unauthenticatedCli: (...args: string[]) => Promise<CliResult>;
   cliWithStdin: (stdinData: string, ...args: string[]) => Promise<CliResult>;
 }
@@ -242,7 +250,8 @@ export interface TestSuite {
 export async function setupTestSuite(): Promise<TestSuite> {
   const { url, authToken, cleanup } = await createTestServer();
   const cli = (...args: string[]) => runCli(url, args, authToken);
+  const cliInDir = (cwd: string, ...args: string[]) => runCli(url, args, authToken, cwd);
   const unauthenticatedCli = (...args: string[]) => runCli(url, args);
   const cliWithStdin = (stdinData: string, ...args: string[]) => runCliWithStdin(url, args, stdinData);
-  return { url, authToken, cleanup, cli, unauthenticatedCli, cliWithStdin };
+  return { url, authToken, cleanup, cli, cliInDir, unauthenticatedCli, cliWithStdin };
 }
