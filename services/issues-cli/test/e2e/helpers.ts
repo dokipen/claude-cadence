@@ -168,10 +168,7 @@ interface ExecCliOptions {
   cwd?: string;
 }
 
-function execCliProcess(serverUrl: string, args: string[], optsOrAuthToken?: string | ExecCliOptions): ChildProcess {
-  const opts: ExecCliOptions = typeof optsOrAuthToken === "string"
-    ? { authToken: optsOrAuthToken }
-    : optsOrAuthToken ?? {};
+function execCliProcess(serverUrl: string, args: string[], opts: ExecCliOptions = {}): ChildProcess {
 
   // Disable chalk colors and ora spinners for predictable output
   const env: Record<string, string> = {
@@ -206,7 +203,7 @@ export function runCliWithStdin(
   authToken?: string,
 ): Promise<CliResult> {
   return new Promise((resolve) => {
-    const child = execCliProcess(serverUrl, args, authToken);
+    const child = execCliProcess(serverUrl, args, { authToken });
 
     let stdout = "";
     let stderr = "";
