@@ -15,6 +15,7 @@ An issue-driven, multi-agent development workflow plugin for Claude Code.
 - `ticket-provider` — Ticket provider abstraction (dispatches to GitHub Issues or issues microservice)
 - `github-issues` — Background knowledge for `gh` CLI patterns
 - `issues-api` — CLI commands for the issues microservice backend
+- `agent-service` — Interacting with the agentd gRPC API
 - `project-ops` — Shared worktree management scripts
 
 ### Agents (6 core specialists)
