@@ -1,0 +1,53 @@
+name: Issues Service CI
+
+on:
+  pull_request:
+    paths:
+      - 'services/issues/**'
+      - 'services/issues-cli/**'
+  push:
+    branches: [main]
+    paths:
+      - 'services/issues/**'
+      - 'services/issues-cli/**'
+
+permissions:
+  contents: read
+
+jobs:
+  test-service:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/issues
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  test-cli:
+    runs-on: ubuntu-latest
+    needs: test-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build issues service
+        run: cd services/issues && npm ci && npx prisma generate && npm run build
+      - name: Test CLI
+        run: cd services/issues-cli && npm ci && npm run typecheck && npm test
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: [test-service, test-cli]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build services/issues/

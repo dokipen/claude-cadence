@@ -102,6 +102,12 @@ Issues must be refined (`/refine`) before implementation — this covers estimat
 - **Communication**: Issue comments pre-PR, PR comments post-PR
 - **GitHub**: Always use `gh` CLI
 
+## Services
+
+### Issue Microservice
+
+A GraphQL-based ticket tracking service with CLI client. See the [Issue Microservice Documentation](services/issues/docs/INDEX.md) for setup, deployment, and usage.
+
 ## License
 
 MIT
