@@ -26,6 +26,7 @@ type Session struct {
 	CreatedAt    time.Time
 	ErrorMessage string
 	AgentPID     int
+	WebsocketURL string
 }
 
 // Store is a thread-safe in-memory session store.

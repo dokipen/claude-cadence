@@ -4,6 +4,9 @@ port: 0  # random port for tests
 tmux:
   socket_name: "agentd-test"
 
+ttyd:
+  enabled: false
+
 log:
   level: "debug"
   format: "text"
@@ -18,3 +21,6 @@ profiles:
   echo-and-exit:
     command: "bash -c 'echo hello && sleep 1'"
     description: "Echoes and exits after 1s"
+  echo-args:
+    command: "echo {{.ExtraArgs}}"
+    description: "Echoes extra args for testing shell escaping"

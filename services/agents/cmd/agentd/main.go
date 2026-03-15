@@ -12,6 +12,7 @@ import (
 	"github.com/dokipen/claude-cadence/services/agents/internal/service"
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
 	"github.com/dokipen/claude-cadence/services/agents/internal/tmux"
+	"github.com/dokipen/claude-cadence/services/agents/internal/ttyd"
 )
 
 func main() {
@@ -57,8 +58,9 @@ func main() {
 
 	// Create components.
 	tmuxClient := tmux.NewClient(cfg.Tmux.SocketName)
+	ttydClient := ttyd.NewClient(cfg.Ttyd.Enabled, cfg.Ttyd.BasePort)
 	store := session.NewStore()
-	manager := session.NewManager(store, tmuxClient, cfg.Profiles)
+	manager := session.NewManager(store, tmuxClient, ttydClient, cfg.Profiles)
 	agentService := service.NewAgentService(manager)
 
 	srv, err := server.New(agentService, cfg)

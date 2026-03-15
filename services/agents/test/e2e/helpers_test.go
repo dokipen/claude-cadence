@@ -15,6 +15,7 @@ import (
 	"github.com/dokipen/claude-cadence/services/agents/internal/service"
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
 	"github.com/dokipen/claude-cadence/services/agents/internal/tmux"
+	"github.com/dokipen/claude-cadence/services/agents/internal/ttyd"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -30,8 +31,9 @@ func TestMain(m *testing.M) {
 
 	// Create components
 	tmuxClient := tmux.NewClient(cfg.Tmux.SocketName)
+	ttydClient := ttyd.NewClient(cfg.Ttyd.Enabled, cfg.Ttyd.BasePort)
 	store := session.NewStore()
-	mgr := session.NewManager(store, tmuxClient, cfg.Profiles)
+	mgr := session.NewManager(store, tmuxClient, ttydClient, cfg.Profiles)
 	svc := service.NewAgentService(mgr)
 
 	// Create a minimal config for test server
