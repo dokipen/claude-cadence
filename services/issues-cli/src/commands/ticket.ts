@@ -327,7 +327,7 @@ export function formatTicketTable(tickets: TicketNode[], options?: { showProject
 
   const rows = tickets.map((t) => {
     const id = t.number != null ? chalk.bold(`#${t.number}`) : chalk.dim(`#${t.id}`);
-    const isBlocked = t.blockedBy != null && t.blockedBy.length > 0;
+    const isBlocked = (t.blockedBy?.length ?? 0) > 0;
     const state = isBlocked ? chalk.red("BLOCKED") : formatState(t.state);
     const priority = formatPriority(t.priority);
     const project = showProject && t.project ? chalk.green(t.project.name) : "";

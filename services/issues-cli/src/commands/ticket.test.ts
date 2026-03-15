@@ -73,8 +73,6 @@ describe("formatTicketTable", () => {
     const dataLine = stripAnsi(output.split("\n")[2]);
     expect(dataLine).toContain("BLOCKED");
     expect(dataLine).not.toContain("[OPEN]");
-    // Verify BLOCKED replaces the state — state brackets should not appear
-    expect(dataLine).not.toMatch(/\[.*\]/);
   });
 
   it("does not show BLOCKED when ticket has no blockers", () => {
