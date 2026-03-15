@@ -19,6 +19,8 @@ user-invokable: false
 grpcurl -plaintext 127.0.0.1:4141 list
 ```
 
+**Note:** `-plaintext` disables TLS and is only appropriate for loopback connections (`127.0.0.1`). For remote hosts, omit `-plaintext` and use TLS.
+
 Two modes for specifying the API schema:
 
 ```bash
@@ -60,7 +62,7 @@ grpcurl -plaintext -d '{
   "session_name": "review-pr-42",
   "base_ref": "main",
   "env": {
-    "GITHUB_TOKEN": "ghp_..."
+    "GITHUB_TOKEN": "$GITHUB_TOKEN"
   },
   "extra_args": ["--verbose"]
 }' 127.0.0.1:4141 agents.v1.AgentService/CreateSession
