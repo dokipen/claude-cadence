@@ -22,9 +22,10 @@ ensure_env() {
     log "Generating .env with random JWT_SECRET..."
     local secret
     secret=$(openssl rand -base64 32)
-    cat > "$ENV_FILE" <<EOF
+    (umask 077 && cat > "$ENV_FILE" <<EOF
 JWT_SECRET="$secret"
 EOF
+    )
   fi
 }
 
@@ -141,8 +142,8 @@ Requires=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=${SCRIPT_DIR}
-ExecStart=${DOCKER_BIN} compose --env-file ${ENV_FILE} -f ${COMPOSE_FILE} up --build -d
-ExecStop=${DOCKER_BIN} compose --env-file ${ENV_FILE} -f ${COMPOSE_FILE} down
+ExecStart=${DOCKER_BIN} compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up --build -d
+ExecStop=${DOCKER_BIN} compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" down
 
 [Install]
 WantedBy=default.target
