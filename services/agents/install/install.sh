@@ -24,7 +24,21 @@ prompt() {
     local value
     printf "%s [%s]: " "$prompt_text" "$default"
     read -r value
-    eval "$var_name=\"${value:-$default}\""
+    printf -v "$var_name" '%s' "${value:-$default}"
+}
+
+validate_username() {
+    local name="$1"
+    if [[ ! "$name" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; then
+        error "Invalid username '$name'. Must match [a-z_][a-z0-9_-]{0,31}."
+    fi
+}
+
+validate_port() {
+    local port="$1"
+    if [[ ! "$port" =~ ^[0-9]+$ ]] || [[ "$port" -lt 1 ]] || [[ "$port" -gt 65535 ]]; then
+        error "Invalid port '$port'. Must be 1-65535."
+    fi
 }
 
 confirm() {
@@ -68,16 +82,22 @@ check_prerequisites() {
 setup_user() {
     local os="$1"
     prompt AGENTD_USER "User to run the service as" "$(whoami)"
+    validate_username "$AGENTD_USER"
 
     if ! id "$AGENTD_USER" >/dev/null 2>&1; then
         info "User '$AGENTD_USER' does not exist."
         if confirm "Create system user '$AGENTD_USER'?"; then
             if [[ "$os" == "darwin" ]]; then
-                # macOS: use sysadminctl or dscl
+                # Find next available UID above 500 (system range).
+                local next_uid
+                next_uid=$(dscl . -list /Users UniqueID | awk '{if ($2 >= 500) max=$2} END {print max+1}')
                 sudo dscl . -create "/Users/$AGENTD_USER"
+                sudo dscl . -create "/Users/$AGENTD_USER" UniqueID "$next_uid"
+                sudo dscl . -create "/Users/$AGENTD_USER" PrimaryGroupID 20
                 sudo dscl . -create "/Users/$AGENTD_USER" UserShell /usr/bin/false
+                sudo dscl . -create "/Users/$AGENTD_USER" NFSHomeDirectory "/var/empty"
                 sudo dscl . -create "/Users/$AGENTD_USER" RealName "agentd service"
-                info "Created user '$AGENTD_USER' on macOS."
+                info "Created user '$AGENTD_USER' (UID=$next_uid) on macOS."
             else
                 sudo useradd --system --shell /usr/bin/false --create-home "$AGENTD_USER"
                 info "Created system user '$AGENTD_USER'."
@@ -111,8 +131,9 @@ setup_directories() {
     sudo mkdir -p "$AGENTD_ROOT_DIR/repos" "$AGENTD_ROOT_DIR/worktrees"
     sudo chown -R "$AGENTD_USER:$AGENTD_GROUP" "$AGENTD_ROOT_DIR"
 
-    mkdir -p "$AGENTD_CONFIG_DIR"
-    mkdir -p "$AGENTD_LOG_DIR"
+    sudo mkdir -p "$AGENTD_CONFIG_DIR"
+    sudo mkdir -p "$AGENTD_LOG_DIR"
+    sudo chown "$AGENTD_USER:$AGENTD_GROUP" "$AGENTD_CONFIG_DIR" "$AGENTD_LOG_DIR"
 }
 
 # --- Config generation ---
@@ -160,7 +181,8 @@ EOF
 install_binary() {
     local script_dir
     script_dir="$(cd "$(dirname "$0")" && pwd)"
-    local service_dir="$script_dir/.."
+    local service_dir
+    service_dir="$(cd "$script_dir/.." && pwd)"
 
     if [[ -f "$service_dir/agentd" ]]; then
         info "Installing pre-built binary to $INSTALL_DIR/$BINARY_NAME..."
@@ -179,15 +201,20 @@ install_binary() {
 
 # --- Template rendering ---
 
+sed_escape() {
+    # Escape characters special to sed replacement strings.
+    printf '%s' "$1" | sed 's/[&/|\\]/\\&/g'
+}
+
 render_template() {
     local template="$1" output="$2"
     sed \
-        -e "s|__BINARY_PATH__|$INSTALL_DIR/$BINARY_NAME|g" \
-        -e "s|__CONFIG_PATH__|$AGENTD_CONFIG_DIR/config.yaml|g" \
-        -e "s|__USER__|$AGENTD_USER|g" \
-        -e "s|__GROUP__|$AGENTD_GROUP|g" \
-        -e "s|__ROOT_DIR__|$AGENTD_ROOT_DIR|g" \
-        -e "s|__LOG_DIR__|$AGENTD_LOG_DIR|g" \
+        -e "s|__BINARY_PATH__|$(sed_escape "$INSTALL_DIR/$BINARY_NAME")|g" \
+        -e "s|__CONFIG_PATH__|$(sed_escape "$AGENTD_CONFIG_DIR/config.yaml")|g" \
+        -e "s|__USER__|$(sed_escape "$AGENTD_USER")|g" \
+        -e "s|__GROUP__|$(sed_escape "$AGENTD_GROUP")|g" \
+        -e "s|__ROOT_DIR__|$(sed_escape "$AGENTD_ROOT_DIR")|g" \
+        -e "s|__LOG_DIR__|$(sed_escape "$AGENTD_LOG_DIR")|g" \
         "$template" > "$output"
 }
 
@@ -278,6 +305,7 @@ main() {
 
     prompt AGENTD_HOST "Host to bind to" "$DEFAULT_HOST"
     prompt AGENTD_PORT "Port to listen on" "$DEFAULT_PORT"
+    validate_port "$AGENTD_PORT"
 
     setup_directories "$os"
     install_binary
@@ -288,7 +316,7 @@ main() {
         linux)  install_systemd ;;
     esac
 
-    health_check
+    health_check || true
 
     echo
     info "Installation complete!"

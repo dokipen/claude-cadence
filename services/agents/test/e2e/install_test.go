@@ -94,7 +94,7 @@ func TestInstall_SystemdGeneration(t *testing.T) {
 		{"type", "Type=simple"},
 		{"user", "User=agentd"},
 		{"group", "Group=agentd"},
-		{"exec start", "ExecStart=/usr/local/bin/agentd --config /etc/agentd/config.yaml"},
+		{"exec start", `ExecStart="/usr/local/bin/agentd" --config "/etc/agentd/config.yaml"`},
 		{"working dir", "WorkingDirectory=/var/lib/agentd"},
 		{"restart", "Restart=on-failure"},
 		{"restart sec", "RestartSec=5"},
@@ -173,7 +173,7 @@ func TestInstall_SystemdCustomValues(t *testing.T) {
 	if !strings.Contains(rendered, "Group=svcgroup") {
 		t.Error("custom group not rendered")
 	}
-	if !strings.Contains(rendered, "ExecStart=/opt/agentd/bin/agentd --config /etc/agentd/custom.yaml") {
+	if !strings.Contains(rendered, `ExecStart="/opt/agentd/bin/agentd" --config "/etc/agentd/custom.yaml"`) {
 		t.Error("custom exec start not rendered")
 	}
 }
