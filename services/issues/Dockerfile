@@ -29,4 +29,4 @@ USER issues
 
 EXPOSE 4000
 
-CMD sh -c "npx prisma migrate deploy && node dist/prisma/seed.js && node dist/src/index.js"
+CMD sh -c "npx prisma migrate deploy && node dist/prisma/seed.js && exec node dist/src/index.js"
