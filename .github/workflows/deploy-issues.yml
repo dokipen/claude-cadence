@@ -47,10 +47,12 @@ jobs:
         run: |
           echo "==> Waiting for service to be ready..."
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:4000/graphql \
-                 -H 'Content-Type: application/json' \
-                 -d '{"query":"{ __typename }"}' > /dev/null 2>&1; then
-              echo "==> Service is healthy"
+            status=$(curl -so /dev/null -w '%{http_code}' \
+              http://localhost:4000/graphql \
+              -H 'Content-Type: application/json' \
+              -d '{"query":"{ __typename }"}' 2>/dev/null || true)
+            if [ "$status" -gt 0 ] 2>/dev/null; then
+              echo "==> Service is healthy (HTTP $status)"
               exit 0
             fi
             sleep 2
