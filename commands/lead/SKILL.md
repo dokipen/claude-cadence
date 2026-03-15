@@ -92,7 +92,6 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
    - Bug fix → Phase 1b (Reproduction)
    - Other → Delegate to appropriate specialist
 4. **Task breakdown**: Create 3-6 discrete units with clear owners
-5. **Post plan to issue** and proceed to implementation
 
 ### Phase 1a: Design Review (for visual changes, if designer agent available)
 
