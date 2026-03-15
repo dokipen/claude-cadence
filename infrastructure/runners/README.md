@@ -70,6 +70,18 @@ Each runner directory is namespaced by repo name, allowing multiple repos on one
 
 The scripts auto-detect the platform and architecture. The runner's bundled `svc.sh` handles service installation for both systemd and launchd.
 
+## Security: Fork Pull Requests
+
+This repository is public. Self-hosted runners execute code from the PR branch, so fork PRs from outside contributors could run untrusted code on runner infrastructure.
+
+**Mitigation:** The CI workflow (`ci.yml`) uses a conditional `runs-on` expression that routes fork PRs to GitHub-hosted `ubuntu-latest` runners automatically. Only same-repo pushes and PRs run on self-hosted runners.
+
+```yaml
+runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
+```
+
+As additional defense-in-depth, enable **Require approval for all outside collaborators** in repo Settings > Actions > General > Fork pull request workflows.
+
 ## Idempotency
 
 Re-running `setup-runners.sh` skips runners that are already configured and have a running service. To reconfigure, tear down first then set up again.
