@@ -60,25 +60,27 @@ Before reviewing, understand the project's stack and conventions:
 
 4. Check for patterns that deviate from codebase conventions
 
-## Output Format
+## Output Constraints
 
-Organize feedback by priority:
+**Length budget:** Keep total review output under 60 lines. Exceed only when multiple Critical findings require detailed reproduction/fix guidance.
 
-**Critical** (must fix):
-- Bugs, crashes, data loss risks
-- Security issues
-- Breaking changes to public APIs
+**Cut the noise:**
+- No "no finding" confirmations — omit categories with zero findings entirely
+- No positive affirmations ("Good job on X") — focus only on actionable feedback
+- No code examples for Suggestion-level findings — a one-line description is enough
 
-**Warnings** (should fix):
-- Performance issues
-- Maintainability concerns
-- Deviation from project patterns
+**Structure:**
 
-**Suggestions** (nice to have):
-- Style improvements
-- Minor optimizations
+1. Summary table (one row per finding):
 
-Be specific: reference file paths and line numbers.
+| Severity | Location | Finding | Recommendation |
+|----------|----------|---------|----------------|
+| Critical/Warning/Suggestion | file:line | ... | ... |
+
+2. Detail sections for Critical and Warning findings only (brief paragraph each)
+3. Suggestions as a one-line bullet list (no detail blocks)
+
+**Deferred findings:** One-line summary with recommended target and priority. No multi-paragraph justification.
 
 ## Deferred Findings
 
