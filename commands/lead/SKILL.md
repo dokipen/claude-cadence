@@ -162,6 +162,8 @@ In both cases:
 6. Clean up worktree using the `project-ops` skill's `cleanup-worktree.sh` script
 7. Report completion
 
+> **Note:** If this phase is skipped (e.g., conversation ends early), cleanup happens automatically the next time `/new-work` creates a worktree — the `cleanup-merged-worktrees.sh` pre-flight detects merged PRs and cleans up their worktrees, branches, and labels.
+
 ---
 
 ## Coordination Protocol

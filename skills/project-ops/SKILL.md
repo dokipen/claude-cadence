@@ -22,8 +22,22 @@ scripts/create-worktree.sh <branch-name>
 
 - Branch names MUST start with an issue number (e.g., `42-add-feature`)
 - Creates `.worktrees/<branch-name>` directory
-- Runs orphan check as pre-flight
+- Runs `cleanup-merged-worktrees.sh` as pre-flight to auto-clean stale worktrees
+- Falls back to orphan check for untracked directories
 - Validates branch doesn't already exist locally or remotely
+
+### cleanup-merged-worktrees.sh
+
+Automatically clean up worktrees whose associated PRs have been merged.
+
+```bash
+scripts/cleanup-merged-worktrees.sh
+```
+
+- Scans `.worktrees/` for branches with merged PRs
+- Removes worktree directory, local/remote branches, and `in-progress` label
+- Skips the current worktree
+- Called automatically by `create-worktree.sh` pre-flight
 
 ### cleanup-worktree.sh
 

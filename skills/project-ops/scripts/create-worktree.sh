@@ -32,16 +32,20 @@ if ! echo "$BRANCH_NAME" | grep -qE '^[0-9]+-'; then
   exit 1
 fi
 
-# Run orphan check if script exists
+# Clean up worktrees from merged PRs before creating a new one
+MERGED_CLEANUP="$SCRIPT_DIR/cleanup-merged-worktrees.sh"
+if [ -x "$MERGED_CLEANUP" ]; then
+  "$MERGED_CLEANUP"
+fi
+
+# Check for remaining orphaned worktree directories
 ORPHAN_CHECK="$SCRIPT_DIR/check-orphaned-worktrees.sh"
 if [ -x "$ORPHAN_CHECK" ]; then
-  echo "Running pre-flight check..."
   if ! "$ORPHAN_CHECK"; then
     echo ""
     echo "Please clean up orphaned worktrees before proceeding."
     exit 1
   fi
-  echo ""
 fi
 
 # Check if branch already exists locally or remotely
