@@ -27,6 +27,7 @@ func (s *AgentService) CreateSession(_ context.Context, req *agentsv1.CreateSess
 	createReq := session.CreateRequest{
 		AgentProfile: req.GetAgentProfile(),
 		SessionName:  req.GetSessionName(),
+		BaseRef:      req.GetBaseRef(),
 		Env:          req.GetEnv(),
 		ExtraArgs:    req.GetExtraArgs(),
 	}
@@ -84,6 +85,9 @@ func sessionToProto(sess *session.Session) *agentsv1.Session {
 		Name:         sess.Name,
 		AgentProfile: sess.AgentProfile,
 		State:        stateToProto(sess.State),
+		WorktreePath: sess.WorktreePath,
+		RepoUrl:      sess.RepoURL,
+		BaseRef:      sess.BaseRef,
 		TmuxSession:  sess.TmuxSession,
 		CreatedAt:    timestamppb.New(sess.CreatedAt),
 		ErrorMessage: sess.ErrorMessage,

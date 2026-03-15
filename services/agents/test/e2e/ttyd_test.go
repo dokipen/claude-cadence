@@ -37,7 +37,7 @@ func newTtydTestEnv(t *testing.T) *ttydTestEnv {
 		"sleeper": {Command: "sleep 3600"},
 	}
 
-	mgr := session.NewManager(store, tmuxClient, ttydClient, profiles)
+	mgr := session.NewManager(store, tmuxClient, ttydClient, nil, profiles)
 	svc := service.NewAgentService(mgr)
 
 	ttydTestCfg := &config.Config{
