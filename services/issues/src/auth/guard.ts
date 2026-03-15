@@ -9,6 +9,8 @@ const PUBLIC_FIELDS = new Set([
   "generateOAuthState",
   "authenticateWithGitHubCode",
   "authenticateWithGitHubPAT",
+  "refreshToken",
+  "logout",
   ...(isProduction ? [] : ["__schema", "__type"]),
 ]);
 

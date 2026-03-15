@@ -3,7 +3,13 @@ import type { Loaders } from "../../loaders.js";
 import type { GitHubUserProfile } from "../../auth/types.js";
 import { GitHubOAuthProvider } from "../../auth/providers/github-oauth.js";
 import { GitHubPATProvider } from "../../auth/providers/github-pat.js";
-import { signToken } from "../../auth/jwt.js";
+import {
+  signToken,
+  verifyToken,
+  generateRefreshToken,
+  REFRESH_TOKEN_EXPIRY_DAYS,
+  ACCESS_TOKEN_EXPIRY_MS,
+} from "../../auth/jwt.js";
 import { oauthStateStore } from "../../auth/state-store.js";
 import { GraphQLError } from "graphql";
 
@@ -11,6 +17,7 @@ export interface AuthenticatedContext {
   prisma: PrismaClient;
   loaders: Loaders;
   currentUser: User | null;
+  accessToken?: string;
 }
 
 const oauthProvider = new GitHubOAuthProvider();
@@ -34,6 +41,23 @@ async function upsertUser(
       avatarUrl: profile.avatarUrl,
     },
   });
+}
+
+async function issueTokens(prisma: PrismaClient, userId: string) {
+  const token = signToken(userId);
+  const refreshTokenValue = generateRefreshToken();
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + REFRESH_TOKEN_EXPIRY_DAYS);
+
+  await prisma.refreshToken.create({
+    data: {
+      token: refreshTokenValue,
+      userId,
+      expiresAt,
+    },
+  });
+
+  return { token, refreshToken: refreshTokenValue };
 }
 
 export function requireAuth(context: AuthenticatedContext): User {
@@ -70,8 +94,8 @@ export const authResolvers = {
       }
       const profile = await oauthProvider.authenticate({ code });
       const user = await upsertUser(prisma, profile);
-      const token = signToken(user.id);
-      return { token, user };
+      const { token, refreshToken } = await issueTokens(prisma, user.id);
+      return { token, refreshToken, user };
     },
 
     authenticateWithGitHubPAT: async (
@@ -81,8 +105,80 @@ export const authResolvers = {
     ) => {
       const profile = await patProvider.authenticate({ token });
       const user = await upsertUser(prisma, profile);
-      const jwtToken = signToken(user.id);
-      return { token: jwtToken, user };
+      const { token: jwtToken, refreshToken } = await issueTokens(
+        prisma,
+        user.id
+      );
+      return { token: jwtToken, refreshToken, user };
+    },
+
+    refreshToken: async (
+      _: unknown,
+      { refreshToken }: { refreshToken: string },
+      { prisma }: AuthenticatedContext
+    ) => {
+      // Atomic rotation: revoke old token and verify it wasn't already revoked
+      return prisma.$transaction(async (tx) => {
+        const result = await tx.refreshToken.updateMany({
+          where: { token: refreshToken, revoked: false },
+          data: { revoked: true },
+        });
+
+        if (result.count === 0) {
+          throw new GraphQLError("Invalid or revoked refresh token", {
+            extensions: { code: "UNAUTHENTICATED" },
+          });
+        }
+
+        const storedToken = await tx.refreshToken.findUnique({
+          where: { token: refreshToken },
+          include: { user: true },
+        });
+
+        if (!storedToken || storedToken.expiresAt < new Date()) {
+          throw new GraphQLError("Refresh token expired", {
+            extensions: { code: "UNAUTHENTICATED" },
+          });
+        }
+
+        const { token: newAccessToken, refreshToken: newRefreshToken } =
+          await issueTokens(tx as unknown as PrismaClient, storedToken.userId);
+
+        return {
+          token: newAccessToken,
+          refreshToken: newRefreshToken,
+          user: storedToken.user,
+        };
+      });
+    },
+
+    logout: async (
+      _: unknown,
+      { refreshToken }: { refreshToken: string },
+      context: AuthenticatedContext
+    ) => {
+      const { prisma, accessToken } = context;
+
+      // Revoke the refresh token
+      await prisma.refreshToken.updateMany({
+        where: { token: refreshToken, revoked: false },
+        data: { revoked: true },
+      });
+
+      // Blocklist the current access token so it cannot be reused
+      if (accessToken) {
+        try {
+          const { jti } = verifyToken(accessToken);
+          const expiresAt = new Date(Date.now() + ACCESS_TOKEN_EXPIRY_MS);
+          await prisma.revokedToken.create({
+            data: { jti, expiresAt },
+          });
+        } catch {
+          // Token may already be expired/invalid — that's fine
+        }
+      }
+
+      return true;
     },
   },
 };

@@ -18,6 +18,7 @@ model User {
 
   assignedTickets Ticket[]
   comments        Comment[]
+  refreshTokens   RefreshToken[]
 }
 
 // SQLite does not support enums natively — we store them as strings
@@ -86,4 +87,22 @@ model BlockRelation {
   blocked Ticket @relation("blocked", fields: [blockedId], references: [id])
 
   @@unique([blockerId, blockedId])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model RevokedToken {
+  id        String   @id @default(cuid())
+  jti       String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 }

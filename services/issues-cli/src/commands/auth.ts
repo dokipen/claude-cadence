@@ -3,8 +3,9 @@ import { Command } from "commander";
 import { gql } from "graphql-request";
 import chalk from "chalk";
 import ora from "ora";
+import { GraphQLClient } from "graphql-request";
 import { getClient } from "../client.js";
-import { setAuthToken, clearAuthToken } from "../config.js";
+import { setAuthTokens, clearAuthToken, getRefreshToken, getApiUrl } from "../config.js";
 import { handleError } from "../errors.js";
 
 // --- GraphQL Documents ---
@@ -13,6 +14,7 @@ const AUTHENTICATE_WITH_PAT = gql`
   mutation AuthenticateWithGitHubPAT($token: String!) {
     authenticateWithGitHubPAT(token: $token) {
       token
+      refreshToken
       user {
         id
         login
@@ -33,6 +35,7 @@ const AUTHENTICATE_WITH_CODE = gql`
   mutation AuthenticateWithGitHubCode($code: String!, $state: String!) {
     authenticateWithGitHubCode(code: $code, state: $state) {
       token
+      refreshToken
       user {
         id
         login
@@ -40,6 +43,12 @@ const AUTHENTICATE_WITH_CODE = gql`
         avatarUrl
       }
     }
+  }
+`;
+
+const LOGOUT = gql`
+  mutation Logout($refreshToken: String!) {
+    logout(refreshToken: $refreshToken)
   }
 `;
 
@@ -60,6 +69,7 @@ const ME = gql`
 
 interface AuthPayload {
   token: string;
+  refreshToken: string;
   user: {
     id: string;
     login: string;
@@ -132,7 +142,7 @@ export function registerAuthCommand(program: Command): void {
             { token }
           );
           result = data.authenticateWithGitHubPAT;
-          setAuthToken(result.token);
+          setAuthTokens(result.token, result.refreshToken);
           spinner.succeed(`Authenticated as ${chalk.bold(result.user.login)} (${result.user.displayName})`);
         } else if (options.code) {
           const spinner = ora("Authenticating...").start();
@@ -145,7 +155,7 @@ export function registerAuthCommand(program: Command): void {
             { code: options.code, state }
           );
           result = data.authenticateWithGitHubCode;
-          setAuthToken(result.token);
+          setAuthTokens(result.token, result.refreshToken);
           spinner.succeed(`Authenticated as ${chalk.bold(result.user.login)} (${result.user.displayName})`);
         } else if (process.stdin.isTTY) {
           const token = await promptSecret("Enter GitHub PAT: ");
@@ -160,7 +170,7 @@ export function registerAuthCommand(program: Command): void {
             { token }
           );
           result = data.authenticateWithGitHubPAT;
-          setAuthToken(result.token);
+          setAuthTokens(result.token, result.refreshToken);
           spinner.succeed(`Authenticated as ${chalk.bold(result.user.login)} (${result.user.displayName})`);
         } else {
           console.error(chalk.red("Error: please provide --pat <token>, --pat - (stdin), or --code <code>"));
@@ -175,8 +185,19 @@ export function registerAuthCommand(program: Command): void {
 
   auth
     .command("logout")
-    .description("Clear stored authentication token")
-    .action(() => {
+    .description("Revoke session and clear stored tokens")
+    .action(async () => {
+      // Try to revoke the refresh token on the server
+      const refreshToken = getRefreshToken();
+      if (refreshToken) {
+        try {
+          const client = new GraphQLClient(getApiUrl());
+          await client.request(LOGOUT, { refreshToken });
+        } catch {
+          // Best-effort server-side revocation — continue with local cleanup
+        }
+      }
+
       clearAuthToken();
       console.log("Logged out successfully.");
     });
