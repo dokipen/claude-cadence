@@ -8,7 +8,7 @@ const ISSUES_DIR = path.resolve(__dirname, "../../issues");
 export default function globalSetup() {
   const env = {
     ...process.env,
-    DATABASE_URL: "file:./test.db",
+    DATABASE_URL: `file:${path.resolve(ISSUES_DIR, "test.db")}`,
   };
 
   console.log("Running prisma migrate deploy against test database...");
