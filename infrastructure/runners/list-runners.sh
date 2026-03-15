@@ -81,8 +81,14 @@ get_service_status() {
     if [[ "$OS" == "linux" ]] && command -v systemctl >/dev/null 2>&1; then
         systemctl is-active "$svc_name" 2>/dev/null || echo "inactive"
     elif [[ "$OS" == "darwin" ]] && command -v launchctl >/dev/null 2>&1; then
-        if launchctl list "$svc_name" >/dev/null 2>&1; then
+        # launchctl list exits 0 for loaded-but-crashed services.
+        # Parse the PID field: a positive PID means running, "-" or "0" means not running.
+        local pid
+        pid=$(launchctl list "$svc_name" 2>/dev/null | awk '/PID/ {print $3}' || echo "")
+        if [[ -n "$pid" ]] && [[ "$pid" != "-" ]] && [[ "$pid" -gt 0 ]] 2>/dev/null; then
             echo "active"
+        elif launchctl list "$svc_name" >/dev/null 2>&1; then
+            echo "loaded (not running)"
         else
             echo "inactive"
         fi

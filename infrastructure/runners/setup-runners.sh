@@ -144,7 +144,11 @@ if [[ -z "$LABELS" ]]; then
             LABELS="macOS,X64"
         fi
     else
-        LABELS="Linux,X64"
+        if [[ "$RUNNER_ARCH" == "arm64" ]]; then
+            LABELS="Linux,ARM64"
+        else
+            LABELS="Linux,X64"
+        fi
     fi
 fi
 
@@ -166,6 +170,13 @@ check_prerequisites() {
     command -v curl >/dev/null 2>&1 || missing+=("curl")
     command -v tar >/dev/null 2>&1 || missing+=("tar")
 
+    # Verify gh is authenticated (GH_TOKEN env var or gh auth status)
+    if [[ -z "${GH_TOKEN:-}" ]]; then
+        if ! gh auth status >/dev/null 2>&1; then
+            error "GitHub CLI is not authenticated. Run 'gh auth login' or set GH_TOKEN."
+        fi
+    fi
+
     if [[ "$OS" == "linux" ]]; then
         command -v systemctl >/dev/null 2>&1 || missing+=("systemctl")
     elif [[ "$OS" == "darwin" ]]; then
@@ -184,8 +195,11 @@ check_prerequisites() {
 ensure_user() {
     if [[ "$OS" == "darwin" ]]; then
         # On macOS, runners run as the current user — no system user needed
+        if [[ "$RUNNER_USER" != "$(whoami)" ]] && [[ "$RUNNER_USER" != "$DEFAULT_USER" ]]; then
+            warn "Ignoring --user '$RUNNER_USER' on macOS — runners run as current user."
+        fi
         RUNNER_USER="$(whoami)"
-        info "macOS detected — runners will run as current user '$RUNNER_USER'."
+        info "macOS: runners will run as current user '$RUNNER_USER'."
         return 0
     fi
 
@@ -349,6 +363,9 @@ setup_runner() {
 # --- Main ---
 
 main() {
+    check_prerequisites
+    ensure_user
+
     info "GitHub Actions Runner Setup"
     info "  Repo:      $REPO"
     info "  Count:     $COUNT"
@@ -358,9 +375,6 @@ main() {
     info "  Platform:  $OS/$RUNNER_ARCH"
     [[ "$DRY_RUN" == "true" ]] && info "  Mode:      DRY RUN"
     echo
-
-    check_prerequisites
-    ensure_user
     resolve_runner_version
     fetch_registration_token
 

@@ -89,13 +89,11 @@ detect_platform
 
 REPO_NAME="${REPO#*/}"
 
-if [[ -z "$BASE_DIR" ]]; then
-    if [[ "$OS" == "darwin" ]]; then
-        BASE_DIR="$HOME/actions-runner"
-        RUNNER_USER="$(whoami)"
-    else
-        BASE_DIR="/home/$RUNNER_USER"
-    fi
+if [[ "$OS" == "darwin" ]]; then
+    RUNNER_USER="$(whoami)"
+    [[ -z "$BASE_DIR" ]] && BASE_DIR="$HOME/actions-runner"
+else
+    [[ -z "$BASE_DIR" ]] && BASE_DIR="/home/$RUNNER_USER"
 fi
 
 case "$BASE_DIR" in
