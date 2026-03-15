@@ -194,21 +194,20 @@ install_cli() {
   if [ -d "$cli_dir" ]; then
     log "Installing issues CLI..."
     (cd "$cli_dir" && npm install && npm run build)
-    # npm link writes to the global node_modules which may require elevated
-    # privileges on Linux. Try without sudo first, fall back to sudo.
-    local link_err
-    link_err=$(mktemp)
-    if (cd "$cli_dir" && npm link 2>"$link_err"); then
-      rm -f "$link_err"
-    elif command -v sudo >/dev/null 2>&1; then
-      log "npm link failed ($(cat "$link_err")), retrying with sudo..."
-      rm -f "$link_err"
-      (cd "$cli_dir" && sudo npm link) || err "sudo npm link failed in $cli_dir"
-    else
-      local reason
-      reason=$(cat "$link_err")
-      rm -f "$link_err"
-      err "npm link failed ($reason) and sudo is not available. Run 'sudo npm link' manually in $cli_dir"
+    # Install to a user-local prefix to avoid privilege escalation.
+    local prefix="$HOME/.local"
+    mkdir -p "$prefix/lib"
+    (cd "$cli_dir" && npm link --prefix "$prefix") \
+      || err "npm link --prefix \"$prefix\" failed in $cli_dir"
+    if [[ ":$PATH:" != *":$prefix/bin:"* ]]; then
+      log ""
+      log "Add $prefix/bin to your PATH so the 'issues' command is available:"
+      case "$(basename "$SHELL")" in
+        bash) log "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc" ;;
+        zsh)  log "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc" ;;
+        *)    log "  Add \$HOME/.local/bin to your shell's PATH configuration" ;;
+      esac
+      log ""
     fi
     log "CLI installed. Run 'issues --help' to verify."
   else
@@ -220,7 +219,8 @@ uninstall_cli() {
   local cli_dir="$SCRIPT_DIR/../issues-cli"
   if [ -d "$cli_dir" ]; then
     log "Unlinking issues CLI..."
-    (cd "$cli_dir" && npm unlink -g @claude-cadence/issues-cli 2>/dev/null || true)
+    local prefix="$HOME/.local"
+    rm -f "$prefix/bin/issues"
     log "CLI unlinked"
   fi
 }
@@ -242,7 +242,7 @@ The install command:
   - Ensures a .env file with JWT_SECRET exists
   - Builds and starts the Docker Compose stack
   - Registers a launchd (macOS) or systemd (Linux) service for auto-start
-  - Installs the issues CLI globally
+  - Installs the issues CLI to ~/.local
 EOF
 }
 
