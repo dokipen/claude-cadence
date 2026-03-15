@@ -16,6 +16,7 @@ tmux:
 ttyd:
   enabled: false
   base_port: 7681
+  max_ports: 100       # Maximum concurrent ttyd ports (range: base_port to base_port+max_ports)
 
 # Logging
 log:

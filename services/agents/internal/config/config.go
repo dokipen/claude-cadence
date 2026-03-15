@@ -94,6 +94,7 @@ type TmuxConfig struct {
 type TtydConfig struct {
 	Enabled  bool `yaml:"enabled"`
 	BasePort int  `yaml:"base_port"`
+	MaxPorts int  `yaml:"max_ports"`
 }
 
 // LogConfig holds logging settings.
@@ -148,6 +149,9 @@ func applyDefaults(cfg *Config) {
 	if cfg.Ttyd.BasePort == 0 {
 		cfg.Ttyd.BasePort = 7681
 	}
+	if cfg.Ttyd.MaxPorts == 0 {
+		cfg.Ttyd.MaxPorts = 100
+	}
 	if cfg.Log.Level == "" {
 		cfg.Log.Level = "info"
 	}
@@ -187,6 +191,19 @@ func validate(cfg *Config) error {
 	for name, p := range cfg.Profiles {
 		if p.Command == "" {
 			return fmt.Errorf("profile %q: command is required", name)
+		}
+	}
+
+	// Validate ttyd port range.
+	if cfg.Ttyd.Enabled {
+		if cfg.Ttyd.BasePort < 1 || cfg.Ttyd.BasePort > 65535 {
+			return fmt.Errorf("ttyd.base_port must be between 1 and 65535")
+		}
+		if cfg.Ttyd.MaxPorts < 1 {
+			return fmt.Errorf("ttyd.max_ports must be at least 1")
+		}
+		if cfg.Ttyd.BasePort+cfg.Ttyd.MaxPorts > 65536 {
+			return fmt.Errorf("ttyd port range exceeds maximum port number (base_port + max_ports > 65536)")
 		}
 	}
 

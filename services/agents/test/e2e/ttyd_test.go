@@ -31,7 +31,7 @@ func newTtydTestEnv(t *testing.T) *ttydTestEnv {
 
 	socketName := "agentd-ttyd-test"
 	tmuxClient := tmux.NewClient(socketName)
-	ttydClient := ttyd.NewClient(true, 17681)
+	ttydClient := ttyd.NewClient(true, 17681, 100)
 	store := session.NewStore()
 	profiles := map[string]config.Profile{
 		"sleeper": {Command: "sleep 3600"},
