@@ -7,7 +7,7 @@ services:
       - issues-data:/app/data
     environment:
       - DATABASE_URL=file:/app/data/issues.db
-      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set}
       - PORT=4000
 
 volumes:

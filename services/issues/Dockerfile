@@ -22,6 +22,9 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/package.json ./
 
+RUN mkdir -p /app/data && addgroup -S issues && adduser -S issues -G issues && chown -R issues:issues /app
+USER issues
+
 EXPOSE 4000
 
 CMD sh -c "npx prisma migrate deploy && npx prisma db seed && node dist/index.js"

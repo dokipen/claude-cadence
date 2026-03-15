@@ -11,6 +11,9 @@ on:
       - 'services/issues/**'
       - 'services/issues-cli/**'
 
+permissions:
+  contents: read
+
 jobs:
   test-service:
     runs-on: ubuntu-latest
