@@ -38,6 +38,7 @@ model Project {
 
 model Ticket {
   id                 String   @id @default(cuid())
+  number             Int
   title              String
   description        String?
   acceptanceCriteria String?
@@ -55,6 +56,8 @@ model Ticket {
   comments    Comment[]
   blocks      BlockRelation[] @relation("blocker")
   blockedBy   BlockRelation[] @relation("blocked")
+
+  @@unique([projectId, number])
 }
 
 model Label {

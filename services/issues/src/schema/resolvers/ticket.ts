@@ -20,6 +20,16 @@ export const ticketResolvers = {
       return prisma.ticket.findUnique({ where: { id } });
     },
 
+    ticketByNumber: async (
+      _: unknown,
+      { projectId, number }: { projectId: string; number: number },
+      { prisma }: Context
+    ) => {
+      return prisma.ticket.findUnique({
+        where: { projectId_number: { projectId, number } },
+      });
+    },
+
     tickets: async (
       _: unknown,
       args: {
@@ -131,33 +141,44 @@ export const ticketResolvers = {
         throw new Error(`Invalid priority: ${priority}. Must be one of: ${[...VALID_PRIORITIES].join(", ")}`);
       }
 
-      const project = await prisma.project.findUnique({ where: { id: projectId } });
-      if (!project) {
-        throw new Error(`Project not found: ${projectId}`);
-      }
+      return prisma.$transaction(async (tx) => {
+        const project = await tx.project.findUnique({ where: { id: projectId } });
+        if (!project) {
+          throw new Error(`Project not found: ${projectId}`);
+        }
 
-      const data: Prisma.TicketCreateInput = {
-        title,
-        description: description ?? null,
-        acceptanceCriteria: acceptanceCriteria ?? null,
-        storyPoints: storyPoints ?? null,
-        priority: priority ?? "MEDIUM",
-        project: { connect: { id: projectId } },
-      };
+        // Assign next sequential number within the project
+        const lastTicket = await tx.ticket.findFirst({
+          where: { projectId },
+          orderBy: { number: "desc" },
+          select: { number: true },
+        });
+        const nextNumber = (lastTicket?.number ?? 0) + 1;
 
-      if (assigneeId) {
-        data.assignee = { connect: { id: assigneeId } };
-      }
-
-      if (labelIds && labelIds.length > 0) {
-        data.labels = {
-          create: labelIds.map((labelId: string) => ({
-            label: { connect: { id: labelId } },
-          })),
+        const data: Prisma.TicketCreateInput = {
+          number: nextNumber,
+          title,
+          description: description ?? null,
+          acceptanceCriteria: acceptanceCriteria ?? null,
+          storyPoints: storyPoints ?? null,
+          priority: priority ?? "MEDIUM",
+          project: { connect: { id: projectId } },
         };
-      }
 
-      return prisma.ticket.create({ data });
+        if (assigneeId) {
+          data.assignee = { connect: { id: assigneeId } };
+        }
+
+        if (labelIds && labelIds.length > 0) {
+          data.labels = {
+            create: labelIds.map((labelId: string) => ({
+              label: { connect: { id: labelId } },
+            })),
+          };
+        }
+
+        return tx.ticket.create({ data });
+      });
     },
 
     updateTicket: async (

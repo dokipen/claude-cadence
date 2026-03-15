@@ -11,11 +11,16 @@ const CREATE_TICKET = gql`
   mutation CreateTicket($input: CreateTicketInput!) {
     createTicket(input: $input) {
       id
+      number
       title
       state
       priority
       storyPoints
       labels {
+        id
+        name
+      }
+      project {
         id
         name
       }
@@ -28,6 +33,7 @@ const GET_TICKET = gql`
   query GetTicket($id: ID!) {
     ticket(id: $id) {
       id
+      number
       title
       description
       acceptanceCriteria
@@ -59,11 +65,65 @@ const GET_TICKET = gql`
       }
       blocks {
         id
+        number
         title
         state
       }
       blockedBy {
         id
+        number
+        title
+        state
+      }
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+const GET_TICKET_BY_NUMBER = gql`
+  query GetTicketByNumber($projectId: ID!, $number: Int!) {
+    ticketByNumber(projectId: $projectId, number: $number) {
+      id
+      number
+      title
+      description
+      acceptanceCriteria
+      state
+      storyPoints
+      priority
+      assignee {
+        id
+        login
+        displayName
+      }
+      project {
+        id
+        name
+      }
+      labels {
+        id
+        name
+        color
+      }
+      comments {
+        id
+        body
+        author {
+          login
+          displayName
+        }
+        createdAt
+      }
+      blocks {
+        id
+        number
+        title
+        state
+      }
+      blockedBy {
+        id
+        number
         title
         state
       }
@@ -98,6 +158,7 @@ const LIST_TICKETS = gql`
         cursor
         node {
           id
+          number
           title
           state
           priority
@@ -126,6 +187,7 @@ const TRANSITION_TICKET = gql`
   mutation TransitionTicket($id: ID!, $to: TicketState!) {
     transitionTicket(id: $id, to: $to) {
       id
+      number
       title
       state
       priority
@@ -137,6 +199,7 @@ const UPDATE_TICKET = gql`
   mutation UpdateTicket($id: ID!, $input: UpdateTicketInput!) {
     updateTicket(id: $id, input: $input) {
       id
+      number
       title
       description
       acceptanceCriteria
@@ -177,6 +240,7 @@ function formatPriority(priority: string): string {
 
 function formatTicketRow(ticket: {
   id: string;
+  number?: number;
   title: string;
   state: string;
   priority: string;
@@ -184,7 +248,7 @@ function formatTicketRow(ticket: {
   assignee?: { login: string } | null;
   labels?: { name: string }[];
 }): string {
-  const id = chalk.dim(`#${ticket.id}`);
+  const displayId = ticket.number != null ? chalk.bold(`#${ticket.number}`) : chalk.dim(`#${ticket.id}`);
   const state = formatState(ticket.state);
   const priority = formatPriority(ticket.priority);
   const points = ticket.storyPoints != null ? chalk.magenta(`(${ticket.storyPoints}pts)`) : "";
@@ -194,7 +258,7 @@ function formatTicketRow(ticket: {
       ? ticket.labels.map((l) => chalk.dim(`[${l.name}]`)).join(" ")
       : "";
 
-  return [id, state, priority, points, ticket.title, assignee, labels].filter(Boolean).join("  ");
+  return [displayId, state, priority, points, ticket.title, assignee, labels].filter(Boolean).join("  ");
 }
 
 // --- Commands ---
@@ -266,11 +330,13 @@ export function registerTicketCommand(program: Command): void {
         const data = await client.request<{
           createTicket: {
             id: string;
+            number: number;
             title: string;
             state: string;
             priority: string;
             storyPoints: number | null;
             labels: { id: string; name: string }[];
+            project: { id: string; name: string };
             createdAt: string;
           };
         }>(CREATE_TICKET, { input });
@@ -278,7 +344,7 @@ export function registerTicketCommand(program: Command): void {
         spinner.succeed("Ticket created");
         const t = data.createTicket;
         console.log();
-        console.log(`  ${chalk.bold(`#${t.id}`)}  ${t.title}`);
+        console.log(`  ${chalk.bold(`#${t.number}`)}  ${t.title}`);
         console.log(`  State: ${formatState(t.state)}  Priority: ${formatPriority(t.priority)}`);
         if (t.storyPoints != null) {
           console.log(`  Story Points: ${chalk.magenta(String(t.storyPoints))}`);
@@ -296,46 +362,64 @@ export function registerTicketCommand(program: Command): void {
   // --- view ---
   ticket
     .command("view <id>")
-    .description("View ticket details")
-    .action(async (id: string) => {
+    .description("View ticket details (accepts ticket number or CUID)")
+    .option("--project <id>", "Project ID (required when using ticket number)")
+    .action(async (id: string, opts: { project?: string }) => {
       const spinner = ora("Fetching ticket...").start();
       try {
         const client = getClient();
-        const data = await client.request<{
-          ticket: {
+        const isNumber = /^\d+$/.test(id);
+
+        type TicketDetail = {
+          id: string;
+          number: number;
+          title: string;
+          description: string | null;
+          acceptanceCriteria: string | null;
+          state: string;
+          storyPoints: number | null;
+          priority: string;
+          assignee: { id: string; login: string; displayName: string } | null;
+          project: { id: string; name: string };
+          labels: { id: string; name: string; color: string }[];
+          comments: {
             id: string;
-            title: string;
-            description: string | null;
-            acceptanceCriteria: string | null;
-            state: string;
-            storyPoints: number | null;
-            priority: string;
-            assignee: { id: string; login: string; displayName: string } | null;
-            project: { id: string; name: string };
-            labels: { id: string; name: string; color: string }[];
-            comments: {
-              id: string;
-              body: string;
-              author: { login: string; displayName: string };
-              createdAt: string;
-            }[];
-            blocks: { id: string; title: string; state: string }[];
-            blockedBy: { id: string; title: string; state: string }[];
+            body: string;
+            author: { login: string; displayName: string };
             createdAt: string;
-            updatedAt: string;
-          } | null;
-        }>(GET_TICKET, { id });
+          }[];
+          blocks: { id: string; number: number; title: string; state: string }[];
+          blockedBy: { id: string; number: number; title: string; state: string }[];
+          createdAt: string;
+          updatedAt: string;
+        };
+
+        let t: TicketDetail | null;
+
+        if (isNumber) {
+          if (!opts.project) {
+            spinner.fail("--project is required when using a ticket number");
+            process.exit(1);
+          }
+          const data = await client.request<{ ticketByNumber: TicketDetail | null }>(
+            GET_TICKET_BY_NUMBER,
+            { projectId: opts.project, number: parseInt(id, 10) }
+          );
+          t = data.ticketByNumber;
+        } else {
+          const data = await client.request<{ ticket: TicketDetail | null }>(GET_TICKET, { id });
+          t = data.ticket;
+        }
 
         spinner.stop();
 
-        const t = data.ticket;
         if (!t) {
           console.error(chalk.red(`Ticket #${id} not found`));
           process.exit(1);
         }
 
         console.log();
-        console.log(chalk.bold(`  #${t.id}  ${t.title}`));
+        console.log(chalk.bold(`  #${t.number}  ${t.title}`));
         console.log(
           `  State: ${formatState(t.state)}  Priority: ${formatPriority(t.priority)}`
         );
@@ -374,7 +458,7 @@ export function registerTicketCommand(program: Command): void {
           console.log();
           console.log(chalk.bold("  Blocked By"));
           for (const b of t.blockedBy) {
-            console.log(`    #${b.id} ${b.title} ${formatState(b.state)}`);
+            console.log(`    #${b.number} ${b.title} ${formatState(b.state)}`);
           }
         }
 
@@ -382,7 +466,7 @@ export function registerTicketCommand(program: Command): void {
           console.log();
           console.log(chalk.bold("  Blocks"));
           for (const b of t.blocks) {
-            console.log(`    #${b.id} ${b.title} ${formatState(b.state)}`);
+            console.log(`    #${b.number} ${b.title} ${formatState(b.state)}`);
           }
         }
 
@@ -438,6 +522,7 @@ export function registerTicketCommand(program: Command): void {
               cursor: string;
               node: {
                 id: string;
+                number: number;
                 title: string;
                 state: string;
                 priority: string;
@@ -511,6 +596,7 @@ export function registerTicketCommand(program: Command): void {
         const data = await client.request<{
           updateTicket: {
             id: string;
+            number: number;
             title: string;
             description: string | null;
             acceptanceCriteria: string | null;
@@ -524,7 +610,7 @@ export function registerTicketCommand(program: Command): void {
         spinner.succeed("Ticket updated");
         const t = data.updateTicket;
         console.log();
-        console.log(`  ${chalk.bold(`#${t.id}`)}  ${t.title}`);
+        console.log(`  ${chalk.bold(`#${t.number}`)}  ${t.title}`);
         console.log(`  State: ${formatState(t.state)}  Priority: ${formatPriority(t.priority)}`);
         if (t.storyPoints != null) {
           console.log(`  Story Points: ${chalk.magenta(String(t.storyPoints))}`);
@@ -548,6 +634,7 @@ export function registerTicketCommand(program: Command): void {
         const data = await client.request<{
           transitionTicket: {
             id: string;
+            number: number;
             title: string;
             state: string;
             priority: string;
@@ -557,7 +644,7 @@ export function registerTicketCommand(program: Command): void {
         spinner.succeed("Ticket transitioned");
         const t = data.transitionTicket;
         console.log();
-        console.log(`  ${chalk.bold(`#${t.id}`)}  ${t.title}`);
+        console.log(`  ${chalk.bold(`#${t.number}`)}  ${t.title}`);
         console.log(`  State: ${formatState(t.state)}  Priority: ${formatPriority(t.priority)}`);
         console.log();
       } catch (error) {

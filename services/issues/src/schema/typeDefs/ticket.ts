@@ -45,6 +45,7 @@ export const ticketTypeDefs = `
 
   type Ticket {
     id: ID!
+    number: Int!
     title: String!
     description: String
     acceptanceCriteria: String
@@ -97,6 +98,7 @@ export const ticketTypeDefs = `
 
   type Query {
     ticket(id: ID!): Ticket
+    ticketByNumber(projectId: ID!, number: Int!): Ticket
     tickets(
       state: TicketState
       labelName: String
