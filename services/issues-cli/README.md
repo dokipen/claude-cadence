@@ -103,7 +103,7 @@ Revokes the refresh token server-side, then deletes `~/.issues-cli/auth.json`.
 
 ### Token Refresh
 
-Access tokens expire after 7 days. When the CLI receives an `UNAUTHENTICATED` error, it automatically uses the refresh token to obtain a new access token and retries the request. New tokens are persisted transparently.
+Access tokens expire after 15 minutes; refresh tokens last 30 days. When the CLI receives an `UNAUTHENTICATED` error, it automatically uses the refresh token to obtain a new access token and retries the request. New tokens are persisted transparently.
 
 ### Environment Variable Overrides
 
@@ -125,6 +125,7 @@ issues ticket list
 
 ```bash
 # Create
+# Create (--title is required)
 issues ticket create --title "Fix login bug" \
   --description "Users cannot log in with SSO" \
   --acceptance-criteria "SSO login works" \
@@ -143,7 +144,7 @@ issues ticket list \
   --assignee <login> \
   --blocked \
   --priority HIGHEST|HIGH|MEDIUM|LOW|LOWEST \
-  --first <n> \
+  --first <n> \       # default: 20
   --after <cursor>
 
 # Update
@@ -174,7 +175,7 @@ A ticket cannot transition to `IN_PROGRESS` if it has unresolved blockers.
 
 ```bash
 issues label list
-issues label create --name "urgent" --color "#ff0000"
+issues label create --name "urgent" --color "#ff0000"  # both --name and --color are required
 issues label add <ticketId> --label <labelId>
 issues label remove <ticketId> --label <labelId>
 ```
