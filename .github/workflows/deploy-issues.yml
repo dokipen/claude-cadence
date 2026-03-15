@@ -30,6 +30,8 @@ jobs:
         working-directory: services/issues
     steps:
       - uses: actions/checkout@v4
+        with:
+          clean: true
 
       - name: Build and deploy
         run: |
@@ -82,6 +84,10 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Commit:** \`${COMMIT_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Check the logs above for details." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Cleanup workspace
+        if: always()
+        run: rm -rf "$GITHUB_WORKSPACE"/*
 
   notify-cli-update:
     needs: deploy
