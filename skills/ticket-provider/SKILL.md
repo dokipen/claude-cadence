@@ -55,6 +55,8 @@ When `provider: github` (or no config), use `gh` CLI commands. Refer to the `git
 
 When `provider: issues-api`, use the `issues` CLI. Refer to the `issues-api` skill for full command reference.
 
+**N** = ticket number (requires `--project`), **TICKET_ID** = CUID (no `--project` needed). Use `ticket view` to look up a ticket's CUID from its number.
+
 | Operation | Command |
 |-----------|---------|
 | List tickets | `issues ticket list --project $PROJECT [filters]` |
