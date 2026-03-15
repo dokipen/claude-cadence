@@ -55,16 +55,18 @@ When `provider: github` (or no config), use `gh` CLI commands. Refer to the `git
 
 When `provider: issues-api`, use the `issues` CLI. Refer to the `issues-api` skill for full command reference.
 
+**N** = ticket number (requires `--project`), **TICKET_ID** = CUID (no `--project` needed). Use `ticket view` to look up a ticket's CUID from its number.
+
 | Operation | Command |
 |-----------|---------|
 | List tickets | `issues ticket list --project $PROJECT [filters] --json` |
 | View ticket | `issues ticket view N --project $PROJECT --json` |
 | Create ticket | `issues ticket create --project $PROJECT --title "..." [options] --json` |
-| Update ticket | `issues ticket update N --project $PROJECT [options] --json` |
-| Add label | `issues label add N --project $PROJECT --label LABEL_ID --json` |
-| Remove label | `issues label remove N --project $PROJECT --label LABEL_ID --json` |
-| Comment | `issues comment add N --project $PROJECT --body "..." --json` |
-| Close ticket | `issues ticket transition N --project $PROJECT --to CLOSED --json` |
+| Update ticket | `issues ticket update TICKET_ID [options] --json` |
+| Add label | `issues label add TICKET_ID --label LABEL_ID --json` |
+| Remove label | `issues label remove TICKET_ID --label LABEL_ID --json` |
+| Comment | `issues comment add TICKET_ID --body "..." --json` |
+| Close ticket | `issues ticket transition TICKET_ID --to CLOSED --json` |
 | Check blockers | `issues ticket view N --project $PROJECT --json` (read `blockedBy` array) |
 | Check state | `issues ticket view N --project $PROJECT --json` (read `state` field) |
 | Check assignee | `issues ticket view N --project $PROJECT --json` (read `assignee` field) |
@@ -82,15 +84,15 @@ The two providers use different terminology in some areas:
 | State | `open` / `closed` | `BACKLOG` / `REFINED` / `IN_PROGRESS` / `CLOSED` |
 | Estimate | Label (`estimate:5`) | Story points field (`--points 5`) |
 | Priority | Not native (use labels) | Native field (`--priority HIGH`) |
-| Labels | By name | By ID (use `issues label list --project $PROJECT --json` to resolve) |
+| Labels | By name | By ID (use `issues label list --json` to resolve) |
 | Claim/start work | Add `in-progress` label | Transition to `IN_PROGRESS` |
 | Mark refined | Add `refined` label | Transition to `REFINED` |
-| Blocking | GitHub dependencies API | `issues block add/remove --json` |
+| Blocking | GitHub dependencies API | `issues block add/remove --blocker X --blocked Y --json` |
 
 ## Important Notes
 
 - **PR operations always use `gh` CLI** regardless of ticket provider — PRs are a GitHub concept
 - **Default is `github`** — existing projects work without any configuration changes
 - When using `issues-api`, the API URL from `CLAUDE.md` must be reachable
-- When using `issues-api`, `project_id` is required — all `issues` CLI commands must include `--project $PROJECT` (project name or ID; inferred from git origin if omitted)
+- When using `issues-api`, `project_id` is required for `ticket list`, `ticket create`, and `ticket view` (when using ticket numbers). Other commands take a CUID ticket ID and don't need `--project`.
 - The `issues` CLI must be installed and authenticated (`issues auth login --pat <token>`)
