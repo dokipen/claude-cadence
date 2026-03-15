@@ -102,7 +102,7 @@ export function registerCommentCommand(program: Command): void {
         spinner.succeed("Comment updated");
         const c = data.updateComment;
         console.log();
-        console.log(`  ${chalk.bold(`@${c.author.login}`)}  ${chalk.dim(c.createdAt)}`);
+        console.log(`  ${chalk.bold(`@${c.author.login}`)}  ${chalk.dim(c.updatedAt)}`);
         console.log(`    ${c.body}`);
         console.log();
       } catch (error) {

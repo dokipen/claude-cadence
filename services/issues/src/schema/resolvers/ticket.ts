@@ -340,6 +340,8 @@ export const ticketResolvers = {
       { ticketId, body }: { ticketId: string; body: string },
       { prisma }: Context
     ) => {
+      if (!body.trim()) throw new Error("Comment body cannot be empty");
+
       const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
       if (!ticket) throw new Error(`Ticket not found: ${ticketId}`);
 
@@ -356,6 +358,8 @@ export const ticketResolvers = {
       { id, body }: { id: string; body: string },
       { prisma }: Context
     ) => {
+      if (!body.trim()) throw new Error("Comment body cannot be empty");
+
       const existing = await prisma.comment.findUnique({ where: { id } });
       if (!existing) throw new Error("Comment not found");
 
