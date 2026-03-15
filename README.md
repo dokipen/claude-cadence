@@ -6,6 +6,21 @@ Claude Cadence provides a structured development workflow with git worktrees, ph
 
 ## Installation
 
+### Git clone (simplest)
+
+```bash
+git clone https://github.com/dokipen/claude-cadence.git
+claude --plugin-dir ./claude-cadence
+```
+
+To always load the plugin, add `--plugin-dir` to your shell alias or config:
+
+```bash
+alias claude='claude --plugin-dir /path/to/claude-cadence'
+```
+
+### Plugin marketplace
+
 ```bash
 # Add the marketplace (once)
 /plugin marketplace add dokipen/claude-cadence
@@ -15,6 +30,14 @@ Claude Cadence provides a structured development workflow with git worktrees, ph
 ```
 
 ## Updating
+
+### Git clone
+
+```bash
+cd /path/to/claude-cadence && git pull
+```
+
+### Plugin marketplace
 
 Run `claude plugin update cadence@claude-cadence` to update, then restart Claude Code.
 
