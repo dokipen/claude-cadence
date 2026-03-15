@@ -124,7 +124,7 @@ describe("Workflow States", () => {
     const result = await suite.cli("ticket", "transition", "nonexistent-id", "--to", "REFINED");
     expect(result.exitCode).toBe(1);
     const output = result.stdout + result.stderr;
-    expect(output).toContain("not found");
+    expect(output).toContain("Invalid ticket identifier");
   });
 
   it("should block transition to IN_PROGRESS when ticket has unresolved blockers", async () => {
