@@ -76,6 +76,19 @@ func main() {
 		vaultClient = vc
 	}
 	manager := session.NewManager(store, tmuxClient, ttydClient, gitClient, vaultClient, cfg.Profiles)
+
+	// Recover any orphaned tmux sessions from a previous run.
+	recovered, err := manager.RecoverSessions()
+	if err != nil {
+		slog.Warn("session recovery failed", "error", err)
+	} else if recovered > 0 {
+		slog.Info("recovered sessions from tmux", "count", recovered)
+	}
+
+	// Start background stale session cleaner.
+	cleaner := session.NewCleaner(manager, cfg.Cleanup.StaleSessionTTL, cfg.Cleanup.CheckInterval)
+	cleaner.Start()
+
 	agentService := service.NewAgentService(manager)
 
 	srv, err := server.New(agentService, cfg)
@@ -101,6 +114,7 @@ func main() {
 		slog.Error("server error, shutting down", "error", err)
 	}
 
+	cleaner.Stop()
 	srv.Stop()
 	slog.Info("agentd stopped")
 }

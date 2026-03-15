@@ -351,25 +351,102 @@ func (m *Manager) Destroy(id string, force bool) error {
 	return nil
 }
 
+// RecoverSessions rediscovers tmux sessions on the agentd socket that are not
+// tracked in the in-memory store. This handles daemon restarts where the store
+// was lost but tmux sessions survived. Recovered sessions are added to the
+// store with correct RUNNING/STOPPED state based on process liveness.
+//
+// Recovered sessions have an empty AgentProfile since the original profile
+// cannot be determined from tmux alone. They will not appear in
+// profile-filtered List calls.
+//
+// This must be called before the server starts accepting connections.
+func (m *Manager) RecoverSessions() (int, error) {
+	tmuxSessions, err := m.tmux.ListSessions()
+	if err != nil {
+		return 0, fmt.Errorf("listing tmux sessions: %w", err)
+	}
+
+	// Build a set of tmux session names already tracked in the store.
+	tracked := make(map[string]bool)
+	for _, sess := range m.store.List() {
+		tracked[sess.TmuxSession] = true
+	}
+
+	recovered := 0
+	now := time.Now()
+	for _, tmuxName := range tmuxSessions {
+		if tracked[tmuxName] {
+			continue
+		}
+
+		// Skip sessions with names that don't match agentd naming conventions.
+		if !tmuxNameRe.MatchString(tmuxName) {
+			slog.Debug("skipping non-agentd tmux session during recovery", "name", tmuxName)
+			continue
+		}
+
+		// Determine state by checking if the pane process is alive.
+		state := StateRunning
+		var stoppedAt time.Time
+		pid, err := m.tmux.GetPanePID(tmuxName)
+		if err != nil {
+			// Can't get PID — treat as stopped.
+			state = StateStopped
+			stoppedAt = now
+			pid = 0
+		} else if !isProcessAlive(pid) {
+			state = StateStopped
+			stoppedAt = now
+		}
+
+		sess := &Session{
+			ID:          uuid.New().String(),
+			Name:        tmuxName,
+			State:       state,
+			TmuxSession: tmuxName,
+			CreatedAt:   now,
+			StoppedAt:   stoppedAt,
+			AgentPID:    pid,
+		}
+		m.store.Add(sess)
+		recovered++
+
+		slog.Info("recovered tmux session",
+			"name", tmuxName,
+			"id", sess.ID,
+			"state", state,
+		)
+	}
+
+	return recovered, nil
+}
+
 func (m *Manager) reconcile(sess *Session) {
 	if sess.State != StateRunning && sess.State != StateCreating {
 		return
 	}
 
+	now := time.Now()
+
 	tmuxExists := m.tmux.HasSession(sess.TmuxSession)
 	if !tmuxExists {
 		m.store.Update(sess.ID, func(s *Session) {
 			s.State = StateStopped
+			s.StoppedAt = now
 		})
 		sess.State = StateStopped
+		sess.StoppedAt = now
 		return
 	}
 
 	if sess.AgentPID > 0 && !isProcessAlive(sess.AgentPID) {
 		m.store.Update(sess.ID, func(s *Session) {
 			s.State = StateStopped
+			s.StoppedAt = now
 		})
 		sess.State = StateStopped
+		sess.StoppedAt = now
 		return
 	}
 }

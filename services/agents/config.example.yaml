@@ -22,6 +22,11 @@ log:
   level: "info"    # debug, info, warn, error
   format: "json"   # json, text
 
+# Stale session cleanup
+cleanup:
+  stale_session_ttl: "24h"   # Destroy stopped sessions after this duration
+  check_interval: "5m"       # How often to check for stale sessions
+
 # Agent profiles
 profiles:
   claude-reviewer:

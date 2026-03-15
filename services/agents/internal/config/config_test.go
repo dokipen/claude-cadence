@@ -3,10 +3,18 @@ package config
 import (
 	"os"
 	"testing"
+	"time"
 )
 
 func validProfiles() map[string]Profile {
 	return map[string]Profile{"test": {Command: "echo test"}}
+}
+
+func validCleanup() CleanupConfig {
+	return CleanupConfig{
+		StaleSessionTTL: 24 * time.Hour,
+		CheckInterval:   5 * time.Minute,
+	}
 }
 
 func TestValidate_ValidLocalhostNoAuth(t *testing.T) {
@@ -14,6 +22,7 @@ func TestValidate_ValidLocalhostNoAuth(t *testing.T) {
 		Host:     "127.0.0.1",
 		Auth:     AuthConfig{Mode: "none"},
 		Profiles: validProfiles(),
+		Cleanup:  validCleanup(),
 	}
 	if err := validate(cfg); err != nil {
 		t.Errorf("expected no error, got: %v", err)
@@ -25,6 +34,7 @@ func TestValidate_ValidLocalhostIPv6(t *testing.T) {
 		Host:     "::1",
 		Auth:     AuthConfig{Mode: "none"},
 		Profiles: validProfiles(),
+		Cleanup:  validCleanup(),
 	}
 	if err := validate(cfg); err != nil {
 		t.Errorf("expected no error, got: %v", err)
@@ -36,6 +46,7 @@ func TestValidate_ValidTokenAuth(t *testing.T) {
 		Host:     "127.0.0.1",
 		Auth:     AuthConfig{Mode: "token", Token: "mysecret"},
 		Profiles: validProfiles(),
+		Cleanup:  validCleanup(),
 	}
 	if err := validate(cfg); err != nil {
 		t.Errorf("expected no error, got: %v", err)
@@ -47,6 +58,7 @@ func TestValidate_ValidTokenAuthWithEnvVar(t *testing.T) {
 		Host:     "127.0.0.1",
 		Auth:     AuthConfig{Mode: "token", TokenEnvVar: "AGENTD_TOKEN"},
 		Profiles: validProfiles(),
+		Cleanup:  validCleanup(),
 	}
 	if err := validate(cfg); err != nil {
 		t.Errorf("expected no error, got: %v", err)
@@ -58,6 +70,7 @@ func TestValidate_TokenAuthWithoutToken(t *testing.T) {
 		Host:     "127.0.0.1",
 		Auth:     AuthConfig{Mode: "token"},
 		Profiles: validProfiles(),
+		Cleanup:  validCleanup(),
 	}
 	err := validate(cfg)
 	if err == nil {
@@ -74,6 +87,7 @@ func TestValidate_InvalidAuthMode(t *testing.T) {
 		Host:     "127.0.0.1",
 		Auth:     AuthConfig{Mode: "invalid"},
 		Profiles: validProfiles(),
+		Cleanup:  validCleanup(),
 	}
 	err := validate(cfg)
 	if err == nil {
@@ -86,6 +100,7 @@ func TestValidate_NonLocalhostWithTokenAuth(t *testing.T) {
 		Host:     "0.0.0.0",
 		Auth:     AuthConfig{Mode: "token", Token: "secret"},
 		Profiles: validProfiles(),
+		Cleanup:  validCleanup(),
 	}
 	if err := validate(cfg); err != nil {
 		t.Errorf("expected no error, got: %v", err)
@@ -97,6 +112,7 @@ func TestValidate_NonLocalhostWithoutAuth(t *testing.T) {
 		Host:     "0.0.0.0",
 		Auth:     AuthConfig{Mode: "none"},
 		Profiles: validProfiles(),
+		Cleanup:  validCleanup(),
 	}
 	err := validate(cfg)
 	if err == nil {

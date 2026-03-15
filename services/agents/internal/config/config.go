@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -73,6 +74,15 @@ type Config struct {
 	Auth       AuthConfig         `yaml:"auth"`
 	Vault      *VaultConfig       `yaml:"vault"`
 	Reflection bool               `yaml:"reflection"`
+	Cleanup    CleanupConfig      `yaml:"cleanup"`
+}
+
+// CleanupConfig holds stale session cleanup settings.
+type CleanupConfig struct {
+	StaleSessionTTL time.Duration `yaml:"-"`
+	CheckInterval   time.Duration `yaml:"-"`
+	RawTTL          string        `yaml:"stale_session_ttl"`
+	RawInterval     string        `yaml:"check_interval"`
 }
 
 // TmuxConfig holds tmux-specific settings.
@@ -114,6 +124,10 @@ func Load(path string) (*Config, error) {
 
 	applyDefaults(&cfg)
 
+	if err := parseDurations(&cfg); err != nil {
+		return nil, fmt.Errorf("parsing config: %w", err)
+	}
+
 	if err := validate(&cfg); err != nil {
 		return nil, fmt.Errorf("validating config: %w", err)
 	}
@@ -143,6 +157,27 @@ func applyDefaults(cfg *Config) {
 	if cfg.Auth.Mode == "" {
 		cfg.Auth.Mode = "none"
 	}
+	if cfg.Cleanup.RawTTL == "" {
+		cfg.Cleanup.RawTTL = "24h"
+	}
+	if cfg.Cleanup.RawInterval == "" {
+		cfg.Cleanup.RawInterval = "5m"
+	}
+}
+
+func parseDurations(cfg *Config) error {
+	ttl, err := time.ParseDuration(cfg.Cleanup.RawTTL)
+	if err != nil {
+		return fmt.Errorf("cleanup.stale_session_ttl: %w", err)
+	}
+	cfg.Cleanup.StaleSessionTTL = ttl
+
+	interval, err := time.ParseDuration(cfg.Cleanup.RawInterval)
+	if err != nil {
+		return fmt.Errorf("cleanup.check_interval: %w", err)
+	}
+	cfg.Cleanup.CheckInterval = interval
+	return nil
 }
 
 func validate(cfg *Config) error {
@@ -163,6 +198,10 @@ func validate(cfg *Config) error {
 	}
 
 	// Auth mode validation.
+	if cfg.Cleanup.CheckInterval <= 0 {
+		return fmt.Errorf("cleanup.check_interval must be positive")
+	}
+
 	switch cfg.Auth.Mode {
 	case "none":
 		// ok
