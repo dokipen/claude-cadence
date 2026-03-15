@@ -4,6 +4,8 @@ import chalk from "chalk";
 import ora from "ora";
 import { getClient } from "../client.js";
 import { handleError } from "../errors.js";
+import { resolveProjectId } from "../project-resolver.js";
+import { resolveTicketId } from "../resolve-ticket.js";
 
 // --- GraphQL Documents ---
 
@@ -269,9 +271,10 @@ interface CreateOptions {
   acceptanceCriteria?: string;
   labels?: string;
   assignee?: string;
-  project: string;
+  project?: string;
   points?: string;
   priority?: string;
+  json?: boolean;
 }
 
 interface ListOptions {
@@ -283,10 +286,13 @@ interface ListOptions {
   project?: string;
   limit?: string;
   after?: string;
+  json?: boolean;
 }
 
 interface TransitionOptions {
   to: string;
+  project?: string;
+  json?: boolean;
 }
 
 interface UpdateOptions {
@@ -295,6 +301,8 @@ interface UpdateOptions {
   acceptanceCriteria?: string;
   points?: string;
   priority?: string;
+  project?: string;
+  json?: boolean;
 }
 
 export function registerTicketCommand(program: Command): void {
@@ -305,20 +313,22 @@ export function registerTicketCommand(program: Command): void {
     .command("create")
     .description("Create a new ticket")
     .requiredOption("--title <title>", "Ticket title")
-    .requiredOption("--project <id>", "Project ID")
+    .option("--project <project>", "Project name or ID (inferred from git origin if omitted)")
     .option("--description <description>", "Ticket description")
     .option("--acceptance-criteria <criteria>", "Acceptance criteria")
     .option("--labels <ids>", "Comma-separated label IDs")
     .option("--assignee <id>", "Assignee user ID")
     .option("--points <points>", "Story points")
     .option("--priority <priority>", "Priority (HIGHEST, HIGH, MEDIUM, LOW, LOWEST)")
+    .option("--json", "Output raw JSON")
     .action(async (opts: CreateOptions) => {
       const spinner = ora("Creating ticket...").start();
       try {
         const client = getClient();
+        const projectId = await resolveProjectId(opts.project);
         const input: Record<string, unknown> = {
           title: opts.title,
-          projectId: opts.project,
+          projectId,
         };
         if (opts.description) input.description = opts.description;
         if (opts.acceptanceCriteria) input.acceptanceCriteria = opts.acceptanceCriteria;
@@ -340,6 +350,12 @@ export function registerTicketCommand(program: Command): void {
             createdAt: string;
           };
         }>(CREATE_TICKET, { input });
+
+        if (opts.json) {
+          spinner.stop();
+          console.log(JSON.stringify(data.createTicket, null, 2));
+          return;
+        }
 
         spinner.succeed("Ticket created");
         const t = data.createTicket;
@@ -363,11 +379,15 @@ export function registerTicketCommand(program: Command): void {
   ticket
     .command("view <id>")
     .description("View ticket details (accepts ticket number or CUID)")
-    .option("--project <id>", "Project ID (required when using ticket number)")
-    .action(async (id: string, opts: { project?: string }) => {
+    .option("--project <project>", "Project name or ID (inferred from git origin if omitted)")
+    .option("--json", "Output raw JSON")
+    .action(async (id: string, opts: { project?: string; json?: boolean }) => {
       const spinner = ora("Fetching ticket...").start();
       try {
         const client = getClient();
+        // Intentionally NOT using resolveTicketId here: view fetches the full
+        // ticket directly by number in a single query, avoiding a two-round-trip
+        // resolve-then-fetch pattern.
         const isNumber = /^\d+$/.test(id);
 
         type TicketDetail = {
@@ -397,13 +417,10 @@ export function registerTicketCommand(program: Command): void {
         let t: TicketDetail | null;
 
         if (isNumber) {
-          if (!opts.project) {
-            spinner.fail("--project is required when using a ticket number");
-            process.exit(1);
-          }
+          const projectId = await resolveProjectId(opts.project);
           const data = await client.request<{ ticketByNumber: TicketDetail | null }>(
             GET_TICKET_BY_NUMBER,
-            { projectId: opts.project, number: parseInt(id, 10) }
+            { projectId, number: parseInt(id, 10) }
           );
           t = data.ticketByNumber;
         } else {
@@ -416,6 +433,11 @@ export function registerTicketCommand(program: Command): void {
         if (!t) {
           console.error(chalk.red(`Ticket #${id} not found`));
           process.exit(1);
+        }
+
+        if (opts.json) {
+          console.log(JSON.stringify(t, null, 2));
+          return;
         }
 
         console.log();
@@ -499,9 +521,10 @@ export function registerTicketCommand(program: Command): void {
     .option("--assignee <login>", "Filter by assignee login")
     .option("--blocked", "Filter to only blocked tickets")
     .option("--priority <priority>", "Filter by priority (HIGHEST, HIGH, MEDIUM, LOW, LOWEST)")
-    .option("--project <id>", "Filter by project ID")
+    .option("--project <project>", "Filter by project name or ID (inferred from git origin if omitted)")
     .option("-l, --limit <count>", "Max number of tickets to return", "100")
     .option("--after <cursor>", "Cursor for pagination")
+    .option("--json", "Output raw JSON")
     .action(async (opts: ListOptions) => {
       const limit = Number(opts.limit);
       if (!Number.isInteger(limit) || limit <= 0) {
@@ -511,6 +534,15 @@ export function registerTicketCommand(program: Command): void {
       }
       const spinner = ora("Fetching tickets...").start();
       try {
+        // Resolve project: explicit name/ID takes precedence, otherwise infer from git origin
+        let projectId: string | undefined;
+        try {
+          projectId = await resolveProjectId(opts.project);
+        } catch (e) {
+          if (opts.project) throw e; // Re-throw if user explicitly provided a project
+          // Inference is best-effort for list — continue without project filter
+        }
+
         const client = getClient();
         const variables: Record<string, unknown> = {
           first: limit,
@@ -520,7 +552,7 @@ export function registerTicketCommand(program: Command): void {
         if (opts.assignee) variables.assigneeLogin = opts.assignee;
         if (opts.blocked) variables.isBlocked = true;
         if (opts.priority) variables.priority = opts.priority;
-        if (opts.project) variables.projectId = opts.project;
+        if (projectId) variables.projectId = projectId;
         if (opts.after) variables.after = opts.after;
 
         const data = await client.request<{
@@ -546,6 +578,11 @@ export function registerTicketCommand(program: Command): void {
         }>(LIST_TICKETS, variables);
 
         spinner.stop();
+
+        if (opts.json) {
+          console.log(JSON.stringify(data.tickets, null, 2));
+          return;
+        }
 
         const { edges, pageInfo } = data.tickets;
 
@@ -576,12 +613,15 @@ export function registerTicketCommand(program: Command): void {
   // --- update ---
   ticket
     .command("update <id>")
+    .alias("edit")
     .description("Update a ticket")
+    .option("--project <project>", "Project name or ID (required when using ticket number)")
     .option("--title <title>", "New title")
     .option("--description <description>", "New description")
     .option("--acceptance-criteria <criteria>", "New acceptance criteria")
     .option("--points <points>", "New story points")
     .option("--priority <priority>", "New priority (HIGHEST, HIGH, MEDIUM, LOW, LOWEST)")
+    .option("--json", "Output raw JSON")
     .action(async (id: string, opts: UpdateOptions) => {
       const input: Record<string, unknown> = {};
       if (opts.title) input.title = opts.title;
@@ -599,6 +639,7 @@ export function registerTicketCommand(program: Command): void {
 
       const spinner = ora("Updating ticket...").start();
       try {
+        const resolvedId = await resolveTicketId(id, opts.project);
         const client = getClient();
         const data = await client.request<{
           updateTicket: {
@@ -612,12 +653,18 @@ export function registerTicketCommand(program: Command): void {
             priority: string;
             updatedAt: string;
           };
-        }>(UPDATE_TICKET, { id, input });
+        }>(UPDATE_TICKET, { id: resolvedId, input });
+
+        if (opts.json) {
+          spinner.stop();
+          console.log(JSON.stringify(data.updateTicket, null, 2));
+          return;
+        }
 
         spinner.succeed("Ticket updated");
         const t = data.updateTicket;
         console.log();
-        console.log(`  ${chalk.bold(`#${t.id}`)}  ${t.title}`);
+        console.log(`  ${chalk.bold(`#${t.number}`)}  ${t.title}`);
         console.log(`  State: ${formatState(t.state)}  Priority: ${formatPriority(t.priority)}`);
         if (t.storyPoints != null) {
           console.log(`  Story Points: ${chalk.magenta(String(t.storyPoints))}`);
@@ -633,10 +680,13 @@ export function registerTicketCommand(program: Command): void {
   ticket
     .command("transition <id>")
     .description("Transition a ticket to a new state")
+    .option("--project <project>", "Project name or ID (required when using ticket number)")
     .requiredOption("--to <state>", "Target state (BACKLOG, REFINED, IN_PROGRESS, CLOSED)")
+    .option("--json", "Output raw JSON")
     .action(async (id: string, opts: TransitionOptions) => {
       const spinner = ora("Transitioning ticket...").start();
       try {
+        const resolvedId = await resolveTicketId(id, opts.project);
         const client = getClient();
         const data = await client.request<{
           transitionTicket: {
@@ -646,7 +696,13 @@ export function registerTicketCommand(program: Command): void {
             state: string;
             priority: string;
           };
-        }>(TRANSITION_TICKET, { id, to: opts.to });
+        }>(TRANSITION_TICKET, { id: resolvedId, to: opts.to });
+
+        if (opts.json) {
+          spinner.stop();
+          console.log(JSON.stringify(data.transitionTicket, null, 2));
+          return;
+        }
 
         spinner.succeed("Ticket transitioned");
         const t = data.transitionTicket;

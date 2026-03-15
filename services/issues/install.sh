@@ -70,6 +70,7 @@ launchd_install() {
     <string>-f</string>
     <string>${COMPOSE_FILE}</string>
     <string>up</string>
+    <string>--force-recreate</string>
     <string>--wait</string>
   </array>
   <key>RunAtLoad</key>
@@ -147,7 +148,7 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=${SCRIPT_DIR}
-ExecStart=${DOCKER_BIN} compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d
+ExecStart=${DOCKER_BIN} compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --force-recreate
 ExecStop=${DOCKER_BIN} compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" down
 
 [Install]

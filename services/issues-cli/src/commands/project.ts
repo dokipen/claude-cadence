@@ -4,6 +4,7 @@ import chalk from "chalk";
 import ora from "ora";
 import { getClient } from "../client.js";
 import { handleError } from "../errors.js";
+import { resolveProjectId } from "../project-resolver.js";
 
 // --- GraphQL Documents ---
 
@@ -63,13 +64,20 @@ export function registerProjectCommand(program: Command): void {
     .description("Create a new project")
     .requiredOption("--name <name>", "Project name")
     .requiredOption("--repository <repository>", "Repository (e.g. org/repo)")
-    .action(async (opts: { name: string; repository: string }) => {
+    .option("--json", "Output raw JSON")
+    .action(async (opts: { name: string; repository: string; json?: boolean }) => {
       const spinner = ora("Creating project...").start();
       try {
         const client = getClient();
         const data = await client.request<{
           createProject: { id: string; name: string; repository: string; createdAt: string };
         }>(CREATE_PROJECT, { input: { name: opts.name, repository: opts.repository } });
+
+        if (opts.json) {
+          spinner.stop();
+          console.log(JSON.stringify(data.createProject, null, 2));
+          return;
+        }
 
         spinner.succeed("Project created");
         const p = data.createProject;
@@ -87,7 +95,8 @@ export function registerProjectCommand(program: Command): void {
   project
     .command("list")
     .description("List all projects")
-    .action(async () => {
+    .option("--json", "Output raw JSON")
+    .action(async (opts: { json?: boolean }) => {
       const spinner = ora("Fetching projects...").start();
       try {
         const client = getClient();
@@ -96,6 +105,11 @@ export function registerProjectCommand(program: Command): void {
         }>(LIST_PROJECTS);
 
         spinner.stop();
+
+        if (opts.json) {
+          console.log(JSON.stringify(data.projects, null, 2));
+          return;
+        }
 
         if (data.projects.length === 0) {
           console.log(chalk.dim("  No projects found."));
@@ -117,10 +131,12 @@ export function registerProjectCommand(program: Command): void {
   // --- view ---
   project
     .command("view <id>")
-    .description("View project details")
-    .action(async (id: string) => {
+    .description("View project details (accepts project name or ID)")
+    .option("--json", "Output raw JSON")
+    .action(async (id: string, opts: { json?: boolean }) => {
       const spinner = ora("Fetching project...").start();
       try {
+        const resolvedId = await resolveProjectId(id);
         const client = getClient();
         const data = await client.request<{
           project: {
@@ -130,7 +146,7 @@ export function registerProjectCommand(program: Command): void {
             createdAt: string;
             updatedAt: string;
           } | null;
-        }>(GET_PROJECT, { id });
+        }>(GET_PROJECT, { id: resolvedId });
 
         spinner.stop();
 
@@ -138,6 +154,11 @@ export function registerProjectCommand(program: Command): void {
         if (!p) {
           console.error(chalk.red(`Project #${id} not found`));
           process.exit(1);
+        }
+
+        if (opts.json) {
+          console.log(JSON.stringify(p, null, 2));
+          return;
         }
 
         console.log();
@@ -154,10 +175,11 @@ export function registerProjectCommand(program: Command): void {
   // --- update ---
   project
     .command("update <id>")
-    .description("Update a project")
+    .description("Update a project (accepts project name or ID)")
     .option("--name <name>", "New name")
     .option("--repository <repository>", "New repository")
-    .action(async (id: string, opts: { name?: string; repository?: string }) => {
+    .option("--json", "Output raw JSON")
+    .action(async (id: string, opts: { name?: string; repository?: string; json?: boolean }) => {
       const input: Record<string, string> = {};
       if (opts.name) input.name = opts.name;
       if (opts.repository) input.repository = opts.repository;
@@ -171,10 +193,17 @@ export function registerProjectCommand(program: Command): void {
 
       const spinner = ora("Updating project...").start();
       try {
+        const resolvedId = await resolveProjectId(id);
         const client = getClient();
         const data = await client.request<{
           updateProject: { id: string; name: string; repository: string; updatedAt: string };
-        }>(UPDATE_PROJECT, { id, input });
+        }>(UPDATE_PROJECT, { id: resolvedId, input });
+
+        if (opts.json) {
+          spinner.stop();
+          console.log(JSON.stringify(data.updateProject, null, 2));
+          return;
+        }
 
         spinner.succeed("Project updated");
         const p = data.updateProject;

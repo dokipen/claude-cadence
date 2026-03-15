@@ -24,7 +24,7 @@ Detect the provider from the project's `CLAUDE.md` before performing any ticket 
 
 ```bash
 PROVIDER=$(grep -A3 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'provider:' | tail -1 | awk '{print $2}' || echo "github")
-PROJECT_ID=$(grep -A4 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'project_id:' | tail -1 | awk '{print $2}')
+PROJECT=$(grep -A4 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'project_id:' | tail -1 | awk '{print $2}')
 ```
 
 If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, use `issues` CLI commands. **PR operations always use `gh` CLI regardless of provider.**
@@ -40,7 +40,7 @@ If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, 
 
    **Issues API:**
    ```bash
-   issues ticket list --project $PROJECT_ID --label "[relevant label]"
+   issues ticket list --project $PROJECT --label "[relevant label]"
    ```
 
 2. **If issue exists**: Verify it has clear acceptance criteria
@@ -52,7 +52,7 @@ If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, 
 
    **Issues API:**
    ```bash
-   issues ticket view [NUMBER] --project $PROJECT_ID
+   issues ticket view [NUMBER] --project $PROJECT --json
    ```
 
 3. **If no issue exists**: Create one with a descriptive title and initial context:
@@ -72,7 +72,7 @@ If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, 
    **Issues API:**
    ```bash
    issues ticket create \
-     --project $PROJECT_ID \
+     --project $PROJECT \
      --title "Descriptive title" \
      --labels "BUG_LABEL_ID" \
      --description "## Description
@@ -92,9 +92,9 @@ If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, 
 
    **Issues API:**
    ```bash
-   issues ticket view [NUMBER] --project $PROJECT_ID
+   issues ticket view [NUMBER] --project $PROJECT --json
    ```
-   If the state is not `REFINED` (or later), run `/refine [NUMBER]` before proceeding.
+   If the `state` field is not `REFINED` (or later), run `/refine [NUMBER]` before proceeding.
 
 5. **Check if work is already complete**:
    Before claiming, delegate to an appropriate specialist to verify the work isn't already done.
@@ -108,7 +108,7 @@ If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, 
 
    **Issues API:**
    ```bash
-   issues ticket transition [NUMBER] --project $PROJECT_ID --to IN_PROGRESS
+   issues ticket transition TICKET_ID --to IN_PROGRESS
    ```
 
 ---
@@ -123,7 +123,7 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 
 | Phase | Channel | Command (GitHub) | Command (Issues API) |
 |-------|---------|------------------|----------------------|
-| Pre-PR (research, planning, implementation) | Ticket | `gh issue comment [N] --body "..."` | `issues comment add [N] --project $PROJECT_ID --body "..."` |
+| Pre-PR (research, planning, implementation) | Ticket | `gh issue comment [N] --body "..."` | `issues comment add TICKET_ID --body "..."` |
 | Post-PR (code review, QA feedback) | GitHub PR | `gh pr review [N] --comment --body "..."` | `gh pr review [N] --comment --body "..."` |
 
 ---
@@ -230,9 +230,9 @@ In both cases:
    - If checks pass: the merge proceeds automatically
    - If checks fail: report the specific failed check(s) to the user
    - If timeout is exceeded: report the timeout and the still-pending check(s) to the user
-2. Remove in-progress status:
-   - **GitHub (default):** `gh issue edit [NUMBER] --remove-label "in-progress"`
-   - **Issues API:** No-op — merging the PR with `Fixes #[NUMBER]` closes the ticket automatically
+2. Close the ticket:
+   - **GitHub (default):** `gh issue edit [NUMBER] --remove-label "in-progress"` (the PR's `Fixes #N` auto-closes it)
+   - **Issues API:** `issues ticket transition TICKET_ID --to CLOSED`
 3. Sync blocked labels using the `update-blocked-labels.sh` script in this command's `scripts/` directory
 4. Return to default branch and pull latest
 5. Clean up worktree using the `project-ops` skill's `cleanup-worktree.sh` script

@@ -53,7 +53,7 @@ async function tryRefresh(url: string): Promise<string | null> {
   }
 }
 
-function isAuthError(error: unknown): boolean {
+export function isAuthError(error: unknown): boolean {
   const err = error as { response?: { errors?: Array<{ extensions?: { code?: string } }> } };
   return err?.response?.errors?.some(
     (e) => e?.extensions?.code === "UNAUTHENTICATED"

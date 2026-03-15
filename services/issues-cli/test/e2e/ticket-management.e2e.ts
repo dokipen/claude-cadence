@@ -150,6 +150,7 @@ describe("Ticket Management", () => {
     }
   });
 
+
   it("should update a ticket's title", async () => {
     const result = await suite.cli("ticket", "update", createdTicketId, "--title", "Updated title");
     expect(result.exitCode).toBe(0);

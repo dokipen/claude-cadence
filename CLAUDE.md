@@ -40,7 +40,7 @@ Consuming projects provide their own `CLAUDE.md` with:
 ## Ticket Provider
 provider: github          # or "issues-api"
 api_url: http://localhost:4000  # required for issues-api
-project_id: <project-id>       # required for issues-api
+project_id: <project-name-or-id> # required for issues-api (accepts name or CUID)
 ```
 
 The `Ticket Provider` section is optional. When omitted, the default provider is `github` (GitHub Issues via `gh` CLI), maintaining full backward compatibility.
@@ -80,4 +80,4 @@ Bump the `version` field in `.claude-plugin/plugin.json` only when preparing a r
 ## Ticket Provider
 provider: issues-api
 api_url: http://localhost:4000
-project_id: cmmryin270000ny01dc2msx3t
+project_id: claude-cadence

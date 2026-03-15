@@ -16,7 +16,7 @@ Read the project's `CLAUDE.md` and look for a `## Ticket Provider` section:
 ## Ticket Provider
 provider: issues-api
 api_url: http://localhost:4000
-project_id: <project-id>
+project_id: <project-name-or-id>
 ```
 
 If no `Ticket Provider` section exists, or if it specifies `provider: github`, use the **GitHub Issues** backend (default, backward compatible).
@@ -26,7 +26,7 @@ If no `Ticket Provider` section exists, or if it specifies `provider: github`, u
 ```bash
 # Extract provider from CLAUDE.md (defaults to "github")
 PROVIDER=$(grep -A3 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'provider:' | tail -1 | awk '{print $2}' || echo "github")
-PROJECT_ID=$(grep -A4 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'project_id:' | tail -1 | awk '{print $2}')
+PROJECT=$(grep -A4 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'project_id:' | tail -1 | awk '{print $2}')
 ```
 
 ## Provider Dispatch
@@ -57,18 +57,20 @@ When `provider: issues-api`, use the `issues` CLI. Refer to the `issues-api` ski
 
 | Operation | Command |
 |-----------|---------|
-| List tickets | `issues ticket list --project $PROJECT_ID [filters]` |
-| View ticket | `issues ticket view N --project $PROJECT_ID` |
-| Create ticket | `issues ticket create --project $PROJECT_ID --title "..." [options]` |
-| Update ticket | `issues ticket update N --project $PROJECT_ID [options]` |
-| Add label | `issues label add N --project $PROJECT_ID --label LABEL_ID` |
-| Remove label | `issues label remove N --project $PROJECT_ID --label LABEL_ID` |
-| Comment | `issues comment add N --project $PROJECT_ID --body "..."` |
-| Close ticket | `issues ticket transition N --project $PROJECT_ID --to CLOSED` |
-| Check blockers | `issues ticket view N --project $PROJECT_ID` (inspect `blockedBy` in output) |
-| Check state | `issues ticket view N --project $PROJECT_ID` (inspect `State` in output) |
-| Check assignee | `issues ticket view N --project $PROJECT_ID` (inspect `Assignee` in output) |
-| Check estimate | `issues ticket view N --project $PROJECT_ID` (inspect `Story Points` in output) |
+| List tickets | `issues ticket list --project $PROJECT [filters]` |
+| View ticket | `issues ticket view N --project $PROJECT` |
+| Create ticket | `issues ticket create --project $PROJECT --title "..." [options]` |
+| Update ticket | `issues ticket update N --project $PROJECT [options]` |
+| Add label | `issues label add N --project $PROJECT --label LABEL_ID` |
+| Remove label | `issues label remove N --project $PROJECT --label LABEL_ID` |
+| Comment | `issues comment add N --project $PROJECT --body "..."` |
+| Close ticket | `issues ticket transition N --project $PROJECT --to CLOSED` |
+| Check blockers | `issues ticket view N --project $PROJECT --json` (read `blockedBy` array) |
+| Check state | `issues ticket view N --project $PROJECT --json` (read `state` field) |
+| Check assignee | `issues ticket view N --project $PROJECT --json` (read `assignee` field) |
+| Check estimate | `issues ticket view N --project $PROJECT --json` (read `storyPoints` field) |
+
+**Tip:** Use `--json` on any command to get structured output for programmatic parsing. See the `issues-api` skill for details.
 
 ## Concept Mapping
 
@@ -80,15 +82,15 @@ The two providers use different terminology in some areas:
 | State | `open` / `closed` | `BACKLOG` / `REFINED` / `IN_PROGRESS` / `CLOSED` |
 | Estimate | Label (`estimate:5`) | Story points field (`--points 5`) |
 | Priority | Not native (use labels) | Native field (`--priority HIGH`) |
-| Labels | By name | By ID (use `issues label list --project $PROJECT_ID` to look up) |
+| Labels | By name | By ID (use `issues label list --project $PROJECT --json` to look up) |
 | Claim/start work | Add `in-progress` label | Transition to `IN_PROGRESS` |
 | Mark refined | Add `refined` label | Transition to `REFINED` |
-| Blocking | GitHub dependencies API | `issues block add/remove --project $PROJECT_ID` |
+| Blocking | GitHub dependencies API | `issues block add/remove` |
 
 ## Important Notes
 
 - **PR operations always use `gh` CLI** regardless of ticket provider — PRs are a GitHub concept
 - **Default is `github`** — existing projects work without any configuration changes
 - When using `issues-api`, the API URL from `CLAUDE.md` must be reachable
-- When using `issues-api`, `project_id` is required — all `issues` CLI commands must include `--project $PROJECT_ID`
+- When using `issues-api`, `project_id` is required — all `issues` CLI commands must include `--project $PROJECT` (project name or ID; inferred from git origin if omitted)
 - The `issues` CLI must be installed and authenticated (`issues auth login --pat <token>`)
