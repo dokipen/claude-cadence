@@ -3,6 +3,7 @@ import { verifyToken } from "./jwt.js";
 
 export interface AuthContext {
   currentUser: User | null;
+  accessToken?: string;
 }
 
 /**
@@ -25,17 +26,15 @@ export async function buildAuthContext(
     const { userId, jti } = verifyToken(token);
 
     // Check if the token has been revoked
-    if (jti) {
-      const revoked = await prisma.revokedToken.findUnique({
-        where: { jti },
-      });
-      if (revoked) {
-        return { currentUser: null };
-      }
+    const revoked = await prisma.revokedToken.findUnique({
+      where: { jti },
+    });
+    if (revoked) {
+      return { currentUser: null };
     }
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
-    return { currentUser: user };
+    return { currentUser: user, accessToken: token };
   } catch {
     return { currentUser: null };
   }

@@ -65,13 +65,6 @@ export function setAuthTokens(token: string, refreshToken: string): void {
   writeFileSync(AUTH_FILE, JSON.stringify(auth, null, 2) + "\n", { encoding: "utf-8", mode: 0o600 });
 }
 
-export function setAuthToken(token: string): void {
-  ensureConfigDir();
-  const existing = readJsonFile<AuthFile>(AUTH_FILE);
-  const auth: AuthFile = { ...existing, token };
-  writeFileSync(AUTH_FILE, JSON.stringify(auth, null, 2) + "\n", { encoding: "utf-8", mode: 0o600 });
-}
-
 export function clearAuthToken(): void {
   if (existsSync(AUTH_FILE)) {
     unlinkSync(AUTH_FILE);

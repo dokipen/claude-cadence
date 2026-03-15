@@ -8,6 +8,7 @@ import {
   verifyToken,
   generateRefreshToken,
   REFRESH_TOKEN_EXPIRY_DAYS,
+  ACCESS_TOKEN_EXPIRY_MS,
 } from "../../auth/jwt.js";
 import { GraphQLError } from "graphql";
 
@@ -15,6 +16,7 @@ export interface AuthenticatedContext {
   prisma: PrismaClient;
   loaders: Loaders;
   currentUser: User | null;
+  accessToken?: string;
 }
 
 const oauthProvider = new GitHubOAuthProvider();
@@ -105,52 +107,65 @@ export const authResolvers = {
       { refreshToken }: { refreshToken: string },
       { prisma }: AuthenticatedContext
     ) => {
-      const storedToken = await prisma.refreshToken.findUnique({
-        where: { token: refreshToken },
-        include: { user: true },
-      });
-
-      if (!storedToken || storedToken.revoked) {
-        throw new GraphQLError("Invalid or revoked refresh token", {
-          extensions: { code: "UNAUTHENTICATED" },
+      // Atomic rotation: revoke old token and verify it wasn't already revoked
+      return prisma.$transaction(async (tx) => {
+        const result = await tx.refreshToken.updateMany({
+          where: { token: refreshToken, revoked: false },
+          data: { revoked: true },
         });
-      }
 
-      if (storedToken.expiresAt < new Date()) {
-        throw new GraphQLError("Refresh token expired", {
-          extensions: { code: "UNAUTHENTICATED" },
+        if (result.count === 0) {
+          throw new GraphQLError("Invalid or revoked refresh token", {
+            extensions: { code: "UNAUTHENTICATED" },
+          });
+        }
+
+        const storedToken = await tx.refreshToken.findUnique({
+          where: { token: refreshToken },
+          include: { user: true },
         });
-      }
 
-      // Rotate: revoke old refresh token, issue new pair
-      await prisma.refreshToken.update({
-        where: { id: storedToken.id },
-        data: { revoked: true },
+        if (!storedToken || storedToken.expiresAt < new Date()) {
+          throw new GraphQLError("Refresh token expired", {
+            extensions: { code: "UNAUTHENTICATED" },
+          });
+        }
+
+        const { token: newAccessToken, refreshToken: newRefreshToken } =
+          await issueTokens(tx as unknown as PrismaClient, storedToken.userId);
+
+        return {
+          token: newAccessToken,
+          refreshToken: newRefreshToken,
+          user: storedToken.user,
+        };
       });
-
-      const { token, refreshToken: newRefreshToken } = await issueTokens(
-        prisma,
-        storedToken.userId
-      );
-
-      return { token, refreshToken: newRefreshToken, user: storedToken.user };
     },
 
     logout: async (
       _: unknown,
       { refreshToken }: { refreshToken: string },
-      { prisma }: AuthenticatedContext
+      context: AuthenticatedContext
     ) => {
+      const { prisma, accessToken } = context;
+
       // Revoke the refresh token
-      const storedToken = await prisma.refreshToken.findUnique({
-        where: { token: refreshToken },
+      await prisma.refreshToken.updateMany({
+        where: { token: refreshToken, revoked: false },
+        data: { revoked: true },
       });
 
-      if (storedToken && !storedToken.revoked) {
-        await prisma.refreshToken.update({
-          where: { id: storedToken.id },
-          data: { revoked: true },
-        });
+      // Blocklist the current access token so it cannot be reused
+      if (accessToken) {
+        try {
+          const { jti } = verifyToken(accessToken);
+          const expiresAt = new Date(Date.now() + ACCESS_TOKEN_EXPIRY_MS);
+          await prisma.revokedToken.create({
+            data: { jti, expiresAt },
+          });
+        } catch {
+          // Token may already be expired/invalid — that's fine
+        }
       }
 
       return true;
