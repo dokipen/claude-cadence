@@ -11,7 +11,7 @@ You are now acting as the technical lead, coordinating specialist agents on this
 **Autonomy principle:** Drive through all phases without pausing for confirmation. Only interrupt the user when:
 - Acceptance criteria are ambiguous and you cannot resolve them from context
 - A decision requires user judgement (e.g., breaking down a large issue, choosing between approaches)
-- Manual QA is needed (Phase 6, visual changes)
+- Manual QA is needed (Phase 6, visual changes only)
 - A phase is blocked and you cannot unblock it yourself
 
 ## Issue-First Workflow
@@ -134,6 +134,7 @@ Use `/create-pr` to create the pull request. Link to the issue with `Fixes #[NUM
 3. Triage findings by severity (Critical/Warning block merge, Suggestions don't)
 4. Fix-review loop: assign fixes, push, re-review (max 3 cycles before escalation)
 5. Handle deferred findings using the convention below
+6. Once all blocking findings are resolved, proceed directly to Phase 7 (skip Phase 6 unless the PR contains visual changes)
 
 #### Deferred Findings Convention
 
@@ -146,10 +147,12 @@ In both cases:
 - Link back to the originating review: include "Discovered in #[PR-NUMBER] review" in the finding description
 - Review agents should recommend a target (existing ticket or new issue) in their review output — the lead makes the final call
 
-### Phase 6: Manual QA (for visual changes)
+### Phase 6: Manual QA (visual changes only — skip for non-visual PRs)
+
+> **This phase only applies when the PR contains visual/UI changes.** For all other PRs, proceed directly from Phase 5 to Phase 7.
 
 1. Present to user for manual testing
-2. Wait for user feedback
+2. Wait for user feedback (user intervention required)
 3. Address issues if reported, return to Phase 5 after fixes
 
 ### Phase 7: Merge and Cleanup
