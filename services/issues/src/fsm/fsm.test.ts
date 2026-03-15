@@ -4,8 +4,10 @@ import { validateTransition, checkBlockerGuard } from "./ticket-machine.js";
 describe("validateTransition", () => {
   const validTransitions: [string, string][] = [
     ["BACKLOG", "REFINED"],
+    ["BACKLOG", "CLOSED"],
     ["REFINED", "IN_PROGRESS"],
     ["REFINED", "BACKLOG"],
+    ["REFINED", "CLOSED"],
     ["IN_PROGRESS", "CLOSED"],
     ["IN_PROGRESS", "REFINED"],
     ["CLOSED", "BACKLOG"],
@@ -19,7 +21,6 @@ describe("validateTransition", () => {
   );
 
   const invalidTransitions: [string, string][] = [
-    ["BACKLOG", "CLOSED"],
     ["BACKLOG", "IN_PROGRESS"],
     ["IN_PROGRESS", "BACKLOG"],
     ["CLOSED", "IN_PROGRESS"],
@@ -44,7 +45,7 @@ describe("validateTransition", () => {
   });
 
   it("lists allowed transitions in error message", () => {
-    const result = validateTransition("BACKLOG", "CLOSED");
+    const result = validateTransition("BACKLOG", "IN_PROGRESS");
     expect(result.error).toContain("REFINED");
     expect(result.error).toContain("Allowed transitions:");
   });

@@ -107,8 +107,8 @@ issues ticket transition 42 --project PROJECT_ID --to BACKLOG
 ```
 
 Valid transitions:
-- `BACKLOG` -> `REFINED`
-- `REFINED` -> `IN_PROGRESS`, `BACKLOG`
+- `BACKLOG` -> `REFINED`, `CLOSED`
+- `REFINED` -> `IN_PROGRESS`, `BACKLOG`, `CLOSED`
 - `IN_PROGRESS` -> `CLOSED`, `REFINED`
 - `CLOSED` -> `BACKLOG`
 
