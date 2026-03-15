@@ -65,10 +65,15 @@ describe("checkBlockerGuard", () => {
     expect(result).toEqual({ allowed: true });
   });
 
-  it("allows when all blockers are closed", async () => {
+  it("queries only for unresolved (non-CLOSED) blockers", async () => {
     const prisma = mockPrisma(0);
-    const result = await checkBlockerGuard("ticket-1", prisma);
-    expect(result).toEqual({ allowed: true });
+    await checkBlockerGuard("ticket-1", prisma);
+    expect(prisma.blockRelation.count).toHaveBeenCalledWith({
+      where: {
+        blockedId: "ticket-1",
+        blocker: { state: { not: "CLOSED" } },
+      },
+    });
   });
 
   it("rejects when some blockers are not closed", async () => {

@@ -332,7 +332,7 @@ export const ticketResolvers = {
         where: { blockerId_blockedId: { blockerId, blockedId } },
       });
 
-      return prisma.ticket.findUnique({ where: { id: blockedId } });
+      return prisma.ticket.findUniqueOrThrow({ where: { id: blockedId } });
     },
   },
 
