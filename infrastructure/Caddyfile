@@ -27,7 +27,8 @@
 		}
 	}
 
-	handle / {
+	# Fallback for unmatched routes
+	handle {
 		respond "Claude Cadence API Gateway" 200
 	}
 }
