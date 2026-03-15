@@ -1,4 +1,4 @@
-import type { PrismaClient, Ticket, Prisma } from "@prisma/client";
+import type { PrismaClient, Ticket, Comment, Prisma } from "@prisma/client";
 import type { Loaders } from "../../loaders.js";
 import { validateTransition, checkBlockerGuard } from "../../fsm/ticket-machine.js";
 
@@ -333,6 +333,62 @@ export const ticketResolvers = {
       });
 
       return prisma.ticket.findUniqueOrThrow({ where: { id: blockedId } });
+    },
+
+    addComment: async (
+      _: unknown,
+      { ticketId, body }: { ticketId: string; body: string },
+      { prisma }: Context
+    ) => {
+      if (!body.trim()) throw new Error("Comment body cannot be empty");
+
+      const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+      if (!ticket) throw new Error(`Ticket not found: ${ticketId}`);
+
+      const user = await prisma.user.findFirstOrThrow();
+
+      return prisma.comment.create({
+        data: { ticketId, body, authorId: user.id },
+        include: { author: true },
+      });
+    },
+
+    updateComment: async (
+      _: unknown,
+      { id, body }: { id: string; body: string },
+      { prisma }: Context
+    ) => {
+      if (!body.trim()) throw new Error("Comment body cannot be empty");
+
+      const existing = await prisma.comment.findUnique({ where: { id } });
+      if (!existing) throw new Error("Comment not found");
+
+      return prisma.comment.update({
+        where: { id },
+        data: { body },
+        include: { author: true },
+      });
+    },
+
+    deleteComment: async (
+      _: unknown,
+      { id }: { id: string },
+      { prisma }: Context
+    ) => {
+      const existing = await prisma.comment.findUnique({
+        where: { id },
+        include: { author: true },
+      });
+      if (!existing) throw new Error("Comment not found");
+
+      await prisma.comment.delete({ where: { id } });
+      return existing;
+    },
+  },
+
+  Comment: {
+    author: async (parent: Comment, _: unknown, { loaders }: Context) => {
+      return loaders.assigneeByUserId.load(parent.authorId);
     },
   },
 

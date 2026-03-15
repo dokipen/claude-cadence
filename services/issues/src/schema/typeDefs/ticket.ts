@@ -119,5 +119,8 @@ export const ticketTypeDefs = `
     transitionTicket(id: ID!, to: TicketState!): Ticket!
     addBlockRelation(blockerId: ID!, blockedId: ID!): Ticket!
     removeBlockRelation(blockerId: ID!, blockedId: ID!): Ticket!
+    addComment(ticketId: ID!, body: String!): Comment!
+    updateComment(id: ID!, body: String!): Comment!
+    deleteComment(id: ID!): Comment!
   }
 `;
