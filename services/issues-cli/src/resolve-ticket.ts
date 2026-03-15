@@ -1,5 +1,6 @@
 import { gql } from "graphql-request";
 import { getClient } from "./client.js";
+import { resolveProjectId } from "./project-resolver.js";
 
 const GET_TICKET_ID_BY_NUMBER = gql`
   query GetTicketIdByNumber($projectId: ID!, $number: Int!) {
@@ -11,7 +12,8 @@ const GET_TICKET_ID_BY_NUMBER = gql`
 
 /**
  * Resolves a ticket identifier to a CUID.
- * If the identifier is numeric, requires --project and looks up via ticketByNumber.
+ * If the identifier is numeric, resolves the project (via explicit flag, name
+ * lookup, or git origin inference) and looks up via ticketByNumber.
  * If the identifier is already a CUID, returns it directly.
  */
 export async function resolveTicketId(
@@ -24,15 +26,13 @@ export async function resolveTicketId(
     return id;
   }
 
-  if (!project) {
-    throw new Error("--project is required when using a ticket number");
-  }
+  const projectId = await resolveProjectId(project);
 
   const client = getClient();
   const data = await client.request<{
     ticketByNumber: { id: string } | null;
   }>(GET_TICKET_ID_BY_NUMBER, {
-    projectId: project,
+    projectId,
     number: parseInt(id, 10),
   });
 
