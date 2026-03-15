@@ -1,0 +1,20 @@
+host: "127.0.0.1"
+port: 0  # random port for tests
+
+tmux:
+  socket_name: "agentd-test"
+
+log:
+  level: "debug"
+  format: "text"
+
+profiles:
+  sleeper:
+    command: "sleep 3600"
+    description: "Long-running sleep process"
+  fast-exit:
+    command: "exit"
+    description: "Exits the shell immediately, destroying the tmux session"
+  echo-and-exit:
+    command: "bash -c 'echo hello && sleep 1'"
+    description: "Echoes and exits after 1s"

@@ -1,0 +1,72 @@
+syntax = "proto3";
+package agents.v1;
+
+option go_package = "github.com/dokipen/claude-cadence/services/agents/gen/agents/v1;agentsv1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+service AgentService {
+  rpc CreateSession(CreateSessionRequest) returns (CreateSessionResponse);
+  rpc GetSession(GetSessionRequest) returns (GetSessionResponse);
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+  rpc DestroySession(DestroySessionRequest) returns (google.protobuf.Empty);
+}
+
+enum SessionState {
+  SESSION_STATE_UNSPECIFIED = 0;
+  SESSION_STATE_CREATING = 1;
+  SESSION_STATE_RUNNING = 2;
+  SESSION_STATE_STOPPED = 3;
+  SESSION_STATE_ERROR = 4;
+  SESSION_STATE_DESTROYING = 5;
+}
+
+message Session {
+  string id = 1;
+  string name = 2;
+  string agent_profile = 3;
+  SessionState state = 4;
+  string worktree_path = 5;
+  string repo_url = 6;
+  string base_ref = 7;
+  string tmux_session = 8;
+  google.protobuf.Timestamp created_at = 9;
+  string error_message = 10;
+  int32 agent_pid = 11;
+  string websocket_url = 12;
+}
+
+message CreateSessionRequest {
+  string agent_profile = 1;
+  string session_name = 2;
+  string base_ref = 3;
+  map<string, string> env = 4;
+  repeated string extra_args = 5;
+}
+
+message CreateSessionResponse {
+  Session session = 1;
+}
+
+message GetSessionRequest {
+  string session_id = 1;
+}
+
+message GetSessionResponse {
+  Session session = 1;
+}
+
+message ListSessionsRequest {
+  string agent_profile = 1;
+  SessionState state = 2;
+}
+
+message ListSessionsResponse {
+  repeated Session sessions = 1;
+}
+
+message DestroySessionRequest {
+  string session_id = 1;
+  bool force = 2;
+}
