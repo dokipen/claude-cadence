@@ -63,13 +63,20 @@ export function registerProjectCommand(program: Command): void {
     .description("Create a new project")
     .requiredOption("--name <name>", "Project name")
     .requiredOption("--repository <repository>", "Repository (e.g. org/repo)")
-    .action(async (opts: { name: string; repository: string }) => {
+    .option("--json", "Output raw JSON")
+    .action(async (opts: { name: string; repository: string; json?: boolean }) => {
       const spinner = ora("Creating project...").start();
       try {
         const client = getClient();
         const data = await client.request<{
           createProject: { id: string; name: string; repository: string; createdAt: string };
         }>(CREATE_PROJECT, { input: { name: opts.name, repository: opts.repository } });
+
+        if (opts.json) {
+          spinner.stop();
+          console.log(JSON.stringify(data.createProject, null, 2));
+          return;
+        }
 
         spinner.succeed("Project created");
         const p = data.createProject;
@@ -87,7 +94,8 @@ export function registerProjectCommand(program: Command): void {
   project
     .command("list")
     .description("List all projects")
-    .action(async () => {
+    .option("--json", "Output raw JSON")
+    .action(async (opts: { json?: boolean }) => {
       const spinner = ora("Fetching projects...").start();
       try {
         const client = getClient();
@@ -96,6 +104,11 @@ export function registerProjectCommand(program: Command): void {
         }>(LIST_PROJECTS);
 
         spinner.stop();
+
+        if (opts.json) {
+          console.log(JSON.stringify(data.projects, null, 2));
+          return;
+        }
 
         if (data.projects.length === 0) {
           console.log(chalk.dim("  No projects found."));
@@ -118,7 +131,8 @@ export function registerProjectCommand(program: Command): void {
   project
     .command("view <id>")
     .description("View project details")
-    .action(async (id: string) => {
+    .option("--json", "Output raw JSON")
+    .action(async (id: string, opts: { json?: boolean }) => {
       const spinner = ora("Fetching project...").start();
       try {
         const client = getClient();
@@ -140,6 +154,11 @@ export function registerProjectCommand(program: Command): void {
           process.exit(1);
         }
 
+        if (opts.json) {
+          console.log(JSON.stringify(p, null, 2));
+          return;
+        }
+
         console.log();
         console.log(chalk.bold(`  #${p.id}  ${p.name}`));
         console.log(`  Repository: ${chalk.cyan(p.repository)}`);
@@ -157,7 +176,8 @@ export function registerProjectCommand(program: Command): void {
     .description("Update a project")
     .option("--name <name>", "New name")
     .option("--repository <repository>", "New repository")
-    .action(async (id: string, opts: { name?: string; repository?: string }) => {
+    .option("--json", "Output raw JSON")
+    .action(async (id: string, opts: { name?: string; repository?: string; json?: boolean }) => {
       const input: Record<string, string> = {};
       if (opts.name) input.name = opts.name;
       if (opts.repository) input.repository = opts.repository;
@@ -175,6 +195,12 @@ export function registerProjectCommand(program: Command): void {
         const data = await client.request<{
           updateProject: { id: string; name: string; repository: string; updatedAt: string };
         }>(UPDATE_PROJECT, { id, input });
+
+        if (opts.json) {
+          spinner.stop();
+          console.log(JSON.stringify(data.updateProject, null, 2));
+          return;
+        }
 
         spinner.succeed("Project updated");
         const p = data.updateProject;

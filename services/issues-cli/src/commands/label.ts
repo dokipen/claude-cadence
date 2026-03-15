@@ -66,13 +66,20 @@ export function registerLabelCommand(program: Command): void {
     .description("Create a new label")
     .requiredOption("--name <name>", "Label name")
     .requiredOption("--color <color>", "Label color (hex, e.g. #ff0000)")
-    .action(async (opts: { name: string; color: string }) => {
+    .option("--json", "Output raw JSON")
+    .action(async (opts: { name: string; color: string; json?: boolean }) => {
       const spinner = ora("Creating label...").start();
       try {
         const client = getClient();
         const data = await client.request<{
           createLabel: { id: string; name: string; color: string; createdAt: string };
         }>(CREATE_LABEL, { name: opts.name, color: opts.color });
+
+        if (opts.json) {
+          spinner.stop();
+          console.log(JSON.stringify(data.createLabel, null, 2));
+          return;
+        }
 
         spinner.succeed("Label created");
         const l = data.createLabel;
@@ -89,7 +96,8 @@ export function registerLabelCommand(program: Command): void {
   label
     .command("list")
     .description("List all labels")
-    .action(async () => {
+    .option("--json", "Output raw JSON")
+    .action(async (opts: { json?: boolean }) => {
       const spinner = ora("Fetching labels...").start();
       try {
         const client = getClient();
@@ -98,6 +106,11 @@ export function registerLabelCommand(program: Command): void {
         }>(LIST_LABELS);
 
         spinner.stop();
+
+        if (opts.json) {
+          console.log(JSON.stringify(data.labels, null, 2));
+          return;
+        }
 
         if (data.labels.length === 0) {
           console.log(chalk.dim("  No labels found."));
@@ -121,13 +134,20 @@ export function registerLabelCommand(program: Command): void {
     .command("add <ticket-id>")
     .description("Add a label to a ticket")
     .requiredOption("--label <id>", "Label ID")
-    .action(async (ticketId: string, opts: { label: string }) => {
+    .option("--json", "Output raw JSON")
+    .action(async (ticketId: string, opts: { label: string; json?: boolean }) => {
       const spinner = ora("Adding label...").start();
       try {
         const client = getClient();
         const data = await client.request<{
           addLabel: { id: string; title: string; labels: Array<{ id: string; name: string }> };
         }>(ADD_LABEL, { ticketId, labelId: opts.label });
+
+        if (opts.json) {
+          spinner.stop();
+          console.log(JSON.stringify(data.addLabel, null, 2));
+          return;
+        }
 
         spinner.succeed("Label added");
         const t = data.addLabel;
@@ -146,13 +166,20 @@ export function registerLabelCommand(program: Command): void {
     .command("remove <ticket-id>")
     .description("Remove a label from a ticket")
     .requiredOption("--label <id>", "Label ID")
-    .action(async (ticketId: string, opts: { label: string }) => {
+    .option("--json", "Output raw JSON")
+    .action(async (ticketId: string, opts: { label: string; json?: boolean }) => {
       const spinner = ora("Removing label...").start();
       try {
         const client = getClient();
         const data = await client.request<{
           removeLabel: { id: string; title: string; labels: Array<{ id: string; name: string }> };
         }>(REMOVE_LABEL, { ticketId, labelId: opts.label });
+
+        if (opts.json) {
+          spinner.stop();
+          console.log(JSON.stringify(data.removeLabel, null, 2));
+          return;
+        }
 
         spinner.succeed("Label removed");
         const t = data.removeLabel;

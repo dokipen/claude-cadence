@@ -66,7 +66,7 @@ Use this value to select the correct commands throughout the workflow.
 
    **Issues API:**
    ```bash
-   issues ticket list --project $PROJECT_ID --state BACKLOG
+   issues ticket list --project $PROJECT_ID --state BACKLOG --json
    ```
 
 2. **For each issue**, delegate to ticket-refiner agent
@@ -83,7 +83,7 @@ An issue is refined when it has ALL of:
 | Acceptance criteria | Checkboxes defining "done" | `--acceptance-criteria` field |
 | Estimate | `estimate:N` label (1-13) | Story points field (`--points N`) |
 | Priority | `priority:high`, `priority:medium`, or `priority:low` label | Priority field (`--priority N`) |
-| Type label | Label by name: bug, enhancement, etc. | Label by ID (use `issues label list` to look up) |
+| Type label | Label by name: bug, enhancement, etc. | Label by ID (use `issues label list --json` to look up) |
 | Assigned | Assigned to a developer | `issues assign TICKET_ID --user USER_ID` |
 | Blockers linked | Via GitHub dependencies API | `issues block add --blocker X --blocked Y` |
 | Blocked label | `blocked` label if open blockers exist | Blocked tickets auto-tracked; cannot transition to `IN_PROGRESS` |

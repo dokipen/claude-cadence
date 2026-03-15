@@ -43,7 +43,8 @@ export function registerAssignCommand(program: Command): void {
     .command("assign <ticket-id>")
     .description("Assign a ticket to a user")
     .requiredOption("--user <id>", "User ID")
-    .action(async (ticketId: string, opts: { user: string }) => {
+    .option("--json", "Output raw JSON")
+    .action(async (ticketId: string, opts: { user: string; json?: boolean }) => {
       const spinner = ora("Assigning ticket...").start();
       try {
         const client = getClient();
@@ -54,6 +55,12 @@ export function registerAssignCommand(program: Command): void {
             assignee: { id: string; login: string; displayName: string } | null;
           };
         }>(ASSIGN_TICKET, { ticketId, userId: opts.user });
+
+        if (opts.json) {
+          spinner.stop();
+          console.log(JSON.stringify(data.assignTicket, null, 2));
+          return;
+        }
 
         spinner.succeed("Ticket assigned");
         const t = data.assignTicket;
@@ -73,7 +80,8 @@ export function registerAssignCommand(program: Command): void {
   program
     .command("unassign <ticket-id>")
     .description("Unassign a ticket")
-    .action(async (ticketId: string) => {
+    .option("--json", "Output raw JSON")
+    .action(async (ticketId: string, opts: { json?: boolean }) => {
       const spinner = ora("Unassigning ticket...").start();
       try {
         const client = getClient();
@@ -84,6 +92,12 @@ export function registerAssignCommand(program: Command): void {
             assignee: null;
           };
         }>(UNASSIGN_TICKET, { ticketId });
+
+        if (opts.json) {
+          spinner.stop();
+          console.log(JSON.stringify(data.unassignTicket, null, 2));
+          return;
+        }
 
         spinner.succeed("Ticket unassigned");
         const t = data.unassignTicket;
