@@ -23,6 +23,8 @@ jobs:
     #   2. github-runner user is in the docker group
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 15
+    env:
+      JWT_SECRET: ${{ secrets.ISSUES_JWT_SECRET }}
     defaults:
       run:
         working-directory: services/issues
@@ -30,8 +32,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build and deploy
-        env:
-          JWT_SECRET: ${{ secrets.ISSUES_JWT_SECRET }}
         run: |
           if [ -z "$JWT_SECRET" ]; then
             echo "::error::ISSUES_JWT_SECRET secret is not set"
