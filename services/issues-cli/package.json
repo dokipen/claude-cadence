@@ -21,7 +21,9 @@
     "ora": "^8.2.0"
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20.17.0",
+    "jsonwebtoken": "^9.0.3",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"

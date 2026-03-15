@@ -4,6 +4,8 @@ import { PrismaClient } from "@prisma/client";
 import { DateTimeResolver } from "graphql-scalars";
 import { typeDefs, resolvers } from "./schema/index.js";
 import { createLoaders } from "./loaders.js";
+import { buildAuthContext } from "./auth/context.js";
+import { authGuardPlugin } from "./auth/guard.js";
 
 const prisma = new PrismaClient();
 
@@ -13,17 +15,24 @@ const server = new ApolloServer({
     ...resolvers,
     { DateTime: DateTimeResolver },
   ],
+  plugins: [authGuardPlugin()],
 });
 
 const port = parseInt(process.env.PORT || "4000", 10);
 
 const { url } = await startStandaloneServer(server, {
   listen: { port },
-  // Fresh loaders per request to avoid cross-request cache pollution
-  context: async () => ({
-    prisma,
-    loaders: createLoaders(prisma),
-  }),
+  context: async ({ req }) => {
+    const { currentUser } = await buildAuthContext(
+      { headers: { authorization: req.headers.authorization } },
+      prisma
+    );
+    return {
+      prisma,
+      loaders: createLoaders(prisma),
+      currentUser,
+    };
+  },
 });
 
 console.log(`Server ready at ${url}`);

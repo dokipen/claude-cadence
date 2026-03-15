@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { GraphQLClient, gql } from "graphql-request";
-import { setupTestSuite, type TestSuite } from "./helpers.js";
+import { setupTestSuite, type TestSuite, TEST_USER_ID } from "./helpers.js";
 
 describe("Assignment Management", () => {
   let suite: TestSuite;
@@ -15,24 +14,9 @@ describe("Assignment Management", () => {
     suite?.cleanup();
   });
 
-  it("should create a test user and ticket via GraphQL", async () => {
-    const client = new GraphQLClient(suite.url);
-
-    const CREATE_USER = gql`
-      mutation CreateUser($githubId: Int!, $login: String!, $displayName: String!) {
-        createUser(githubId: $githubId, login: $login, displayName: $displayName) {
-          id
-          login
-          displayName
-        }
-      }
-    `;
-
-    const userData = await client.request<{
-      createUser: { id: string; login: string; displayName: string };
-    }>(CREATE_USER, { githubId: 12345, login: "testuser", displayName: "Test User" });
-
-    userId = userData.createUser.id;
+  it("should create a ticket for assignment tests", async () => {
+    // Use the test user created by the test helper
+    userId = TEST_USER_ID;
     expect(userId).toBeTruthy();
 
     const result = await suite.cli("ticket", "create", "--title", "Assignment test ticket");

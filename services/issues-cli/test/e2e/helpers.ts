@@ -1,13 +1,17 @@
 import { spawn, execSync, type ChildProcess } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createServer } from "node:net";
+import jwt from "jsonwebtoken";
 
 // Resolve paths relative to repo root (two levels up from issues-cli/)
 const REPO_ROOT = resolve(__dirname, "../../../..");
 const ISSUES_SERVICE_DIR = join(REPO_ROOT, "services", "issues");
 const ISSUES_CLI_DIR = join(REPO_ROOT, "services", "issues-cli");
+
+const TEST_JWT_SECRET = "test-secret";
+export const TEST_USER_ID = "test-user-id-000";
 
 /**
  * Find a free port by briefly listening on port 0 and reading the assigned port.
@@ -30,12 +34,14 @@ async function getFreePort(): Promise<number> {
 
 export interface TestServer {
   url: string;
+  authToken: string;
   cleanup: () => void;
 }
 
 /**
  * Start the Apollo Server as a child process with a fresh SQLite database.
  * Waits for "Server ready" on stdout before resolving.
+ * Creates a test user and returns a valid auth token.
  */
 export async function createTestServer(): Promise<TestServer> {
   const tmpDir = mkdtempSync(join(tmpdir(), "issues-e2e-"));
@@ -47,6 +53,7 @@ export async function createTestServer(): Promise<TestServer> {
     ...process.env,
     DATABASE_URL: databaseUrl,
     PORT: String(port),
+    JWT_SECRET: TEST_JWT_SECRET,
   };
 
   // Run Prisma migrations
@@ -62,6 +69,20 @@ export async function createTestServer(): Promise<TestServer> {
     env,
     stdio: "pipe",
   });
+
+  // Create a test user directly via SQL
+  const sqlFile = join(tmpDir, "create-test-user.sql");
+  const now = new Date().toISOString();
+  writeFileSync(sqlFile, `INSERT INTO User (id, githubId, login, displayName, avatarUrl, createdAt, updatedAt) VALUES ('${TEST_USER_ID}', 12345, 'testuser', 'Test User', NULL, '${now}', '${now}');`);
+
+  execSync(`npx prisma db execute --file ${sqlFile} --schema prisma/schema.prisma`, {
+    cwd: ISSUES_SERVICE_DIR,
+    env,
+    stdio: "pipe",
+  });
+
+  // Sign a JWT for the test user
+  const authToken = jwt.sign({ userId: TEST_USER_ID }, TEST_JWT_SECRET, { expiresIn: "1h" });
 
   // Start the server as a child process
   const serverProcess = spawn("npx", ["tsx", join(ISSUES_SERVICE_DIR, "src", "index.ts")], {
@@ -118,7 +139,7 @@ export async function createTestServer(): Promise<TestServer> {
     }
   };
 
-  return { url, cleanup };
+  return { url, authToken, cleanup };
 }
 
 export interface CliResult {
@@ -129,10 +150,15 @@ export interface CliResult {
 
 /**
  * Run the issues CLI as a child process pointing at the given server URL.
+ * Optionally pass an auth token via ISSUES_AUTH_TOKEN env var.
  */
-export function runCli(serverUrl: string, ...args: string[]): Promise<CliResult> {
+export function runCli(
+  serverUrl: string,
+  args: string[],
+  authToken?: string,
+): Promise<CliResult> {
   return new Promise((resolve) => {
-    const child = execCliProcess(serverUrl, args);
+    const child = execCliProcess(serverUrl, args, authToken);
 
     let stdout = "";
     let stderr = "";
@@ -155,14 +181,18 @@ export function runCli(serverUrl: string, ...args: string[]): Promise<CliResult>
   });
 }
 
-function execCliProcess(serverUrl: string, args: string[]): ChildProcess {
+function execCliProcess(serverUrl: string, args: string[], authToken?: string): ChildProcess {
   // Disable chalk colors and ora spinners for predictable output
-  const env = {
-    ...process.env,
+  const env: Record<string, string> = {
+    ...(process.env as Record<string, string>),
     ISSUES_API_URL: serverUrl,
     FORCE_COLOR: "0",
     NO_COLOR: "1",
   };
+
+  if (authToken) {
+    env.ISSUES_AUTH_TOKEN = authToken;
+  }
 
   return spawn(
     "npx",
@@ -177,8 +207,10 @@ function execCliProcess(serverUrl: string, args: string[]): ChildProcess {
 
 export interface TestSuite {
   url: string;
+  authToken: string;
   cleanup: () => void;
   cli: (...args: string[]) => Promise<CliResult>;
+  unauthenticatedCli: (...args: string[]) => Promise<CliResult>;
 }
 
 /**
@@ -190,7 +222,8 @@ export interface TestSuite {
  *   afterAll(() => suite.cleanup());
  */
 export async function setupTestSuite(): Promise<TestSuite> {
-  const { url, cleanup } = await createTestServer();
-  const cli = (...args: string[]) => runCli(url, ...args);
-  return { url, cleanup, cli };
+  const { url, authToken, cleanup } = await createTestServer();
+  const cli = (...args: string[]) => runCli(url, args, authToken);
+  const unauthenticatedCli = (...args: string[]) => runCli(url, args);
+  return { url, authToken, cleanup, cli, unauthenticatedCli };
 }
