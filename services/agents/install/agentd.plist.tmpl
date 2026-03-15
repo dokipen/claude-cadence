@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.cadence.agentd</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__BINARY_PATH__</string>
+        <string>--config</string>
+        <string>__CONFIG_PATH__</string>
+    </array>
+
+    <key>UserName</key>
+    <string>__USER__</string>
+
+    <key>WorkingDirectory</key>
+    <string>__ROOT_DIR__</string>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>__LOG_DIR__/agentd.stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__LOG_DIR__/agentd.stderr.log</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>
