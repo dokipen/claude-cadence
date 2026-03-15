@@ -31,4 +31,4 @@ Users can authenticate with the web UI to access ticket data.
 - Token refresh uses `refreshToken` mutation, matching the pattern in `services/issues-cli/src/client.ts`
 - JWT payload: `{ userId, jti }` signed with `JWT_SECRET` (see `services/issues/src/auth/jwt.ts`)
 - Access tokens expire in 15 minutes; refresh tokens last 30 days
-- Tokens stored in localStorage: `cadence_token`, `cadence_refresh_token`
+- Tokens stored in localStorage: `cadence_token`, `cadence_refresh_token` (pragmatic for self-hosted LAN tool; `httpOnly` cookies would require API changes — acceptable trade-off)

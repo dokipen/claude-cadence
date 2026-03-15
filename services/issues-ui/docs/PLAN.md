@@ -155,16 +155,23 @@ export default defineConfig({
 
 ### Auth Fixture
 
-JWT payload matches `services/issues/src/auth/jwt.ts` — `{ userId, jti }` signed with `JWT_SECRET`:
+The access token is a JWT matching `services/issues/src/auth/jwt.ts` — `{ userId, jti }` signed with `JWT_SECRET`:
 
 ```ts
 const token = jwt.sign({ userId: "e2e-test-user", jti: "e2e" }, "e2e-test-secret", { expiresIn: "1h" });
 ```
 
+The refresh token is an opaque hex string (not a JWT). The seed script must insert a `RefreshToken` row via Prisma directly — `generateRefreshToken()` produces a random 64-char hex string, so the fixture creates one and stores it in the database alongside the test user.
+
+### Database Setup
+
+`global-setup.ts` must run `prisma migrate deploy` against the test database before seeding. The `webServer` `npm start` command alone does not migrate a fresh `test.db`.
+
 ### Test Seed Data
 
-`services/issues/prisma/seed-e2e.ts` creates:
+`services/issues/prisma/seed-e2e.ts` creates via direct Prisma inserts:
 - 1 user (`e2e-test-user` / `e2e-tester`)
+- 1 refresh token row linked to the test user
 - 1 project (`E2E Test Project`)
 - 4+ tickets (one per state), with labels, assignee, story points
 - Comments on tickets
@@ -284,13 +291,15 @@ Expanded ticket view with all fields, comments, and blocking relationships.
 
 Full GitHub OAuth redirect login alongside PAT login.
 
+> **Note:** Production OAuth requires Caddy's `try_files` to serve `index.html` for the `/auth/callback` route. This Caddyfile change lands in Phase 5. OAuth can be developed and tested locally (Vite handles SPA routing in dev), but won't work in production until Phase 5 deploys.
+
 **Delivers:**
 - `auth/AuthCallback.tsx` — Route at `/auth/callback`
 - Updated `auth/LoginPage.tsx` — "Sign in with GitHub" button
 - `VITE_GITHUB_CLIENT_ID` env var for build-time OAuth client ID
 - `.env.example` documenting the variable
 
-**Verify:** Full OAuth redirect flow works end-to-end. PAT login still works as fallback.
+**Verify:** Full OAuth redirect flow works end-to-end (locally). PAT login still works as fallback.
 
 ### Phase 5: Caddy config + CI + deploy + polish (est: 5)
 **Blocked by:** Phase 3, Phase 4
@@ -299,9 +308,10 @@ Production deployment, CI pipeline, automated deploy, and UX polish.
 
 **Delivers:**
 - Updated `infrastructure/Caddyfile` — `file_server` + `try_files` replacing plain-text fallback
-- Updated `infrastructure/install-caddy-site.sh` — same SPA block
+- Updated `infrastructure/install-caddy-site.sh` — same SPA block in the heredoc (lines 50–78)
 - `scripts/deploy.sh` — atomic deploy via `mv` swap
 - CI jobs: `issues-ui-ci` and `issues-ui-deploy`
+- Updated `ci-status` gate job — add `issues-ui-ci` to `needs` list and result variable loop
 - Auto-refresh: board re-fetches on 60-second interval
 - Keyboard: `Escape` on detail page goes back
 - Error boundary at App level
@@ -328,4 +338,4 @@ Phases 2–3 and Phase 4 can run in parallel (both only depend on Phase 1). Phas
 
 **Runtime:** react, react-dom, react-router, graphql, graphql-request
 
-**Dev:** typescript, vite, @vitejs/plugin-react, @playwright/test, jsonwebtoken (e2e fixture)
+**Dev:** typescript, vite, @vitejs/plugin-react, @playwright/test, jsonwebtoken, @types/jsonwebtoken (e2e fixture)
