@@ -142,6 +142,14 @@ describe("Ticket Management", () => {
     expect(result.stdout).toContain("More results available");
   });
 
+  it("should reject invalid --limit values", async () => {
+    for (const val of ["0", "-1", "abc", "10x"]) {
+      const result = await suite.cli("ticket", "list", "--limit", val);
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("--limit must be a positive integer");
+    }
+  });
+
   it("should update a ticket's title", async () => {
     const result = await suite.cli("ticket", "update", createdTicketId, "--title", "Updated title");
     expect(result.exitCode).toBe(0);

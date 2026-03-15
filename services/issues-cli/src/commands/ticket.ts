@@ -503,8 +503,8 @@ export function registerTicketCommand(program: Command): void {
     .option("-l, --limit <count>", "Max number of tickets to return", "100")
     .option("--after <cursor>", "Cursor for pagination")
     .action(async (opts: ListOptions) => {
-      const limit = parseInt(opts.limit ?? "100", 10);
-      if (!Number.isFinite(limit) || limit <= 0) {
+      const limit = Number(opts.limit);
+      if (!Number.isInteger(limit) || limit <= 0) {
         console.error(chalk.red("Error: --limit must be a positive integer"));
         process.exitCode = 1;
         return;
