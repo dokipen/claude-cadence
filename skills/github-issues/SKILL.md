@@ -79,6 +79,19 @@ gh issue view 42 --json labels --jq '.labels[].name | select(startswith("estimat
 gh issue edit 42 --add-label "estimate:5"
 ```
 
+## Priority
+
+### Available priority labels
+- `priority:high` — Blocking other work, critical bug, or security issue
+- `priority:medium` — Normal feature work or non-critical bugs
+- `priority:low` — Nice-to-have improvements, minor cleanup, deferred review findings
+
+### Check/set priority
+```bash
+gh issue view 42 --json labels --jq '.labels[].name | select(startswith("priority:"))'
+gh issue edit 42 --add-label "priority:medium"
+```
+
 ## Commenting
 
 ```bash

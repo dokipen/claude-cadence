@@ -81,6 +81,7 @@ An issue is refined when it has ALL of:
 | Clear title | Descriptive, categorized via labels | Same |
 | Acceptance criteria | Checkboxes defining "done" | `--acceptance-criteria` field |
 | Estimate | `estimate:N` label (1-13) | Story points field (`--points N`) |
+| Priority | `priority:high`, `priority:medium`, or `priority:low` label | Priority field (`--priority N`) |
 | Type label | Label by name: bug, enhancement, etc. | Label by ID (use `issues label list` to look up) |
 | Assigned | Assigned to a developer | `issues assign N --user USER_ID` |
 | Blockers linked | Via GitHub dependencies API | `issues block add --blocker X --blocked N` |
@@ -101,6 +102,16 @@ An issue is refined when it has ALL of:
 | 13 | Very large, consider breaking down |
 
 GitHub uses labels (`estimate:5`). Issues API uses story points (`--points 5`).
+
+### Priority Scale
+
+| Label | Description |
+|-------|-------------|
+| priority:high | Blocking other work, critical bug, or security issue |
+| priority:medium | Normal feature work or non-critical bugs |
+| priority:low | Nice-to-have improvements, minor cleanup, deferred review findings |
+
+GitHub uses labels (`priority:medium`). Issues API uses the priority field (`--priority N`).
 
 ### Title Conventions
 

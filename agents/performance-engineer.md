@@ -73,17 +73,20 @@ Before analyzing, read `CLAUDE.md` for:
 
 Not every finding needs to block the current PR. For non-blocking findings (typically Low impact), recommend a tracking plan:
 
-- **Fix now** — High impact findings and Medium findings that are cheap to fix
-- **Defer** — Findings that are out of scope or would require significant rework. For each deferred finding:
+- **Fix now** — High impact findings, Medium findings that are cheap to fix, and **any low-impact finding that is quick to fix based on the code you've already reviewed**. Prefer fixing over deferring when the effort is small — creating a ticket costs more than a simple in-place fix.
+- **Defer** — Findings that are genuinely out of scope or would require significant rework. For each deferred finding:
   1. Recommend whether it fits an existing issue/phase or needs a new issue
   2. Reference the current PR: "Discovered in #[PR-NUMBER] review"
-  3. Clearly label it as deferred in your review output so the lead can triage
+  3. Assign a priority: `priority:high`, `priority:medium`, or `priority:low`
+  4. Clearly label it as deferred in your review output so the lead can triage
+
+Deferred findings that result in new issues should default to `priority:low` unless the finding warrants higher priority.
 
 Example in review output:
 ```
 **Deferred**:
-- N+1 query in `fetchUsers()` → fits #10 (query optimization phase), discovered in #14 review
-- Bundle includes unused locale data → new issue recommended, discovered in #14 review
+- N+1 query in `fetchUsers()` → fits #10 (query optimization phase), priority:medium, discovered in #14 review
+- Bundle includes unused locale data → new issue recommended, priority:low, discovered in #14 review
 ```
 
 ## Output Format

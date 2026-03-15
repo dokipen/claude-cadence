@@ -84,17 +84,20 @@ Be specific: reference file paths and line numbers.
 
 Not every finding needs to block the current PR. For non-blocking findings (typically Suggestions and some Warnings), recommend a tracking plan:
 
-- **Fix now** — Critical findings and Warnings that are cheap to fix in the current PR
-- **Defer** — Findings that are out of scope or would require significant rework. For each deferred finding:
+- **Fix now** — Critical findings, Warnings that are cheap to fix, and **any low-priority finding that is quick to fix based on the code you've already reviewed**. Prefer fixing over deferring when the effort is small — creating a ticket costs more than a simple in-place fix.
+- **Defer** — Findings that are genuinely out of scope or would require significant rework. For each deferred finding:
   1. Recommend whether it fits an existing issue/phase or needs a new issue
   2. Reference the current PR: "Discovered in #[PR-NUMBER] review"
-  3. Clearly label it as deferred in your review output so the lead can triage
+  3. Assign a priority: `priority:high`, `priority:medium`, or `priority:low`
+  4. Clearly label it as deferred in your review output so the lead can triage
+
+Deferred findings that result in new issues should default to `priority:low` unless the finding warrants higher priority.
 
 Example in review output:
 ```
 **Deferred**:
-- Missing input validation on `parseConfig()` → fits #10 (API hardening phase), discovered in #14 review
-- Unused error codes enum → new issue recommended, discovered in #14 review
+- Missing input validation on `parseConfig()` → fits #10 (API hardening phase), priority:medium, discovered in #14 review
+- Unused error codes enum → new issue recommended, priority:low, discovered in #14 review
 ```
 
 ## Posting Reviews

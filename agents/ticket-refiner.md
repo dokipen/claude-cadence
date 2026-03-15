@@ -48,6 +48,7 @@ A refined ticket must have ALL of the following:
 | Clear title | Manual review | Manual review |
 | Acceptance criteria | Manual review | Manual review |
 | Estimate | `gh issue view N --json labels --jq '.labels[].name \| select(startswith("estimate:"))'` | `issues ticket view N` (check Story Points field) |
+| Priority | `gh issue view N --json labels --jq '.labels[].name \| select(startswith("priority:"))'` | `issues ticket view N` (check Priority field) |
 | Type label | `gh issue view N --json labels --jq '.labels[].name \| select(. == "bug" or . == "enhancement" or . == "documentation" or . == "testing" or . == "performance")'` | `issues ticket view N` (check labels) |
 | Assigned | `gh issue view N --json assignees --jq '.assignees[].login'` | `issues ticket view N` (check Assignee field) |
 | Blockers linked (if any) | Check via GitHub dependencies API | `issues ticket view N` (check Blocked By section) |
@@ -80,6 +81,18 @@ After refinement with `issues-api`, transition the ticket state from `BACKLOG` t
 | estimate:5 | Medium — moderate complexity | 1 day |
 | estimate:8 | Large — significant work | 2-3 days |
 | estimate:13 | Very large — break down | 1 week |
+
+## Priority Scale
+
+| Label | Description |
+|-------|-------------|
+| priority:high | Blocking other work, critical bug, or security issue |
+| priority:medium | Normal feature work or non-critical bugs |
+| priority:low | Nice-to-have improvements, minor cleanup, deferred review findings |
+
+GitHub uses labels (`priority:medium`). Issues API uses the priority field (`--priority N`).
+
+When assessing priority, consider: Does this block other work? Is there a security or data-integrity risk? Is this user-facing? Issues created from deferred PR review findings should default to `priority:low` unless the finding indicates a higher severity.
 
 ## Review Process
 
