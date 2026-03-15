@@ -24,6 +24,7 @@ issues ticket create \
   --description "Detailed description" \
   --acceptance-criteria "- [ ] Criterion 1\n- [ ] Criterion 2" \
   --labels "LABEL_ID1,LABEL_ID2" \
+  --assignee USER_ID \
   --points 5 \
   --priority MEDIUM
 ```
