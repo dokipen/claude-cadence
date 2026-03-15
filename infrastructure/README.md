@@ -37,3 +37,17 @@ CADENCE_DOMAIN=cadence.example.com caddy run --config infrastructure/Caddyfile
 Caddy will automatically obtain and renew TLS certificates via Let's Encrypt for the configured domain.
 
 **gRPC clients:** In production mode, Caddy terminates TLS at the edge and forwards to the agents service over plaintext h2c internally. gRPC clients must connect to Caddy using TLS (e.g., `grpcurl cadence.example.com:443 ...` instead of `-plaintext`).
+
+### Security: enable agentd token auth
+
+> **Important:** When exposing Caddy to a network (any non-localhost deployment), you **must** enable token authentication on `agentd`. By default, `agentd` skips auth when bound to loopback (`127.0.0.1`), but Caddy forwards external traffic to that loopback port — bypassing the bind-address guard.
+>
+> In your `agentd` config (`~/.config/agentd/config.yaml`):
+>
+> ```yaml
+> auth:
+>   mode: "token"
+>   token_env_var: "AGENTD_TOKEN"
+> ```
+>
+> Without this, anyone who can reach Caddy has unauthenticated access to the gRPC API.
