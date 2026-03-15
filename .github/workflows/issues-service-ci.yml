@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   test-service:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     defaults:
       run:
         working-directory: services/issues
@@ -32,7 +32,7 @@ jobs:
       - run: npm run build
 
   test-cli:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     needs: test-service
     steps:
       - uses: actions/checkout@v4
@@ -45,7 +45,7 @@ jobs:
         run: cd services/issues-cli && npm ci && npm run typecheck && npm test
 
   docker:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     needs: [test-service, test-cli]
     steps:
       - uses: actions/checkout@v4

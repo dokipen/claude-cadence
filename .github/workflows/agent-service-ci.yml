@@ -15,16 +15,13 @@ permissions:
 
 jobs:
   lint-and-test:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
           go-version-file: services/agents/go.mod
-
-      - name: Install tmux
-        run: sudo apt-get update && sudo apt-get install -y tmux
 
       - name: Run go vet
         working-directory: services/agents
@@ -40,7 +37,7 @@ jobs:
 
   build:
     needs: lint-and-test
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - uses: actions/checkout@v4
 
