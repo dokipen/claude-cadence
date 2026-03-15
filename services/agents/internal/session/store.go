@@ -27,7 +27,6 @@ type Session struct {
 	ErrorMessage string
 	AgentPID     int
 	WebsocketURL string
-	TtydPID      int
 }
 
 // Store is a thread-safe in-memory session store.

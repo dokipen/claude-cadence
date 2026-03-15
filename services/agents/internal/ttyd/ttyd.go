@@ -2,6 +2,7 @@ package ttyd
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -46,14 +47,15 @@ func (c *Client) Start(sessionID, tmuxSocketName, tmuxSessionName string) (strin
 	c.nextPort++
 	c.mu.Unlock()
 
-	// ttyd -p <port> -W tmux -L <socket> attach-session -t <session>
+	// ttyd -i 127.0.0.1 -p <port> -W tmux -L <socket> attach-session -t <session>
 	cmd := exec.Command("ttyd",
+		"-i", "127.0.0.1",
 		"-p", fmt.Sprintf("%d", port),
 		"-W",
 		"tmux", "-L", tmuxSocketName, "attach-session", "-t", tmuxSessionName,
 	)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
 
 	if err := cmd.Start(); err != nil {
 		return "", fmt.Errorf("starting ttyd: %w", err)

@@ -2,9 +2,9 @@ package e2e_test
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -168,7 +168,7 @@ func TestTtyd_HttpResponds(t *testing.T) {
 	}
 
 	// Convert ws:// to http:// for HTTP check.
-	httpURL := "http" + wsURL[2:]
+	httpURL := strings.Replace(wsURL, "ws://", "http://", 1)
 
 	// Poll until ttyd HTTP endpoint responds (it takes a moment to start).
 	deadline := time.Now().Add(5 * time.Second)
@@ -210,7 +210,7 @@ func TestTtyd_StopsOnDestroy(t *testing.T) {
 		t.Fatal("expected non-empty websocket_url")
 	}
 
-	httpURL := "http" + wsURL[2:]
+	httpURL := strings.Replace(wsURL, "ws://", "http://", 1)
 
 	// Wait for ttyd to be ready.
 	deadline := time.Now().Add(5 * time.Second)
@@ -293,8 +293,8 @@ func TestTtyd_UniquePort(t *testing.T) {
 		t.Errorf("expected unique websocket URLs, both are %q", url1)
 	}
 
-	fmt.Printf("Session 1 URL: %s\n", url1)
-	fmt.Printf("Session 2 URL: %s\n", url2)
+	t.Logf("Session 1 URL: %s", url1)
+	t.Logf("Session 2 URL: %s", url2)
 }
 
 func ttydAvailable() bool {
