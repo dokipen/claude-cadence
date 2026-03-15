@@ -1,5 +1,14 @@
 #!/usr/bin/env node
 
+// Trust macOS Keychain certificates (e.g. Caddy internal CA)
+if (process.platform === "darwin") {
+  try {
+    await import("mac-ca/register");
+  } catch (e) {
+    process.stderr.write(`warning: failed to load macOS Keychain certs: ${e}\n`);
+  }
+}
+
 import { Command } from "commander";
 import { registerTicketCommand } from "./commands/ticket.js";
 import { registerLabelCommand } from "./commands/label.js";
