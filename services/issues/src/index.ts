@@ -9,12 +9,15 @@ import { authGuardPlugin } from "./auth/guard.js";
 
 const prisma = new PrismaClient();
 
+const isProduction = process.env.NODE_ENV === "production";
+
 const server = new ApolloServer({
   typeDefs,
   resolvers: [
     ...resolvers,
     { DateTime: DateTimeResolver },
   ],
+  introspection: !isProduction,
   plugins: [authGuardPlugin()],
 });
 
