@@ -134,7 +134,7 @@ Use `/create-pr` to create the pull request. Link to the issue with `Fixes #[NUM
 3. Triage findings by severity (Critical/Warning block merge, Suggestions don't)
 4. Fix-review loop: assign fixes, push, re-review (max 3 cycles before escalation)
 5. Handle deferred findings using the convention below
-6. Once all blocking findings are resolved, proceed directly to Phase 7 (skip Phase 6 unless the PR contains visual changes)
+6. Once all blocking findings are resolved, proceed directly to Phase 7 (skip Phase 6 unless the PR contains visual/UI changes)
 
 #### Deferred Findings Convention
 
