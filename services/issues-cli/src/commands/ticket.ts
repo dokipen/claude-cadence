@@ -420,6 +420,7 @@ export function registerTicketCommand(program: Command): void {
 
         console.log();
         console.log(chalk.bold(`  #${t.number}  ${t.title}`));
+        console.log(`  ID: ${chalk.dim(t.id)}`);
         console.log(
           `  State: ${formatState(t.state)}  Priority: ${formatPriority(t.priority)}`
         );
