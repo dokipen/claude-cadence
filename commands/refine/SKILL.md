@@ -83,9 +83,9 @@ An issue is refined when it has ALL of:
 | Acceptance criteria | Checkboxes defining "done" | `--acceptance-criteria` field |
 | Estimate | `estimate:N` label (1-13) | Story points field (`--points N`) |
 | Priority | `priority:high`, `priority:medium`, or `priority:low` label | Priority field (`--priority N`) |
-| Type label | Label by name: bug, enhancement, etc. | Label by ID (use `issues label list --project $PROJECT --json` to look up) |
-| Assigned | Assigned to a developer | `issues assign N --project $PROJECT --user USER_ID` |
-| Blockers linked | Via GitHub dependencies API | `issues block add --project $PROJECT --blocker X --blocked N` |
+| Type label | Label by name: bug, enhancement, etc. | Label by ID (use `issues label list` to look up) |
+| Assigned | Assigned to a developer | `issues assign TICKET_ID --user USER_ID` |
+| Blockers linked | Via GitHub dependencies API | `issues block add --blocker X --blocked Y` |
 | Blocked label | `blocked` label if open blockers exist | Blocked tickets auto-tracked; cannot transition to `IN_PROGRESS` |
 | Refined | `refined` label added after all criteria met | Transition to `REFINED` state |
 
