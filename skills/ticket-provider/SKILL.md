@@ -85,7 +85,7 @@ The two providers use different terminology in some areas:
 | Labels | By name | By ID (use `issues label list --project $PROJECT --json` to resolve) |
 | Claim/start work | Add `in-progress` label | Transition to `IN_PROGRESS` |
 | Mark refined | Add `refined` label | Transition to `REFINED` |
-| Blocking | GitHub dependencies API | `issues block add/remove` |
+| Blocking | GitHub dependencies API | `issues block add/remove --json` |
 
 ## Important Notes
 

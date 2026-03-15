@@ -244,7 +244,7 @@ When `--json` is used:
 - The JSON structure matches the GraphQL response data
 - Errors still go to stderr in plain text
 
-**Best practice for agents:** Always use `--json` when you need to extract specific fields from command output. Parse with `jq` or read the JSON directly.
+**Best practice for agents:** Always use `--json` when invoking `issues` CLI commands. This avoids parsing chalk-formatted terminal output with ANSI escape codes. Parse with `jq` or read the JSON directly.
 
 ## Data Model Notes
 
