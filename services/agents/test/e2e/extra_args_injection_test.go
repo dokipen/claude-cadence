@@ -1,0 +1,54 @@
+package e2e_test
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	agentsv1 "github.com/dokipen/claude-cadence/services/agents/gen/agents/v1"
+)
+
+func TestCreateSession_ExtraArgsInjection(t *testing.T) {
+	client := newTestClient(t)
+	ctx := context.Background()
+	name := uniqueSessionName(t)
+
+	// Create a temp file path that the injection would create if unescaped.
+	markerFile := filepath.Join(t.TempDir(), "injection-marker")
+
+	// This payload, if unsanitized and sent to a shell via tmux send-keys,
+	// would create the marker file. With proper escaping it should be treated
+	// as a literal string argument to echo.
+	payload := "safe; touch " + markerFile
+
+	resp, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+		AgentProfile: "echo-args",
+		SessionName:  name,
+		ExtraArgs:    []string{payload},
+	})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+
+	t.Cleanup(func() {
+		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
+			SessionId: resp.GetSession().GetId(),
+			Force:     true,
+		})
+	})
+
+	sess := resp.GetSession()
+	if sess.GetId() == "" {
+		t.Error("expected non-empty session ID")
+	}
+
+	// Wait for the command to execute in tmux.
+	time.Sleep(1 * time.Second)
+
+	// The marker file must NOT exist — if it does, the injection succeeded.
+	if _, err := os.Stat(markerFile); err == nil {
+		t.Fatalf("SECURITY: injection marker file was created at %s — ExtraArgs were not properly sanitized", markerFile)
+	}
+}

@@ -244,7 +244,7 @@ func (m *Manager) renderCommand(cmdTemplate string, sess *Session, extraArgs []s
 	data := templateData{
 		SessionID:    sess.ID,
 		SessionName:  sess.Name,
-		ExtraArgs:    strings.Join(extraArgs, " "),
+		ExtraArgs:    shellJoinArgs(extraArgs),
 		WorktreePath: "", // Phase 1: no worktrees
 	}
 
@@ -253,6 +253,27 @@ func (m *Manager) renderCommand(cmdTemplate string, sess *Session, extraArgs []s
 		return "", fmt.Errorf("executing command template: %w", err)
 	}
 	return buf.String(), nil
+}
+
+// shellEscapeArg wraps a single argument in single quotes, escaping any
+// embedded single quotes. This is the safest quoting method for POSIX shells:
+// within single quotes, no characters are special except ' itself.
+func shellEscapeArg(arg string) string {
+	// Replace each ' with '\'' (end quote, escaped quote, start quote)
+	return "'" + strings.ReplaceAll(arg, "'", `'\''`) + "'"
+}
+
+// shellJoinArgs escapes each argument and joins them with spaces.
+// Returns empty string for empty/nil slices.
+func shellJoinArgs(args []string) string {
+	if len(args) == 0 {
+		return ""
+	}
+	escaped := make([]string, len(args))
+	for i, arg := range args {
+		escaped[i] = shellEscapeArg(arg)
+	}
+	return strings.Join(escaped, " ")
 }
 
 func isProcessAlive(pid int) bool {
