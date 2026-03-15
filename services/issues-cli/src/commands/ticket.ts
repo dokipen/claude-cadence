@@ -4,6 +4,7 @@ import chalk from "chalk";
 import ora from "ora";
 import { getClient } from "../client.js";
 import { handleError } from "../errors.js";
+import { resolveProjectId } from "../project-resolver.js";
 import { resolveTicketId } from "../resolve-ticket.js";
 
 // --- GraphQL Documents ---
@@ -270,7 +271,7 @@ interface CreateOptions {
   acceptanceCriteria?: string;
   labels?: string;
   assignee?: string;
-  project: string;
+  project?: string;
   points?: string;
   priority?: string;
 }
@@ -308,7 +309,7 @@ export function registerTicketCommand(program: Command): void {
     .command("create")
     .description("Create a new ticket")
     .requiredOption("--title <title>", "Ticket title")
-    .requiredOption("--project <id>", "Project ID")
+    .option("--project <id>", "Project ID (inferred from git origin if omitted)")
     .option("--description <description>", "Ticket description")
     .option("--acceptance-criteria <criteria>", "Acceptance criteria")
     .option("--labels <ids>", "Comma-separated label IDs")
@@ -318,10 +319,11 @@ export function registerTicketCommand(program: Command): void {
     .action(async (opts: CreateOptions) => {
       const spinner = ora("Creating ticket...").start();
       try {
+        const projectId = await resolveProjectId(opts.project);
         const client = getClient();
         const input: Record<string, unknown> = {
           title: opts.title,
-          projectId: opts.project,
+          projectId,
         };
         if (opts.description) input.description = opts.description;
         if (opts.acceptanceCriteria) input.acceptanceCriteria = opts.acceptanceCriteria;
@@ -366,7 +368,7 @@ export function registerTicketCommand(program: Command): void {
   ticket
     .command("view <id>")
     .description("View ticket details (accepts ticket number or CUID)")
-    .option("--project <id>", "Project ID (required when using ticket number)")
+    .option("--project <id>", "Project ID (inferred from git origin if omitted)")
     .action(async (id: string, opts: { project?: string }) => {
       const spinner = ora("Fetching ticket...").start();
       try {
@@ -403,13 +405,10 @@ export function registerTicketCommand(program: Command): void {
         let t: TicketDetail | null;
 
         if (isNumber) {
-          if (!opts.project) {
-            spinner.fail("--project is required when using a ticket number");
-            process.exit(1);
-          }
+          const projectId = await resolveProjectId(opts.project);
           const data = await client.request<{ ticketByNumber: TicketDetail | null }>(
             GET_TICKET_BY_NUMBER,
-            { projectId: opts.project, number: parseInt(id, 10) }
+            { projectId, number: parseInt(id, 10) }
           );
           t = data.ticketByNumber;
         } else {
@@ -505,7 +504,7 @@ export function registerTicketCommand(program: Command): void {
     .option("--assignee <login>", "Filter by assignee login")
     .option("--blocked", "Filter to only blocked tickets")
     .option("--priority <priority>", "Filter by priority (HIGHEST, HIGH, MEDIUM, LOW, LOWEST)")
-    .option("--project <id>", "Filter by project ID")
+    .option("--project <id>", "Filter by project ID (inferred from git origin if omitted)")
     .option("-l, --limit <count>", "Max number of tickets to return", "100")
     .option("--after <cursor>", "Cursor for pagination")
     .action(async (opts: ListOptions) => {
@@ -517,6 +516,16 @@ export function registerTicketCommand(program: Command): void {
       }
       const spinner = ora("Fetching tickets...").start();
       try {
+        // Try to infer project if not explicitly provided
+        let projectId = opts.project;
+        if (!projectId) {
+          try {
+            projectId = await resolveProjectId(undefined);
+          } catch {
+            // Inference is best-effort for list — continue without project filter
+          }
+        }
+
         const client = getClient();
         const variables: Record<string, unknown> = {
           first: limit,
@@ -526,7 +535,7 @@ export function registerTicketCommand(program: Command): void {
         if (opts.assignee) variables.assigneeLogin = opts.assignee;
         if (opts.blocked) variables.isBlocked = true;
         if (opts.priority) variables.priority = opts.priority;
-        if (opts.project) variables.projectId = opts.project;
+        if (projectId) variables.projectId = projectId;
         if (opts.after) variables.after = opts.after;
 
         const data = await client.request<{
