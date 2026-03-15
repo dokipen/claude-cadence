@@ -1,10 +1,11 @@
-import type { PrismaClient, Ticket, Comment, Prisma } from "@prisma/client";
+import type { PrismaClient, Ticket, Comment, Prisma, User } from "@prisma/client";
 import type { Loaders } from "../../loaders.js";
 import { validateTransition, checkBlockerGuard } from "../../fsm/ticket-machine.js";
 
 export interface Context {
   prisma: PrismaClient;
   loaders: Loaders;
+  currentUser: User | null;
 }
 
 const VALID_STATES = new Set(["BACKLOG", "REFINED", "IN_PROGRESS", "CLOSED"]);
@@ -338,17 +339,16 @@ export const ticketResolvers = {
     addComment: async (
       _: unknown,
       { ticketId, body }: { ticketId: string; body: string },
-      { prisma }: Context
+      { prisma, currentUser }: Context
     ) => {
       if (!body.trim()) throw new Error("Comment body cannot be empty");
+      if (!currentUser) throw new Error("Authentication required");
 
       const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
       if (!ticket) throw new Error(`Ticket not found: ${ticketId}`);
 
-      const user = await prisma.user.findFirstOrThrow();
-
       return prisma.comment.create({
-        data: { ticketId, body, authorId: user.id },
+        data: { ticketId, body, authorId: currentUser.id },
         include: { author: true },
       });
     },
