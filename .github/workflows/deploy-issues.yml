@@ -103,5 +103,5 @@ jobs:
           echo "The issues CLI source was modified. Rebuild on dev machines:" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo '```bash' >> "$GITHUB_STEP_SUMMARY"
-          echo "cd services/issues-cli && npm install && npm run build && npm link" >> "$GITHUB_STEP_SUMMARY"
+          echo "cd services/issues-cli && npm install && npm run build && npm link --prefix \"\$HOME/.local\"" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"

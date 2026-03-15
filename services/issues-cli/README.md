@@ -17,13 +17,13 @@ To install the CLI standalone:
 cd services/issues-cli
 npm install
 npm run build
-npm link
+npm link --prefix "$HOME/.local"
 ```
 
-This makes the `issues` command available globally. To uninstall:
+This makes the `issues` command available in `~/.local/bin`. Ensure `~/.local/bin` is on your `PATH`. To uninstall:
 
 ```bash
-npm unlink -g @claude-cadence/issues-cli
+npm unlink --prefix "$HOME/.local"
 ```
 
 For development without building:
