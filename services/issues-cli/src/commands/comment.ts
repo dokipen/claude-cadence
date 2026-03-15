@@ -4,6 +4,7 @@ import chalk from "chalk";
 import ora from "ora";
 import { getClient } from "../client.js";
 import { handleError } from "../errors.js";
+import { resolveTicketId } from "../resolve-ticket.js";
 
 // --- GraphQL Documents ---
 
@@ -54,10 +55,12 @@ export function registerCommentCommand(program: Command): void {
   comment
     .command("add <ticket-id>")
     .description("Add a comment to a ticket")
+    .option("--project <id>", "Project ID (required when using ticket number)")
     .requiredOption("--body <body>", "Comment body")
-    .action(async (ticketId: string, opts: { body: string }) => {
+    .action(async (ticketId: string, opts: { body: string; project?: string }) => {
       const spinner = ora("Adding comment...").start();
       try {
+        const resolvedId = await resolveTicketId(ticketId, opts.project);
         const client = getClient();
         const data = await client.request<{
           addComment: {
@@ -66,7 +69,7 @@ export function registerCommentCommand(program: Command): void {
             author: { login: string; displayName: string };
             createdAt: string;
           };
-        }>(ADD_COMMENT, { ticketId, body: opts.body });
+        }>(ADD_COMMENT, { ticketId: resolvedId, body: opts.body });
 
         spinner.succeed("Comment added");
         const c = data.addComment;

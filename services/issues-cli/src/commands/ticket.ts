@@ -4,6 +4,7 @@ import chalk from "chalk";
 import ora from "ora";
 import { getClient } from "../client.js";
 import { handleError } from "../errors.js";
+import { resolveTicketId } from "../resolve-ticket.js";
 
 // --- GraphQL Documents ---
 
@@ -287,6 +288,7 @@ interface ListOptions {
 
 interface TransitionOptions {
   to: string;
+  project?: string;
 }
 
 interface UpdateOptions {
@@ -295,6 +297,7 @@ interface UpdateOptions {
   acceptanceCriteria?: string;
   points?: string;
   priority?: string;
+  project?: string;
 }
 
 export function registerTicketCommand(program: Command): void {
@@ -577,6 +580,7 @@ export function registerTicketCommand(program: Command): void {
   ticket
     .command("update <id>")
     .description("Update a ticket")
+    .option("--project <id>", "Project ID (required when using ticket number)")
     .option("--title <title>", "New title")
     .option("--description <description>", "New description")
     .option("--acceptance-criteria <criteria>", "New acceptance criteria")
@@ -599,6 +603,7 @@ export function registerTicketCommand(program: Command): void {
 
       const spinner = ora("Updating ticket...").start();
       try {
+        const resolvedId = await resolveTicketId(id, opts.project);
         const client = getClient();
         const data = await client.request<{
           updateTicket: {
@@ -612,7 +617,7 @@ export function registerTicketCommand(program: Command): void {
             priority: string;
             updatedAt: string;
           };
-        }>(UPDATE_TICKET, { id, input });
+        }>(UPDATE_TICKET, { id: resolvedId, input });
 
         spinner.succeed("Ticket updated");
         const t = data.updateTicket;
@@ -633,10 +638,12 @@ export function registerTicketCommand(program: Command): void {
   ticket
     .command("transition <id>")
     .description("Transition a ticket to a new state")
+    .option("--project <id>", "Project ID (required when using ticket number)")
     .requiredOption("--to <state>", "Target state (BACKLOG, REFINED, IN_PROGRESS, CLOSED)")
     .action(async (id: string, opts: TransitionOptions) => {
       const spinner = ora("Transitioning ticket...").start();
       try {
+        const resolvedId = await resolveTicketId(id, opts.project);
         const client = getClient();
         const data = await client.request<{
           transitionTicket: {
@@ -646,7 +653,7 @@ export function registerTicketCommand(program: Command): void {
             state: string;
             priority: string;
           };
-        }>(TRANSITION_TICKET, { id, to: opts.to });
+        }>(TRANSITION_TICKET, { id: resolvedId, to: opts.to });
 
         spinner.succeed("Ticket transitioned");
         const t = data.transitionTicket;
