@@ -23,7 +23,7 @@ func newTestManager(t *testing.T) (*session.Manager, *session.Store) {
 	}
 	store := session.NewStore()
 	tmuxClient := tmux.NewClient(testSocket)
-	ttydClient := ttyd.NewClient(false, 0)
+	ttydClient := ttyd.NewClient(false, 0, 100)
 	mgr := session.NewManager(store, tmuxClient, ttydClient, nil, nil, profiles)
 	return mgr, store
 }

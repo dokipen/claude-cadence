@@ -94,6 +94,7 @@ type TmuxConfig struct {
 type TtydConfig struct {
 	Enabled  bool `yaml:"enabled"`
 	BasePort int  `yaml:"base_port"`
+	MaxPorts int  `yaml:"max_ports"`
 }
 
 // LogConfig holds logging settings.
@@ -147,6 +148,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Ttyd.BasePort == 0 {
 		cfg.Ttyd.BasePort = 7681
+	}
+	if cfg.Ttyd.MaxPorts == 0 {
+		cfg.Ttyd.MaxPorts = 100
 	}
 	if cfg.Log.Level == "" {
 		cfg.Log.Level = "info"

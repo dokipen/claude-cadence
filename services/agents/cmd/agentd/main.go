@@ -60,7 +60,7 @@ func main() {
 
 	// Create components.
 	tmuxClient := tmux.NewClient(cfg.Tmux.SocketName)
-	ttydClient := ttyd.NewClient(cfg.Ttyd.Enabled, cfg.Ttyd.BasePort)
+	ttydClient := ttyd.NewClient(cfg.Ttyd.Enabled, cfg.Ttyd.BasePort, cfg.Ttyd.MaxPorts)
 	store := session.NewStore()
 	var gitClient *git.Client
 	if cfg.RootDir != "" {

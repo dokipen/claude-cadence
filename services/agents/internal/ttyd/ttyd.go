@@ -1,6 +1,7 @@
 package ttyd
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,10 +12,12 @@ import (
 
 // Client manages ttyd processes for tmux sessions.
 type Client struct {
-	mu       sync.Mutex
-	enabled  bool
-	basePort int
-	nextPort int
+	mu        sync.Mutex
+	enabled   bool
+	basePort  int
+	maxPorts  int
+	nextPort  int
+	freePorts []int
 	// sessionID -> process info
 	procs map[string]*procInfo
 }
@@ -26,14 +29,19 @@ type procInfo struct {
 
 // NewClient creates a new ttyd Client.
 // If enabled is false, all operations are no-ops.
-func NewClient(enabled bool, basePort int) *Client {
+// maxPorts limits the port range to [basePort, basePort+maxPorts).
+func NewClient(enabled bool, basePort, maxPorts int) *Client {
 	return &Client{
 		enabled:  enabled,
 		basePort: basePort,
+		maxPorts: maxPorts,
 		nextPort: basePort,
 		procs:    make(map[string]*procInfo),
 	}
 }
+
+// ErrPortsExhausted is returned when all ports in the configured range are in use.
+var ErrPortsExhausted = errors.New("all ttyd ports are in use")
 
 // Start launches a ttyd process for the given tmux session.
 // Returns the websocket URL, or empty string if ttyd is disabled.
@@ -43,8 +51,17 @@ func (c *Client) Start(sessionID, tmuxSocketName, tmuxSessionName string) (strin
 	}
 
 	c.mu.Lock()
-	port := c.nextPort
-	c.nextPort++
+	var port int
+	if n := len(c.freePorts); n > 0 {
+		port = c.freePorts[n-1]
+		c.freePorts = c.freePorts[:n-1]
+	} else if c.nextPort < c.basePort+c.maxPorts {
+		port = c.nextPort
+		c.nextPort++
+	} else {
+		c.mu.Unlock()
+		return "", ErrPortsExhausted
+	}
 	c.mu.Unlock()
 
 	// ttyd -i 127.0.0.1 -p <port> -W tmux -L <socket> attach-session -t <session>
@@ -84,6 +101,7 @@ func (c *Client) Stop(sessionID string) {
 	info, ok := c.procs[sessionID]
 	if ok {
 		delete(c.procs, sessionID)
+		c.freePorts = append(c.freePorts, info.port)
 	}
 	c.mu.Unlock()
 
