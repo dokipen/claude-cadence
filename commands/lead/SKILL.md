@@ -215,15 +215,22 @@ In both cases:
 
 ### Phase 7: Merge and Cleanup
 
-1. Verify PR checks pass: `gh pr checks`
-2. Merge: `gh pr merge --squash --delete-branch`
-3. Remove in-progress status:
+1. Wait for PR checks to pass, then merge. Use a 10-minute timeout to avoid blocking on stuck checks (`--watch` returns immediately if checks are already green):
+   ```bash
+   timeout 600 gh pr checks --watch --fail-fast && gh pr merge --squash --delete-branch
+   ```
+   > **Note:** On macOS without GNU coreutils, use `gtimeout` instead of `timeout`.
+
+   - If checks pass: the merge proceeds automatically
+   - If checks fail: report the specific failed check(s) to the user
+   - If timeout is exceeded: report the timeout and the still-pending check(s) to the user
+2. Remove in-progress status:
    - **GitHub (default):** `gh issue edit [NUMBER] --remove-label "in-progress"`
    - **Issues API:** No-op — merging the PR with `Fixes #[NUMBER]` closes the ticket automatically
-4. Sync blocked labels using the `update-blocked-labels.sh` script in this command's `scripts/` directory
-5. Return to default branch and pull latest
-6. Clean up worktree using the `project-ops` skill's `cleanup-worktree.sh` script
-7. Report completion
+3. Sync blocked labels using the `update-blocked-labels.sh` script in this command's `scripts/` directory
+4. Return to default branch and pull latest
+5. Clean up worktree using the `project-ops` skill's `cleanup-worktree.sh` script
+6. Report completion
 
 > **Note:** If this phase is skipped (e.g., conversation ends early), cleanup happens automatically the next time `/new-work` creates a worktree — the `cleanup-merged-worktrees.sh` pre-flight detects merged PRs and cleans up their worktrees, branches, and labels.
 
