@@ -152,7 +152,7 @@ fi
 case "$BASE_DIR" in
     *..*)  error "Invalid base-dir: '$BASE_DIR'. Path traversal not allowed." ;;
 esac
-[[ "$BASE_DIR" != /* ]] && [[ "$BASE_DIR" != ~* ]] && error "Invalid base-dir: '$BASE_DIR'. Must be an absolute path."
+[[ "$BASE_DIR" != /* ]] && error "Invalid base-dir: '$BASE_DIR'. Must be an absolute path."
 
 HOSTNAME_PREFIX="$(hostname -s)"
 
