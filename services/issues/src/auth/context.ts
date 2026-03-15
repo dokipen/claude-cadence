@@ -7,6 +7,7 @@ export interface AuthContext {
 
 /**
  * Extract and verify JWT from the Authorization header.
+ * Checks the token against the revocation blocklist before accepting.
  * Returns the authenticated user or null if no valid token is present.
  */
 export async function buildAuthContext(
@@ -21,7 +22,18 @@ export async function buildAuthContext(
   const token = authHeader.slice(7);
 
   try {
-    const { userId } = verifyToken(token);
+    const { userId, jti } = verifyToken(token);
+
+    // Check if the token has been revoked
+    if (jti) {
+      const revoked = await prisma.revokedToken.findUnique({
+        where: { jti },
+      });
+      if (revoked) {
+        return { currentUser: null };
+      }
+    }
+
     const user = await prisma.user.findUnique({ where: { id: userId } });
     return { currentUser: user };
   } catch {

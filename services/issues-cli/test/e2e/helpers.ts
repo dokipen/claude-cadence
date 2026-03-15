@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import jwt from "jsonwebtoken";
+import { randomBytes } from "node:crypto";
 
 // Resolve paths relative to repo root (two levels up from issues-cli/)
 const REPO_ROOT = resolve(__dirname, "../../../..");
@@ -61,8 +62,9 @@ export async function createTestServer(): Promise<TestServer> {
     stdio: "pipe",
   });
 
-  // Sign a JWT for the test user
-  const authToken = jwt.sign({ userId: TEST_USER_ID }, TEST_JWT_SECRET, { expiresIn: "1h" });
+  // Sign a JWT for the test user (includes jti for revocation support)
+  const jti = randomBytes(16).toString("hex");
+  const authToken = jwt.sign({ userId: TEST_USER_ID, jti }, TEST_JWT_SECRET, { expiresIn: "1h" });
 
   // Start the server as a child process
   const serverProcess = spawn("npx", ["tsx", join(ISSUES_SERVICE_DIR, "src", "index.ts")], {

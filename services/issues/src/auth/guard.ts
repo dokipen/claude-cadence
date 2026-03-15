@@ -8,6 +8,8 @@ import type { AuthenticatedContext } from "../schema/resolvers/auth.js";
 const PUBLIC_FIELDS = new Set([
   "authenticateWithGitHubCode",
   "authenticateWithGitHubPAT",
+  "refreshToken",
+  "logout",
   ...(isProduction ? [] : ["__schema", "__type"]),
 ]);
 

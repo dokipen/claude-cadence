@@ -16,6 +16,7 @@ interface ConfigFile {
 
 interface AuthFile {
   token?: string;
+  refreshToken?: string;
 }
 
 function readJsonFile<T>(path: string): T | null {
@@ -49,9 +50,25 @@ export function getAuthToken(): string | undefined {
   return auth?.token ?? undefined;
 }
 
+export function getRefreshToken(): string | undefined {
+  if (process.env.ISSUES_REFRESH_TOKEN) {
+    return process.env.ISSUES_REFRESH_TOKEN;
+  }
+
+  const auth = readJsonFile<AuthFile>(AUTH_FILE);
+  return auth?.refreshToken ?? undefined;
+}
+
+export function setAuthTokens(token: string, refreshToken: string): void {
+  ensureConfigDir();
+  const auth: AuthFile = { token, refreshToken };
+  writeFileSync(AUTH_FILE, JSON.stringify(auth, null, 2) + "\n", { encoding: "utf-8", mode: 0o600 });
+}
+
 export function setAuthToken(token: string): void {
   ensureConfigDir();
-  const auth: AuthFile = { token };
+  const existing = readJsonFile<AuthFile>(AUTH_FILE);
+  const auth: AuthFile = { ...existing, token };
   writeFileSync(AUTH_FILE, JSON.stringify(auth, null, 2) + "\n", { encoding: "utf-8", mode: 0o600 });
 }
 
