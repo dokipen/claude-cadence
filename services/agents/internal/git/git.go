@@ -18,6 +18,14 @@ var (
 	repoSegmentRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]*$`)
 )
 
+// Credentials holds authentication data for git operations.
+type Credentials struct {
+	// Token is used for HTTPS repos via a credential helper.
+	Token string
+	// SSHKey is a PEM-encoded private key for SSH repos.
+	SSHKey string
+}
+
 // Client wraps git CLI operations for repo cloning and worktree management.
 type Client struct {
 	rootDir   string
@@ -37,7 +45,8 @@ func (c *Client) getCloneLock(clonePath string) *sync.Mutex {
 
 // EnsureClone clones the repo if it doesn't exist, or pulls the default branch
 // if it does. Returns the path to the clone directory.
-func (c *Client) EnsureClone(repoURL string) (string, error) {
+// If creds is non-nil, credentials are injected into the git environment.
+func (c *Client) EnsureClone(repoURL string, creds *Credentials) (string, error) {
 	owner, repo, err := parseRepoURL(repoURL)
 	if err != nil {
 		return "", fmt.Errorf("parsing repo URL: %w", err)
@@ -65,7 +74,7 @@ func (c *Client) EnsureClone(repoURL string) (string, error) {
 
 	if _, err := os.Stat(filepath.Join(cloneDir, ".git")); err == nil {
 		// Already cloned — pull default branch.
-		if err := c.pullDefaultBranch(cloneDir); err != nil {
+		if err := c.pullDefaultBranch(cloneDir, creds); err != nil {
 			return "", fmt.Errorf("pulling default branch: %w", err)
 		}
 		return cloneDir, nil
@@ -77,6 +86,8 @@ func (c *Client) EnsureClone(repoURL string) (string, error) {
 	}
 
 	cmd := exec.Command("git", "clone", repoURL, cloneDir)
+	cleanup := c.applyCredentials(cmd, repoURL, creds)
+	defer cleanup()
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return "", fmt.Errorf("git clone: %w: %s", err, string(output))
 	}
@@ -173,7 +184,7 @@ func (c *Client) CloneDir(repoURL string) (string, error) {
 	return filepath.Join(c.rootDir, "repos", owner, repo), nil
 }
 
-func (c *Client) pullDefaultBranch(cloneDir string) error {
+func (c *Client) pullDefaultBranch(cloneDir string, creds *Credentials) error {
 	branch, err := c.DefaultBranch(cloneDir)
 	if err != nil {
 		return err
@@ -181,7 +192,17 @@ func (c *Client) pullDefaultBranch(cloneDir string) error {
 
 	// Fetch then update the local branch ref to match origin.
 	fetch := exec.Command("git", "-C", cloneDir, "fetch", "origin", branch)
-	if output, err := fetch.CombinedOutput(); err != nil {
+	// Determine repo URL for credential type detection.
+	urlCmd := exec.Command("git", "-C", cloneDir, "remote", "get-url", "origin")
+	var cleanup func()
+	if urlOut, err := urlCmd.Output(); err == nil {
+		cleanup = c.applyCredentials(fetch, strings.TrimSpace(string(urlOut)), creds)
+	} else {
+		cleanup = func() {}
+	}
+	output, err := fetch.CombinedOutput()
+	cleanup()
+	if err != nil {
 		return fmt.Errorf("git fetch: %w: %s", err, string(output))
 	}
 
@@ -191,6 +212,81 @@ func (c *Client) pullDefaultBranch(cloneDir string) error {
 	}
 
 	return nil
+}
+
+// applyCredentials sets environment variables on a git command for authentication.
+// Returns a cleanup function that removes any temporary credential files.
+func (c *Client) applyCredentials(cmd *exec.Cmd, repoURL string, creds *Credentials) func() {
+	noop := func() {}
+	if creds == nil {
+		return noop
+	}
+
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+
+	var tempFiles []string
+
+	if strings.HasPrefix(repoURL, "git@") || strings.Contains(repoURL, "ssh://") {
+		// SSH repo — use SSH key via GIT_SSH_COMMAND with a temp key file.
+		if creds.SSHKey != "" {
+			keyFile, err := writeTempSecret(creds.SSHKey, "agentd-ssh-key-*")
+			if err == nil {
+				tempFiles = append(tempFiles, keyFile)
+				cmd.Env = append(cmd.Env,
+					fmt.Sprintf("GIT_SSH_COMMAND=ssh -i %s -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new", keyFile),
+				)
+			}
+		}
+	} else {
+		// HTTPS repo — use token via a git-credential-store temp file.
+		if creds.Token != "" {
+			credFile, err := writeGitCredentials(repoURL, creds.Token)
+			if err == nil {
+				tempFiles = append(tempFiles, credFile)
+				cmd.Env = append(cmd.Env,
+					"GIT_CONFIG_KEY_0=credential.helper",
+					fmt.Sprintf("GIT_CONFIG_VALUE_0=store --file=%s", credFile),
+					"GIT_CONFIG_COUNT=1",
+				)
+			}
+		}
+	}
+
+	return func() {
+		for _, f := range tempFiles {
+			os.Remove(f)
+		}
+	}
+}
+
+// writeGitCredentials writes a git-credential-store formatted file for HTTPS auth.
+// Format: https://username:token@hostname
+func writeGitCredentials(repoURL, token string) (string, error) {
+	u, err := url.Parse(repoURL)
+	if err != nil {
+		return "", fmt.Errorf("parsing repo URL for credentials: %w", err)
+	}
+	credLine := fmt.Sprintf("%s://x-access-token:%s@%s\n", u.Scheme, token, u.Host)
+	return writeTempSecret(credLine, "agentd-git-cred-*")
+}
+
+// writeTempSecret writes sensitive data to a temp file with 0600 permissions.
+func writeTempSecret(data, pattern string) (string, error) {
+	f, err := os.CreateTemp("", pattern)
+	if err != nil {
+		return "", err
+	}
+	if _, err := f.WriteString(data); err != nil {
+		f.Close()
+		os.Remove(f.Name())
+		return "", err
+	}
+	f.Close()
+	if err := os.Chmod(f.Name(), 0o600); err != nil {
+		os.Remove(f.Name())
+		return "", err
+	}
+	return f.Name(), nil
 }
 
 // parseRepoURL extracts owner and repo from HTTPS, SSH, or local path git URLs.

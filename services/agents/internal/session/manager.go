@@ -14,6 +14,7 @@ import (
 	"github.com/dokipen/claude-cadence/services/agents/internal/git"
 	"github.com/dokipen/claude-cadence/services/agents/internal/tmux"
 	"github.com/dokipen/claude-cadence/services/agents/internal/ttyd"
+	"github.com/dokipen/claude-cadence/services/agents/internal/vault"
 	"github.com/google/uuid"
 )
 
@@ -28,17 +29,20 @@ type Manager struct {
 	tmux     *tmux.Client
 	ttyd     *ttyd.Client
 	git      *git.Client
+	vault    *vault.Client
 	profiles map[string]config.Profile
 }
 
 // NewManager creates a new session Manager.
 // gitClient may be nil if no profiles use repos.
-func NewManager(store *Store, tmuxClient *tmux.Client, ttydClient *ttyd.Client, gitClient *git.Client, profiles map[string]config.Profile) *Manager {
+// vaultClient may be nil if no profiles use vault secrets.
+func NewManager(store *Store, tmuxClient *tmux.Client, ttydClient *ttyd.Client, gitClient *git.Client, vaultClient *vault.Client, profiles map[string]config.Profile) *Manager {
 	return &Manager{
 		store:    store,
 		tmux:     tmuxClient,
 		ttyd:     ttydClient,
 		git:      gitClient,
+		vault:    vaultClient,
 		profiles: profiles,
 	}
 }
@@ -118,6 +122,40 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	}
 	m.store.Add(sess)
 
+	// Fetch Vault secrets if the profile has a vault_secret path.
+	var gitCreds *git.Credentials
+	var vaultSecrets map[string]interface{}
+	if profile.VaultSecret != "" {
+		if m.vault == nil {
+			errMsg := "vault client not configured but profile requires vault_secret"
+			m.store.Update(sessionID, func(s *Session) {
+				s.State = StateError
+				s.ErrorMessage = errMsg
+			})
+			return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
+		}
+
+		secrets, err := m.vault.GetSecret(profile.VaultSecret)
+		if err != nil {
+			errMsg := fmt.Sprintf("failed to fetch vault secret: %v", err)
+			m.store.Update(sessionID, func(s *Session) {
+				s.State = StateError
+				s.ErrorMessage = errMsg
+			})
+			return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
+		}
+		vaultSecrets = secrets
+
+		// Extract git credentials from the secret data.
+		gitCreds = &git.Credentials{}
+		if token, ok := secrets["token"].(string); ok {
+			gitCreds.Token = token
+		}
+		if sshKey, ok := secrets["ssh_key"].(string); ok {
+			gitCreds.SSHKey = sshKey
+		}
+	}
+
 	// If the profile has a repo, clone/pull and create a worktree.
 	workdir := "/"
 	if profile.Repo != "" {
@@ -130,7 +168,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 			return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
 		}
 
-		cloneDir, err := m.git.EnsureClone(profile.Repo)
+		cloneDir, err := m.git.EnsureClone(profile.Repo, gitCreds)
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to clone repo: %v", err)
 			m.store.Update(sessionID, func(s *Session) {
@@ -173,6 +211,21 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 			s.ErrorMessage = errMsg
 		})
 		return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
+	}
+
+	// Inject Vault secrets as env vars into tmux session.
+	if vaultSecrets != nil {
+		for k, v := range vaultSecrets {
+			envKey := strings.ToUpper(k)
+			if !envKeyRe.MatchString(envKey) {
+				slog.Warn("skipping vault secret with invalid env key", "key", k)
+				continue
+			}
+			strVal := fmt.Sprintf("%v", v)
+			if err := m.tmux.SetEnv(sessionName, envKey, strVal); err != nil {
+				slog.Warn("failed to set vault env var", "key", envKey, "error", err)
+			}
+		}
 	}
 
 	// Set env vars (validate keys to prevent injection via tmux set-environment).

@@ -14,6 +14,7 @@ import (
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
 	"github.com/dokipen/claude-cadence/services/agents/internal/tmux"
 	"github.com/dokipen/claude-cadence/services/agents/internal/ttyd"
+	"github.com/dokipen/claude-cadence/services/agents/internal/vault"
 )
 
 func main() {
@@ -65,7 +66,16 @@ func main() {
 	if cfg.RootDir != "" {
 		gitClient = git.NewClient(cfg.RootDir)
 	}
-	manager := session.NewManager(store, tmuxClient, ttydClient, gitClient, cfg.Profiles)
+	var vaultClient *vault.Client
+	if cfg.Vault != nil {
+		vc, err := vault.NewClient(cfg.Vault)
+		if err != nil {
+			slog.Error("failed to create vault client", "error", err)
+			os.Exit(1)
+		}
+		vaultClient = vc
+	}
+	manager := session.NewManager(store, tmuxClient, ttydClient, gitClient, vaultClient, cfg.Profiles)
 	agentService := service.NewAgentService(manager)
 
 	srv, err := server.New(agentService, cfg)

@@ -70,7 +70,7 @@ func setupGitTestEnv(t *testing.T) *gitTestEnv {
 	tmuxClient := tmux.NewClient(socketName)
 	store := session.NewStore()
 	gitClient := git.NewClient(rootDir)
-	mgr := session.NewManager(store, tmuxClient, nil, gitClient, profiles)
+	mgr := session.NewManager(store, tmuxClient, nil, gitClient, nil, profiles)
 	svc := service.NewAgentService(mgr)
 
 	gitTestCfg := &config.Config{
