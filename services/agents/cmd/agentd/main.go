@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
+	"github.com/dokipen/claude-cadence/services/agents/internal/git"
 	"github.com/dokipen/claude-cadence/services/agents/internal/server"
 	"github.com/dokipen/claude-cadence/services/agents/internal/service"
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
@@ -60,7 +61,11 @@ func main() {
 	tmuxClient := tmux.NewClient(cfg.Tmux.SocketName)
 	ttydClient := ttyd.NewClient(cfg.Ttyd.Enabled, cfg.Ttyd.BasePort)
 	store := session.NewStore()
-	manager := session.NewManager(store, tmuxClient, ttydClient, cfg.Profiles)
+	var gitClient *git.Client
+	if cfg.RootDir != "" {
+		gitClient = git.NewClient(cfg.RootDir)
+	}
+	manager := session.NewManager(store, tmuxClient, ttydClient, gitClient, cfg.Profiles)
 	agentService := service.NewAgentService(manager)
 
 	srv, err := server.New(agentService, cfg.Host, cfg.Port)

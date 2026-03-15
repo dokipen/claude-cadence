@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
+	"github.com/dokipen/claude-cadence/services/agents/internal/git"
 	"github.com/dokipen/claude-cadence/services/agents/internal/tmux"
 	"github.com/dokipen/claude-cadence/services/agents/internal/ttyd"
 	"github.com/google/uuid"
@@ -26,15 +27,18 @@ type Manager struct {
 	store    *Store
 	tmux     *tmux.Client
 	ttyd     *ttyd.Client
+	git      *git.Client
 	profiles map[string]config.Profile
 }
 
 // NewManager creates a new session Manager.
-func NewManager(store *Store, tmuxClient *tmux.Client, ttydClient *ttyd.Client, profiles map[string]config.Profile) *Manager {
+// gitClient may be nil if no profiles use repos.
+func NewManager(store *Store, tmuxClient *tmux.Client, ttydClient *ttyd.Client, gitClient *git.Client, profiles map[string]config.Profile) *Manager {
 	return &Manager{
 		store:    store,
 		tmux:     tmuxClient,
 		ttyd:     ttydClient,
+		git:      gitClient,
 		profiles: profiles,
 	}
 }
@@ -43,6 +47,7 @@ func NewManager(store *Store, tmuxClient *tmux.Client, ttydClient *ttyd.Client, 
 type CreateRequest struct {
 	AgentProfile string
 	SessionName  string
+	BaseRef      string
 	Env          map[string]string
 	ExtraArgs    []string
 }
@@ -108,9 +113,61 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	}
 	m.store.Add(sess)
 
-	// Create tmux session. Use "/" as workdir for Phase 1 (no worktrees).
-	if err := m.tmux.NewSession(sessionName, "/"); err != nil {
+	// If the profile has a repo, clone/pull and create a worktree.
+	workdir := "/"
+	if profile.Repo != "" {
+		if m.git == nil {
+			errMsg := "git client not configured but profile requires a repo"
+			m.store.Update(sessionID, func(s *Session) {
+				s.State = StateError
+				s.ErrorMessage = errMsg
+			})
+			return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
+		}
+
+		cloneDir, err := m.git.EnsureClone(profile.Repo)
+		if err != nil {
+			errMsg := fmt.Sprintf("failed to clone repo: %v", err)
+			m.store.Update(sessionID, func(s *Session) {
+				s.State = StateError
+				s.ErrorMessage = errMsg
+			})
+			return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
+		}
+
+		worktreeDir := m.git.WorktreeDir(sessionID)
+		baseRef := req.BaseRef
+		if err := m.git.AddWorktree(cloneDir, worktreeDir, baseRef); err != nil {
+			errMsg := fmt.Sprintf("failed to create worktree: %v", err)
+			m.store.Update(sessionID, func(s *Session) {
+				s.State = StateError
+				s.ErrorMessage = errMsg
+			})
+			return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
+		}
+
+		// Resolve the actual base ref used.
+		if baseRef == "" {
+			baseRef, _ = m.git.DefaultBranch(cloneDir)
+		}
+
+		workdir = worktreeDir
+		m.store.Update(sessionID, func(s *Session) {
+			s.WorktreePath = worktreeDir
+			s.RepoURL = profile.Repo
+			s.BaseRef = baseRef
+		})
+	}
+
+	// Create tmux session with the worktree as workdir.
+	if err := m.tmux.NewSession(sessionName, workdir); err != nil {
 		errMsg := fmt.Sprintf("failed to create tmux session: %v", err)
+		// Clean up worktree if we created one.
+		if profile.Repo != "" && m.git != nil {
+			cloneDir, _ := m.git.CloneDir(profile.Repo)
+			worktreeDir := m.git.WorktreeDir(sessionID)
+			_ = m.git.RemoveWorktree(cloneDir, worktreeDir)
+		}
 		m.store.Update(sessionID, func(s *Session) {
 			s.State = StateError
 			s.ErrorMessage = errMsg
@@ -224,6 +281,19 @@ func (m *Manager) Destroy(id string, force bool) error {
 		}
 	}
 
+	// Clean up worktree if one was created.
+	if sess.WorktreePath != "" && sess.RepoURL != "" && m.git != nil {
+		cloneDir, err := m.git.CloneDir(sess.RepoURL)
+		if err == nil {
+			if err := m.git.RemoveWorktree(cloneDir, sess.WorktreePath); err != nil {
+				slog.Warn("failed to remove worktree", "path", sess.WorktreePath, "error", err)
+			}
+			if err := m.git.PruneWorktrees(cloneDir); err != nil {
+				slog.Warn("failed to prune worktrees", "error", err)
+			}
+		}
+	}
+
 	m.store.Delete(id)
 	return nil
 }
@@ -267,9 +337,9 @@ func (m *Manager) mustGet(id string) *Session {
 }
 
 type templateData struct {
-	SessionID   string
-	SessionName string
-	ExtraArgs   string
+	SessionID    string
+	SessionName  string
+	ExtraArgs    string
 	WorktreePath string
 }
 
@@ -283,7 +353,7 @@ func (m *Manager) renderCommand(cmdTemplate string, sess *Session, extraArgs []s
 		SessionID:    sess.ID,
 		SessionName:  sess.Name,
 		ExtraArgs:    shellJoinArgs(extraArgs),
-		WorktreePath: "", // Phase 1: no worktrees
+		WorktreePath: sess.WorktreePath,
 	}
 
 	var buf bytes.Buffer
