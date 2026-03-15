@@ -119,6 +119,18 @@ export ISSUES_AUTH_TOKEN=eyJhbG...
 issues ticket list
 ```
 
+## JSON Output
+
+All commands (except `auth`) support a `--json` flag that outputs structured JSON instead of formatted text:
+
+```bash
+issues ticket view 42 --project my-project --json
+issues ticket list --project my-project --json
+issues label list --json
+```
+
+When `--json` is used, output is valid JSON written to stdout with no spinner text or ANSI escape codes. The JSON structure matches the GraphQL API response. Errors still go to stderr in plain text.
+
 ## Commands
 
 ### Tickets
