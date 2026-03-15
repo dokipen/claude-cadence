@@ -302,7 +302,7 @@ function stripAnsi(s: string): string {
   return s.replace(ANSI_RE, "");
 }
 
-interface TicketNode {
+export interface TicketNode {
   id: string;
   number?: number;
   title: string;
@@ -314,8 +314,9 @@ interface TicketNode {
   labels?: { name: string }[];
 }
 
-function formatTicketTable(tickets: TicketNode[], options?: { showProject?: boolean }, maxWidth = 120): string {
+export function formatTicketTable(tickets: TicketNode[], options?: { showProject?: boolean; showHeader?: boolean }, maxWidth = 120): string {
   const showProject = options?.showProject ?? false;
+  const showHeader = options?.showHeader ?? true;
 
   const rows = tickets.map((t) => {
     const id = t.number != null ? chalk.bold(`#${t.number}`) : chalk.dim(`#${t.id}`);
@@ -327,9 +328,26 @@ function formatTicketTable(tickets: TicketNode[], options?: { showProject?: bool
     return { id, state, priority, project, title: t.title, points, assignee };
   });
 
-  // Measure visible widths (strip ANSI)
-  const widths: Record<string, number> = { id: 0, state: 0, priority: 0, points: 0, assignee: 0 };
-  if (showProject) widths.project = 0;
+  // Column headers
+  const headers = {
+    id: "#",
+    state: "State",
+    priority: "Priority",
+    project: "Project",
+    title: "Title",
+    points: "Points",
+    assignee: "Assignee",
+  };
+
+  // Measure visible widths (strip ANSI), accounting for header labels
+  const widths: Record<string, number> = {
+    id: headers.id.length,
+    state: headers.state.length,
+    priority: headers.priority.length,
+    points: headers.points.length,
+    assignee: headers.assignee.length,
+  };
+  if (showProject) widths.project = headers.project.length;
   for (const r of rows) {
     widths.id = Math.max(widths.id, stripAnsi(r.id).length);
     widths.state = Math.max(widths.state, stripAnsi(r.state).length);
@@ -349,7 +367,15 @@ function formatTicketTable(tickets: TicketNode[], options?: { showProject?: bool
     return visible < w ? s + " ".repeat(w - visible) : s;
   }
 
-  return rows
+  // Build header row
+  const headerProjectCol = showProject ? `  ${pad(headers.project, widths.project)}` : "";
+  const headerLine = chalk.dim(
+    `  ${pad(headers.id, widths.id)}  ${pad(headers.state, widths.state)}  ${pad(headers.priority, widths.priority)}${headerProjectCol}  ${pad(headers.title, titleWidth)}  ${pad(headers.points, widths.points)}  ${headers.assignee}`
+  );
+  const separatorWidth = 2 + widths.id + 2 + widths.state + 2 + widths.priority + (showProject ? 2 + widths.project : 0) + 2 + titleWidth + 2 + widths.points + 2 + widths.assignee;
+  const separatorLine = chalk.dim("  " + "─".repeat(separatorWidth - 2));
+
+  const dataLines = rows
     .map((r) => {
       const chars = Array.from(r.title);
       const visibleTitle = chars.length > titleWidth ? chars.slice(0, titleWidth - 1).join("") + "…" : r.title;
@@ -357,6 +383,11 @@ function formatTicketTable(tickets: TicketNode[], options?: { showProject?: bool
       return `  ${pad(r.id, widths.id)}  ${pad(r.state, widths.state)}  ${pad(r.priority, widths.priority)}${projectCol}  ${pad(visibleTitle, titleWidth)}  ${pad(r.points, widths.points)}  ${r.assignee}`;
     })
     .join("\n");
+
+  if (showHeader) {
+    return [headerLine, separatorLine, dataLines].join("\n");
+  }
+  return dataLines;
 }
 
 // --- Commands ---
@@ -705,9 +736,11 @@ export function registerTicketCommand(program: Command): void {
 
         console.log();
         if (opts.verbose) {
+          let isFirst = true;
           for (const edge of edges) {
             const t = edge.node;
-            console.log(formatTicketTable([{ ...t, labels: [] }], { showProject }));
+            console.log(formatTicketTable([{ ...t, labels: [] }], { showProject, showHeader: isFirst }));
+            isFirst = false;
             if (t.labels.length > 0) {
               const labelStr = t.labels
                 .map((l) => l.id ? `${l.name} ${chalk.dim(`(${l.id})`)}` : l.name)
