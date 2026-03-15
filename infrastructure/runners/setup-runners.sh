@@ -171,6 +171,13 @@ check_prerequisites() {
     command -v curl >/dev/null 2>&1 || missing+=("curl")
     command -v tar >/dev/null 2>&1 || missing+=("tar")
 
+    # SHA256 verification tool
+    if [[ "$OS" == "darwin" ]]; then
+        command -v shasum >/dev/null 2>&1 || missing+=("shasum")
+    else
+        command -v sha256sum >/dev/null 2>&1 || missing+=("sha256sum")
+    fi
+
     # Verify gh is authenticated (GH_TOKEN env var or gh auth status)
     if [[ -z "${GH_TOKEN:-}" ]]; then
         if ! gh auth status >/dev/null 2>&1; then
@@ -267,6 +274,42 @@ is_service_running() {
     return 1
 }
 
+# --- Checksum verification ---
+
+verify_checksum() {
+    local tarball_path="$1"
+    local sha_tag="${RUNNER_OS}-${RUNNER_ARCH}"
+
+    info "  Fetching SHA256 checksum from release v${RUNNER_VERSION}..."
+    local release_body
+    release_body=$(gh release view "v${RUNNER_VERSION}" --repo actions/runner --json body --jq '.body' 2>/dev/null) \
+        || error "Failed to fetch release notes for v${RUNNER_VERSION}. Cannot verify checksum."
+
+    local expected_hash
+    expected_hash=$(printf '%s' "$release_body" | sed -n "s/.*<!-- BEGIN SHA ${sha_tag} -->\([a-f0-9]*\)<!-- END SHA ${sha_tag} -->.*/\1/p")
+
+    if [[ -z "$expected_hash" ]]; then
+        error "No SHA256 checksum found for ${sha_tag} in release v${RUNNER_VERSION}."
+    fi
+
+    info "  Verifying SHA256 checksum..."
+    local actual_hash
+    if [[ "$OS" == "darwin" ]]; then
+        actual_hash=$(shasum -a 256 "$tarball_path" | awk '{print $1}')
+    else
+        actual_hash=$(sha256sum "$tarball_path" | awk '{print $1}')
+    fi
+
+    if [[ "$actual_hash" != "$expected_hash" ]]; then
+        error "SHA256 checksum mismatch for $(basename "$tarball_path").
+  Expected: $expected_hash
+  Actual:   $actual_hash
+Aborting — the downloaded file may be corrupted or tampered with."
+    fi
+
+    info "  Checksum verified: $actual_hash"
+}
+
 # --- Runner setup ---
 
 setup_runner() {
@@ -298,12 +341,18 @@ setup_runner() {
     info "  Downloading actions-runner v${RUNNER_VERSION} (${RUNNER_OS}/${RUNNER_ARCH})..."
     if [[ "$DRY_RUN" == "true" ]]; then
         run_cmd curl -sL "$tarball_url" -o "$runner_dir/actions-runner.tar.gz"
+        dry_run_print "" "verify_checksum" "$runner_dir/actions-runner.tar.gz"
         run_cmd tar -xzf "$runner_dir/actions-runner.tar.gz" -C "$runner_dir"
         run_cmd rm -f "$runner_dir/actions-runner.tar.gz"
     elif [[ "$OS" == "darwin" ]]; then
-        (cd "$runner_dir" && curl -sL "$tarball_url" -o actions-runner.tar.gz && tar -xzf actions-runner.tar.gz && rm -f actions-runner.tar.gz)
+        curl -sL "$tarball_url" -o "$runner_dir/actions-runner.tar.gz"
+        verify_checksum "$runner_dir/actions-runner.tar.gz"
+        tar -xzf "$runner_dir/actions-runner.tar.gz" -C "$runner_dir"
+        rm -f "$runner_dir/actions-runner.tar.gz"
     else
-        sudo -u "$RUNNER_USER" -- sh -c 'cd "$1" && curl -sL "$2" -o actions-runner.tar.gz && tar -xzf actions-runner.tar.gz && rm -f actions-runner.tar.gz' _ "$runner_dir" "$tarball_url"
+        sudo -u "$RUNNER_USER" -- sh -c 'cd "$1" && curl -sL "$2" -o actions-runner.tar.gz' _ "$runner_dir" "$tarball_url"
+        verify_checksum "$runner_dir/actions-runner.tar.gz"
+        sudo -u "$RUNNER_USER" -- sh -c 'cd "$1" && tar -xzf actions-runner.tar.gz && rm -f actions-runner.tar.gz' _ "$runner_dir"
     fi
 
     # Configure — pass token via environment variable to avoid process list exposure
