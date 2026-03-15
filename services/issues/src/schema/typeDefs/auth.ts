@@ -9,7 +9,8 @@ export const authTypeDefs = `
   }
 
   extend type Mutation {
-    authenticateWithGitHubCode(code: String!): AuthPayload!
+    generateOAuthState: String!
+    authenticateWithGitHubCode(code: String!, state: String!): AuthPayload!
     authenticateWithGitHubPAT(token: String!): AuthPayload!
   }
 `;
