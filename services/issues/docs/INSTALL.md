@@ -110,4 +110,4 @@ url: http://localhost:4000
 
 ## Auto-Deploy Strategy
 
-GitHub Actions rebuilds the Docker image and deploys on every merge to `main`. The CI workflow triggers on changes to `services/issues/**` and `services/issues-cli/**`, running tests, typecheck, build, and Docker build before deploying.
+The CI workflow validates Docker builds on every PR and push to `main`, but does not deploy automatically. To set up auto-deploy, add a separate workflow that pushes to a container registry and triggers deployment to your target environment on merge to `main`.
