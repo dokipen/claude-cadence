@@ -13,12 +13,10 @@ Scripts to provision and manage self-hosted GitHub Actions runners as systemd se
 ### Provision runners
 
 ```bash
-# Linux (requires sudo for systemd and user creation)
-sudo ./setup-runners.sh --repo dokipen/claude-cadence --count 3
-
-# macOS (no sudo needed — runs as current user)
 ./setup-runners.sh --repo dokipen/claude-cadence --count 3
 ```
+
+> **Note:** Do not run with `sudo`. The script elevates internally via `sudo` only for privileged operations (user creation, systemd, directory ownership). The `gh` API calls run as your user, which must have `gh` authenticated.
 
 Options:
 - `--repo OWNER/REPO` — GitHub repo (required)
@@ -38,10 +36,6 @@ Options:
 ### Remove runners
 
 ```bash
-# Linux
-sudo ./teardown-runners.sh --repo dokipen/claude-cadence
-
-# macOS
 ./teardown-runners.sh --repo dokipen/claude-cadence
 ```
 
@@ -70,7 +64,7 @@ Each runner directory is namespaced by repo name, allowing multiple repos on one
 |---------|-------|-------|
 | Service manager | systemd | launchd |
 | Runner user | Dedicated system user (`github-runner`) | Current user |
-| Requires sudo | Yes | No |
+| Requires sudo | Internally (for systemd/user ops) | No |
 | Default labels | `Linux,X64` | `macOS,ARM64` or `macOS,X64` |
 | Default base dir | `/home/github-runner` | `~/actions-runner` |
 

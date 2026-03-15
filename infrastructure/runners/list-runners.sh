@@ -52,7 +52,7 @@ done
 
 detect_platform
 
-[[ ! "$RUNNER_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] && error "Invalid user name: '$RUNNER_USER'."
+if [[ ! "$RUNNER_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; then error "Invalid user name: '$RUNNER_USER'."; fi
 
 if [[ -z "$BASE_DIR" ]]; then
     if [[ "$OS" == "darwin" ]]; then
@@ -65,7 +65,7 @@ fi
 case "$BASE_DIR" in
     *..*)  error "Invalid base-dir: '$BASE_DIR'. Path traversal not allowed." ;;
 esac
-[[ "$BASE_DIR" != /* ]] && error "Invalid base-dir: '$BASE_DIR'. Must be an absolute path."
+if [[ "$BASE_DIR" != /* ]]; then error "Invalid base-dir: '$BASE_DIR'. Must be an absolute path."; fi
 
 # --- Service status ---
 
