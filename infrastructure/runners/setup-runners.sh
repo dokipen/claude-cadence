@@ -159,6 +159,7 @@ esac
 if [[ "$BASE_DIR" != /* ]]; then error "Invalid base-dir: '$BASE_DIR'. Must be an absolute path."; fi
 
 HOSTNAME_PREFIX="$(hostname -s)"
+if [[ ! "$HOSTNAME_PREFIX" =~ ^[A-Za-z0-9-]+$ ]]; then error "Unexpected hostname format: '$HOSTNAME_PREFIX'. Only alphanumeric and hyphen allowed."; fi
 
 # --- Prerequisites ---
 
@@ -221,6 +222,7 @@ resolve_runner_version() {
             info "Using placeholder version $RUNNER_VERSION for dry-run."
         else
             RUNNER_VERSION=$(gh api repos/actions/runner/releases/latest --jq '.tag_name' | sed 's/^v//')
+            if [[ ! "$RUNNER_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then error "Unexpected runner version format from API: '$RUNNER_VERSION'"; fi
             info "Latest runner version: $RUNNER_VERSION"
         fi
     fi
