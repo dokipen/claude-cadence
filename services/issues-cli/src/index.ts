@@ -4,8 +4,8 @@
 if (process.platform === "darwin") {
   try {
     await import("mac-ca/register");
-  } catch {
-    // mac-ca is optional — continue without it
+  } catch (e) {
+    process.stderr.write(`warning: failed to load macOS Keychain certs: ${e}\n`);
   }
 }
 
