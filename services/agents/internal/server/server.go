@@ -5,6 +5,7 @@ import (
 	"net"
 
 	agentsv1 "github.com/dokipen/claude-cadence/services/agents/gen/agents/v1"
+	"github.com/dokipen/claude-cadence/services/agents/internal/config"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -16,16 +17,27 @@ type Server struct {
 }
 
 // New creates a new Server with the given service registered.
-func New(agentService agentsv1.AgentServiceServer, host string, port int) (*Server, error) {
-	addr := fmt.Sprintf("%s:%d", host, port)
+func New(agentService agentsv1.AgentServiceServer, cfg *config.Config) (*Server, error) {
+	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen on %s: %w", addr, err)
 	}
 
-	grpcServer := grpc.NewServer()
+	var opts []grpc.ServerOption
+
+	if cfg.Auth.Mode == "token" {
+		token := cfg.Auth.ResolveToken()
+		opts = append(opts, grpc.UnaryInterceptor(tokenUnaryInterceptor(token)))
+		opts = append(opts, grpc.StreamInterceptor(tokenStreamInterceptor(token)))
+	}
+
+	grpcServer := grpc.NewServer(opts...)
 	agentsv1.RegisterAgentServiceServer(grpcServer, agentService)
-	reflection.Register(grpcServer)
+
+	if cfg.Reflection {
+		reflection.Register(grpcServer)
+	}
 
 	return &Server{
 		grpcServer: grpcServer,

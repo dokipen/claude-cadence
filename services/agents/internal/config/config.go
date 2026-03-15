@@ -7,15 +7,34 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// AuthConfig holds authentication settings.
+type AuthConfig struct {
+	Mode        string `yaml:"mode"`          // "none", "token"
+	Token       string `yaml:"token"`         // shared bearer token
+	TokenEnvVar string `yaml:"token_env_var"` // env var override for token
+}
+
+// ResolveToken returns the token, preferring the env var if set.
+func (a *AuthConfig) ResolveToken() string {
+	if a.TokenEnvVar != "" {
+		if v := os.Getenv(a.TokenEnvVar); v != "" {
+			return v
+		}
+	}
+	return a.Token
+}
+
 // Config is the top-level agentd configuration.
 type Config struct {
-	Host     string             `yaml:"host"`
-	Port     int                `yaml:"port"`
-	RootDir  string             `yaml:"root_dir"`
-	Tmux     TmuxConfig         `yaml:"tmux"`
-	Ttyd     TtydConfig         `yaml:"ttyd"`
-	Log      LogConfig          `yaml:"log"`
-	Profiles map[string]Profile `yaml:"profiles"`
+	Host       string             `yaml:"host"`
+	Port       int                `yaml:"port"`
+	RootDir    string             `yaml:"root_dir"`
+	Tmux       TmuxConfig         `yaml:"tmux"`
+	Ttyd       TtydConfig         `yaml:"ttyd"`
+	Log        LogConfig          `yaml:"log"`
+	Profiles   map[string]Profile `yaml:"profiles"`
+	Auth       AuthConfig         `yaml:"auth"`
+	Reflection bool               `yaml:"reflection"`
 }
 
 // TmuxConfig holds tmux-specific settings.
@@ -82,6 +101,9 @@ func applyDefaults(cfg *Config) {
 	if cfg.Log.Format == "" {
 		cfg.Log.Format = "json"
 	}
+	if cfg.Auth.Mode == "" {
+		cfg.Auth.Mode = "none"
+	}
 }
 
 func validate(cfg *Config) error {
@@ -93,5 +115,25 @@ func validate(cfg *Config) error {
 			return fmt.Errorf("profile %q: command is required", name)
 		}
 	}
+
+	// Require authentication for non-loopback bindings.
+	if cfg.Host != "127.0.0.1" && cfg.Host != "localhost" && cfg.Host != "::1" {
+		if cfg.Auth.Mode == "none" {
+			return fmt.Errorf("authentication required for non-localhost bindings")
+		}
+	}
+
+	// Auth mode validation.
+	switch cfg.Auth.Mode {
+	case "none":
+		// ok
+	case "token":
+		if cfg.Auth.Token == "" && cfg.Auth.TokenEnvVar == "" {
+			return fmt.Errorf("token or token_env_var required for token authentication")
+		}
+	default:
+		return fmt.Errorf("invalid auth mode %q: must be \"none\" or \"token\"", cfg.Auth.Mode)
+	}
+
 	return nil
 }

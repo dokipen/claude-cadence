@@ -40,7 +40,13 @@ func newTtydTestEnv(t *testing.T) *ttydTestEnv {
 	mgr := session.NewManager(store, tmuxClient, ttydClient, profiles)
 	svc := service.NewAgentService(mgr)
 
-	srv, err := server.New(svc, "127.0.0.1", 0)
+	ttydTestCfg := &config.Config{
+		Host:       "127.0.0.1",
+		Port:       0,
+		Reflection: true,
+		Auth:       config.AuthConfig{Mode: "none"},
+	}
+	srv, err := server.New(svc, ttydTestCfg)
 	if err != nil {
 		t.Fatalf("creating ttyd test server: %v", err)
 	}

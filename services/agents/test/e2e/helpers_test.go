@@ -36,8 +36,16 @@ func TestMain(m *testing.M) {
 	mgr := session.NewManager(store, tmuxClient, ttydClient, cfg.Profiles)
 	svc := service.NewAgentService(mgr)
 
+	// Create a minimal config for test server
+	testCfg := &config.Config{
+		Host:       "127.0.0.1",
+		Port:       0,
+		Reflection: true, // tests use reflection
+		Auth:       config.AuthConfig{Mode: "none"},
+	}
+
 	// Start server on random port
-	srv, err := server.New(svc, "127.0.0.1", 0)
+	srv, err := server.New(svc, testCfg)
 	if err != nil {
 		log.Fatalf("creating server: %v", err)
 	}
