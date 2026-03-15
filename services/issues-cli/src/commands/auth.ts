@@ -1,3 +1,4 @@
+import { createInterface } from "node:readline";
 import { Command } from "commander";
 import { gql } from "graphql-request";
 import chalk from "chalk";
@@ -70,6 +71,30 @@ interface UserProfile {
   createdAt: string;
 }
 
+// --- Helpers ---
+
+function readStdin(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let data = "";
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk) => { data += chunk; });
+    process.stdin.on("end", () => resolve(data.trim()));
+    process.stdin.on("error", reject);
+  });
+}
+
+function promptSecret(prompt: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const rl = createInterface({ input: process.stdin, output: process.stderr });
+    process.stderr.write(prompt);
+    rl.once("line", (line) => {
+      rl.close();
+      resolve(line.trim());
+    });
+    rl.once("error", reject);
+  });
+}
+
 // --- Command Registration ---
 
 export function registerAuthCommand(program: Command): void {
@@ -81,33 +106,56 @@ export function registerAuthCommand(program: Command): void {
     .option("--pat <token>", "GitHub Personal Access Token")
     .option("--code <code>", "GitHub OAuth authorization code")
     .action(async (options: { pat?: string; code?: string }) => {
-      const spinner = ora("Authenticating...").start();
-
       try {
         const client = getClient();
         let result: AuthPayload;
 
         if (options.pat) {
+          const token = options.pat === "-" ? await readStdin() : options.pat;
+          if (!token) {
+            console.error(chalk.red("Error: no token received from stdin"));
+            process.exit(1);
+            return;
+          }
+          const spinner = ora("Authenticating...").start();
           const data = await client.request<{ authenticateWithGitHubPAT: AuthPayload }>(
             AUTHENTICATE_WITH_PAT,
-            { token: options.pat }
+            { token }
           );
           result = data.authenticateWithGitHubPAT;
+          setAuthToken(result.token);
+          spinner.succeed(`Authenticated as ${chalk.bold(result.user.login)} (${result.user.displayName})`);
         } else if (options.code) {
+          const spinner = ora("Authenticating...").start();
           const data = await client.request<{ authenticateWithGitHubCode: AuthPayload }>(
             AUTHENTICATE_WITH_CODE,
             { code: options.code }
           );
           result = data.authenticateWithGitHubCode;
+          setAuthToken(result.token);
+          spinner.succeed(`Authenticated as ${chalk.bold(result.user.login)} (${result.user.displayName})`);
+        } else if (process.stdin.isTTY) {
+          const token = await promptSecret("Enter GitHub PAT: ");
+          if (!token) {
+            console.error(chalk.red("Error: no token provided"));
+            process.exit(1);
+            return;
+          }
+          const spinner = ora("Authenticating...").start();
+          const data = await client.request<{ authenticateWithGitHubPAT: AuthPayload }>(
+            AUTHENTICATE_WITH_PAT,
+            { token }
+          );
+          result = data.authenticateWithGitHubPAT;
+          setAuthToken(result.token);
+          spinner.succeed(`Authenticated as ${chalk.bold(result.user.login)} (${result.user.displayName})`);
         } else {
-          spinner.fail("Please provide --pat <token> or --code <code>");
+          console.error(chalk.red("Error: please provide --pat <token>, --pat - (stdin), or --code <code>"));
           process.exit(1);
           return;
         }
-
-        setAuthToken(result.token);
-        spinner.succeed(`Authenticated as ${chalk.bold(result.user.login)} (${result.user.displayName})`);
       } catch (error) {
+        const spinner = ora();
         spinner.fail("Authentication failed");
         handleError(error);
       }

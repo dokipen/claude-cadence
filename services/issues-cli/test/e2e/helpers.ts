@@ -184,12 +184,49 @@ function execCliProcess(serverUrl: string, args: string[], authToken?: string): 
   );
 }
 
+/**
+ * Run the issues CLI with data written to stdin.
+ */
+export function runCliWithStdin(
+  serverUrl: string,
+  args: string[],
+  stdinData: string,
+  authToken?: string,
+): Promise<CliResult> {
+  return new Promise((resolve) => {
+    const child = execCliProcess(serverUrl, args, authToken);
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (data: Buffer) => {
+      stdout += data.toString();
+    });
+
+    child.stderr.on("data", (data: Buffer) => {
+      stderr += data.toString();
+    });
+
+    child.on("close", (code) => {
+      resolve({ stdout, stderr, exitCode: code });
+    });
+
+    child.on("error", (err) => {
+      resolve({ stdout, stderr: stderr + err.message, exitCode: 1 });
+    });
+
+    child.stdin.write(stdinData);
+    child.stdin.end();
+  });
+}
+
 export interface TestSuite {
   url: string;
   authToken: string;
   cleanup: () => void;
   cli: (...args: string[]) => Promise<CliResult>;
   unauthenticatedCli: (...args: string[]) => Promise<CliResult>;
+  cliWithStdin: (stdinData: string, ...args: string[]) => Promise<CliResult>;
 }
 
 /**
@@ -204,5 +241,6 @@ export async function setupTestSuite(): Promise<TestSuite> {
   const { url, authToken, cleanup } = await createTestServer();
   const cli = (...args: string[]) => runCli(url, args, authToken);
   const unauthenticatedCli = (...args: string[]) => runCli(url, args);
-  return { url, authToken, cleanup, cli, unauthenticatedCli };
+  const cliWithStdin = (stdinData: string, ...args: string[]) => runCliWithStdin(url, args, stdinData);
+  return { url, authToken, cleanup, cli, unauthenticatedCli, cliWithStdin };
 }
