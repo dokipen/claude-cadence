@@ -25,7 +25,7 @@ CADENCE_DOMAIN=cadence.bootsy.internal caddy run --config infrastructure/Caddyfi
 Caddy serves HTTPS on port 443 using its built-in CA and redirects HTTP (port 80) to HTTPS. Services are available at:
 
 - `https://cadence.bootsy.internal/graphql` — Issues GraphQL API
-- `https://cadence.bootsy.internal/agents.v1.*` — Agents gRPC endpoint
+- `https://cadence.bootsy.internal/agents.v1.AgentService/<Method>` — Agents gRPC endpoint (Caddy routes `/agents.v1.*`)
 
 **DNS:** Ensure `CADENCE_DOMAIN` resolves to the host running Caddy on your LAN.
 

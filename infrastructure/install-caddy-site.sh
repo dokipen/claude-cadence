@@ -93,4 +93,4 @@ sudo systemctl reload caddy
 
 log "Done! Services available at:"
 log "  https://${vhost}/graphql  — Issues GraphQL API"
-log "  https://${vhost}/agents.v1.*  — Agents gRPC endpoint"
+log "  https://${vhost}/agents.v1.AgentService/<Method>  — Agents gRPC endpoint"
