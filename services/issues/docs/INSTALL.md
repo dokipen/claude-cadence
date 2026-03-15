@@ -96,7 +96,7 @@ To use the issues service as your ticket provider, add the following to your pro
 ## Ticket Provider
 
 provider: issues-api
-url: http://localhost:4000
+api_url: http://localhost:4000
 ```
 
 ## Auto-Deploy Strategy

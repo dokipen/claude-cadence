@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVICE_NAME="com.claude-cadence.issues"
 COMPOSE_FILE="$SCRIPT_DIR/docker-compose.yml"
 ENV_FILE="$SCRIPT_DIR/.env"
+DOCKER_BIN="$(command -v docker 2>/dev/null || echo "/usr/bin/docker")"
 
 # --- Helpers ---
 
@@ -22,7 +23,7 @@ ensure_env() {
     local secret
     secret=$(openssl rand -base64 32)
     cat > "$ENV_FILE" <<EOF
-JWT_SECRET=$secret
+JWT_SECRET="$secret"
 EOF
   fi
 }
@@ -55,8 +56,7 @@ launchd_install() {
   <string>${SERVICE_NAME}</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/bin/env</string>
-    <string>docker</string>
+    <string>${DOCKER_BIN}</string>
     <string>compose</string>
     <string>--env-file</string>
     <string>${ENV_FILE}</string>
@@ -83,7 +83,9 @@ launchd_install() {
 </plist>
 EOF
 
-  launchctl load -w "$plist"
+  # Unload first for idempotent re-installs
+  launchctl bootout "gui/$(id -u)/$SERVICE_NAME" 2>/dev/null || true
+  launchctl bootstrap "gui/$(id -u)" "$plist"
   log "launchd service installed and started"
 }
 
@@ -91,7 +93,7 @@ launchd_uninstall() {
   local plist
   plist=$(launchd_plist_path)
   if [ -f "$plist" ]; then
-    launchctl unload "$plist" 2>/dev/null || true
+    launchctl bootout "gui/$(id -u)/$SERVICE_NAME" 2>/dev/null || true
     rm -f "$plist"
     docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" down 2>/dev/null || true
     log "launchd service uninstalled"
@@ -139,8 +141,8 @@ Requires=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=${SCRIPT_DIR}
-ExecStart=/usr/bin/docker compose --env-file ${ENV_FILE} -f ${COMPOSE_FILE} up --build -d
-ExecStop=/usr/bin/docker compose --env-file ${ENV_FILE} -f ${COMPOSE_FILE} down
+ExecStart=${DOCKER_BIN} compose --env-file ${ENV_FILE} -f ${COMPOSE_FILE} up --build -d
+ExecStop=${DOCKER_BIN} compose --env-file ${ENV_FILE} -f ${COMPOSE_FILE} down
 
 [Install]
 WantedBy=default.target
