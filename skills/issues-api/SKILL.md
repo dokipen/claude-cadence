@@ -43,7 +43,7 @@ issues project update PROJECT_ID --repository "org/new-repo"
 
 ## Ticket Management
 
-**ID types:** Commands that accept a ticket number (e.g., `ticket view 42`) require `--project PROJECT_ID` to resolve the number. Commands that accept a CUID ticket ID (e.g., `ticket update`, `ticket transition`, `comment add`, `label add/remove`, `assign`, `unassign`) do not use `--project`. Use `ticket view` to look up a ticket's CUID from its number.
+**ID types:** Most commands accept either a ticket number or a CUID. When using a ticket number, `ticket view` requires `--project PROJECT_ID` to resolve it. When using a CUID, `--project` is not needed. Commands like `ticket update`, `ticket transition`, `comment add`, `label add/remove`, `assign`, and `unassign` only accept a CUID and do not use `--project`. Use `ticket view` to look up a ticket's CUID from its number.
 
 ### Create a ticket
 
@@ -77,7 +77,7 @@ issues ticket list --assignee "username"
 issues ticket list --blocked
 issues ticket list --priority HIGH
 issues ticket list --project PROJECT_ID
-issues ticket list --first 50
+issues ticket list --limit 50
 issues ticket list --after "cursor_value"
 ```
 
