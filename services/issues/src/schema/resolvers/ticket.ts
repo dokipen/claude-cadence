@@ -2,6 +2,7 @@ import type { PrismaClient, Ticket, Comment, Prisma, User } from "@prisma/client
 import type { Loaders } from "../../loaders.js";
 import { validateTransition, checkBlockerGuard } from "../../fsm/ticket-machine.js";
 import { GraphQLError } from "graphql";
+import { requireAuth } from "./auth.js";
 
 export interface Context {
   prisma: PrismaClient;
@@ -340,20 +341,16 @@ export const ticketResolvers = {
     addComment: async (
       _: unknown,
       { ticketId, body }: { ticketId: string; body: string },
-      { prisma, currentUser }: Context
+      context: Context
     ) => {
+      const user = requireAuth(context);
       if (!body.trim()) throw new Error("Comment body cannot be empty");
-      if (!currentUser) {
-        throw new GraphQLError("Authentication required", {
-          extensions: { code: "UNAUTHENTICATED" },
-        });
-      }
 
-      const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+      const ticket = await context.prisma.ticket.findUnique({ where: { id: ticketId } });
       if (!ticket) throw new Error(`Ticket not found: ${ticketId}`);
 
-      return prisma.comment.create({
-        data: { ticketId, body, authorId: currentUser.id },
+      return context.prisma.comment.create({
+        data: { ticketId, body, authorId: user.id },
         include: { author: true },
       });
     },
@@ -361,25 +358,21 @@ export const ticketResolvers = {
     updateComment: async (
       _: unknown,
       { id, body }: { id: string; body: string },
-      { prisma, currentUser }: Context
+      context: Context
     ) => {
-      if (!currentUser) {
-        throw new GraphQLError("Authentication required", {
-          extensions: { code: "UNAUTHENTICATED" },
-        });
-      }
+      const user = requireAuth(context);
       if (!body.trim()) throw new Error("Comment body cannot be empty");
 
-      const existing = await prisma.comment.findUnique({ where: { id } });
+      const existing = await context.prisma.comment.findUnique({ where: { id } });
       if (!existing) throw new Error("Comment not found");
 
-      if (existing.authorId !== currentUser.id) {
+      if (existing.authorId !== user.id) {
         throw new GraphQLError("You can only edit your own comments", {
           extensions: { code: "FORBIDDEN" },
         });
       }
 
-      return prisma.comment.update({
+      return context.prisma.comment.update({
         where: { id },
         data: { body },
         include: { author: true },
@@ -389,27 +382,23 @@ export const ticketResolvers = {
     deleteComment: async (
       _: unknown,
       { id }: { id: string },
-      { prisma, currentUser }: Context
+      context: Context
     ) => {
-      if (!currentUser) {
-        throw new GraphQLError("Authentication required", {
-          extensions: { code: "UNAUTHENTICATED" },
-        });
-      }
+      const user = requireAuth(context);
 
-      const existing = await prisma.comment.findUnique({
+      const existing = await context.prisma.comment.findUnique({
         where: { id },
         include: { author: true },
       });
       if (!existing) throw new Error("Comment not found");
 
-      if (existing.authorId !== currentUser.id) {
+      if (existing.authorId !== user.id) {
         throw new GraphQLError("You can only delete your own comments", {
           extensions: { code: "FORBIDDEN" },
         });
       }
 
-      await prisma.comment.delete({ where: { id } });
+      await context.prisma.comment.delete({ where: { id } });
       return existing;
     },
   },

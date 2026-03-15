@@ -1,6 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
-import { ticketResolvers } from "./ticket.js";
 import type { User } from "@prisma/client";
+
+process.env.JWT_SECRET = "test-secret-for-unit-tests";
+
+const { ticketResolvers } = await import("./ticket.js");
 
 const mockUser: User = {
   id: "user-1",
@@ -22,7 +25,7 @@ const otherUser: User = {
   updatedAt: new Date(),
 };
 
-function makeMockContext(currentUser: User | null, prismaOverrides = {}) {
+function makeMockContext(currentUser: User | null) {
   return {
     prisma: {
       comment: {
@@ -34,7 +37,6 @@ function makeMockContext(currentUser: User | null, prismaOverrides = {}) {
       ticket: {
         findUnique: vi.fn(),
       },
-      ...prismaOverrides,
     } as any,
     loaders: {} as any,
     currentUser,
