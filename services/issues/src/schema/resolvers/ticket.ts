@@ -408,7 +408,11 @@ export const ticketResolvers = {
 
   Ticket: {
     project: async (parent: Ticket, _: unknown, { loaders }: Context) => {
-      return loaders.projectByProjectId.load(parent.projectId);
+      const project = await loaders.projectByProjectId.load(parent.projectId);
+      if (!project) {
+        throw new Error(`Project not found: ${parent.projectId}`);
+      }
+      return project;
     },
 
     labels: async (parent: Ticket, _: unknown, { loaders }: Context) => {

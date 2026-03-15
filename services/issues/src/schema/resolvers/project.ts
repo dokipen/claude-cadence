@@ -1,6 +1,6 @@
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient, User } from "@prisma/client";
 import type { Loaders } from "../../loaders.js";
-import type { User } from "@prisma/client";
+import { requireAuth } from "./auth.js";
 
 export interface Context {
   prisma: PrismaClient;
@@ -23,8 +23,10 @@ export const projectResolvers = {
     createProject: async (
       _: unknown,
       { input }: { input: { name: string; repository: string } },
-      { prisma }: Context
+      context: Context
     ) => {
+      requireAuth(context);
+      const { prisma } = context;
       return prisma.project.create({
         data: {
           name: input.name,
@@ -36,8 +38,10 @@ export const projectResolvers = {
     updateProject: async (
       _: unknown,
       { id, input }: { id: string; input: { name?: string; repository?: string } },
-      { prisma }: Context
+      context: Context
     ) => {
+      requireAuth(context);
+      const { prisma } = context;
       const existing = await prisma.project.findUnique({ where: { id } });
       if (!existing) {
         throw new Error(`Project not found: ${id}`);
@@ -46,6 +50,10 @@ export const projectResolvers = {
       const data: Record<string, string> = {};
       if (input.name !== undefined) data.name = input.name;
       if (input.repository !== undefined) data.repository = input.repository;
+
+      if (Object.keys(data).length === 0) {
+        throw new Error("At least one field to update must be specified");
+      }
 
       return prisma.project.update({
         where: { id },

@@ -147,4 +147,32 @@ describe("Project Management", () => {
     const output = result.stdout + result.stderr;
     expect(output).toContain("Project not found");
   });
+
+  it("should reject creating a project with duplicate name", async () => {
+    const result = await suite.cli(
+      "project", "create",
+      "--name", "Default",
+      "--repository", "org/another-repo"
+    );
+    expect(result.exitCode).not.toBe(0);
+  });
+
+  it("should reject creating a project with duplicate repository", async () => {
+    const result = await suite.cli(
+      "project", "create",
+      "--name", "Another Project",
+      "--repository", "default/repository"
+    );
+    expect(result.exitCode).not.toBe(0);
+  });
+
+  it("should handle updating a non-existent project", async () => {
+    const result = await suite.cli(
+      "project", "update", "nonexistent-id-12345",
+      "--name", "Should fail"
+    );
+    expect(result.exitCode).not.toBe(0);
+    const output = result.stdout + result.stderr;
+    expect(output).toContain("Project not found");
+  });
 });
