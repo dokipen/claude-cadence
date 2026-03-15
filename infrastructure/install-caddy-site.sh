@@ -57,8 +57,7 @@ ${vhost} {
 	}
 
 	# Agents service — gRPC
-	handle /agents/* {
-		uri strip_prefix /agents
+	handle /agents.v1.* {
 		reverse_proxy localhost:4141 {
 			transport http {
 				versions h2c
@@ -94,4 +93,4 @@ sudo systemctl reload caddy
 
 log "Done! Services available at:"
 log "  https://${vhost}/graphql  — Issues GraphQL API"
-log "  https://${vhost}/agents/  — Agents gRPC endpoint"
+log "  https://${vhost}/agents.v1.AgentService/<Method>  — Agents gRPC endpoint"
