@@ -8,7 +8,7 @@
 #
 # Usage: ./scripts/cleanup-merged-worktrees.sh
 #
-# Safe to run at any time — skips the current worktree and active PRs.
+# Safe to run at any time — skips worktrees in active use by any session.
 # Note: Only detects PRs opened from branches in the same repo (not forks).
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -18,8 +18,9 @@ if [ ! -d "$WORKTREES_DIR" ]; then
   exit 0
 fi
 
-# Get current branch to avoid cleaning up the worktree we're working in
-CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "")
+# Collect all branches currently checked out in any worktree (not just CWD).
+# This protects against removing worktrees in use by concurrent agent sessions.
+ACTIVE_BRANCHES=$(git worktree list --porcelain 2>/dev/null | grep '^branch ' | sed 's|^branch refs/heads/||')
 
 cleaned=0
 for dir in "$WORKTREES_DIR"/*/; do
@@ -31,8 +32,9 @@ for dir in "$WORKTREES_DIR"/*/; do
     continue
   fi
 
-  # Skip the current worktree
-  if [ "$branch_name" = "$CURRENT_BRANCH" ]; then
+  # Skip worktrees with branches checked out in any active session
+  if echo "$ACTIVE_BRANCHES" | grep -qx "$branch_name"; then
+    echo "Skipping '$branch_name' — currently checked out in an active worktree"
     continue
   fi
 
