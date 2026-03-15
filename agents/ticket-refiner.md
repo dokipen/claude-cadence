@@ -22,13 +22,15 @@ Read the project's `CLAUDE.md` and look for a `## Ticket Provider` section:
 ## Ticket Provider
 provider: issues-api
 api_url: http://localhost:4000
+project_id: <project-id>
 ```
 
 If no `Ticket Provider` section exists, or if it specifies `provider: github`, use the **GitHub Issues** backend (default).
 
 ```bash
 # Extract provider from CLAUDE.md (defaults to "github")
-PROVIDER=$(grep -A2 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'provider:' | awk '{print $2}' || echo "github")
+PROVIDER=$(grep -A3 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'provider:' | tail -1 | awk '{print $2}' || echo "github")
+PROJECT_ID=$(grep -A4 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'project_id:' | tail -1 | awk '{print $2}')
 ```
 
 ## Getting Project Context
@@ -47,11 +49,11 @@ A refined ticket must have ALL of the following:
 |-----------|--------------|------------|
 | Clear title | Manual review | Manual review |
 | Acceptance criteria | Manual review | Manual review |
-| Estimate | `gh issue view N --json labels --jq '.labels[].name \| select(startswith("estimate:"))'` | `issues ticket view N` (check Story Points field) |
-| Priority | `gh issue view N --json labels --jq '.labels[].name \| select(startswith("priority:"))'` | `issues ticket view N` (check Priority field) |
-| Type label | `gh issue view N --json labels --jq '.labels[].name \| select(. == "bug" or . == "enhancement" or . == "documentation" or . == "testing" or . == "performance")'` | `issues ticket view N` (check labels) |
-| Assigned | `gh issue view N --json assignees --jq '.assignees[].login'` | `issues ticket view N` (check Assignee field) |
-| Blockers linked (if any) | Check via GitHub dependencies API | `issues ticket view N` (check Blocked By section) |
+| Estimate | `gh issue view N --json labels --jq '.labels[].name \| select(startswith("estimate:"))'` | `issues ticket view N --project $PROJECT_ID` (check Story Points field) |
+| Priority | `gh issue view N --json labels --jq '.labels[].name \| select(startswith("priority:"))'` | `issues ticket view N --project $PROJECT_ID` (check Priority field) |
+| Type label | `gh issue view N --json labels --jq '.labels[].name \| select(. == "bug" or . == "enhancement" or . == "documentation" or . == "testing" or . == "performance")'` | `issues ticket view N --project $PROJECT_ID` (check labels) |
+| Assigned | `gh issue view N --json assignees --jq '.assignees[].login'` | `issues ticket view N --project $PROJECT_ID` (check Assignee field) |
+| Blockers linked (if any) | Check via GitHub dependencies API | `issues ticket view N --project $PROJECT_ID` (check Blocked By section) |
 | Blocked status correct | See "Blocked Label Logic" below | Enforced via state machine (no label needed) |
 
 ### Issues API Native Fields
@@ -60,9 +62,9 @@ When using `issues-api`, also verify and set these native fields:
 
 | Field | Check | Update Command |
 |-------|-------|----------------|
-| State | `issues ticket view N` (State field) | `issues ticket transition N --to REFINED` |
-| Story Points | `issues ticket view N` (Story Points field) | `issues ticket update N --points X` |
-| Priority | `issues ticket view N` (Priority field) | `issues ticket update N --priority X` |
+| State | `issues ticket view N --project $PROJECT_ID` (State field) | `issues ticket transition N --project $PROJECT_ID --to REFINED` |
+| Story Points | `issues ticket view N --project $PROJECT_ID` (Story Points field) | `issues ticket update N --project $PROJECT_ID --points X` |
+| Priority | `issues ticket view N --project $PROJECT_ID` (Priority field) | `issues ticket update N --project $PROJECT_ID --priority X` |
 
 After refinement with `issues-api`, transition the ticket state from `BACKLOG` to `REFINED`.
 
@@ -97,7 +99,7 @@ When assessing priority, consider: Does this block other work? Is there a securi
 ## Review Process
 
 1. **Detect the ticket provider** from the project's `CLAUDE.md`
-2. **Read the ticket** using `gh issue view N` (GitHub) or `issues ticket view N` (issues-api)
+2. **Read the ticket** using `gh issue view N` (GitHub) or `issues ticket view N --project $PROJECT_ID` (issues-api)
 3. **Check each criterion** using the provider-appropriate commands above
 4. **Evaluate acceptance criteria quality** — specific, testable, checkbox format?
 5. **Evaluate title** — clear and descriptive?
