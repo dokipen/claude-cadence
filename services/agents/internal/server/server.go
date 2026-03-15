@@ -7,7 +7,6 @@ import (
 	agentsv1 "github.com/dokipen/claude-cadence/services/agents/gen/agents/v1"
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -26,14 +25,6 @@ func New(agentService agentsv1.AgentServiceServer, cfg *config.Config) (*Server,
 	}
 
 	var opts []grpc.ServerOption
-
-	if cfg.TLS.Enabled {
-		creds, err := credentials.NewServerTLSFromFile(cfg.TLS.CertFile, cfg.TLS.KeyFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load TLS credentials: %w", err)
-		}
-		opts = append(opts, grpc.Creds(creds))
-	}
 
 	if cfg.Auth.Mode == "token" {
 		token := cfg.Auth.ResolveToken()

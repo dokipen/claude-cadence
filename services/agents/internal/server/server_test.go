@@ -34,7 +34,6 @@ func baseConfig() *config.Config {
 		Host: "127.0.0.1",
 		Port: 0,
 		Auth: config.AuthConfig{Mode: "none"},
-		TLS:  config.TLSConfig{Enabled: false},
 		Profiles: map[string]config.Profile{
 			"test": {Command: "echo test"},
 		},
