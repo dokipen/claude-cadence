@@ -371,6 +371,9 @@ export function registerTicketCommand(program: Command): void {
       const spinner = ora("Fetching ticket...").start();
       try {
         const client = getClient();
+        // Intentionally NOT using resolveTicketId here: view fetches the full
+        // ticket directly by number in a single query, avoiding a two-round-trip
+        // resolve-then-fetch pattern.
         const isNumber = /^\d+$/.test(id);
 
         type TicketDetail = {
@@ -622,7 +625,7 @@ export function registerTicketCommand(program: Command): void {
         spinner.succeed("Ticket updated");
         const t = data.updateTicket;
         console.log();
-        console.log(`  ${chalk.bold(`#${t.id}`)}  ${t.title}`);
+        console.log(`  ${chalk.bold(`#${t.number}`)}  ${t.title}`);
         console.log(`  State: ${formatState(t.state)}  Priority: ${formatPriority(t.priority)}`);
         if (t.storyPoints != null) {
           console.log(`  Story Points: ${chalk.magenta(String(t.storyPoints))}`);
