@@ -25,6 +25,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
+          cache-dependency-path: services/issues/package-lock.json
       - run: npm ci
       - run: npx prisma generate
       - run: npm run typecheck
@@ -39,6 +41,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
+          cache-dependency-path: |
+            services/issues/package-lock.json
+            services/issues-cli/package-lock.json
       - name: Build issues service
         run: cd services/issues && npm ci && npx prisma generate && npm run build
       - name: Test CLI
