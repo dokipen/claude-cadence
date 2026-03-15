@@ -103,6 +103,16 @@ An issue is refined when it has ALL of:
 
 GitHub uses labels (`estimate:5`). Issues API uses story points (`--points 5`).
 
+### Priority Scale
+
+| Label | Description |
+|-------|-------------|
+| priority:high | Blocking other work, critical bug, or security issue |
+| priority:medium | Normal feature work or non-critical bugs |
+| priority:low | Nice-to-have improvements, minor cleanup, deferred review findings |
+
+GitHub uses labels (`priority:medium`). Issues API uses the priority field (`--priority N`).
+
 ### Title Conventions
 
 Example: `Add achievements` + `enhancement` label

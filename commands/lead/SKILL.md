@@ -263,4 +263,5 @@ Specialists should conclude with one of:
 When agents discover out-of-scope issues:
 - Create a NEW issue (not scope creep)
 - Label with `agent-discovered`
+- Assign a priority label (`priority:high`, `priority:medium`, or `priority:low`) — default to `priority:low` unless the finding warrants higher
 - Continue with original work
