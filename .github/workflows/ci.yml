@@ -124,21 +124,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check CI status
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          ISSUES_TEST: ${{ needs.issues-service-test.result }}
+          ISSUES_CLI: ${{ needs.issues-cli-test.result }}
+          ISSUES_DOCKER: ${{ needs.issues-service-docker.result }}
+          AGENT_TEST: ${{ needs.agent-service-test.result }}
+          AGENT_BUILD: ${{ needs.agent-service-build.result }}
         run: |
-          echo "Issues service: ${{ needs.issues-service-test.result }}"
-          echo "Issues CLI: ${{ needs.issues-cli-test.result }}"
-          echo "Issues Docker: ${{ needs.issues-service-docker.result }}"
-          echo "Agent service: ${{ needs.agent-service-test.result }}"
-          echo "Agent build: ${{ needs.agent-service-build.result }}"
+          echo "Changes:        $CHANGES"
+          echo "Issues service: $ISSUES_TEST"
+          echo "Issues CLI:     $ISSUES_CLI"
+          echo "Issues Docker:  $ISSUES_DOCKER"
+          echo "Agent service:  $AGENT_TEST"
+          echo "Agent build:    $AGENT_BUILD"
 
           # Fail if any job failed or was cancelled (skipped is OK — means path filter excluded it)
-          for result in \
-            "${{ needs.changes.result }}" \
-            "${{ needs.issues-service-test.result }}" \
-            "${{ needs.issues-cli-test.result }}" \
-            "${{ needs.issues-service-docker.result }}" \
-            "${{ needs.agent-service-test.result }}" \
-            "${{ needs.agent-service-build.result }}"; do
+          for result in "$CHANGES" "$ISSUES_TEST" "$ISSUES_CLI" "$ISSUES_DOCKER" "$AGENT_TEST" "$AGENT_BUILD"; do
             if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
               echo "::error::One or more CI jobs failed or were cancelled"
               exit 1
