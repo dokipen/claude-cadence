@@ -52,7 +52,7 @@ If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, 
 
    **Issues API:**
    ```bash
-   issues ticket view [NUMBER] --project $PROJECT_ID
+   issues ticket view [NUMBER] --project $PROJECT_ID --json
    ```
 
 3. **If no issue exists**: Create one with a descriptive title and initial context:
@@ -92,9 +92,9 @@ If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, 
 
    **Issues API:**
    ```bash
-   issues ticket view [NUMBER] --project $PROJECT_ID
+   issues ticket view [NUMBER] --project $PROJECT_ID --json
    ```
-   If the state is not `REFINED` (or later), run `/refine [NUMBER]` before proceeding.
+   If the `state` field is not `REFINED` (or later), run `/refine [NUMBER]` before proceeding.
 
 5. **Check if work is already complete**:
    Before claiming, delegate to an appropriate specialist to verify the work isn't already done.

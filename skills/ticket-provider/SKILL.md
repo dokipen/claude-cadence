@@ -65,10 +65,12 @@ When `provider: issues-api`, use the `issues` CLI. Refer to the `issues-api` ski
 | Remove label | `issues label remove TICKET_ID --label LABEL_ID` |
 | Comment | `issues comment add TICKET_ID --body "..."` |
 | Close ticket | `issues ticket transition TICKET_ID --to CLOSED` |
-| Check blockers | `issues ticket view N --project $PROJECT_ID` (inspect `blockedBy` in output) |
-| Check state | `issues ticket view N --project $PROJECT_ID` (inspect `State` in output) |
-| Check assignee | `issues ticket view N --project $PROJECT_ID` (inspect `Assignee` in output) |
-| Check estimate | `issues ticket view N --project $PROJECT_ID` (inspect `Story Points` in output) |
+| Check blockers | `issues ticket view N --project $PROJECT_ID --json` (read `blockedBy` array) |
+| Check state | `issues ticket view N --project $PROJECT_ID --json` (read `state` field) |
+| Check assignee | `issues ticket view N --project $PROJECT_ID --json` (read `assignee` field) |
+| Check estimate | `issues ticket view N --project $PROJECT_ID --json` (read `storyPoints` field) |
+
+**Tip:** Use `--json` on any command to get structured output for programmatic parsing. See the `issues-api` skill for details.
 
 ## Concept Mapping
 
@@ -80,7 +82,7 @@ The two providers use different terminology in some areas:
 | State | `open` / `closed` | `BACKLOG` / `REFINED` / `IN_PROGRESS` / `CLOSED` |
 | Estimate | Label (`estimate:5`) | Story points field (`--points 5`) |
 | Priority | Not native (use labels) | Native field (`--priority HIGH`) |
-| Labels | By name | By ID (use `issues label list` to look up) |
+| Labels | By name | By ID (use `issues label list --json` to look up) |
 | Claim/start work | Add `in-progress` label | Transition to `IN_PROGRESS` |
 | Mark refined | Add `refined` label | Transition to `REFINED` |
 | Blocking | GitHub dependencies API | `issues block add/remove --blocker X --blocked Y` |

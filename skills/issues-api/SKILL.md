@@ -216,6 +216,31 @@ issues auth whoami
 issues auth logout
 ```
 
+## JSON Output
+
+All commands (except `auth`) support a `--json` flag that outputs raw JSON instead of formatted text. Use `--json` when parsing output programmatically.
+
+```bash
+# Get ticket data as JSON
+issues ticket view 42 --project PROJECT_ID --json
+
+# List tickets as JSON (includes pagination info)
+issues ticket list --project PROJECT_ID --json
+
+# Create and get structured response
+issues ticket create --project PROJECT_ID --title "Title" --json
+
+# Get label list as JSON array
+issues label list --json
+```
+
+When `--json` is used:
+- Output is valid JSON written to stdout (no spinner text, no ANSI codes)
+- The JSON structure matches the GraphQL response data
+- Errors still go to stderr in plain text
+
+**Best practice for agents:** Always use `--json` when you need to extract specific fields from command output. Parse with `jq` or read the JSON directly.
+
 ## Data Model Notes
 
 ### States

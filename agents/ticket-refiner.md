@@ -49,11 +49,11 @@ A refined ticket must have ALL of the following:
 |-----------|--------------|------------|
 | Clear title | Manual review | Manual review |
 | Acceptance criteria | Manual review | Manual review |
-| Estimate | `gh issue view N --json labels --jq '.labels[].name \| select(startswith("estimate:"))'` | `issues ticket view N --project $PROJECT_ID` (check Story Points field) |
-| Priority | `gh issue view N --json labels --jq '.labels[].name \| select(startswith("priority:"))'` | `issues ticket view N --project $PROJECT_ID` (check Priority field) |
-| Type label | `gh issue view N --json labels --jq '.labels[].name \| select(. == "bug" or . == "enhancement" or . == "documentation" or . == "testing" or . == "performance")'` | `issues ticket view N --project $PROJECT_ID` (check labels) |
-| Assigned | `gh issue view N --json assignees --jq '.assignees[].login'` | `issues ticket view N --project $PROJECT_ID` (check Assignee field) |
-| Blockers linked (if any) | Check via GitHub dependencies API | `issues ticket view N --project $PROJECT_ID` (check Blocked By section) |
+| Estimate | `gh issue view N --json labels --jq '.labels[].name \| select(startswith("estimate:"))'` | `issues ticket view N --project $PROJECT_ID --json` (read `storyPoints` field) |
+| Priority | `gh issue view N --json labels --jq '.labels[].name \| select(startswith("priority:"))'` | `issues ticket view N --project $PROJECT_ID --json` (read `priority` field) |
+| Type label | `gh issue view N --json labels --jq '.labels[].name \| select(. == "bug" or . == "enhancement" or . == "documentation" or . == "testing" or . == "performance")'` | `issues ticket view N --project $PROJECT_ID --json` (read `labels` array) |
+| Assigned | `gh issue view N --json assignees --jq '.assignees[].login'` | `issues ticket view N --project $PROJECT_ID --json` (read `assignee` field) |
+| Blockers linked (if any) | Check via GitHub dependencies API | `issues ticket view N --project $PROJECT_ID --json` (read `blockedBy` array) |
 | Blocked status correct | See "Blocked Label Logic" below | Enforced via state machine (no label needed) |
 
 ### Issues API Native Fields
@@ -62,9 +62,9 @@ When using `issues-api`, also verify and set these native fields:
 
 | Field | Check | Update Command |
 |-------|-------|----------------|
-| State | `issues ticket view N --project $PROJECT_ID` (State field) | `issues ticket transition TICKET_ID --to REFINED` |
-| Story Points | `issues ticket view N --project $PROJECT_ID` (Story Points field) | `issues ticket update TICKET_ID --points X` |
-| Priority | `issues ticket view N --project $PROJECT_ID` (Priority field) | `issues ticket update TICKET_ID --priority X` |
+| State | `issues ticket view N --project $PROJECT_ID --json` (read `state`) | `issues ticket transition TICKET_ID --to REFINED` |
+| Story Points | `issues ticket view N --project $PROJECT_ID --json` (read `storyPoints`) | `issues ticket update TICKET_ID --points X` |
+| Priority | `issues ticket view N --project $PROJECT_ID --json` (read `priority`) | `issues ticket update TICKET_ID --priority X` |
 
 After refinement with `issues-api`, transition the ticket state from `BACKLOG` to `REFINED`.
 
@@ -99,7 +99,7 @@ When assessing priority, consider: Does this block other work? Is there a securi
 ## Review Process
 
 1. **Detect the ticket provider** from the project's `CLAUDE.md`
-2. **Read the ticket** using `gh issue view N` (GitHub) or `issues ticket view N --project $PROJECT_ID` (issues-api)
+2. **Read the ticket** using `gh issue view N` (GitHub) or `issues ticket view N --project $PROJECT_ID --json` (issues-api)
 3. **Check each criterion** using the provider-appropriate commands above
 4. **Evaluate acceptance criteria quality** — specific, testable, checkbox format?
 5. **Evaluate title** — clear and descriptive?

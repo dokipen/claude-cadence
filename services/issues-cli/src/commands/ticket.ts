@@ -274,6 +274,7 @@ interface CreateOptions {
   project?: string;
   points?: string;
   priority?: string;
+  json?: boolean;
 }
 
 interface ListOptions {
@@ -285,11 +286,13 @@ interface ListOptions {
   project?: string;
   limit?: string;
   after?: string;
+  json?: boolean;
 }
 
 interface TransitionOptions {
   to: string;
   project?: string;
+  json?: boolean;
 }
 
 interface UpdateOptions {
@@ -299,6 +302,7 @@ interface UpdateOptions {
   points?: string;
   priority?: string;
   project?: string;
+  json?: boolean;
 }
 
 export function registerTicketCommand(program: Command): void {
@@ -316,6 +320,7 @@ export function registerTicketCommand(program: Command): void {
     .option("--assignee <id>", "Assignee user ID")
     .option("--points <points>", "Story points")
     .option("--priority <priority>", "Priority (HIGHEST, HIGH, MEDIUM, LOW, LOWEST)")
+    .option("--json", "Output raw JSON")
     .action(async (opts: CreateOptions) => {
       const spinner = ora("Creating ticket...").start();
       try {
@@ -346,6 +351,12 @@ export function registerTicketCommand(program: Command): void {
           };
         }>(CREATE_TICKET, { input });
 
+        if (opts.json) {
+          spinner.stop();
+          console.log(JSON.stringify(data.createTicket, null, 2));
+          return;
+        }
+
         spinner.succeed("Ticket created");
         const t = data.createTicket;
         console.log();
@@ -369,7 +380,8 @@ export function registerTicketCommand(program: Command): void {
     .command("view <id>")
     .description("View ticket details (accepts ticket number or CUID)")
     .option("--project <id>", "Project ID (inferred from git origin if omitted)")
-    .action(async (id: string, opts: { project?: string }) => {
+    .option("--json", "Output raw JSON")
+    .action(async (id: string, opts: { project?: string; json?: boolean }) => {
       const spinner = ora("Fetching ticket...").start();
       try {
         const client = getClient();
@@ -421,6 +433,11 @@ export function registerTicketCommand(program: Command): void {
         if (!t) {
           console.error(chalk.red(`Ticket #${id} not found`));
           process.exit(1);
+        }
+
+        if (opts.json) {
+          console.log(JSON.stringify(t, null, 2));
+          return;
         }
 
         console.log();
@@ -507,6 +524,7 @@ export function registerTicketCommand(program: Command): void {
     .option("--project <id>", "Filter by project ID (inferred from git origin if omitted)")
     .option("-l, --limit <count>", "Max number of tickets to return", "100")
     .option("--after <cursor>", "Cursor for pagination")
+    .option("--json", "Output raw JSON")
     .action(async (opts: ListOptions) => {
       const limit = parseInt(opts.limit ?? "100", 10);
       if (!Number.isFinite(limit) || limit <= 0) {
@@ -562,6 +580,11 @@ export function registerTicketCommand(program: Command): void {
 
         spinner.stop();
 
+        if (opts.json) {
+          console.log(JSON.stringify(data.tickets, null, 2));
+          return;
+        }
+
         const { edges, pageInfo } = data.tickets;
 
         if (edges.length === 0) {
@@ -598,6 +621,7 @@ export function registerTicketCommand(program: Command): void {
     .option("--acceptance-criteria <criteria>", "New acceptance criteria")
     .option("--points <points>", "New story points")
     .option("--priority <priority>", "New priority (HIGHEST, HIGH, MEDIUM, LOW, LOWEST)")
+    .option("--json", "Output raw JSON")
     .action(async (id: string, opts: UpdateOptions) => {
       const input: Record<string, unknown> = {};
       if (opts.title) input.title = opts.title;
@@ -631,6 +655,12 @@ export function registerTicketCommand(program: Command): void {
           };
         }>(UPDATE_TICKET, { id: resolvedId, input });
 
+        if (opts.json) {
+          spinner.stop();
+          console.log(JSON.stringify(data.updateTicket, null, 2));
+          return;
+        }
+
         spinner.succeed("Ticket updated");
         const t = data.updateTicket;
         console.log();
@@ -652,6 +682,7 @@ export function registerTicketCommand(program: Command): void {
     .description("Transition a ticket to a new state")
     .option("--project <id>", "Project ID (required when using ticket number)")
     .requiredOption("--to <state>", "Target state (BACKLOG, REFINED, IN_PROGRESS, CLOSED)")
+    .option("--json", "Output raw JSON")
     .action(async (id: string, opts: TransitionOptions) => {
       const spinner = ora("Transitioning ticket...").start();
       try {
@@ -666,6 +697,12 @@ export function registerTicketCommand(program: Command): void {
             priority: string;
           };
         }>(TRANSITION_TICKET, { id: resolvedId, to: opts.to });
+
+        if (opts.json) {
+          spinner.stop();
+          console.log(JSON.stringify(data.transitionTicket, null, 2));
+          return;
+        }
 
         spinner.succeed("Ticket transitioned");
         const t = data.transitionTicket;
