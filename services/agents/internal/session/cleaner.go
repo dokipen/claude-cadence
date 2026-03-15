@@ -2,6 +2,7 @@ package session
 
 import (
 	"log/slog"
+	"sync"
 	"time"
 )
 
@@ -12,6 +13,7 @@ type Cleaner struct {
 	interval time.Duration
 	stopCh   chan struct{}
 	doneCh   chan struct{}
+	once     sync.Once
 }
 
 // NewCleaner creates a Cleaner that will destroy stopped sessions older than ttl,
@@ -32,13 +34,18 @@ func (c *Cleaner) Start() {
 }
 
 // Stop signals the cleaner to stop and waits for it to finish.
+// Safe to call multiple times.
 func (c *Cleaner) Stop() {
-	close(c.stopCh)
+	c.once.Do(func() { close(c.stopCh) })
 	<-c.doneCh
 }
 
 func (c *Cleaner) run() {
 	defer close(c.doneCh)
+
+	// Run an initial cleanup pass immediately to handle sessions that became
+	// stale before the daemon restarted.
+	c.cleanup()
 
 	ticker := time.NewTicker(c.interval)
 	defer ticker.Stop()

@@ -355,6 +355,12 @@ func (m *Manager) Destroy(id string, force bool) error {
 // tracked in the in-memory store. This handles daemon restarts where the store
 // was lost but tmux sessions survived. Recovered sessions are added to the
 // store with correct RUNNING/STOPPED state based on process liveness.
+//
+// Recovered sessions have an empty AgentProfile since the original profile
+// cannot be determined from tmux alone. They will not appear in
+// profile-filtered List calls.
+//
+// This must be called before the server starts accepting connections.
 func (m *Manager) RecoverSessions() (int, error) {
 	tmuxSessions, err := m.tmux.ListSessions()
 	if err != nil {
@@ -371,6 +377,12 @@ func (m *Manager) RecoverSessions() (int, error) {
 	now := time.Now()
 	for _, tmuxName := range tmuxSessions {
 		if tracked[tmuxName] {
+			continue
+		}
+
+		// Skip sessions with names that don't match agentd naming conventions.
+		if !tmuxNameRe.MatchString(tmuxName) {
+			slog.Debug("skipping non-agentd tmux session during recovery", "name", tmuxName)
 			continue
 		}
 

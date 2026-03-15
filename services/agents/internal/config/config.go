@@ -198,6 +198,10 @@ func validate(cfg *Config) error {
 	}
 
 	// Auth mode validation.
+	if cfg.Cleanup.CheckInterval <= 0 {
+		return fmt.Errorf("cleanup.check_interval must be positive")
+	}
+
 	switch cfg.Auth.Mode {
 	case "none":
 		// ok
