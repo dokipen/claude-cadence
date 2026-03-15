@@ -4,6 +4,7 @@ import chalk from "chalk";
 import ora from "ora";
 import { getClient } from "../client.js";
 import { handleError } from "../errors.js";
+import { resolveProjectId } from "../project-resolver.js";
 
 // --- GraphQL Documents ---
 
@@ -130,11 +131,12 @@ export function registerProjectCommand(program: Command): void {
   // --- view ---
   project
     .command("view <id>")
-    .description("View project details")
+    .description("View project details (accepts project name or ID)")
     .option("--json", "Output raw JSON")
     .action(async (id: string, opts: { json?: boolean }) => {
       const spinner = ora("Fetching project...").start();
       try {
+        const resolvedId = await resolveProjectId(id);
         const client = getClient();
         const data = await client.request<{
           project: {
@@ -144,7 +146,7 @@ export function registerProjectCommand(program: Command): void {
             createdAt: string;
             updatedAt: string;
           } | null;
-        }>(GET_PROJECT, { id });
+        }>(GET_PROJECT, { id: resolvedId });
 
         spinner.stop();
 
@@ -173,7 +175,7 @@ export function registerProjectCommand(program: Command): void {
   // --- update ---
   project
     .command("update <id>")
-    .description("Update a project")
+    .description("Update a project (accepts project name or ID)")
     .option("--name <name>", "New name")
     .option("--repository <repository>", "New repository")
     .option("--json", "Output raw JSON")
@@ -191,10 +193,11 @@ export function registerProjectCommand(program: Command): void {
 
       const spinner = ora("Updating project...").start();
       try {
+        const resolvedId = await resolveProjectId(id);
         const client = getClient();
         const data = await client.request<{
           updateProject: { id: string; name: string; repository: string; updatedAt: string };
-        }>(UPDATE_PROJECT, { id, input });
+        }>(UPDATE_PROJECT, { id: resolvedId, input });
 
         if (opts.json) {
           spinner.stop();

@@ -313,7 +313,7 @@ export function registerTicketCommand(program: Command): void {
     .command("create")
     .description("Create a new ticket")
     .requiredOption("--title <title>", "Ticket title")
-    .option("--project <id>", "Project ID (inferred from git origin if omitted)")
+    .option("--project <project>", "Project name or ID (inferred from git origin if omitted)")
     .option("--description <description>", "Ticket description")
     .option("--acceptance-criteria <criteria>", "Acceptance criteria")
     .option("--labels <ids>", "Comma-separated label IDs")
@@ -324,8 +324,8 @@ export function registerTicketCommand(program: Command): void {
     .action(async (opts: CreateOptions) => {
       const spinner = ora("Creating ticket...").start();
       try {
-        const projectId = await resolveProjectId(opts.project);
         const client = getClient();
+        const projectId = await resolveProjectId(opts.project);
         const input: Record<string, unknown> = {
           title: opts.title,
           projectId,
@@ -379,7 +379,7 @@ export function registerTicketCommand(program: Command): void {
   ticket
     .command("view <id>")
     .description("View ticket details (accepts ticket number or CUID)")
-    .option("--project <id>", "Project ID (inferred from git origin if omitted)")
+    .option("--project <project>", "Project name or ID (inferred from git origin if omitted)")
     .option("--json", "Output raw JSON")
     .action(async (id: string, opts: { project?: string; json?: boolean }) => {
       const spinner = ora("Fetching ticket...").start();
@@ -521,7 +521,7 @@ export function registerTicketCommand(program: Command): void {
     .option("--assignee <login>", "Filter by assignee login")
     .option("--blocked", "Filter to only blocked tickets")
     .option("--priority <priority>", "Filter by priority (HIGHEST, HIGH, MEDIUM, LOW, LOWEST)")
-    .option("--project <id>", "Filter by project ID (inferred from git origin if omitted)")
+    .option("--project <project>", "Filter by project name or ID (inferred from git origin if omitted)")
     .option("-l, --limit <count>", "Max number of tickets to return", "100")
     .option("--after <cursor>", "Cursor for pagination")
     .option("--json", "Output raw JSON")
@@ -534,14 +534,13 @@ export function registerTicketCommand(program: Command): void {
       }
       const spinner = ora("Fetching tickets...").start();
       try {
-        // Try to infer project if not explicitly provided
-        let projectId = opts.project;
-        if (!projectId) {
-          try {
-            projectId = await resolveProjectId(undefined);
-          } catch {
-            // Inference is best-effort for list — continue without project filter
-          }
+        // Resolve project: explicit name/ID takes precedence, otherwise infer from git origin
+        let projectId: string | undefined;
+        try {
+          projectId = await resolveProjectId(opts.project);
+        } catch (e) {
+          if (opts.project) throw e; // Re-throw if user explicitly provided a project
+          // Inference is best-effort for list — continue without project filter
         }
 
         const client = getClient();
@@ -616,7 +615,7 @@ export function registerTicketCommand(program: Command): void {
     .command("update <id>")
     .alias("edit")
     .description("Update a ticket")
-    .option("--project <id>", "Project ID (required when using ticket number)")
+    .option("--project <project>", "Project name or ID (required when using ticket number)")
     .option("--title <title>", "New title")
     .option("--description <description>", "New description")
     .option("--acceptance-criteria <criteria>", "New acceptance criteria")
@@ -681,7 +680,7 @@ export function registerTicketCommand(program: Command): void {
   ticket
     .command("transition <id>")
     .description("Transition a ticket to a new state")
-    .option("--project <id>", "Project ID (required when using ticket number)")
+    .option("--project <project>", "Project name or ID (required when using ticket number)")
     .requiredOption("--to <state>", "Target state (BACKLOG, REFINED, IN_PROGRESS, CLOSED)")
     .option("--json", "Output raw JSON")
     .action(async (id: string, opts: TransitionOptions) => {

@@ -14,6 +14,10 @@ export const projectResolvers = {
       return prisma.project.findUnique({ where: { id } });
     },
 
+    projectByName: async (_: unknown, { name }: { name: string }, { prisma }: Context) => {
+      return prisma.project.findUnique({ where: { name } });
+    },
+
     projects: async (_: unknown, __: unknown, { prisma }: Context) => {
       return prisma.project.findMany({ orderBy: { name: "asc" } });
     },

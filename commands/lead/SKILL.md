@@ -24,7 +24,7 @@ Detect the provider from the project's `CLAUDE.md` before performing any ticket 
 
 ```bash
 PROVIDER=$(grep -A3 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'provider:' | tail -1 | awk '{print $2}' || echo "github")
-PROJECT_ID=$(grep -A4 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'project_id:' | tail -1 | awk '{print $2}')
+PROJECT=$(grep -A4 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'project_id:' | tail -1 | awk '{print $2}')
 ```
 
 If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, use `issues` CLI commands. **PR operations always use `gh` CLI regardless of provider.**
@@ -40,7 +40,7 @@ If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, 
 
    **Issues API:**
    ```bash
-   issues ticket list --project $PROJECT_ID --label "[relevant label]"
+   issues ticket list --project $PROJECT --label "[relevant label]"
    ```
 
 2. **If issue exists**: Verify it has clear acceptance criteria
@@ -52,7 +52,7 @@ If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, 
 
    **Issues API:**
    ```bash
-   issues ticket view [NUMBER] --project $PROJECT_ID --json
+   issues ticket view [NUMBER] --project $PROJECT --json
    ```
 
 3. **If no issue exists**: Create one with a descriptive title and initial context:
@@ -72,7 +72,7 @@ If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, 
    **Issues API:**
    ```bash
    issues ticket create \
-     --project $PROJECT_ID \
+     --project $PROJECT \
      --title "Descriptive title" \
      --labels "BUG_LABEL_ID" \
      --description "## Description
@@ -92,7 +92,7 @@ If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, 
 
    **Issues API:**
    ```bash
-   issues ticket view [NUMBER] --project $PROJECT_ID --json
+   issues ticket view [NUMBER] --project $PROJECT --json
    ```
    If the `state` field is not `REFINED` (or later), run `/refine [NUMBER]` before proceeding.
 
