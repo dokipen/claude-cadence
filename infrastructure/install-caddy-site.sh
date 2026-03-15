@@ -21,6 +21,11 @@ reloaded. Requires sudo for writing to ${CONF_DIR}.
 EOF
 }
 
+# --- Prerequisites ---
+
+command -v caddy >/dev/null 2>&1 || err "caddy is not installed"
+command -v systemctl >/dev/null 2>&1 || err "systemctl not found — this script requires systemd"
+
 hostname="${1:-}"
 if [ -z "$hostname" ]; then
   usage
@@ -30,6 +35,16 @@ fi
 # Validate hostname (basic check — letters, digits, hyphens, dots)
 if ! printf '%s' "$hostname" | grep -qE '^[a-zA-Z0-9.-]+$'; then
   err "Invalid hostname: $hostname"
+fi
+
+# Verify conf.d is imported by the main Caddyfile
+if [ -f /etc/caddy/Caddyfile ]; then
+  if ! grep -q "import.*/etc/caddy/conf\.d/" /etc/caddy/Caddyfile 2>/dev/null && \
+     ! grep -q "import.*conf\.d/" /etc/caddy/Caddyfile 2>/dev/null; then
+    err "/etc/caddy/Caddyfile does not import from ${CONF_DIR} — add 'import ${CONF_DIR}/*' first"
+  fi
+else
+  err "/etc/caddy/Caddyfile not found"
 fi
 
 config="$(cat <<EOF
@@ -65,18 +80,18 @@ EOF
 target="${CONF_DIR}/${SITE_FILE}"
 
 log "Installing Caddy site block for ${hostname}..."
+sudo mkdir -p "$CONF_DIR"
 printf '%s\n' "$config" | sudo tee "$target" > /dev/null
 sudo chmod 644 "$target"
 
 log "Validating Caddy config..."
-if ! sudo caddy validate --config /etc/caddy/Caddyfile 2>&1 | tail -1 | grep -q "Valid"; then
+if ! sudo caddy validate --config /etc/caddy/Caddyfile 2>&1 | grep -q "Valid configuration"; then
   err "Caddy config validation failed — check ${target}"
 fi
 
 log "Reloading Caddy..."
 sudo systemctl reload caddy
 
-log ""
 log "Done! Services available at:"
 log "  https://${hostname}/graphql  — Issues GraphQL API"
 log "  https://${hostname}/agents/  — Agents gRPC endpoint"
