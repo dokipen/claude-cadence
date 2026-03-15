@@ -191,7 +191,8 @@ systemd_status() {
 
 sanitize_output() {
   # Strip ANSI escape codes and truncate to a single line (max 200 chars)
-  sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' | head -c 200 | tr '\n' ' '
+  # Use $'\033' (ANSI-C quoting) for portability across BSD and GNU sed
+  sed $'s/\033\\[[0-9;]*[a-zA-Z]//g' | head -c 200 | tr '\n' ' '
 }
 
 install_cli() {
@@ -203,7 +204,7 @@ install_cli() {
     # privileges on Linux. Try without sudo first, fall back to sudo.
     local link_err
     link_err=$(mktemp)
-    trap 'rm -f "$link_err"' RETURN
+    trap 'rm -f "$link_err"' RETURN EXIT
     if (cd "$cli_dir" && npm link 2>"$link_err"); then
       :
     elif command -v sudo >/dev/null 2>&1; then
