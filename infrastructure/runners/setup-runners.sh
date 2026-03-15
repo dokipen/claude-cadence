@@ -111,15 +111,15 @@ done
 
 # --- Input validation ---
 
-[[ -z "$REPO" ]] && error "Missing required option: --repo OWNER/REPO"
-[[ ! "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] && error "Invalid repo format: '$REPO'. Expected OWNER/REPO."
-[[ ! "$COUNT" =~ ^[1-9][0-9]*$ ]] && error "Invalid count: '$COUNT'. Must be a positive integer."
-[[ ! "$RUNNER_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] && error "Invalid user name: '$RUNNER_USER'. Must match [a-z_][a-z0-9_-]{0,31}."
+if [[ -z "$REPO" ]]; then error "Missing required option: --repo OWNER/REPO"; fi
+if [[ ! "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then error "Invalid repo format: '$REPO'. Expected OWNER/REPO."; fi
+if [[ ! "$COUNT" =~ ^[1-9][0-9]*$ ]]; then error "Invalid count: '$COUNT'. Must be a positive integer."; fi
+if [[ ! "$RUNNER_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; then error "Invalid user name: '$RUNNER_USER'. Must match [a-z_][a-z0-9_-]{0,31}."; fi
 if [[ -n "$LABELS" ]]; then
-    [[ ! "$LABELS" =~ ^[A-Za-z0-9_.,:-]+$ ]] && error "Invalid labels: '$LABELS'. Only alphanumeric, comma, period, colon, hyphen, and underscore allowed."
+    if [[ ! "$LABELS" =~ ^[A-Za-z0-9_.,:-]+$ ]]; then error "Invalid labels: '$LABELS'. Only alphanumeric, comma, period, colon, hyphen, and underscore allowed."; fi
 fi
 if [[ "$RUNNER_VERSION" != "latest" ]]; then
-    [[ ! "$RUNNER_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && error "Invalid runner version: '$RUNNER_VERSION'. Expected semver (e.g., 2.321.0)."
+    if [[ ! "$RUNNER_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then error "Invalid runner version: '$RUNNER_VERSION'. Expected semver (e.g., 2.321.0)."; fi
 fi
 
 # Detect platform and set defaults
@@ -156,9 +156,10 @@ fi
 case "$BASE_DIR" in
     *..*)  error "Invalid base-dir: '$BASE_DIR'. Path traversal not allowed." ;;
 esac
-[[ "$BASE_DIR" != /* ]] && error "Invalid base-dir: '$BASE_DIR'. Must be an absolute path."
+if [[ "$BASE_DIR" != /* ]]; then error "Invalid base-dir: '$BASE_DIR'. Must be an absolute path."; fi
 
 HOSTNAME_PREFIX="$(hostname -s)"
+if [[ ! "$HOSTNAME_PREFIX" =~ ^[A-Za-z0-9-]+$ ]]; then error "Unexpected hostname format: '$HOSTNAME_PREFIX'. Only alphanumeric and hyphen allowed."; fi
 
 # --- Prerequisites ---
 
@@ -221,6 +222,7 @@ resolve_runner_version() {
             info "Using placeholder version $RUNNER_VERSION for dry-run."
         else
             RUNNER_VERSION=$(gh api repos/actions/runner/releases/latest --jq '.tag_name' | sed 's/^v//')
+            if [[ ! "$RUNNER_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then error "Unexpected runner version format from API: '$RUNNER_VERSION'"; fi
             info "Latest runner version: $RUNNER_VERSION"
         fi
     fi
@@ -235,7 +237,7 @@ fetch_registration_token() {
         info "Using placeholder token for dry-run."
     else
         REG_TOKEN=$(gh api "repos/$REPO/actions/runners/registration-token" --method POST --jq '.token')
-        [[ -z "$REG_TOKEN" ]] && error "Failed to fetch registration token. Is 'gh' authenticated with admin access?"
+        if [[ -z "$REG_TOKEN" ]]; then error "Failed to fetch registration token. Is 'gh' authenticated with admin access?"; fi
     fi
 }
 
@@ -247,15 +249,19 @@ is_service_running() {
         if [[ -f "$runner_dir/.service" ]]; then
             local svc_name
             svc_name=$(cat "$runner_dir/.service")
-            [[ "$svc_name" =~ ^[A-Za-z0-9_.@-]+$ ]] && systemctl is-active "$svc_name" >/dev/null 2>&1
-            return $?
+            if [[ "$svc_name" =~ ^[A-Za-z0-9_.@-]+$ ]]; then
+                systemctl is-active "$svc_name" >/dev/null 2>&1
+                return $?
+            fi
         fi
     elif [[ "$OS" == "darwin" ]]; then
         if [[ -f "$runner_dir/.service" ]]; then
             local svc_name
             svc_name=$(cat "$runner_dir/.service")
-            [[ "$svc_name" =~ ^[A-Za-z0-9_.@-]+$ ]] && launchctl list "$svc_name" >/dev/null 2>&1
-            return $?
+            if [[ "$svc_name" =~ ^[A-Za-z0-9_.@-]+$ ]]; then
+                launchctl list "$svc_name" >/dev/null 2>&1
+                return $?
+            fi
         fi
     fi
     return 1
@@ -373,7 +379,7 @@ main() {
     info "  Base:      $BASE_DIR"
     info "  Labels:    $LABELS"
     info "  Platform:  $OS/$RUNNER_ARCH"
-    [[ "$DRY_RUN" == "true" ]] && info "  Mode:      DRY RUN"
+    if [[ "$DRY_RUN" == "true" ]]; then info "  Mode:      DRY RUN"; fi
     echo
     resolve_runner_version
     fetch_registration_token

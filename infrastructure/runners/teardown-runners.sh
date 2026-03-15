@@ -81,9 +81,9 @@ done
 
 # --- Input validation ---
 
-[[ -z "$REPO" ]] && error "Missing required option: --repo OWNER/REPO"
-[[ ! "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] && error "Invalid repo format: '$REPO'. Expected OWNER/REPO."
-[[ ! "$RUNNER_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] && error "Invalid user name: '$RUNNER_USER'. Must match [a-z_][a-z0-9_-]{0,31}."
+if [[ -z "$REPO" ]]; then error "Missing required option: --repo OWNER/REPO"; fi
+if [[ ! "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then error "Invalid repo format: '$REPO'. Expected OWNER/REPO."; fi
+if [[ ! "$RUNNER_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; then error "Invalid user name: '$RUNNER_USER'. Must match [a-z_][a-z0-9_-]{0,31}."; fi
 
 detect_platform
 
@@ -91,15 +91,15 @@ REPO_NAME="${REPO#*/}"
 
 if [[ "$OS" == "darwin" ]]; then
     RUNNER_USER="$(whoami)"
-    [[ -z "$BASE_DIR" ]] && BASE_DIR="$HOME/actions-runner"
+    if [[ -z "$BASE_DIR" ]]; then BASE_DIR="$HOME/actions-runner"; fi
 else
-    [[ -z "$BASE_DIR" ]] && BASE_DIR="/home/$RUNNER_USER"
+    if [[ -z "$BASE_DIR" ]]; then BASE_DIR="/home/$RUNNER_USER"; fi
 fi
 
 case "$BASE_DIR" in
     *..*)  error "Invalid base-dir: '$BASE_DIR'. Path traversal not allowed." ;;
 esac
-[[ "$BASE_DIR" != /* ]] && error "Invalid base-dir: '$BASE_DIR'. Must be an absolute path."
+if [[ "$BASE_DIR" != /* ]]; then error "Invalid base-dir: '$BASE_DIR'. Must be an absolute path."; fi
 
 # --- Fetch removal token ---
 
@@ -110,7 +110,7 @@ fetch_removal_token() {
         info "Using placeholder token for dry-run."
     else
         REMOVE_TOKEN=$(gh api "repos/$REPO/actions/runners/remove-token" --method POST --jq '.token')
-        [[ -z "$REMOVE_TOKEN" ]] && error "Failed to fetch removal token. Is 'gh' authenticated with admin access?"
+        if [[ -z "$REMOVE_TOKEN" ]]; then error "Failed to fetch removal token. Is 'gh' authenticated with admin access?"; fi
     fi
 }
 
@@ -192,7 +192,7 @@ main() {
     info "  User:     $RUNNER_USER"
     info "  Base:     $BASE_DIR"
     info "  Platform: $OS"
-    [[ "$DRY_RUN" == "true" ]] && info "  Mode:     DRY RUN"
+    if [[ "$DRY_RUN" == "true" ]]; then info "  Mode:     DRY RUN"; fi
     echo
 
     # Find runner directories for this repo using find to avoid glob word-splitting
