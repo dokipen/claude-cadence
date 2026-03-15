@@ -12,7 +12,7 @@ Caddy provides a single entry point for the Claude Cadence backend services with
 | Path | Upstream | Protocol |
 |------|----------|----------|
 | `/graphql` | `localhost:4000` | HTTP — Issues service (GraphQL) |
-| `/agents/*` | `localhost:4141` | gRPC (h2c) — Agent service |
+| `/agents.v1.*` | `localhost:4141` | gRPC (h2c) — Agent service |
 
 ## Usage
 
@@ -25,7 +25,7 @@ CADENCE_DOMAIN=cadence.bootsy.internal caddy run --config infrastructure/Caddyfi
 Caddy serves HTTPS on port 443 using its built-in CA and redirects HTTP (port 80) to HTTPS. Services are available at:
 
 - `https://cadence.bootsy.internal/graphql` — Issues GraphQL API
-- `https://cadence.bootsy.internal/agents/` — Agents gRPC endpoint
+- `https://cadence.bootsy.internal/agents.v1.*` — Agents gRPC endpoint
 
 **DNS:** Ensure `CADENCE_DOMAIN` resolves to the host running Caddy on your LAN.
 

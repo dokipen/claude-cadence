@@ -16,8 +16,7 @@
 	}
 
 	# Agents service — gRPC
-	handle /agents/* {
-		uri strip_prefix /agents
+	handle /agents.v1.* {
 		reverse_proxy localhost:4141 {
 			transport http {
 				versions h2c
