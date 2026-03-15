@@ -22,7 +22,7 @@ Before any ticket operation, detect the configured provider. Refer to the `ticke
 ```bash
 # Extract provider from project's CLAUDE.md (defaults to "github")
 PROVIDER=$(grep -A3 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'provider:' | tail -1 | awk '{print $2}' || echo "github")
-PROJECT_ID=$(grep -A4 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'project_id:' | tail -1 | awk '{print $2}')
+PROJECT=$(grep -A4 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'project_id:' | tail -1 | awk '{print $2}')
 ```
 
 Use this value to select the correct commands throughout the workflow.
@@ -51,7 +51,7 @@ Use this value to select the correct commands throughout the workflow.
 
    **Issues API:**
    ```bash
-   issues ticket transition TICKET_ID --to REFINED
+   issues ticket transition 123 --project $PROJECT --to REFINED
    ```
 
 ### Batch Refinement (`/refine`)
@@ -66,7 +66,7 @@ Use this value to select the correct commands throughout the workflow.
 
    **Issues API:**
    ```bash
-   issues ticket list --project $PROJECT_ID --state BACKLOG --json
+   issues ticket list --project $PROJECT --state BACKLOG --json
    ```
 
 2. **For each issue**, delegate to ticket-refiner agent
@@ -83,9 +83,9 @@ An issue is refined when it has ALL of:
 | Acceptance criteria | Checkboxes defining "done" | `--acceptance-criteria` field |
 | Estimate | `estimate:N` label (1-13) | Story points field (`--points N`) |
 | Priority | `priority:high`, `priority:medium`, or `priority:low` label | Priority field (`--priority N`) |
-| Type label | Label by name: bug, enhancement, etc. | Label by ID (use `issues label list --json` to look up) |
-| Assigned | Assigned to a developer | `issues assign TICKET_ID --user USER_ID` |
-| Blockers linked | Via GitHub dependencies API | `issues block add --blocker X --blocked Y` |
+| Type label | Label by name: bug, enhancement, etc. | Label by ID (use `issues label list --project $PROJECT --json` to look up) |
+| Assigned | Assigned to a developer | `issues assign N --project $PROJECT --user USER_ID` |
+| Blockers linked | Via GitHub dependencies API | `issues block add --project $PROJECT --blocker X --blocked N` |
 | Blocked label | `blocked` label if open blockers exist | Blocked tickets auto-tracked; cannot transition to `IN_PROGRESS` |
 | Refined | `refined` label added after all criteria met | Transition to `REFINED` state |
 
