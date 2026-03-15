@@ -43,6 +43,8 @@ issues project update PROJECT_ID --repository "org/new-repo"
 
 ## Ticket Management
 
+**ID types:** Commands that accept a ticket number (e.g., `ticket view 42`) require `--project PROJECT_ID` to resolve the number. Commands that accept a CUID ticket ID (e.g., `ticket update`, `ticket transition`, `comment add`, `label add/remove`, `assign`, `unassign`) do not use `--project`. Use `ticket view` to look up a ticket's CUID from its number.
+
 ### Create a ticket
 
 ```bash
@@ -75,27 +77,27 @@ issues ticket list --assignee "username"
 issues ticket list --blocked
 issues ticket list --priority HIGH
 issues ticket list --project PROJECT_ID
-issues ticket list --limit 50
+issues ticket list --first 50
 issues ticket list --after "cursor_value"
 ```
 
 ### Update a ticket
 
 ```bash
-issues ticket update 42 --project PROJECT_ID --title "New title"
-issues ticket update 42 --project PROJECT_ID --description "New description"
-issues ticket update 42 --project PROJECT_ID --acceptance-criteria "Updated criteria"
-issues ticket update 42 --project PROJECT_ID --points 8
-issues ticket update 42 --project PROJECT_ID --priority HIGH
+issues ticket update TICKET_ID --title "New title"
+issues ticket update TICKET_ID --description "New description"
+issues ticket update TICKET_ID --acceptance-criteria "Updated criteria"
+issues ticket update TICKET_ID --points 8
+issues ticket update TICKET_ID --priority HIGH
 ```
 
 ### Transition a ticket (state changes)
 
 ```bash
-issues ticket transition 42 --project PROJECT_ID --to REFINED
-issues ticket transition 42 --project PROJECT_ID --to IN_PROGRESS
-issues ticket transition 42 --project PROJECT_ID --to CLOSED
-issues ticket transition 42 --project PROJECT_ID --to BACKLOG
+issues ticket transition TICKET_ID --to REFINED
+issues ticket transition TICKET_ID --to IN_PROGRESS
+issues ticket transition TICKET_ID --to CLOSED
+issues ticket transition TICKET_ID --to BACKLOG
 ```
 
 Valid transitions:
@@ -123,13 +125,13 @@ issues label create --name "bug" --color "#d73a4a"
 ### Add a label to a ticket
 
 ```bash
-issues label add 42 --project PROJECT_ID --label LABEL_ID
+issues label add TICKET_ID --label LABEL_ID
 ```
 
 ### Remove a label from a ticket
 
 ```bash
-issues label remove 42 --project PROJECT_ID --label LABEL_ID
+issues label remove TICKET_ID --label LABEL_ID
 ```
 
 ## Comments
@@ -137,7 +139,7 @@ issues label remove 42 --project PROJECT_ID --label LABEL_ID
 ### Add a comment
 
 ```bash
-issues comment add 42 --project PROJECT_ID --body "Comment text"
+issues comment add TICKET_ID --body "Comment text"
 ```
 
 ### Edit a comment
@@ -171,13 +173,13 @@ issues block remove --blocker 10 --blocked 42
 ### Assign a ticket
 
 ```bash
-issues assign 42 --project PROJECT_ID --user USER_ID
+issues assign TICKET_ID --user USER_ID
 ```
 
 ### Unassign a ticket
 
 ```bash
-issues unassign 42 --project PROJECT_ID
+issues unassign TICKET_ID
 ```
 
 ## Authentication
