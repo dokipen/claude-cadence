@@ -1,18 +1,19 @@
 import type { ApolloServerPlugin } from "@apollo/server";
 import { GraphQLError } from "graphql";
+import { isProduction } from "../env.js";
 import type { AuthenticatedContext } from "../schema/resolvers/auth.js";
 
-// Root fields that don't require authentication
+// Root fields that don't require authentication.
+// Introspection fields are only public outside production.
 const PUBLIC_FIELDS = new Set([
   "authenticateWithGitHubCode",
   "authenticateWithGitHubPAT",
-  "__schema",
-  "__type",
+  ...(isProduction ? [] : ["__schema", "__type"]),
 ]);
 
 /**
  * Apollo Server plugin that enforces authentication on all operations
- * except the public auth mutations and introspection.
+ * except the public auth mutations (and introspection in non-production).
  *
  * Uses field-level checking: every root field in the operation must be
  * in the PUBLIC_FIELDS set, otherwise authentication is required.
