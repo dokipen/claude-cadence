@@ -37,6 +37,16 @@ sudo_cmd() {
     fi
 }
 
+# --- Platform detection ---
+
+detect_platform() {
+    case "$(uname -s)" in
+        Linux)  OS="linux" ;;
+        Darwin) OS="darwin" ;;
+        *)      error "Unsupported operating system: $(uname -s)" ;;
+    esac
+}
+
 # --- Argument parsing ---
 
 usage() {
@@ -45,8 +55,8 @@ Usage: $(basename "$0") --repo OWNER/REPO [OPTIONS]
 
 Options:
   --repo OWNER/REPO       GitHub repo to remove runners for (required)
-  --user USER             System user runners run under (default: $DEFAULT_USER)
-  --base-dir DIR          Base directory for runner installs (default: /home/<user>)
+  --user USER             System user runners run under (default: $DEFAULT_USER, ignored on macOS)
+  --base-dir DIR          Base directory for runner installs (default: platform-dependent)
   --dry-run               Print commands instead of executing them
   -h, --help              Show this help
 EOF
@@ -75,8 +85,18 @@ done
 [[ ! "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] && error "Invalid repo format: '$REPO'. Expected OWNER/REPO."
 [[ ! "$RUNNER_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] && error "Invalid user name: '$RUNNER_USER'. Must match [a-z_][a-z0-9_-]{0,31}."
 
+detect_platform
+
 REPO_NAME="${REPO#*/}"
-[[ -z "$BASE_DIR" ]] && BASE_DIR="/home/$RUNNER_USER"
+
+if [[ -z "$BASE_DIR" ]]; then
+    if [[ "$OS" == "darwin" ]]; then
+        BASE_DIR="$HOME/actions-runner"
+        RUNNER_USER="$(whoami)"
+    else
+        BASE_DIR="/home/$RUNNER_USER"
+    fi
+fi
 
 case "$BASE_DIR" in
     *..*)  error "Invalid base-dir: '$BASE_DIR'. Path traversal not allowed." ;;
@@ -105,26 +125,46 @@ teardown_runner() {
 
     info "Tearing down runner at $runner_dir..."
 
-    # Stop and uninstall systemd service
+    # Stop and uninstall service (svc.sh handles both systemd and launchd)
     if [[ -f "$runner_dir/svc.sh" ]]; then
         info "  Stopping service..."
-        (cd "$runner_dir" && sudo ./svc.sh stop) || true
+        if [[ "$OS" == "darwin" ]]; then
+            (cd "$runner_dir" && ./svc.sh stop) || true
+        else
+            (cd "$runner_dir" && sudo ./svc.sh stop) || true
+        fi
 
         info "  Uninstalling service..."
-        (cd "$runner_dir" && sudo ./svc.sh uninstall) || true
+        if [[ "$OS" == "darwin" ]]; then
+            (cd "$runner_dir" && ./svc.sh uninstall) || true
+        else
+            (cd "$runner_dir" && sudo ./svc.sh uninstall) || true
+        fi
     elif [[ "$DRY_RUN" == "true" ]]; then
         info "  Stopping service..."
-        dry_run_print "sudo" sh -c "cd $runner_dir && ./svc.sh stop"
+        if [[ "$OS" == "darwin" ]]; then
+            dry_run_print "" sh -c "cd $runner_dir && ./svc.sh stop"
+        else
+            dry_run_print "sudo" sh -c "cd $runner_dir && ./svc.sh stop"
+        fi
         info "  Uninstalling service..."
-        dry_run_print "sudo" sh -c "cd $runner_dir && ./svc.sh uninstall"
+        if [[ "$OS" == "darwin" ]]; then
+            dry_run_print "" sh -c "cd $runner_dir && ./svc.sh uninstall"
+        else
+            dry_run_print "sudo" sh -c "cd $runner_dir && ./svc.sh uninstall"
+        fi
     fi
 
     # Unconfigure runner — pass token via environment variable
     if [[ -f "$runner_dir/config.sh" ]] || [[ "$DRY_RUN" == "true" ]]; then
         info "  Removing runner registration..."
         if [[ "$DRY_RUN" == "true" ]]; then
-            dry_run_print "ACTIONS_RUNNER_INPUT_TOKEN=<token> sudo -u $RUNNER_USER" \
+            dry_run_print "ACTIONS_RUNNER_INPUT_TOKEN=<token>" \
                 "$runner_dir/config.sh" remove
+        elif [[ "$OS" == "darwin" ]]; then
+            ACTIONS_RUNNER_INPUT_TOKEN="$REMOVE_TOKEN" "$runner_dir/config.sh" remove || {
+                warn "  Could not unconfigure runner (may already be removed from GitHub)."
+            }
         else
             export ACTIONS_RUNNER_INPUT_TOKEN="$REMOVE_TOKEN"
             sudo -u "$RUNNER_USER" --preserve-env=ACTIONS_RUNNER_INPUT_TOKEN \
@@ -137,7 +177,11 @@ teardown_runner() {
 
     # Remove directory
     info "  Removing directory $runner_dir..."
-    sudo_cmd rm -rf "$runner_dir"
+    if [[ "$OS" == "darwin" ]]; then
+        run_cmd rm -rf "$runner_dir"
+    else
+        sudo_cmd rm -rf "$runner_dir"
+    fi
 
     info "  Runner at $dir_name removed."
 }
@@ -146,10 +190,11 @@ teardown_runner() {
 
 main() {
     info "GitHub Actions Runner Teardown"
-    info "  Repo: $REPO"
-    info "  User: $RUNNER_USER"
-    info "  Base: $BASE_DIR"
-    [[ "$DRY_RUN" == "true" ]] && info "  Mode: DRY RUN"
+    info "  Repo:     $REPO"
+    info "  User:     $RUNNER_USER"
+    info "  Base:     $BASE_DIR"
+    info "  Platform: $OS"
+    [[ "$DRY_RUN" == "true" ]] && info "  Mode:     DRY RUN"
     echo
 
     # Find runner directories for this repo using find to avoid glob word-splitting
