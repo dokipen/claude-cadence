@@ -160,11 +160,14 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 3. Delegate to `ux-engineer` if available for usability review
 4. **Wait for user approval** before implementation (user intervention required)
 
-### Phase 1b: Bug Reproduction (for bug fixes)
+### Phase 1b: Bug Reproduction (required for bug fixes)
 
-1. Delegate to `tester`: Write a failing test that reproduces the bug
-2. Verify the test fails for the right reason (the bug, not test setup)
-3. Proceed to fix
+**Before any fix is attempted**, delegate to `tester`:
+1. Write a failing test that reproduces the reported bug
+2. Verify the test fails for the right reason (the bug, not test setup issues)
+3. If reproduction fails, report back — the lead must clarify the bug or adjust scope before proceeding
+
+**Do NOT proceed to Phase 2 until a failing reproduction test exists.** This gate ensures the fix targets the actual bug and prevents regressions.
 
 ### Phase 2: Implementation
 
