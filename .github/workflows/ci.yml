@@ -16,8 +16,13 @@ permissions:
   contents: read
   pull-requests: read
 
+  # SECURITY: Fork PRs run on GitHub-hosted runners; internal PRs/pushes run on self-hosted.
+  # This expression MUST be identical on every job below (except ci-status).
+  # If you add a new job, copy this runs-on expression exactly.
+
 jobs:
   changes:
+    # fork → ubuntu-latest; internal → self-hosted (see SECURITY comment above)
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
     outputs:
       issues-service: ${{ steps.filter.outputs.issues-service }}
@@ -42,6 +47,7 @@ jobs:
   issues-service-test:
     needs: changes
     if: needs.changes.outputs.issues-service == 'true'
+    # fork → ubuntu-latest; internal → self-hosted (see SECURITY comment above)
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
     defaults:
       run:
@@ -67,6 +73,7 @@ jobs:
   issues-cli-test:
     needs: [changes, issues-service-test]
     if: needs.changes.outputs.issues-service == 'true'
+    # fork → ubuntu-latest; internal → self-hosted (see SECURITY comment above)
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
     steps:
       - uses: actions/checkout@v4
@@ -90,6 +97,7 @@ jobs:
   issues-service-docker:
     needs: [changes, issues-service-test, issues-cli-test]
     if: needs.changes.outputs.issues-service == 'true'
+    # fork → ubuntu-latest; internal → self-hosted (see SECURITY comment above)
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
     steps:
       - uses: actions/checkout@v4
@@ -111,6 +119,7 @@ jobs:
   agent-service-test:
     needs: changes
     if: needs.changes.outputs.agent-service == 'true'
+    # fork → ubuntu-latest; internal → self-hosted (see SECURITY comment above)
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
     steps:
       - uses: actions/checkout@v4
@@ -135,6 +144,7 @@ jobs:
   agent-service-build:
     needs: [changes, agent-service-test]
     if: needs.changes.outputs.agent-service == 'true'
+    # fork → ubuntu-latest; internal → self-hosted (see SECURITY comment above)
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
     steps:
       - uses: actions/checkout@v4
