@@ -240,7 +240,13 @@ function formatPriority(priority: string): string {
   return colorFn(priority);
 }
 
-function formatTicketRow(ticket: {
+// eslint-disable-next-line no-control-regex
+const ANSI_RE = /\x1b\[[0-9;]*m/g;
+function stripAnsi(s: string): string {
+  return s.replace(ANSI_RE, "");
+}
+
+interface TicketNode {
   id: string;
   number?: number;
   title: string;
@@ -249,18 +255,44 @@ function formatTicketRow(ticket: {
   storyPoints?: number | null;
   assignee?: { login: string } | null;
   labels?: { name: string }[];
-}): string {
-  const displayId = ticket.number != null ? chalk.bold(`#${ticket.number}`) : chalk.dim(`#${ticket.id}`);
-  const state = formatState(ticket.state);
-  const priority = formatPriority(ticket.priority);
-  const points = ticket.storyPoints != null ? chalk.magenta(`(${ticket.storyPoints}pts)`) : "";
-  const assignee = ticket.assignee ? chalk.cyan(`@${ticket.assignee.login}`) : "";
-  const labels =
-    ticket.labels && ticket.labels.length > 0
-      ? ticket.labels.map((l) => chalk.dim(`[${l.name}]`)).join(" ")
-      : "";
+}
 
-  return [displayId, state, priority, points, ticket.title, assignee, labels].filter(Boolean).join("  ");
+function formatTicketTable(tickets: TicketNode[], maxWidth = 120): string {
+  const rows = tickets.map((t) => {
+    const id = t.number != null ? chalk.bold(`#${t.number}`) : chalk.dim(`#${t.id}`);
+    const state = formatState(t.state);
+    const priority = formatPriority(t.priority);
+    const points = t.storyPoints != null ? chalk.magenta(`${t.storyPoints}pts`) : chalk.dim("-");
+    const assignee = t.assignee ? chalk.cyan(`@${t.assignee.login}`) : chalk.dim("-");
+    return { id, state, priority, title: t.title, points, assignee };
+  });
+
+  // Measure visible widths (strip ANSI)
+  const widths = { id: 0, state: 0, priority: 0, points: 0, assignee: 0 };
+  for (const r of rows) {
+    widths.id = Math.max(widths.id, stripAnsi(r.id).length);
+    widths.state = Math.max(widths.state, stripAnsi(r.state).length);
+    widths.priority = Math.max(widths.priority, stripAnsi(r.priority).length);
+    widths.points = Math.max(widths.points, stripAnsi(r.points).length);
+    widths.assignee = Math.max(widths.assignee, stripAnsi(r.assignee).length);
+  }
+
+  // Title gets remaining space after fixed columns (2-char gaps between each column, 2-char left indent)
+  const fixedWidth = 2 + widths.id + 2 + widths.state + 2 + widths.priority + 2 + 2 + widths.points + 2 + widths.assignee;
+  const titleWidth = Math.max(20, maxWidth - fixedWidth);
+
+  function pad(s: string, w: number): string {
+    const visible = stripAnsi(s).length;
+    return visible < w ? s + " ".repeat(w - visible) : s;
+  }
+
+  return rows
+    .map((r) => {
+      const chars = Array.from(r.title);
+      const visibleTitle = chars.length > titleWidth ? chars.slice(0, titleWidth - 1).join("") + "…" : r.title;
+      return `  ${pad(r.id, widths.id)}  ${pad(r.state, widths.state)}  ${pad(r.priority, widths.priority)}  ${pad(visibleTitle, titleWidth)}  ${pad(r.points, widths.points)}  ${r.assignee}`;
+    })
+    .join("\n");
 }
 
 // --- Commands ---
@@ -593,9 +625,7 @@ export function registerTicketCommand(program: Command): void {
         }
 
         console.log();
-        for (const edge of edges) {
-          console.log(`  ${formatTicketRow(edge.node)}`);
-        }
+        console.log(formatTicketTable(edges.map((e: { node: TicketNode }) => e.node)));
         console.log();
 
         if (pageInfo.hasNextPage) {
