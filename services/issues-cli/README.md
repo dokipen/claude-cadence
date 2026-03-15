@@ -144,7 +144,7 @@ issues ticket list \
   --assignee <login> \
   --blocked \
   --priority HIGHEST|HIGH|MEDIUM|LOW|LOWEST \
-  --first <n> \       # default: 20
+  --limit <n> \       # default: 100 (alias: -l)
   --after <cursor>
 
 # Update

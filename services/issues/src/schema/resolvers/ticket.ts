@@ -45,7 +45,8 @@ export const ticketResolvers = {
       { prisma }: Context
     ) => {
       const { state, labelName, assigneeLogin, isBlocked, priority, projectId, after } = args;
-      const first = Math.min(args.first ?? 20, MAX_PAGE_SIZE);
+      const rawFirst = args.first ?? MAX_PAGE_SIZE;
+      const first = Number.isFinite(rawFirst) ? Math.min(Math.max(1, rawFirst), MAX_PAGE_SIZE) : MAX_PAGE_SIZE;
 
       const where: Prisma.TicketWhereInput = {};
 
