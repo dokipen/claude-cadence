@@ -139,7 +139,12 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 ### Phase 1: Planning
 
 1. **Clarify requirements**: Review the acceptance criteria
-2. **Research**: Delegate to specialist to understand existing code
+2. **Research** (parallel): Delegate simultaneous research tasks to build a complete picture faster:
+   - **Architecture**: Delegate to a specialist to read existing code in the affected area and summarize the current architecture, key abstractions, and dependencies
+   - **Test coverage**: Delegate to `tester` to check what's tested, what's missing, and what test patterns are used in the affected area
+   - **Bug reproduction** (bug fixes only): Delegate to `tester` to attempt reproduction and identify the root cause
+
+   Launch these as parallel Agent tool calls. Collect all results before proceeding to step 3.
 3. **Classify work type**:
    - Feature with UI → Phase 1a (Design, if designer agent available)
    - Bug fix → Phase 1b (Reproduction)
