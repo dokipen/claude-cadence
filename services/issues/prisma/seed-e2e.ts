@@ -48,6 +48,27 @@ async function main() {
     },
   });
 
+  // Create second project (for project switching tests)
+  const project2 = await prisma.project.create({
+    data: {
+      id: "e2e-test-project-2",
+      name: "E2E Empty Project",
+      repository: "test-org/empty-repo",
+    },
+  });
+
+  // Create a ticket in second project to verify switching
+  await prisma.ticket.create({
+    data: {
+      number: 5,
+      title: "Other project ticket",
+      description: "A ticket in the second project",
+      state: "BACKLOG",
+      priority: "LOW",
+      projectId: project2.id,
+    },
+  });
+
   // Create labels
   const bugLabel = await prisma.label.create({
     data: { name: "bug", color: "#d73a4a" },
@@ -134,8 +155,9 @@ async function main() {
 
   console.log("E2E seed data created successfully");
   console.log(`  User: ${user.login} (${user.id})`);
-  console.log(`  Project: ${project.name} (${project.id})`);
-  console.log(`  Tickets: 4 (one per state)`);
+  console.log(`  Project 1: ${project.name} (${project.id})`);
+  console.log(`  Project 2: ${project2.name} (${project2.id})`);
+  console.log(`  Tickets: 5 (4 in project 1, 1 in project 2)`);
   console.log(`  Labels: 2, Comments: 1, Block relations: 1`);
 }
 

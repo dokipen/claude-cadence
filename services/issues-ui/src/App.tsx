@@ -3,9 +3,17 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { LoginPage } from "./auth/LoginPage";
 import { KanbanBoard } from "./components/KanbanBoard";
-import { ProjectSelector } from "./components/ProjectSelector";
+import { ProjectSelector, STORAGE_KEY } from "./components/ProjectSelector";
 import type { ReactNode } from "react";
 import layoutStyles from "./styles/layout.module.css";
+
+const loadingStyle: React.CSSProperties = {
+  minHeight: "100vh",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "var(--bg)",
+};
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -28,7 +36,7 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 function AppShell() {
   const { user, logout } = useAuth();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
-    () => localStorage.getItem("cadence_project_id"),
+    () => localStorage.getItem(STORAGE_KEY),
   );
 
   const handleProjectChange = useCallback((id: string) => {
@@ -89,11 +97,3 @@ function App() {
 }
 
 export default App;
-
-const loadingStyle: React.CSSProperties = {
-  minHeight: "100vh",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  background: "var(--bg)",
-};

@@ -2,6 +2,10 @@ import { test, expect } from "./fixtures/auth";
 
 test.describe("kanban board", () => {
   test.beforeEach(async ({ page }) => {
+    // Pre-select the main test project so board tests are deterministic
+    await page.addInitScript(() => {
+      localStorage.setItem("cadence_project_id", "e2e-test-project");
+    });
     await page.goto("/");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
   });
@@ -31,23 +35,23 @@ test.describe("kanban board", () => {
   test("card shows title", async ({ page }) => {
     const card = page.getByTestId("ticket-card").first();
     await expect(card).toBeVisible();
-    // All seeded tickets have non-empty titles
-    await expect(card.locator("[class*='cardTitle']")).not.toBeEmpty();
+    await expect(card.getByTestId("card-title")).not.toBeEmpty();
   });
 
-  test("card shows priority badge", async ({ page }) => {
-    const badge = page.getByTestId("priority-badge").first();
+  test("card shows priority badge with correct value", async ({ page }) => {
+    const backlogColumn = page.getByTestId("column-BACKLOG");
+    const badge = backlogColumn.getByTestId("priority-badge");
     await expect(badge).toBeVisible();
+    await expect(badge).toHaveText("Low");
+    await expect(badge).toHaveAttribute("data-priority", "LOW");
   });
 
   test("card shows labels", async ({ page }) => {
-    // The backlog ticket has the "bug" label
     const backlogColumn = page.getByTestId("column-BACKLOG");
     await expect(backlogColumn.getByTestId("label-badge")).toHaveText("bug");
   });
 
   test("card shows assignee", async ({ page }) => {
-    // The refined ticket has an assignee
     const refinedColumn = page.getByTestId("column-REFINED");
     await expect(refinedColumn.getByTestId("assignee")).toBeVisible();
     await expect(refinedColumn.getByTestId("assignee")).toContainText(
@@ -56,20 +60,27 @@ test.describe("kanban board", () => {
   });
 
   test("card shows story points", async ({ page }) => {
-    // The refined ticket has 3 story points
     const refinedColumn = page.getByTestId("column-REFINED");
     await expect(refinedColumn.getByTestId("story-points")).toHaveText("3");
   });
 
-  test("empty column shows empty state", async ({ page }) => {
-    // All seeded columns have tickets, so we check the structure is correct.
-    // The empty state message uses data-testid="empty-STATE".
-    // For a proper empty column test, we'd need a state with no tickets.
-    // Instead, verify the board renders and each column has at least one card.
-    for (const state of ["BACKLOG", "REFINED", "IN_PROGRESS", "CLOSED"]) {
-      const column = page.getByTestId(`column-${state}`);
-      await expect(column.getByTestId("ticket-card")).toHaveCount(1);
-    }
+  test("column header shows ticket count", async ({ page }) => {
+    await expect(page.getByTestId("count-BACKLOG")).toHaveText("1");
+    await expect(page.getByTestId("count-REFINED")).toHaveText("1");
+    await expect(page.getByTestId("count-IN_PROGRESS")).toHaveText("1");
+    await expect(page.getByTestId("count-CLOSED")).toHaveText("1");
+  });
+
+  test("empty column shows empty state message", async ({ page }) => {
+    // Switch to the second project which has only a BACKLOG ticket
+    const selector = page.getByTestId("project-selector");
+    await selector.selectOption({ label: "E2E Empty Project" });
+
+    await expect(page.getByTestId("count-BACKLOG")).toHaveText("1");
+    await expect(page.getByTestId("empty-REFINED")).toBeVisible();
+    await expect(page.getByTestId("empty-REFINED")).toHaveText("No tickets");
+    await expect(page.getByTestId("empty-IN_PROGRESS")).toBeVisible();
+    await expect(page.getByTestId("empty-CLOSED")).toBeVisible();
   });
 });
 
@@ -79,23 +90,59 @@ test.describe("project selector", () => {
     await expect(page.getByTestId("project-selector")).toBeVisible();
   });
 
-  test("default project is selected", async ({ page }) => {
+  test("default project is auto-selected on first visit", async ({ page }) => {
+    // No cadence_project_id in localStorage — first project alphabetically is selected
     await page.goto("/");
     const selector = page.getByTestId("project-selector");
     await expect(selector).toBeVisible();
-    // The seed has one project "E2E Test Project" which should be auto-selected
-    await expect(selector).toContainText("E2E Test Project");
+    // "E2E Empty Project" sorts first alphabetically
+    await expect(selector).toContainText("E2E Empty Project");
+  });
+
+  test("switching projects updates board", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("cadence_project_id", "e2e-test-project");
+    });
+    await page.goto("/");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+
+    // Verify first project tickets are visible
+    await expect(
+      page.getByTestId("column-BACKLOG").getByText("Backlog ticket"),
+    ).toBeVisible();
+
+    // Switch to second project
+    const selector = page.getByTestId("project-selector");
+    await selector.selectOption({ label: "E2E Empty Project" });
+
+    // Second project ticket visible, first project ticket gone
+    await expect(
+      page.getByTestId("column-BACKLOG").getByText("Other project ticket"),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("column-BACKLOG").getByText("Backlog ticket"),
+    ).not.toBeVisible();
   });
 
   test("project selection persists across reload", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
-    // Reload and verify board still shows
+    // Switch to second project
+    const selector = page.getByTestId("project-selector");
+    await selector.selectOption({ label: "E2E Empty Project" });
+    await expect(
+      page.getByTestId("column-BACKLOG").getByText("Other project ticket"),
+    ).toBeVisible();
+
+    // Reload and verify second project is still selected
     await page.reload();
     await expect(page.getByTestId("kanban-board")).toBeVisible();
-    await expect(page.getByTestId("project-selector")).toContainText(
-      "E2E Test Project",
+    await expect(page.getByTestId("project-selector")).toHaveValue(
+      "e2e-test-project-2",
     );
+    await expect(
+      page.getByTestId("column-BACKLOG").getByText("Other project ticket"),
+    ).toBeVisible();
   });
 });

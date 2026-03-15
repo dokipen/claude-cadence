@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useProjects } from "../hooks/useProjects";
 import styles from "../styles/layout.module.css";
 
-const STORAGE_KEY = "cadence_project_id";
+export const STORAGE_KEY = "cadence_project_id";
 
 interface ProjectSelectorProps {
   selectedProjectId: string | null;
