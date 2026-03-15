@@ -344,8 +344,8 @@ export function registerTicketCommand(program: Command): void {
         spinner.succeed("Ticket created");
         const t = data.createTicket;
         console.log();
-        console.log(`  ${chalk.bold(`#${t.number}`)}  ${t.title}`);
-        console.log(`  State: ${formatState(t.state)}  Priority: ${formatPriority(t.priority)}`);
+        console.log(`  ${chalk.bold(`#${t.id}`)}  ${t.title}`);
+        console.log(`  Number: ${chalk.bold(`#${t.number}`)}  State: ${formatState(t.state)}  Priority: ${formatPriority(t.priority)}`);
         if (t.storyPoints != null) {
           console.log(`  Story Points: ${chalk.magenta(String(t.storyPoints))}`);
         }
@@ -610,7 +610,7 @@ export function registerTicketCommand(program: Command): void {
         spinner.succeed("Ticket updated");
         const t = data.updateTicket;
         console.log();
-        console.log(`  ${chalk.bold(`#${t.number}`)}  ${t.title}`);
+        console.log(`  ${chalk.bold(`#${t.id}`)}  ${t.title}`);
         console.log(`  State: ${formatState(t.state)}  Priority: ${formatPriority(t.priority)}`);
         if (t.storyPoints != null) {
           console.log(`  Story Points: ${chalk.magenta(String(t.storyPoints))}`);
@@ -644,7 +644,7 @@ export function registerTicketCommand(program: Command): void {
         spinner.succeed("Ticket transitioned");
         const t = data.transitionTicket;
         console.log();
-        console.log(`  ${chalk.bold(`#${t.number}`)}  ${t.title}`);
+        console.log(`  ${chalk.bold(`#${t.id}`)}  ${t.title}`);
         console.log(`  State: ${formatState(t.state)}  Priority: ${formatPriority(t.priority)}`);
         console.log();
       } catch (error) {
