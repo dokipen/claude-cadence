@@ -39,7 +39,8 @@ detect_os() {
 
 build_image() {
   log "Building Docker image (bypassing cache)..."
-  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" build --no-cache
+  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" build --no-cache \
+    || err "Docker image build failed. Check network connectivity and Dockerfile syntax."
 }
 
 # --- launchd (macOS) ---
@@ -250,8 +251,8 @@ case "$cmd" in
   install)
     ensure_docker
     ensure_env
-    build_image
     install_cli
+    build_image
     os=$(detect_os)
     case "$os" in
       macos) launchd_install ;;
