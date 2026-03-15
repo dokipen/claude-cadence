@@ -27,8 +27,12 @@ Two modes for specifying the API schema:
 # Reflection mode (server must have reflection enabled)
 grpcurl -plaintext 127.0.0.1:4141 agents.v1.AgentService/ListSessions
 
-# Proto file mode (use from repo root)
+# Proto file mode (use from services/agents/ directory)
 grpcurl -plaintext -import-path proto -proto agents/v1/agents.proto \
+  127.0.0.1:4141 agents.v1.AgentService/ListSessions
+
+# Or from repo root
+grpcurl -plaintext -import-path services/agents/proto -proto agents/v1/agents.proto \
   127.0.0.1:4141 agents.v1.AgentService/ListSessions
 ```
 
@@ -131,7 +135,7 @@ SESSION=$(grpcurl -plaintext -d '{
   "session_name": "test-issue-99"
 }' 127.0.0.1:4141 agents.v1.AgentService/CreateSession)
 
-SESSION_ID=$(echo "$SESSION" | jq -r '.session.sessionId')
+SESSION_ID=$(echo "$SESSION" | jq -r '.session.id')
 
 # Poll until no longer creating
 grpcurl -plaintext -d "{\"session_id\": \"$SESSION_ID\"}" \

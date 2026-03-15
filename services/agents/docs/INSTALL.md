@@ -432,5 +432,5 @@ log:
 grpcurl -plaintext 127.0.0.1:4141 list
 
 # Check connectivity without reflection
-grpcurl -plaintext 127.0.0.1:4141 agentd.AgentService/ListSessions
+grpcurl -plaintext 127.0.0.1:4141 agents.v1.AgentService/ListSessions
 ```
