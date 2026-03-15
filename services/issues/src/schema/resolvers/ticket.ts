@@ -28,12 +28,13 @@ export const ticketResolvers = {
         assigneeLogin?: string;
         isBlocked?: boolean;
         priority?: string;
+        projectId?: string;
         first?: number;
         after?: string;
       },
       { prisma }: Context
     ) => {
-      const { state, labelName, assigneeLogin, isBlocked, priority, after } = args;
+      const { state, labelName, assigneeLogin, isBlocked, priority, projectId, after } = args;
       const first = Math.min(args.first ?? 20, MAX_PAGE_SIZE);
 
       const where: Prisma.TicketWhereInput = {};
@@ -52,6 +53,10 @@ export const ticketResolvers = {
             label: { name: labelName },
           },
         };
+      }
+
+      if (projectId) {
+        where.projectId = projectId;
       }
 
       if (assigneeLogin) {
@@ -113,16 +118,22 @@ export const ticketResolvers = {
           acceptanceCriteria?: string;
           labelIds?: string[];
           assigneeId?: string;
+          projectId: string;
           storyPoints?: number;
           priority?: string;
         };
       },
       { prisma }: Context
     ) => {
-      const { title, description, acceptanceCriteria, labelIds, assigneeId, storyPoints, priority } = input;
+      const { title, description, acceptanceCriteria, labelIds, assigneeId, projectId, storyPoints, priority } = input;
 
       if (priority && !VALID_PRIORITIES.has(priority)) {
         throw new Error(`Invalid priority: ${priority}. Must be one of: ${[...VALID_PRIORITIES].join(", ")}`);
+      }
+
+      const project = await prisma.project.findUnique({ where: { id: projectId } });
+      if (!project) {
+        throw new Error(`Project not found: ${projectId}`);
       }
 
       const data: Prisma.TicketCreateInput = {
@@ -131,6 +142,7 @@ export const ticketResolvers = {
         acceptanceCriteria: acceptanceCriteria ?? null,
         storyPoints: storyPoints ?? null,
         priority: priority ?? "MEDIUM",
+        project: { connect: { id: projectId } },
       };
 
       if (assigneeId) {
@@ -395,6 +407,10 @@ export const ticketResolvers = {
   },
 
   Ticket: {
+    project: async (parent: Ticket, _: unknown, { loaders }: Context) => {
+      return loaders.projectByProjectId.load(parent.projectId);
+    },
+
     labels: async (parent: Ticket, _: unknown, { loaders }: Context) => {
       return loaders.labelsByTicketId.load(parent.id);
     },

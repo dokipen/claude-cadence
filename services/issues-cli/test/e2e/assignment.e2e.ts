@@ -19,7 +19,7 @@ describe("Assignment Management", () => {
     userId = TEST_USER_ID;
     expect(userId).toBeTruthy();
 
-    const result = await suite.cli("ticket", "create", "--title", "Assignment test ticket");
+    const result = await suite.cli("ticket", "create", "--project", "default-project", "--title", "Assignment test ticket");
     expect(result.exitCode).toBe(0);
 
     const idMatch = result.stdout.match(/#(\S+)\s+Assignment test ticket/);

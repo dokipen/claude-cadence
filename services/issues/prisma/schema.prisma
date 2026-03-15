@@ -27,6 +27,15 @@ model User {
 // TicketState: BACKLOG | REFINED | IN_PROGRESS | CLOSED
 // Priority:    HIGHEST | HIGH | MEDIUM | LOW | LOWEST
 
+model Project {
+  id         String   @id @default(cuid())
+  name       String   @unique
+  repository String   @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  tickets    Ticket[]
+}
+
 model Ticket {
   id                 String   @id @default(cuid())
   title              String
@@ -36,10 +45,12 @@ model Ticket {
   storyPoints        Int?
   priority           String   @default("MEDIUM")
   assigneeId         String?
+  projectId          String
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   assignee    User?          @relation(fields: [assigneeId], references: [id])
+  project     Project        @relation(fields: [projectId], references: [id])
   labels      TicketLabel[]
   comments    Comment[]
   blocks      BlockRelation[] @relation("blocker")

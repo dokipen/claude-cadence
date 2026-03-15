@@ -14,6 +14,33 @@ This skill documents the `issues` CLI client for the issues microservice. Use th
 - The CLI must be authenticated: `issues auth whoami`
 - If not authenticated: `issues auth login --pat <github-pat>`
 
+## Project Management
+
+### Create a project
+
+```bash
+issues project create --name "My Project" --repository "org/repo"
+```
+
+### List projects
+
+```bash
+issues project list
+```
+
+### View a project
+
+```bash
+issues project view PROJECT_ID
+```
+
+### Update a project
+
+```bash
+issues project update PROJECT_ID --name "New Name"
+issues project update PROJECT_ID --repository "org/new-repo"
+```
+
 ## Ticket Management
 
 ### Create a ticket
@@ -21,6 +48,7 @@ This skill documents the `issues` CLI client for the issues microservice. Use th
 ```bash
 issues ticket create \
   --title "Brief descriptive title" \
+  --project PROJECT_ID \
   --description "Detailed description" \
   --acceptance-criteria "- [ ] Criterion 1\n- [ ] Criterion 2" \
   --labels "LABEL_ID1,LABEL_ID2" \
@@ -46,6 +74,7 @@ issues ticket list --label "bug"
 issues ticket list --assignee "username"
 issues ticket list --blocked
 issues ticket list --priority HIGH
+issues ticket list --project PROJECT_ID
 issues ticket list --first 50
 issues ticket list --after "cursor_value"
 ```

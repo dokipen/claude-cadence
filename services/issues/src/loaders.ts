@@ -1,5 +1,5 @@
 import DataLoader from "dataloader";
-import type { PrismaClient, Label, User, Ticket, Comment } from "@prisma/client";
+import type { PrismaClient, Label, User, Ticket, Comment, Project } from "@prisma/client";
 
 export interface Loaders {
   labelsByTicketId: DataLoader<string, Label[]>;
@@ -7,6 +7,7 @@ export interface Loaders {
   assigneeByUserId: DataLoader<string, User | null>;
   blocksByTicketId: DataLoader<string, Ticket[]>;
   blockedByTicketId: DataLoader<string, Ticket[]>;
+  projectByProjectId: DataLoader<string, Project | null>;
 }
 
 export function createLoaders(prisma: PrismaClient): Loaders {
@@ -80,11 +81,23 @@ export function createLoaders(prisma: PrismaClient): Loaders {
     return ticketIds.map((id) => map.get(id) ?? []);
   });
 
+  const projectByProjectId = new DataLoader<string, Project | null>(async (projectIds) => {
+    const projects = await prisma.project.findMany({
+      where: { id: { in: [...projectIds] } },
+    });
+    const map = new Map<string, Project>();
+    for (const p of projects) {
+      map.set(p.id, p);
+    }
+    return projectIds.map((id) => map.get(id) ?? null);
+  });
+
   return {
     labelsByTicketId,
     commentsByTicketId,
     assigneeByUserId,
     blocksByTicketId,
     blockedByTicketId,
+    projectByProjectId,
   };
 }

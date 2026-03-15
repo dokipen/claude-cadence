@@ -46,7 +46,7 @@ describe("Label Management", () => {
   });
 
   it("should create a ticket for label operations", async () => {
-    const result = await suite.cli("ticket", "create", "--title", "Label test ticket");
+    const result = await suite.cli("ticket", "create", "--project", "default-project", "--title", "Label test ticket");
     expect(result.exitCode).toBe(0);
 
     const idMatch = result.stdout.match(/#(\S+)\s+Label test ticket/);

@@ -13,7 +13,7 @@ describe("Comment Management", () => {
     // Test user is created by the test helper (testuser)
 
     // Create a ticket for comment operations
-    const result = await suite.cli("ticket", "create", "--title", "Comment test ticket");
+    const result = await suite.cli("ticket", "create", "--project", "default-project", "--title", "Comment test ticket");
     const idMatch = result.stdout.match(/#(\S+)\s+Comment test ticket/);
     ticketId = idMatch![1];
   });

@@ -52,6 +52,7 @@ export const ticketTypeDefs = `
     storyPoints: Int
     priority: Priority!
     assignee: User
+    project: Project!
     labels: [Label!]!
     comments: [Comment!]!
     blocks: [Ticket!]!
@@ -81,6 +82,7 @@ export const ticketTypeDefs = `
     acceptanceCriteria: String
     labelIds: [ID!]
     assigneeId: ID
+    projectId: ID!
     storyPoints: Int
     priority: Priority
   }
@@ -101,6 +103,7 @@ export const ticketTypeDefs = `
       assigneeLogin: String
       isBlocked: Boolean
       priority: Priority
+      projectId: ID
       first: Int
       after: String
     ): TicketConnection!
