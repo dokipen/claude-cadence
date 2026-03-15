@@ -4,6 +4,7 @@ import type { AuthenticatedContext } from "../schema/resolvers/auth.js";
 
 // Root fields that don't require authentication
 const PUBLIC_FIELDS = new Set([
+  "generateOAuthState",
   "authenticateWithGitHubCode",
   "authenticateWithGitHubPAT",
   "__schema",
