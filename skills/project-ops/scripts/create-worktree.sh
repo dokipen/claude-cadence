@@ -35,9 +35,7 @@ fi
 # Clean up worktrees from merged PRs before creating a new one
 MERGED_CLEANUP="$SCRIPT_DIR/cleanup-merged-worktrees.sh"
 if [ -x "$MERGED_CLEANUP" ]; then
-  echo "Running pre-flight cleanup..."
   "$MERGED_CLEANUP"
-  echo ""
 fi
 
 # Check for remaining orphaned worktree directories

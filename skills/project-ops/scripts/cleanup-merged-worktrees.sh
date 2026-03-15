@@ -9,11 +9,10 @@
 # Usage: ./scripts/cleanup-merged-worktrees.sh
 #
 # Safe to run at any time — skips the current worktree and active PRs.
+# Note: Only detects PRs opened from branches in the same repo (not forks).
 
-set -e
-
-WORKTREES_DIR=".worktrees"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+WORKTREES_DIR="$REPO_ROOT/.worktrees"
 
 if [ ! -d "$WORKTREES_DIR" ]; then
   exit 0
@@ -27,6 +26,11 @@ for dir in "$WORKTREES_DIR"/*/; do
   [ -d "$dir" ] || continue
   branch_name=$(basename "$dir")
 
+  # Validate branch name format (issue-number prefix, alphanumeric with hyphens/underscores)
+  if [[ ! "$branch_name" =~ ^[0-9]+-[a-zA-Z0-9_-]+$ ]]; then
+    continue
+  fi
+
   # Skip the current worktree
   if [ "$branch_name" = "$CURRENT_BRANCH" ]; then
     continue
@@ -34,13 +38,10 @@ for dir in "$WORKTREES_DIR"/*/; do
 
   # Extract issue number from branch name (e.g., "42-add-feature" -> "42")
   issue_number=$(echo "$branch_name" | grep -oE '^[0-9]+')
-  if [ -z "$issue_number" ]; then
-    continue
-  fi
 
   # Check if a merged PR exists for this branch
   merged_pr=$(gh pr list --head "$branch_name" --state merged --json number --jq '.[0].number' 2>/dev/null || echo "")
-  if [ -z "$merged_pr" ]; then
+  if [[ ! "$merged_pr" =~ ^[0-9]+$ ]]; then
     continue
   fi
 
@@ -51,9 +52,10 @@ for dir in "$WORKTREES_DIR"/*/; do
 
   # Remove worktree
   if [ -d "$WORKTREES_DIR/$branch_name" ]; then
-    git worktree remove "$WORKTREES_DIR/$branch_name" 2>/dev/null || \
-      git worktree remove --force "$WORKTREES_DIR/$branch_name" 2>/dev/null || \
-      rm -rf "$WORKTREES_DIR/$branch_name"
+    git worktree remove "$WORKTREES_DIR/$branch_name" 2>/dev/null \
+      || git worktree remove --force "$WORKTREES_DIR/$branch_name" 2>/dev/null \
+      || rm -rf "$WORKTREES_DIR/$branch_name" \
+      || echo "  Warning: failed to remove worktree directory"
   fi
 
   # Delete local branch
@@ -66,9 +68,10 @@ for dir in "$WORKTREES_DIR"/*/; do
   cleaned=$((cleaned + 1))
 done
 
-# Prune orphaned worktree references
+# Prune orphaned worktree references (idempotent and cheap)
+git worktree prune 2>/dev/null || true
+
 if [ $cleaned -gt 0 ]; then
-  git worktree prune
   echo ""
   echo "Cleaned up $cleaned merged worktree(s)."
 fi
