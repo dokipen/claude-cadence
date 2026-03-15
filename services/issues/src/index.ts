@@ -6,10 +6,9 @@ import { typeDefs, resolvers } from "./schema/index.js";
 import { createLoaders } from "./loaders.js";
 import { buildAuthContext } from "./auth/context.js";
 import { authGuardPlugin } from "./auth/guard.js";
+import { isProduction } from "./env.js";
 
 const prisma = new PrismaClient();
-
-const isProduction = process.env.NODE_ENV === "production";
 
 const server = new ApolloServer({
   typeDefs,

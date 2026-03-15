@@ -1,5 +1,6 @@
 import type { ApolloServerPlugin } from "@apollo/server";
 import { GraphQLError } from "graphql";
+import { isProduction } from "../env.js";
 import type { AuthenticatedContext } from "../schema/resolvers/auth.js";
 
 // Root fields that don't require authentication.
@@ -7,7 +8,7 @@ import type { AuthenticatedContext } from "../schema/resolvers/auth.js";
 const PUBLIC_FIELDS = new Set([
   "authenticateWithGitHubCode",
   "authenticateWithGitHubPAT",
-  ...(process.env.NODE_ENV === "production" ? [] : ["__schema", "__type"]),
+  ...(isProduction ? [] : ["__schema", "__type"]),
 ]);
 
 /**
