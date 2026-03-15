@@ -8,7 +8,26 @@ import (
 	"time"
 
 	agentsv1 "github.com/dokipen/claude-cadence/services/agents/gen/agents/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
+
+func TestCreateSession_ExtraArgsNullByte(t *testing.T) {
+	client := newTestClient(t)
+	ctx := context.Background()
+
+	_, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+		AgentProfile: "echo-args",
+		SessionName:  uniqueSessionName(t),
+		ExtraArgs:    []string{"hello\x00world"},
+	})
+	if err == nil {
+		t.Fatal("expected error for null byte in ExtraArgs, got nil")
+	}
+	if code := status.Code(err); code != codes.InvalidArgument {
+		t.Errorf("expected InvalidArgument, got %v", code)
+	}
+}
 
 func TestCreateSession_ExtraArgsInjection(t *testing.T) {
 	client := newTestClient(t)

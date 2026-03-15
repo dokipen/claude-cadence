@@ -44,8 +44,26 @@ type CreateRequest struct {
 	ExtraArgs    []string
 }
 
+const (
+	maxExtraArgs    = 64
+	maxExtraArgLen  = 4096
+)
+
 // Create validates inputs, creates tmux session, starts command, returns Session.
 func (m *Manager) Create(req CreateRequest) (*Session, error) {
+	// Validate ExtraArgs limits and content.
+	if len(req.ExtraArgs) > maxExtraArgs {
+		return nil, &Error{Code: ErrInvalidArgument, Message: fmt.Sprintf("too many extra_args: %d (max %d)", len(req.ExtraArgs), maxExtraArgs)}
+	}
+	for i, arg := range req.ExtraArgs {
+		if len(arg) > maxExtraArgLen {
+			return nil, &Error{Code: ErrInvalidArgument, Message: fmt.Sprintf("extra_args[%d] too long: %d bytes (max %d)", i, len(arg), maxExtraArgLen)}
+		}
+		if strings.ContainsRune(arg, '\x00') {
+			return nil, &Error{Code: ErrInvalidArgument, Message: fmt.Sprintf("extra_args[%d] contains null byte", i)}
+		}
+	}
+
 	// Validate profile exists.
 	profile, ok := m.profiles[req.AgentProfile]
 	if !ok {
