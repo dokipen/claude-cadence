@@ -61,7 +61,7 @@ func main() {
 	manager := session.NewManager(store, tmuxClient, cfg.Profiles)
 	agentService := service.NewAgentService(manager)
 
-	srv, err := server.New(agentService, cfg.Host, cfg.Port)
+	srv, err := server.New(agentService, cfg)
 	if err != nil {
 		slog.Error("failed to create server", "error", err)
 		os.Exit(1)
