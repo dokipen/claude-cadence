@@ -16,7 +16,7 @@ claude --plugin-dir ./claude-cadence
 To always load the plugin, add `--plugin-dir` to your shell alias or config:
 
 ```bash
-alias claude='claude --plugin-dir /path/to/claude-cadence'
+claude() { command claude --plugin-dir /path/to/claude-cadence "$@"; }
 ```
 
 ### Plugin marketplace
