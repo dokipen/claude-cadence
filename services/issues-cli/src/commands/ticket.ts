@@ -112,6 +112,17 @@ const LIST_TICKETS = gql`
   }
 `;
 
+const TRANSITION_TICKET = gql`
+  mutation TransitionTicket($id: ID!, $to: TicketState!) {
+    transitionTicket(id: $id, to: $to) {
+      id
+      title
+      state
+      priority
+    }
+  }
+`;
+
 const UPDATE_TICKET = gql`
   mutation UpdateTicket($id: ID!, $input: UpdateTicketInput!) {
     updateTicket(id: $id, input: $input) {
@@ -196,6 +207,10 @@ interface ListOptions {
   priority?: string;
   first?: string;
   after?: string;
+}
+
+interface TransitionOptions {
+  to: string;
 }
 
 interface UpdateOptions {
@@ -498,6 +513,36 @@ export function registerTicketCommand(program: Command): void {
         console.log();
       } catch (error) {
         spinner.fail("Failed to update ticket");
+        handleError(error);
+      }
+    });
+
+  // --- transition ---
+  ticket
+    .command("transition <id>")
+    .description("Transition a ticket to a new state")
+    .requiredOption("--to <state>", "Target state (BACKLOG, REFINED, IN_PROGRESS, CLOSED)")
+    .action(async (id: string, opts: TransitionOptions) => {
+      const spinner = ora("Transitioning ticket...").start();
+      try {
+        const client = getClient();
+        const data = await client.request<{
+          transitionTicket: {
+            id: string;
+            title: string;
+            state: string;
+            priority: string;
+          };
+        }>(TRANSITION_TICKET, { id, to: opts.to });
+
+        spinner.succeed("Ticket transitioned");
+        const t = data.transitionTicket;
+        console.log();
+        console.log(`  ${chalk.bold(`#${t.id}`)}  ${t.title}`);
+        console.log(`  State: ${formatState(t.state)}  Priority: ${formatPriority(t.priority)}`);
+        console.log();
+      } catch (error) {
+        spinner.fail("Failed to transition ticket");
         handleError(error);
       }
     });

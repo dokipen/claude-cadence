@@ -4,6 +4,7 @@ import { Command } from "commander";
 import { registerTicketCommand } from "./commands/ticket.js";
 import { registerLabelCommand } from "./commands/label.js";
 import { registerAssignCommand } from "./commands/assign.js";
+import { registerBlockCommand } from "./commands/block.js";
 
 const program = new Command();
 
@@ -15,5 +16,6 @@ program
 registerTicketCommand(program);
 registerLabelCommand(program);
 registerAssignCommand(program);
+registerBlockCommand(program);
 
 program.parse();

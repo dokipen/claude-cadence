@@ -116,5 +116,8 @@ export const ticketTypeDefs = `
     assignTicket(ticketId: ID!, userId: ID!): Ticket!
     unassignTicket(ticketId: ID!): Ticket!
     createUser(githubId: Int!, login: String!, displayName: String!, avatarUrl: String): User!
+    transitionTicket(id: ID!, to: TicketState!): Ticket!
+    addBlockRelation(blockerId: ID!, blockedId: ID!): Ticket!
+    removeBlockRelation(blockerId: ID!, blockedId: ID!): Ticket!
   }
 `;
