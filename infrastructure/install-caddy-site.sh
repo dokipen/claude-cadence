@@ -57,7 +57,8 @@ ${vhost} {
 	}
 
 	# Agents service — gRPC
-	handle /agents.v1.* {
+	@grpc path_regexp ^/agents\.v1\.
+	handle @grpc {
 		reverse_proxy localhost:4141 {
 			transport http {
 				versions h2c

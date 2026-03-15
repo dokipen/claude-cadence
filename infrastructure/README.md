@@ -12,7 +12,7 @@ Caddy provides a single entry point for the Claude Cadence backend services with
 | Path | Upstream | Protocol |
 |------|----------|----------|
 | `/graphql` | `localhost:4000` | HTTP — Issues service (GraphQL) |
-| `/agents.v1.*` | `localhost:4141` | gRPC (h2c) — Agent service |
+| `^/agents\.v1\.` (regex) | `localhost:4141` | gRPC (h2c) — Agent service |
 
 ## Usage
 
