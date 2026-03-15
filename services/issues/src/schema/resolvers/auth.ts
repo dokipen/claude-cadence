@@ -10,6 +10,7 @@ import {
   REFRESH_TOKEN_EXPIRY_DAYS,
   ACCESS_TOKEN_EXPIRY_MS,
 } from "../../auth/jwt.js";
+import { oauthStateStore } from "../../auth/state-store.js";
 import { GraphQLError } from "graphql";
 
 export interface AuthenticatedContext {
@@ -77,11 +78,20 @@ export const authResolvers = {
   },
 
   Mutation: {
+    generateOAuthState: () => {
+      return oauthStateStore.generate();
+    },
+
     authenticateWithGitHubCode: async (
       _: unknown,
-      { code }: { code: string },
+      { code, state }: { code: string; state: string },
       { prisma }: AuthenticatedContext
     ) => {
+      if (!oauthStateStore.validate(state)) {
+        throw new GraphQLError("Invalid or expired OAuth state parameter", {
+          extensions: { code: "BAD_USER_INPUT" },
+        });
+      }
       const profile = await oauthProvider.authenticate({ code });
       const user = await upsertUser(prisma, profile);
       const { token, refreshToken } = await issueTokens(prisma, user.id);

@@ -254,21 +254,6 @@ export const ticketResolvers = {
       });
     },
 
-    createUser: async (
-      _: unknown,
-      { githubId, login, displayName, avatarUrl }: {
-        githubId: number;
-        login: string;
-        displayName: string;
-        avatarUrl?: string;
-      },
-      { prisma }: Context
-    ) => {
-      return prisma.user.create({
-        data: { githubId, login, displayName, avatarUrl: avatarUrl ?? null },
-      });
-    },
-
     transitionTicket: async (
       _: unknown,
       { id, to }: { id: string; to: string },

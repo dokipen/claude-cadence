@@ -6,6 +6,7 @@ import type { AuthenticatedContext } from "../schema/resolvers/auth.js";
 // Root fields that don't require authentication.
 // Introspection fields are only public outside production.
 const PUBLIC_FIELDS = new Set([
+  "generateOAuthState",
   "authenticateWithGitHubCode",
   "authenticateWithGitHubPAT",
   "refreshToken",

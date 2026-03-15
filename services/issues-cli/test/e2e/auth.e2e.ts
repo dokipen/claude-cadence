@@ -69,6 +69,24 @@ describe("Auth", () => {
     });
   });
 
+  describe("login stdin", () => {
+    it("should read PAT from stdin when --pat - is used", async () => {
+      const result = await suite.cliWithStdin("fake-token-via-stdin", "auth", "login", "--pat", "-");
+      // The token reaches the server (auth fails because it's not a real GitHub PAT,
+      // but the important thing is that it was read from stdin, not treated as literal "-")
+      const output = result.stdout + result.stderr;
+      expect(output).not.toContain("no token received from stdin");
+      expect(result.exitCode).not.toBe(0); // expected: fake token fails GitHub validation
+    });
+
+    it("should fail with empty stdin when --pat - is used", async () => {
+      const result = await suite.cliWithStdin("", "auth", "login", "--pat", "-");
+      const output = result.stdout + result.stderr;
+      expect(output).toContain("no token received from stdin");
+      expect(result.exitCode).not.toBe(0);
+    });
+  });
+
   describe("logout", () => {
     it("should succeed even without stored token", async () => {
       const result = await suite.cli("auth", "logout");
