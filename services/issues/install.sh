@@ -227,7 +227,7 @@ uninstall_cli() {
     elif command -v sudo >/dev/null 2>&1; then
       log "npm unlink failed ($(cat "$unlink_err")), retrying with sudo..."
       rm -f "$unlink_err"
-      (cd "$cli_dir" && sudo npm unlink -g @claude-cadence/issues-cli) || err "sudo npm unlink failed"
+      (cd "$cli_dir" && sudo npm unlink -g @claude-cadence/issues-cli) || err "sudo npm unlink failed in $cli_dir"
     else
       local reason
       reason=$(cat "$unlink_err")
