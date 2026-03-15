@@ -489,10 +489,10 @@ func (m *Manager) renderCommand(cmdTemplate string, sess *Session, extraArgs []s
 	}
 
 	data := templateData{
-		SessionID:    sess.ID,
+		SessionID:    shellEscapeArg(sess.ID),
 		SessionName:  sess.Name,
 		ExtraArgs:    shellJoinArgs(extraArgs),
-		WorktreePath: sess.WorktreePath,
+		WorktreePath: shellEscapeArg(sess.WorktreePath),
 	}
 
 	var buf bytes.Buffer

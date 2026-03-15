@@ -33,6 +33,70 @@ func TestShellEscapeArg(t *testing.T) {
 	}
 }
 
+func TestRenderCommand(t *testing.T) {
+	m := &Manager{}
+
+	tests := []struct {
+		name        string
+		template    string
+		sess        *Session
+		extraArgs   []string
+		wantContain string
+	}{
+		{
+			name:     "WorktreePath with spaces is escaped",
+			template: "cmd --cwd {{.WorktreePath}}",
+			sess: &Session{
+				ID:           "test-id",
+				Name:         "test-name",
+				WorktreePath: "/path/with spaces/dir",
+			},
+			wantContain: "cmd --cwd '/path/with spaces/dir'",
+		},
+		{
+			name:     "WorktreePath with shell metacharacters is escaped",
+			template: "cmd --cwd {{.WorktreePath}}",
+			sess: &Session{
+				ID:           "test-id",
+				Name:         "test-name",
+				WorktreePath: "/path/$(evil)/dir",
+			},
+			wantContain: "cmd --cwd '/path/$(evil)/dir'",
+		},
+		{
+			name:     "SessionID is escaped",
+			template: "cmd --id {{.SessionID}}",
+			sess: &Session{
+				ID:   "id;rm -rf /",
+				Name: "test-name",
+			},
+			wantContain: "cmd --id 'id;rm -rf /'",
+		},
+		{
+			name:     "all fields together",
+			template: "cmd --id {{.SessionID}} --name {{.SessionName}} --cwd {{.WorktreePath}} {{.ExtraArgs}}",
+			sess: &Session{
+				ID:           "test-id",
+				Name:         "test-name",
+				WorktreePath: "/safe/path",
+			},
+			extraArgs:   []string{"--flag", "value"},
+			wantContain: "cmd --id 'test-id' --name test-name --cwd '/safe/path' '--flag' 'value'",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := m.renderCommand(tt.template, tt.sess, tt.extraArgs)
+			if err != nil {
+				t.Fatalf("renderCommand() error: %v", err)
+			}
+			if got != tt.wantContain {
+				t.Errorf("renderCommand() = %q, want %q", got, tt.wantContain)
+			}
+		})
+	}
+}
+
 func TestShellJoinArgs(t *testing.T) {
 	tests := []struct {
 		name string
