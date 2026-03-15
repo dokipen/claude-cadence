@@ -29,7 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Write .env file
+      - name: Build and deploy
         env:
           JWT_SECRET: ${{ secrets.ISSUES_JWT_SECRET }}
         run: |
@@ -37,11 +37,6 @@ jobs:
             echo "::error::ISSUES_JWT_SECRET secret is not set"
             exit 1
           fi
-          umask 077
-          echo "JWT_SECRET=${JWT_SECRET}" > .env
-
-      - name: Build and deploy
-        run: |
           echo "==> Building Docker image..."
           docker compose build --no-cache
           echo "==> Recreating container..."
