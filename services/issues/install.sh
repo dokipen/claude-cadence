@@ -189,6 +189,11 @@ systemd_status() {
 
 # --- CLI installation ---
 
+sanitize_output() {
+  # Strip ANSI escape codes and truncate to a single line (max 200 chars)
+  sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' | head -c 200 | tr '\n' ' '
+}
+
 install_cli() {
   local cli_dir="$SCRIPT_DIR/../issues-cli"
   if [ -d "$cli_dir" ]; then
@@ -198,16 +203,15 @@ install_cli() {
     # privileges on Linux. Try without sudo first, fall back to sudo.
     local link_err
     link_err=$(mktemp)
+    trap 'rm -f "$link_err"' RETURN
     if (cd "$cli_dir" && npm link 2>"$link_err"); then
-      rm -f "$link_err"
+      :
     elif command -v sudo >/dev/null 2>&1; then
-      log "npm link failed ($(cat "$link_err")), retrying with sudo..."
-      rm -f "$link_err"
+      log "npm link failed ($(sanitize_output < "$link_err")), retrying with sudo..."
       (cd "$cli_dir" && sudo npm link) || err "sudo npm link failed in $cli_dir"
     else
       local reason
-      reason=$(cat "$link_err")
-      rm -f "$link_err"
+      reason=$(sanitize_output < "$link_err")
       err "npm link failed ($reason) and sudo is not available. Run 'sudo npm link' manually in $cli_dir"
     fi
     log "CLI installed. Run 'issues --help' to verify."
