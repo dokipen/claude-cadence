@@ -83,7 +83,7 @@ issues ticket list --assignee "username"
 issues ticket list --blocked
 issues ticket list --priority HIGH
 issues ticket list --project PROJECT_ID
-issues ticket list --first 50
+issues ticket list --limit 50
 issues ticket list --after "cursor_value"
 ```
 

@@ -282,7 +282,7 @@ interface ListOptions {
   blocked?: boolean;
   priority?: string;
   project?: string;
-  first?: string;
+  limit?: string;
   after?: string;
 }
 
@@ -499,9 +499,15 @@ export function registerTicketCommand(program: Command): void {
     .option("--blocked", "Filter to only blocked tickets")
     .option("--priority <priority>", "Filter by priority (HIGHEST, HIGH, MEDIUM, LOW, LOWEST)")
     .option("--project <id>", "Filter by project ID (inferred from git origin if omitted)")
-    .option("--first <count>", "Number of tickets to fetch", "20")
+    .option("-l, --limit <count>", "Max number of tickets to return", "100")
     .option("--after <cursor>", "Cursor for pagination")
     .action(async (opts: ListOptions) => {
+      const limit = parseInt(opts.limit ?? "100", 10);
+      if (!Number.isFinite(limit) || limit <= 0) {
+        console.error(chalk.red("Error: --limit must be a positive integer"));
+        process.exitCode = 1;
+        return;
+      }
       const spinner = ora("Fetching tickets...").start();
       try {
         // Try to infer project if not explicitly provided
@@ -516,7 +522,7 @@ export function registerTicketCommand(program: Command): void {
 
         const client = getClient();
         const variables: Record<string, unknown> = {
-          first: parseInt(opts.first ?? "20", 10),
+          first: limit,
         };
         if (opts.state) variables.state = opts.state;
         if (opts.label) variables.labelName = opts.label;
