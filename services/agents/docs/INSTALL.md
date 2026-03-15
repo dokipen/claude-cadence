@@ -1,0 +1,436 @@
+# agentd Installation and Operations Guide
+
+`agentd` is a gRPC service for managing AI agent sessions in tmux. This guide covers
+installation, configuration, and day-to-day operation.
+
+---
+
+## 1. System Requirements
+
+**Supported operating systems:** macOS, Linux
+
+| Dependency | Required | Notes |
+|---|---|---|
+| Go 1.21+ | Build only | Not needed if using a pre-built binary |
+| git | Yes | Worktree and repo management |
+| tmux | Yes | Session management |
+| ttyd | No | Web terminal access (only when `ttyd.enabled: true`) |
+| vault CLI | No | Secret injection for private repos |
+| grpcurl | No | Useful for health checks and manual API calls |
+
+**Default network binding:** `127.0.0.1:4141`
+
+---
+
+## 2. Building
+
+```bash
+cd services/agents
+make build
+# Produces: ./agentd
+```
+
+If Go is unavailable, the `install/install.sh` script can drive the build automatically when run from the source tree.
+
+---
+
+## 3. Installation
+
+### Interactive installer (recommended)
+
+The installer handles binary placement, user creation, directory setup, config
+generation, and service registration in one step.
+
+```bash
+cd services/agents
+./install/install.sh
+```
+
+The script detects the platform (macOS or Linux), checks prerequisites, prompts for
+configuration values, and registers `agentd` as a launchd agent (macOS) or systemd
+service (Linux).
+
+### Manual installation
+
+1. Build the binary: `make build`
+2. Copy to a directory on your `$PATH`: `sudo cp agentd /usr/local/bin/agentd`
+3. Create a config file (see Section 4)
+4. Run directly or register as a service (see Section 9)
+
+---
+
+## 4. Configuration
+
+### Config file location
+
+agentd looks for its configuration in the following order:
+
+1. Path given by `--config <path>` flag
+2. Path in the `AGENTD_CONFIG` environment variable
+3. `~/.config/agentd/config.yaml` (default)
+
+Copy the example config as a starting point:
+
+```bash
+cp services/agents/config.example.yaml ~/.config/agentd/config.yaml
+```
+
+### Full configuration reference
+
+```yaml
+# Network binding
+host: "127.0.0.1"   # default: 127.0.0.1
+port: 4141           # default: 4141
+
+# Root directory for git clones and worktrees (required for git/worktree features)
+root_dir: "/var/lib/agentd"
+
+# tmux configuration
+tmux:
+  socket_name: "agentd"   # default: "agentd"
+
+# ttyd web terminal (optional)
+ttyd:
+  enabled: false      # default: false
+  base_port: 7681     # default: 7681 — first port in the allocation range
+  max_ports: 100      # default: 100  — maximum concurrent ttyd instances
+                      # ports used: base_port .. base_port+max_ports-1
+
+# Logging
+log:
+  level: "info"    # default: "info"  — debug, info, warn, error
+  format: "json"   # default: "json"  — json, text
+
+# Stale session cleanup
+cleanup:
+  stale_session_ttl: "24h"   # default: "24h" — destroy stopped sessions after this duration
+  check_interval: "5m"       # default: "5m"  — how often to scan for stale sessions
+
+# Authentication
+auth:
+  mode: "none"           # default: "none" — "none" or "token"
+  token: ""              # shared bearer token (token mode)
+  token_env_var: ""      # env var to read the token from (takes priority over token)
+
+# HashiCorp Vault integration (optional — omit entire block if unused)
+vault:
+  address: "https://vault.example.com"
+  auth_method: "token"        # "token" or "approle"
+
+  # Token auth
+  token: ""               # inline token (not recommended for production)
+  token_env_var: ""       # env var override; falls back to VAULT_TOKEN if empty
+
+  # AppRole auth
+  role_id: ""
+  secret_id: ""
+  secret_id_env_var: ""   # env var override for secret_id
+
+# Agent profiles
+profiles:
+  my-agent:
+    repo: "https://github.com/org/project.git"
+    command: "claude --model sonnet --permission-mode accept --cwd {{.WorktreePath}} {{.ExtraArgs}}"
+    description: "Claude Code agent"
+    vault_secret: ""   # optional — Vault path for repo credentials
+
+# gRPC reflection (enables grpcurl service discovery)
+reflection: false   # default: false
+```
+
+### Configuration constraints
+
+- `root_dir` is required whenever profiles use worktrees or repo cloning.
+- Binding to a non-loopback address (`host` other than `127.0.0.1`, `localhost`, or
+  `::1`) requires `auth.mode` to be `"token"`. The service will refuse to start if
+  this constraint is violated.
+- `ttyd.base_port + ttyd.max_ports` must not exceed 65536.
+- At least one profile must be defined.
+- Every profile must have a non-empty `command`.
+- A profile with `vault_secret` set requires a `vault` block in the config.
+
+---
+
+## 5. Running
+
+```bash
+# Using --config flag
+agentd --config ~/.config/agentd/config.yaml
+
+# Using environment variable
+AGENTD_CONFIG=~/.config/agentd/config.yaml agentd
+```
+
+agentd logs to stderr in JSON format by default. Use a process supervisor or service
+manager to capture and rotate logs.
+
+---
+
+## 6. Profile Configuration
+
+Profiles define which agent command to run and against which repository. Each profile
+name becomes an identifier used in API calls.
+
+### Command template variables
+
+Profile `command` strings are Go templates evaluated at session start:
+
+| Variable | Description |
+|---|---|
+| `{{.WorktreePath}}` | Absolute path of the checked-out worktree |
+| `{{.ExtraArgs}}` | Additional arguments passed by the caller at session creation |
+| `{{.SessionName}}` | Human-readable tmux session name |
+| `{{.SessionID}}` | Unique session UUID |
+
+### Examples
+
+```yaml
+profiles:
+  # Claude Code reviewer using the sonnet model
+  claude-reviewer:
+    repo: "https://github.com/org/project.git"
+    command: "claude --model sonnet --permission-mode accept --cwd {{.WorktreePath}} {{.ExtraArgs}}"
+    description: "Claude Code reviewer"
+
+  # Claude Opus for complex tasks
+  claude-opus:
+    repo: "https://github.com/org/project.git"
+    command: "claude --model opus --permission-mode accept --cwd {{.WorktreePath}} {{.ExtraArgs}}"
+    description: "Claude Opus agent"
+
+  # Custom agent script
+  my-agent:
+    repo: "https://github.com/org/project.git"
+    command: "/usr/local/bin/my-agent --session {{.SessionID}} --dir {{.WorktreePath}} {{.ExtraArgs}}"
+    description: "Custom agent"
+```
+
+---
+
+## 7. Authentication
+
+By default (`auth.mode: "none"`) the service accepts all connections without
+credentials. This is safe when `agentd` is bound to localhost and accessed only by
+trusted local processes.
+
+### Token authentication
+
+Set `auth.mode` to `"token"` and supply a token:
+
+```yaml
+auth:
+  mode: "token"
+  token_env_var: "AGENTD_TOKEN"   # preferred — read token from environment
+```
+
+Or inline (not recommended for shared configs):
+
+```yaml
+auth:
+  mode: "token"
+  token: "my-secret-token"
+```
+
+### Authenticating with grpcurl
+
+Pass the token in the `Authorization` header:
+
+```bash
+grpcurl -plaintext \
+  -H "Authorization: Bearer $AGENTD_TOKEN" \
+  127.0.0.1:4141 \
+  agents.v1.AgentService/ListSessions
+```
+
+Token authentication is required whenever `agentd` is bound to a non-loopback
+interface.
+
+---
+
+## 8. Vault Integration
+
+HashiCorp Vault is used to supply credentials for private repositories at session
+start time. When a profile specifies `vault_secret`, agentd fetches the secret from
+Vault before cloning the repo.
+
+### When to use Vault
+
+- Profiles that clone private repositories requiring authentication tokens
+- Environments where credentials must not be stored in config files
+
+### Token authentication
+
+```yaml
+vault:
+  address: "https://vault.example.com"
+  auth_method: "token"
+  token_env_var: "VAULT_TOKEN"   # standard Vault env var; used by default
+```
+
+### AppRole authentication
+
+AppRole is suitable for automated deployments where a human-interactive token is not
+available:
+
+```yaml
+vault:
+  address: "https://vault.example.com"
+  auth_method: "approle"
+  role_id: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+  secret_id_env_var: "VAULT_SECRET_ID"   # inject secret_id at runtime
+```
+
+### Profile vault_secret field
+
+```yaml
+profiles:
+  private-agent:
+    repo: "https://github.com/org/private-repo.git"
+    command: "claude --cwd {{.WorktreePath}} {{.ExtraArgs}}"
+    vault_secret: "secret/data/agentd/github/private-repo"
+```
+
+The value is the Vault KV path from which agentd reads credentials before cloning.
+
+---
+
+## 9. Stale Session Cleanup
+
+agentd automatically tracks session state. When a tmux session stops (the agent
+process exits), the session transitions to a stopped state. The cleanup subsystem
+runs on a configurable interval and destroys stopped sessions that have been idle
+longer than `stale_session_ttl`.
+
+On restart, agentd reconciles its internal state with the live tmux sessions,
+recovering any sessions that are still running.
+
+```yaml
+cleanup:
+  stale_session_ttl: "24h"   # how long to keep stopped sessions before destroying them
+  check_interval: "5m"       # how often to run the cleanup scan
+```
+
+---
+
+## 10. Service Management
+
+The interactive installer registers agentd as a system service automatically. For
+manual setups, use the templates in `install/`.
+
+### macOS — launchd
+
+```bash
+# Install (done by install.sh, shown for reference)
+launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.cadence.agentd.plist
+
+# Start / stop
+launchctl kickstart -k "gui/$(id -u)/com.cadence.agentd"
+launchctl bootout "gui/$(id -u)/com.cadence.agentd"
+
+# View logs (launchd redirects stdout/stderr to files configured in the plist)
+tail -f ~/Library/Logs/agentd/agentd.stderr.log
+```
+
+The plist template (`install/agentd.plist.tmpl`) sets `KeepAlive` and `RunAtLoad`,
+so agentd starts at login and restarts automatically on failure.
+
+### Linux — systemd
+
+```bash
+# Enable and start (done by install.sh, shown for reference)
+sudo systemctl enable agentd
+sudo systemctl start agentd
+
+# Control
+sudo systemctl stop agentd
+sudo systemctl restart agentd
+
+# View logs
+journalctl -u agentd -f
+```
+
+The systemd unit template (`install/agentd.service.tmpl`) sets `Restart=on-failure`
+with a 5-second restart delay. Logs go to the journal (`SyslogIdentifier=agentd`).
+
+### Uninstalling
+
+```bash
+./install/uninstall.sh
+```
+
+---
+
+## 11. Troubleshooting
+
+### Port already in use
+
+```
+failed to listen: address already in use
+```
+
+Another process is using port 4141. Either stop the other process or change
+`port` in the config.
+
+```bash
+# Find the process using the port
+lsof -i :4141
+```
+
+### tmux not found
+
+```
+exec: "tmux": executable file not found in $PATH
+```
+
+Install tmux:
+- macOS: `brew install tmux`
+- Ubuntu/Debian: `sudo apt install tmux`
+
+### Permission errors on root_dir
+
+agentd needs read/write access to `root_dir` and its subdirectories. Check ownership:
+
+```bash
+ls -la /var/lib/agentd
+sudo chown -R agentd:agentd /var/lib/agentd
+```
+
+### Authentication rejected
+
+Verify the token matches what was configured and that the `Authorization` header
+is formatted correctly: `Bearer <token>` (case-sensitive).
+
+### Inspecting live tmux sessions
+
+agentd uses a named tmux socket. To list sessions outside of agentd:
+
+```bash
+tmux -L agentd list-sessions
+```
+
+To attach to a running agent session for debugging:
+
+```bash
+tmux -L agentd attach -t <session-name>
+```
+
+### Enabling debug logging
+
+Set `log.level` to `"debug"` in the config and restart the service. This produces
+verbose output for all gRPC calls, tmux interactions, and session state transitions.
+
+```yaml
+log:
+  level: "debug"
+  format: "text"   # "text" is easier to read in a terminal; use "json" for log aggregators
+```
+
+### Health check with grpcurl
+
+```bash
+# List available services (requires reflection: true in config)
+grpcurl -plaintext 127.0.0.1:4141 list
+
+# Check connectivity without reflection
+grpcurl -plaintext 127.0.0.1:4141 agentd.AgentService/ListSessions
+```
