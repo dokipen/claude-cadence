@@ -12,13 +12,28 @@ const LIST_LABELS = gql`
 `;
 
 /**
- * Resolves a label identifier to a CUID.
- * If the identifier looks like a CUID, returns it directly.
- * Otherwise, looks up the label by name (case-insensitive).
+ * Fetches all labels once and resolves each name/ID to a CUID.
+ * CUIDs are returned directly without a round-trip.
+ * Names are matched case-insensitively.
+ *
+ * Note: assumes the labels list is small enough to fetch in one query
+ * (no pagination). This is safe for typical projects with < 100 labels.
  */
-export async function resolveLabelId(nameOrId: string): Promise<string> {
-  if (isCuid(nameOrId)) {
-    return nameOrId;
+export async function resolveLabelIds(namesOrIds: string[]): Promise<string[]> {
+  const results: string[] = [];
+  const toResolve: { index: number; name: string }[] = [];
+
+  for (let i = 0; i < namesOrIds.length; i++) {
+    if (isCuid(namesOrIds[i])) {
+      results[i] = namesOrIds[i];
+    } else {
+      results[i] = ""; // placeholder
+      toResolve.push({ index: i, name: namesOrIds[i] });
+    }
+  }
+
+  if (toResolve.length === 0) {
+    return results;
   }
 
   const client = getClient();
@@ -26,16 +41,26 @@ export async function resolveLabelId(nameOrId: string): Promise<string> {
     labels: Array<{ id: string; name: string }>;
   }>(LIST_LABELS);
 
-  const match = data.labels.find(
-    (l) => l.name.toLowerCase() === nameOrId.toLowerCase(),
-  );
-
-  if (!match) {
-    const available = data.labels.map((l) => l.name).join(", ");
-    throw new Error(
-      `Label not found: "${nameOrId}". Available labels: ${available}`,
+  for (const { index, name } of toResolve) {
+    const match = data.labels.find(
+      (l) => l.name.toLowerCase() === name.toLowerCase(),
     );
+    if (!match) {
+      throw new Error(
+        `Label not found: "${name}". Run "issues label list" to see available labels.`,
+      );
+    }
+    results[index] = match.id;
   }
 
-  return match.id;
+  return results;
+}
+
+/**
+ * Resolves a single label identifier to a CUID.
+ * Convenience wrapper around resolveLabelIds.
+ */
+export async function resolveLabelId(nameOrId: string): Promise<string> {
+  const [id] = await resolveLabelIds([nameOrId]);
+  return id;
 }

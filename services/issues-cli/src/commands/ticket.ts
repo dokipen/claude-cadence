@@ -5,7 +5,7 @@ import ora from "ora";
 import { getClient } from "../client.js";
 import { handleError } from "../errors.js";
 import { resolveProjectId } from "../project-resolver.js";
-import { resolveLabelId } from "../resolve-label.js";
+import { resolveLabelIds } from "../resolve-label.js";
 import { resolveTicketId } from "../resolve-ticket.js";
 
 // --- GraphQL Documents ---
@@ -335,7 +335,7 @@ export function registerTicketCommand(program: Command): void {
         if (opts.acceptanceCriteria) input.acceptanceCriteria = opts.acceptanceCriteria;
         if (opts.labels) {
           const labelTokens = opts.labels.split(",").map((s) => s.trim());
-          input.labelIds = await Promise.all(labelTokens.map(resolveLabelId));
+          input.labelIds = await resolveLabelIds(labelTokens);
         }
         if (opts.assignee) input.assigneeId = opts.assignee;
         if (opts.points) input.storyPoints = parseInt(opts.points, 10);

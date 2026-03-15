@@ -18,15 +18,12 @@ vi.mock("./config.js", () => ({
 }));
 
 // Mock project-resolver (for isCuid export)
-vi.mock("./project-resolver.js", async () => {
-  const actual = await vi.importActual<typeof import("./project-resolver.js")>("./project-resolver.js");
-  return {
-    ...actual,
-    resolveProjectId: vi.fn(),
-  };
-});
+vi.mock("./project-resolver.js", () => ({
+  isCuid: (value: string) => /^c[a-z0-9]{24,}$/.test(value),
+  resolveProjectId: vi.fn(),
+}));
 
-const { resolveLabelId } = await import("./resolve-label.js");
+const { resolveLabelId, resolveLabelIds } = await import("./resolve-label.js");
 
 describe("resolveLabelId", () => {
   beforeEach(() => {
@@ -64,7 +61,7 @@ describe("resolveLabelId", () => {
     expect(result).toBe("label-1");
   });
 
-  it("throws with available labels when not found", async () => {
+  it("throws with guidance when not found", async () => {
     mockRequest.mockResolvedValue({
       labels: [
         { id: "label-1", name: "bug" },
@@ -73,7 +70,46 @@ describe("resolveLabelId", () => {
     });
 
     await expect(resolveLabelId("nonexistent")).rejects.toThrow(
-      'Label not found: "nonexistent". Available labels: bug, enhancement',
+      'Label not found: "nonexistent". Run "issues label list" to see available labels.',
     );
+  });
+});
+
+describe("resolveLabelIds", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("resolves multiple labels in a single fetch", async () => {
+    mockRequest.mockResolvedValue({
+      labels: [
+        { id: "label-1", name: "bug" },
+        { id: "label-2", name: "enhancement" },
+      ],
+    });
+
+    const result = await resolveLabelIds(["bug", "enhancement"]);
+    expect(result).toEqual(["label-1", "label-2"]);
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips fetch when all inputs are CUIDs", async () => {
+    const cuid1 = "cmms2j38b0009o601cui5c23i";
+    const cuid2 = "cmms2j38b0009o601cui5c24j";
+
+    const result = await resolveLabelIds([cuid1, cuid2]);
+    expect(result).toEqual([cuid1, cuid2]);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("mixes CUIDs and names", async () => {
+    const cuid = "cmms2j38b0009o601cui5c23i";
+    mockRequest.mockResolvedValue({
+      labels: [{ id: "label-1", name: "bug" }],
+    });
+
+    const result = await resolveLabelIds([cuid, "bug"]);
+    expect(result).toEqual([cuid, "label-1"]);
+    expect(mockRequest).toHaveBeenCalledTimes(1);
   });
 });

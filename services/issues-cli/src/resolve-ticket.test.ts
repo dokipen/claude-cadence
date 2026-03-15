@@ -20,6 +20,7 @@ vi.mock("./config.js", () => ({
 // Mock project-resolver
 const mockResolveProjectId = vi.fn();
 vi.mock("./project-resolver.js", () => ({
+  isCuid: (value: string) => /^c[a-z0-9]{24,}$/.test(value),
   resolveProjectId: (...args: unknown[]) => mockResolveProjectId(...args),
 }));
 
@@ -58,6 +59,14 @@ describe("resolveTicketId", () => {
     mockRequest.mockResolvedValue({ ticketByNumber: null });
 
     await expect(resolveTicketId("999")).rejects.toThrow("Ticket not found: 999");
+  });
+
+  it("throws for invalid (non-numeric, non-CUID) identifiers", async () => {
+    await expect(resolveTicketId("abc-123")).rejects.toThrow(
+      'Invalid ticket identifier: "abc-123"',
+    );
+    expect(mockResolveProjectId).not.toHaveBeenCalled();
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("propagates errors from resolveProjectId", async () => {
