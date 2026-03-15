@@ -81,6 +81,7 @@ An issue is refined when it has ALL of:
 | Clear title | Descriptive, categorized via labels | Same |
 | Acceptance criteria | Checkboxes defining "done" | `--acceptance-criteria` field |
 | Estimate | `estimate:N` label (1-13) | Story points field (`--points N`) |
+| Priority | `priority:high`, `priority:medium`, or `priority:low` label | Priority field (`--priority N`) |
 | Type label | Label by name: bug, enhancement, etc. | Label by ID (use `issues label list` to look up) |
 | Assigned | Assigned to a developer | `issues assign N --user USER_ID` |
 | Blockers linked | Via GitHub dependencies API | `issues block add --blocker X --blocked N` |
