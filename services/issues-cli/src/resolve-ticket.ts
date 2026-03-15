@@ -1,5 +1,6 @@
 import { gql } from "graphql-request";
 import { getClient } from "./client.js";
+import { isCuid } from "./project-resolver.js";
 import { resolveProjectId } from "./project-resolver.js";
 
 const GET_TICKET_ID_BY_NUMBER = gql`
@@ -20,10 +21,15 @@ export async function resolveTicketId(
   id: string,
   project?: string,
 ): Promise<string> {
-  const isNumber = /^\d+$/.test(id);
-
-  if (!isNumber) {
+  if (isCuid(id)) {
     return id;
+  }
+
+  const isNumber = /^\d+$/.test(id);
+  if (!isNumber) {
+    throw new Error(
+      `Invalid ticket identifier: "${id}". Provide a ticket number (e.g., 42) or a CUID.`,
+    );
   }
 
   const projectId = await resolveProjectId(project);

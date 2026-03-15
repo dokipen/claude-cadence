@@ -5,6 +5,7 @@ import ora from "ora";
 import { getClient } from "../client.js";
 import { handleError } from "../errors.js";
 import { resolveProjectId } from "../project-resolver.js";
+import { resolveLabelIds } from "../resolve-label.js";
 import { resolveTicketId } from "../resolve-ticket.js";
 
 // --- GraphQL Documents ---
@@ -404,7 +405,7 @@ export function registerTicketCommand(program: Command): void {
     .option("--project <project>", "Project name or ID (inferred from git origin if omitted)")
     .option("--description <description>", "Ticket description")
     .option("--acceptance-criteria <criteria>", "Acceptance criteria")
-    .option("--labels <ids>", "Comma-separated label IDs")
+    .option("--labels <names-or-ids>", "Comma-separated label names or IDs")
     .option("--assignee <id>", "Assignee user ID")
     .option("--points <points>", "Story points")
     .option("--priority <priority>", "Priority (HIGHEST, HIGH, MEDIUM, LOW, LOWEST)")
@@ -420,7 +421,10 @@ export function registerTicketCommand(program: Command): void {
         };
         if (opts.description) input.description = opts.description;
         if (opts.acceptanceCriteria) input.acceptanceCriteria = opts.acceptanceCriteria;
-        if (opts.labels) input.labelIds = opts.labels.split(",").map((s) => s.trim());
+        if (opts.labels) {
+          const labelTokens = opts.labels.split(",").map((s) => s.trim());
+          input.labelIds = await resolveLabelIds(labelTokens);
+        }
         if (opts.assignee) input.assigneeId = opts.assignee;
         if (opts.points) input.storyPoints = parseInt(opts.points, 10);
         if (opts.priority) input.priority = opts.priority;

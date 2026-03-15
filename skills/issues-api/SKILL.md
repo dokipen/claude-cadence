@@ -61,7 +61,7 @@ issues ticket create \
   --project PROJECT \
   --description "Detailed description" \
   --acceptance-criteria "- [ ] Criterion 1\n- [ ] Criterion 2" \
-  --labels "LABEL_ID1,LABEL_ID2" \
+  --labels "bug,enhancement" \
   --assignee USER_ID \
   --points 5 \
   --priority MEDIUM \
@@ -140,13 +140,13 @@ issues label create --name "bug" --color "#d73a4a" --json
 ### Add a label to a ticket
 
 ```bash
-issues label add TICKET_ID --label LABEL_ID --json
+issues label add TICKET_ID --label bug --json
 ```
 
 ### Remove a label from a ticket
 
 ```bash
-issues label remove TICKET_ID --label LABEL_ID --json
+issues label remove TICKET_ID --label bug --json
 ```
 
 ## Comments
@@ -174,13 +174,15 @@ issues comment delete COMMENT_ID --json
 ### Add a blocker
 
 ```bash
-issues block add --blocker 10 --blocked 42 --json
+issues block add --blocker 10 --blocked 42 --project PROJECT --json
 ```
+
+Note: `--project` is optional if you're in a git repo whose origin matches a known project.
 
 ### Remove a blocker
 
 ```bash
-issues block remove --blocker 10 --blocked 42 --json
+issues block remove --blocker 10 --blocked 42 --project PROJECT --json
 ```
 
 ## Assignment

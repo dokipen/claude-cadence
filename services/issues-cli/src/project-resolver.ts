@@ -28,7 +28,7 @@ const GET_PROJECT_BY_NAME = gql`
  * pattern would be treated as an ID. In practice this is unlikely since
  * project names are human-readable strings like "claude-cadence".
  */
-function isCuid(value: string): boolean {
+export function isCuid(value: string): boolean {
   return /^c[a-z0-9]{24,}$/.test(value);
 }
 
