@@ -1,0 +1,150 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      issues-service: ${{ steps.filter.outputs.issues-service }}
+      agent-service: ${{ steps.filter.outputs.agent-service }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3
+        id: filter
+        with:
+          filters: |
+            issues-service:
+              - 'services/issues/**'
+              - 'services/issues-cli/**'
+            agent-service:
+              - 'services/agents/**'
+
+  issues-service-test:
+    needs: changes
+    if: needs.changes.outputs.issues-service == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/issues
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: services/issues/package-lock.json
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  issues-cli-test:
+    needs: [changes, issues-service-test]
+    if: needs.changes.outputs.issues-service == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: |
+            services/issues/package-lock.json
+            services/issues-cli/package-lock.json
+      - name: Build issues service
+        run: cd services/issues && npm ci && npx prisma generate && npm run build
+      - name: Test CLI
+        run: cd services/issues-cli && npm ci && npm run typecheck && npm test
+
+  issues-service-docker:
+    needs: [changes, issues-service-test, issues-cli-test]
+    if: needs.changes.outputs.issues-service == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build services/issues/
+
+  agent-service-test:
+    needs: changes
+    if: needs.changes.outputs.agent-service == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/agents/go.mod
+      - name: Install tmux
+        run: sudo apt-get update && sudo apt-get install -y tmux
+      - name: Run go vet
+        working-directory: services/agents
+        run: go vet ./...
+      - name: Run unit tests
+        working-directory: services/agents
+        run: go test -v $(go list ./... | grep -v /test/e2e)
+      - name: Run e2e tests
+        working-directory: services/agents
+        run: go test -v -count=1 -timeout 120s ./test/e2e/
+
+  agent-service-build:
+    needs: [changes, agent-service-test]
+    if: needs.changes.outputs.agent-service == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/agents/go.mod
+      - name: Build agentd
+        working-directory: services/agents
+        run: go build -o agentd ./cmd/agentd
+
+  ci-status:
+    if: always()
+    needs:
+      - changes
+      - issues-service-test
+      - issues-cli-test
+      - issues-service-docker
+      - agent-service-test
+      - agent-service-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check CI status
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          ISSUES_TEST: ${{ needs.issues-service-test.result }}
+          ISSUES_CLI: ${{ needs.issues-cli-test.result }}
+          ISSUES_DOCKER: ${{ needs.issues-service-docker.result }}
+          AGENT_TEST: ${{ needs.agent-service-test.result }}
+          AGENT_BUILD: ${{ needs.agent-service-build.result }}
+        run: |
+          echo "Changes:        $CHANGES"
+          echo "Issues service: $ISSUES_TEST"
+          echo "Issues CLI:     $ISSUES_CLI"
+          echo "Issues Docker:  $ISSUES_DOCKER"
+          echo "Agent service:  $AGENT_TEST"
+          echo "Agent build:    $AGENT_BUILD"
+
+          # Fail if any job failed or was cancelled (skipped is OK — means path filter excluded it)
+          for result in "$CHANGES" "$ISSUES_TEST" "$ISSUES_CLI" "$ISSUES_DOCKER" "$AGENT_TEST" "$AGENT_BUILD"; do
+            if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
+              echo "::error::One or more CI jobs failed or were cancelled"
+              exit 1
+            fi
+          done
+
+          echo "All CI checks passed (or were skipped)"
