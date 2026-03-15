@@ -75,11 +75,11 @@ interface UserProfile {
 
 function readStdin(): Promise<string> {
   return new Promise((resolve, reject) => {
-    let data = "";
-    process.stdin.setEncoding("utf8");
-    process.stdin.on("data", (chunk) => { data += chunk; });
-    process.stdin.on("end", () => resolve(data.trim()));
-    process.stdin.on("error", reject);
+    const rl = createInterface({ input: process.stdin });
+    const lines: string[] = [];
+    rl.on("line", (line) => lines.push(line));
+    rl.on("close", () => resolve(lines.join("\n").trim()));
+    rl.on("error", (err) => { rl.close(); reject(err); });
   });
 }
 
@@ -155,8 +155,7 @@ export function registerAuthCommand(program: Command): void {
           return;
         }
       } catch (error) {
-        const spinner = ora();
-        spinner.fail("Authentication failed");
+        console.error(chalk.red("Authentication failed"));
         handleError(error);
       }
     });
