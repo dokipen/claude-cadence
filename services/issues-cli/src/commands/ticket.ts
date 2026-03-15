@@ -185,6 +185,61 @@ const LIST_TICKETS = gql`
   }
 `;
 
+const LIST_TICKETS_VERBOSE = gql`
+  query ListTicketsVerbose(
+    $state: TicketState
+    $labelName: String
+    $assigneeLogin: String
+    $isBlocked: Boolean
+    $priority: Priority
+    $projectId: ID
+    $first: Int
+    $after: String
+  ) {
+    tickets(
+      state: $state
+      labelName: $labelName
+      assigneeLogin: $assigneeLogin
+      isBlocked: $isBlocked
+      priority: $priority
+      projectId: $projectId
+      first: $first
+      after: $after
+    ) {
+      edges {
+        cursor
+        node {
+          id
+          number
+          title
+          description
+          acceptanceCriteria
+          state
+          priority
+          storyPoints
+          assignee {
+            login
+          }
+          project {
+            id
+            name
+          }
+          labels {
+            id
+            name
+          }
+          createdAt
+          updatedAt
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+`;
+
 const TRANSITION_TICKET = gql`
   mutation TransitionTicket($id: ID!, $to: TicketState!) {
     transitionTicket(id: $id, to: $to) {
@@ -319,6 +374,7 @@ interface ListOptions {
   limit?: string;
   after?: string;
   json?: boolean;
+  verbose?: boolean;
 }
 
 interface TransitionOptions {
@@ -557,6 +613,7 @@ export function registerTicketCommand(program: Command): void {
     .option("-l, --limit <count>", "Max number of tickets to return", "100")
     .option("--after <cursor>", "Cursor for pagination")
     .option("--json", "Output raw JSON")
+    .option("-v, --verbose", "Show full ticket details including description and acceptance criteria")
     .action(async (opts: ListOptions) => {
       const limit = Number(opts.limit);
       if (!Number.isInteger(limit) || limit <= 0) {
@@ -587,27 +644,33 @@ export function registerTicketCommand(program: Command): void {
         if (projectId) variables.projectId = projectId;
         if (opts.after) variables.after = opts.after;
 
+        type TicketNode = {
+          id: string;
+          number: number;
+          title: string;
+          state: string;
+          priority: string;
+          storyPoints: number | null;
+          assignee: { login: string } | null;
+          labels: { id?: string; name: string }[];
+          description?: string | null;
+          acceptanceCriteria?: string | null;
+          createdAt?: string;
+          updatedAt?: string;
+        };
+
         const data = await client.request<{
           tickets: {
             edges: Array<{
               cursor: string;
-              node: {
-                id: string;
-                number: number;
-                title: string;
-                state: string;
-                priority: string;
-                storyPoints: number | null;
-                assignee: { login: string } | null;
-                labels: { name: string }[];
-              };
+              node: TicketNode;
             }>;
             pageInfo: {
               hasNextPage: boolean;
               endCursor: string | null;
             };
           };
-        }>(LIST_TICKETS, variables);
+        }>(opts.verbose ? LIST_TICKETS_VERBOSE : LIST_TICKETS, variables);
 
         spinner.stop();
 
@@ -625,8 +688,36 @@ export function registerTicketCommand(program: Command): void {
         }
 
         console.log();
-        console.log(formatTicketTable(edges.map((e: { node: TicketNode }) => e.node)));
-        console.log();
+        if (opts.verbose) {
+          for (const edge of edges) {
+            const t = edge.node;
+            console.log(formatTicketTable([{ ...t, labels: [] }]));
+            if (t.labels.length > 0) {
+              const labelStr = t.labels
+                .map((l) => l.id ? `${l.name} ${chalk.dim(`(${l.id})`)}` : l.name)
+                .join(", ");
+              console.log(`    Labels: ${labelStr}`);
+            }
+            if (t.description) {
+              console.log();
+              console.log(chalk.bold("    Description"));
+              for (const line of t.description.split("\n")) {
+                console.log(`    ${line}`);
+              }
+            }
+            if (t.acceptanceCriteria) {
+              console.log();
+              console.log(chalk.bold("    Acceptance Criteria"));
+              for (const line of t.acceptanceCriteria.split("\n")) {
+                console.log(`    ${line}`);
+              }
+            }
+            console.log();
+          }
+        } else {
+          console.log(formatTicketTable(edges.map((e: { node: TicketNode }) => e.node)));
+          console.log();
+        }
 
         if (pageInfo.hasNextPage) {
           console.log(
