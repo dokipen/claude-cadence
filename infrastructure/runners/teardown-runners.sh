@@ -14,9 +14,16 @@ info()  { printf "\033[1;34m==>\033[0m %s\n" "$1"; }
 warn()  { printf "\033[1;33mWarning:\033[0m %s\n" "$1"; }
 error() { printf "\033[1;31mError:\033[0m %s\n" "$1" >&2; exit 1; }
 
+dry_run_print() {
+    local prefix="$1"; shift
+    printf "\033[0;36m[dry-run]\033[0m %s" "$prefix"
+    printf " %q" "$@"
+    printf "\n"
+}
+
 run_cmd() {
     if [[ "$DRY_RUN" == "true" ]]; then
-        printf "\033[0;36m[dry-run]\033[0m %s\n" "$*"
+        dry_run_print "" "$@"
     else
         "$@"
     fi
@@ -24,7 +31,7 @@ run_cmd() {
 
 sudo_cmd() {
     if [[ "$DRY_RUN" == "true" ]]; then
-        printf "\033[0;36m[dry-run]\033[0m sudo %s\n" "$*"
+        dry_run_print "sudo" "$@"
     else
         sudo "$@"
     fi
@@ -62,11 +69,19 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# --- Input validation ---
+
 [[ -z "$REPO" ]] && error "Missing required option: --repo OWNER/REPO"
 [[ ! "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] && error "Invalid repo format: '$REPO'. Expected OWNER/REPO."
+[[ ! "$RUNNER_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] && error "Invalid user name: '$RUNNER_USER'. Must match [a-z_][a-z0-9_-]{0,31}."
 
 REPO_NAME="${REPO#*/}"
 [[ -z "$BASE_DIR" ]] && BASE_DIR="/home/$RUNNER_USER"
+
+case "$BASE_DIR" in
+    *..*)  error "Invalid base-dir: '$BASE_DIR'. Path traversal not allowed." ;;
+esac
+[[ "$BASE_DIR" != /* ]] && error "Invalid base-dir: '$BASE_DIR'. Must be an absolute path."
 
 # --- Fetch removal token ---
 
@@ -93,21 +108,30 @@ teardown_runner() {
     # Stop and uninstall systemd service
     if [[ -f "$runner_dir/svc.sh" ]]; then
         info "  Stopping service..."
-        sudo_cmd bash -c "cd '$runner_dir' && ./svc.sh stop" || true
+        (cd "$runner_dir" && sudo ./svc.sh stop) || true
 
         info "  Uninstalling service..."
-        sudo_cmd bash -c "cd '$runner_dir' && ./svc.sh uninstall" || true
+        (cd "$runner_dir" && sudo ./svc.sh uninstall) || true
+    elif [[ "$DRY_RUN" == "true" ]]; then
+        info "  Stopping service..."
+        dry_run_print "sudo" sh -c "cd $runner_dir && ./svc.sh stop"
+        info "  Uninstalling service..."
+        dry_run_print "sudo" sh -c "cd $runner_dir && ./svc.sh uninstall"
     fi
 
-    # Unconfigure runner
+    # Unconfigure runner — pass token via environment variable
     if [[ -f "$runner_dir/config.sh" ]] || [[ "$DRY_RUN" == "true" ]]; then
         info "  Removing runner registration..."
         if [[ "$DRY_RUN" == "true" ]]; then
-            run_cmd sudo -u "$RUNNER_USER" "$runner_dir/config.sh" remove --token "$REMOVE_TOKEN"
+            dry_run_print "ACTIONS_RUNNER_INPUT_TOKEN=<token> sudo -u $RUNNER_USER" \
+                "$runner_dir/config.sh" remove
         else
-            sudo -u "$RUNNER_USER" "$runner_dir/config.sh" remove --token "$REMOVE_TOKEN" || {
+            export ACTIONS_RUNNER_INPUT_TOKEN="$REMOVE_TOKEN"
+            sudo -u "$RUNNER_USER" --preserve-env=ACTIONS_RUNNER_INPUT_TOKEN \
+                "$runner_dir/config.sh" remove || {
                 warn "  Could not unconfigure runner (may already be removed from GitHub)."
             }
+            unset ACTIONS_RUNNER_INPUT_TOKEN
         fi
     fi
 
@@ -128,37 +152,30 @@ main() {
     [[ "$DRY_RUN" == "true" ]] && info "  Mode: DRY RUN"
     echo
 
-    # Find runner directories for this repo
-    local pattern="${BASE_DIR}/actions-runner-${REPO_NAME}-*"
+    # Find runner directories for this repo using find to avoid glob word-splitting
     local runner_dirs=()
 
-    if [[ "$DRY_RUN" == "true" ]]; then
-        # In dry-run, show what we'd look for
-        info "Looking for runner directories matching: $pattern"
-        # Try to find them anyway (they may exist even in dry-run)
-        for dir in $pattern; do
-            [[ -d "$dir" ]] && runner_dirs+=("$dir")
+    if [[ -d "$BASE_DIR" ]]; then
+        while IFS= read -r dir; do
+            runner_dirs+=("$dir")
+        done < <(find "$BASE_DIR" -maxdepth 1 -type d -name "actions-runner-${REPO_NAME}-*" | sort)
+    fi
+
+    if [[ "$DRY_RUN" == "true" ]] && [[ ${#runner_dirs[@]} -eq 0 ]]; then
+        info "No directories found (expected in dry-run). Showing example teardown for 3 runners."
+        fetch_removal_token
+        for i in 1 2 3; do
+            local example_dir="${BASE_DIR}/actions-runner-${REPO_NAME}-${i}"
+            info "Would tear down: $example_dir"
+            teardown_runner "$example_dir"
         done
-        if [[ ${#runner_dirs[@]} -eq 0 ]]; then
-            info "No directories found (expected in dry-run). Showing example teardown for 3 runners."
-            for i in 1 2 3; do
-                local example_dir="${BASE_DIR}/actions-runner-${REPO_NAME}-${i}"
-                info "Would tear down: $example_dir"
-                run_cmd sudo -u "$RUNNER_USER" "$example_dir/config.sh" remove --token DRY_RUN_TOKEN_PLACEHOLDER
-                run_cmd rm -rf "$example_dir"
-            done
-            echo
-            info "Teardown complete (dry-run)."
-            return 0
-        fi
-    else
-        for dir in $pattern; do
-            [[ -d "$dir" ]] && runner_dirs+=("$dir")
-        done
+        echo
+        info "Teardown complete (dry-run)."
+        return 0
     fi
 
     if [[ ${#runner_dirs[@]} -eq 0 ]]; then
-        warn "No runner directories found matching: $pattern"
+        warn "No runner directories found in $BASE_DIR matching actions-runner-${REPO_NAME}-*"
         info "Nothing to tear down."
         return 0
     fi

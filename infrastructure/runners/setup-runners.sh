@@ -18,9 +18,17 @@ info()  { printf "\033[1;34m==>\033[0m %s\n" "$1"; }
 warn()  { printf "\033[1;33mWarning:\033[0m %s\n" "$1"; }
 error() { printf "\033[1;31mError:\033[0m %s\n" "$1" >&2; exit 1; }
 
+dry_run_print() {
+    # Print a shell-safe representation of the command
+    local prefix="$1"; shift
+    printf "\033[0;36m[dry-run]\033[0m %s" "$prefix"
+    printf " %q" "$@"
+    printf "\n"
+}
+
 run_cmd() {
     if [[ "$DRY_RUN" == "true" ]]; then
-        printf "\033[0;36m[dry-run]\033[0m %s\n" "$*"
+        dry_run_print "" "$@"
     else
         "$@"
     fi
@@ -28,7 +36,7 @@ run_cmd() {
 
 sudo_cmd() {
     if [[ "$DRY_RUN" == "true" ]]; then
-        printf "\033[0;36m[dry-run]\033[0m sudo %s\n" "$*"
+        dry_run_print "sudo" "$@"
     else
         sudo "$@"
     fi
@@ -75,12 +83,26 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# --- Input validation ---
+
 [[ -z "$REPO" ]] && error "Missing required option: --repo OWNER/REPO"
 [[ ! "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] && error "Invalid repo format: '$REPO'. Expected OWNER/REPO."
 [[ ! "$COUNT" =~ ^[1-9][0-9]*$ ]] && error "Invalid count: '$COUNT'. Must be a positive integer."
+[[ ! "$RUNNER_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] && error "Invalid user name: '$RUNNER_USER'. Must match [a-z_][a-z0-9_-]{0,31}."
+[[ ! "$LABELS" =~ ^[A-Za-z0-9_.,:-]+$ ]] && error "Invalid labels: '$LABELS'. Only alphanumeric, comma, period, colon, hyphen, and underscore allowed."
+if [[ "$RUNNER_VERSION" != "latest" ]]; then
+    [[ ! "$RUNNER_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && error "Invalid runner version: '$RUNNER_VERSION'. Expected semver (e.g., 2.321.0)."
+fi
 
 REPO_NAME="${REPO#*/}"
 [[ -z "$BASE_DIR" ]] && BASE_DIR="/home/$RUNNER_USER"
+
+# Canonicalize and reject path traversal
+case "$BASE_DIR" in
+    *..*)  error "Invalid base-dir: '$BASE_DIR'. Path traversal not allowed." ;;
+esac
+[[ "$BASE_DIR" != /* ]] && error "Invalid base-dir: '$BASE_DIR'. Must be an absolute path."
+
 HOSTNAME_PREFIX="$(hostname -s)"
 
 # --- Prerequisites ---
@@ -159,10 +181,13 @@ setup_runner() {
 
     info "Setting up runner $index: $runner_name"
 
-    # Idempotency: skip if runner directory exists and is configured
+    # Idempotency: skip if runner directory exists, is configured, and service is running
     if [[ -f "$runner_dir/.runner" ]] && [[ "$DRY_RUN" != "true" ]]; then
-        warn "Runner '$runner_name' already configured at $runner_dir — skipping."
-        return 0
+        if [[ -f "$runner_dir/.service" ]] && systemctl is-active "$(cat "$runner_dir/.service")" >/dev/null 2>&1; then
+            warn "Runner '$runner_name' already configured and running at $runner_dir — skipping."
+            return 0
+        fi
+        warn "Runner '$runner_name' configured but service not running — re-installing service."
     fi
 
     # Create and extract
@@ -176,35 +201,42 @@ setup_runner() {
         run_cmd tar -xzf "$runner_dir/actions-runner.tar.gz" -C "$runner_dir"
         run_cmd rm -f "$runner_dir/actions-runner.tar.gz"
     else
-        sudo -u "$RUNNER_USER" bash -c "cd '$runner_dir' && curl -sL '$tarball_url' -o actions-runner.tar.gz && tar -xzf actions-runner.tar.gz && rm -f actions-runner.tar.gz"
+        sudo -u "$RUNNER_USER" -- sh -c 'cd "$1" && curl -sL "$2" -o actions-runner.tar.gz && tar -xzf actions-runner.tar.gz && rm -f actions-runner.tar.gz' _ "$runner_dir" "$tarball_url"
     fi
 
-    # Configure
+    # Configure — pass token via environment variable to avoid process list exposure
     info "  Configuring runner '$runner_name'..."
     if [[ "$DRY_RUN" == "true" ]]; then
-        run_cmd sudo -u "$RUNNER_USER" "$runner_dir/config.sh" \
-            --unattended \
+        dry_run_print "ACTIONS_RUNNER_INPUT_TOKEN=<token> sudo -u $RUNNER_USER" \
+            "$runner_dir/config.sh" --unattended \
             --url "https://github.com/$REPO" \
-            --token "$REG_TOKEN" \
-            --name "$runner_name" \
-            --labels "$LABELS" \
-            --replace
+            --name "$runner_name" --labels "$LABELS" --replace
     else
-        sudo -u "$RUNNER_USER" "$runner_dir/config.sh" \
+        export ACTIONS_RUNNER_INPUT_TOKEN="$REG_TOKEN"
+        sudo -u "$RUNNER_USER" --preserve-env=ACTIONS_RUNNER_INPUT_TOKEN \
+            "$runner_dir/config.sh" \
             --unattended \
             --url "https://github.com/$REPO" \
-            --token "$REG_TOKEN" \
             --name "$runner_name" \
             --labels "$LABELS" \
             --replace
+        unset ACTIONS_RUNNER_INPUT_TOKEN
     fi
 
     # Install and start systemd service
     info "  Installing systemd service..."
-    sudo_cmd bash -c "cd '$runner_dir' && ./svc.sh install '$RUNNER_USER'"
+    if [[ "$DRY_RUN" == "true" ]]; then
+        dry_run_print "sudo" sh -c "cd $runner_dir && ./svc.sh install $RUNNER_USER"
+    else
+        (cd "$runner_dir" && sudo ./svc.sh install "$RUNNER_USER")
+    fi
 
     info "  Starting service..."
-    sudo_cmd bash -c "cd '$runner_dir' && ./svc.sh start"
+    if [[ "$DRY_RUN" == "true" ]]; then
+        dry_run_print "sudo" sh -c "cd $runner_dir && ./svc.sh start"
+    else
+        (cd "$runner_dir" && sudo ./svc.sh start)
+    fi
 
     info "  Runner '$runner_name' is ready."
 }
@@ -235,8 +267,7 @@ main() {
     info ""
     info "Summary:"
     for i in $(seq 1 "$COUNT"); do
-        local runner_name="${HOSTNAME_PREFIX}-${REPO_NAME}-${i}"
-        info "  - $runner_name"
+        info "  - ${HOSTNAME_PREFIX}-${REPO_NAME}-${i}"
     done
     echo
     info "View runners: gh api repos/$REPO/actions/runners --jq '.runners[] | .name'"

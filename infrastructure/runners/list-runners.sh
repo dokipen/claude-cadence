@@ -40,7 +40,13 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+[[ ! "$RUNNER_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] && error "Invalid user name: '$RUNNER_USER'."
 [[ -z "$BASE_DIR" ]] && BASE_DIR="/home/$RUNNER_USER"
+
+case "$BASE_DIR" in
+    *..*)  error "Invalid base-dir: '$BASE_DIR'. Path traversal not allowed." ;;
+esac
+[[ "$BASE_DIR" != /* ]] && error "Invalid base-dir: '$BASE_DIR'. Must be an absolute path."
 
 # --- Main ---
 
@@ -66,8 +72,11 @@ main() {
         # Extract runner name from .runner config if available
         local runner_name="(unknown)"
         if [[ -f "$runner_dir/.runner" ]]; then
-            # .runner is a JSON file with agentName field
-            runner_name=$(grep -o '"agentName":"[^"]*"' "$runner_dir/.runner" 2>/dev/null | cut -d'"' -f4 || echo "(unknown)")
+            if command -v jq >/dev/null 2>&1; then
+                runner_name=$(jq -r '.agentName // "(unknown)"' "$runner_dir/.runner" 2>/dev/null || echo "(unknown)")
+            else
+                runner_name=$(grep -o '"agentName":"[^"]*"' "$runner_dir/.runner" 2>/dev/null | cut -d'"' -f4 || echo "(unknown)")
+            fi
         fi
 
         # Find the systemd service name
@@ -76,9 +85,9 @@ main() {
             svc_name=$(cat "$runner_dir/.service")
         fi
 
-        # Get service status
+        # Get service status (validate service name before passing to systemctl)
         local status="unknown"
-        if [[ -n "$svc_name" ]] && command -v systemctl >/dev/null 2>&1; then
+        if [[ -n "$svc_name" ]] && [[ "$svc_name" =~ ^[A-Za-z0-9_.@-]+$ ]] && command -v systemctl >/dev/null 2>&1; then
             status=$(systemctl is-active "$svc_name" 2>/dev/null || echo "inactive")
         fi
 
