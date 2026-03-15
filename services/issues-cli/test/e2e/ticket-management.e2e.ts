@@ -128,7 +128,7 @@ describe("Ticket Management", () => {
     const result = await suite.cli("ticket", "list", "--limit", "1");
     expect(result.exitCode).toBe(0);
     // Count ticket rows (each has a # prefix from formatTicketRow)
-    const ticketLines = result.stdout.split("\n").filter(l => l.includes("#"));
+    const ticketLines = result.stdout.split("\n").filter(l => /^\s+#\S+\s+\[/.test(l));
     expect(ticketLines).toHaveLength(1);
     // Should indicate more results available
     expect(result.stdout).toContain("More results available");
@@ -137,8 +137,9 @@ describe("Ticket Management", () => {
   it("should limit results with -l shorthand", async () => {
     const result = await suite.cli("ticket", "list", "-l", "2");
     expect(result.exitCode).toBe(0);
-    const ticketLines = result.stdout.split("\n").filter(l => l.includes("#"));
+    const ticketLines = result.stdout.split("\n").filter(l => /^\s+#\S+\s+\[/.test(l));
     expect(ticketLines).toHaveLength(2);
+    expect(result.stdout).toContain("More results available");
   });
 
   it("should update a ticket's title", async () => {
