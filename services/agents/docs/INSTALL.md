@@ -360,7 +360,15 @@ with a 5-second restart delay. Logs go to the journal (`SyslogIdentifier=agentd`
 
 ---
 
-## 11. Troubleshooting
+## 11. Reverse Proxy (Caddy)
+
+A shared Caddyfile in `infrastructure/Caddyfile` provides a single entry point for both the issues and agents services. See the [Caddy setup section](../../../infrastructure/README.md) for full details.
+
+When running behind Caddy, gRPC requests to agentd are routed through `/agents/*` on the Caddy host using h2c transport. Direct access on port 4141 remains available for local development.
+
+---
+
+## 12. Troubleshooting
 
 ### Port already in use
 
