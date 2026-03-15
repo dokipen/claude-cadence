@@ -88,6 +88,22 @@ describe("Workflow States", () => {
     expect(result.exitCode).toBe(0);
     const output = result.stdout + result.stderr;
     expect(output).toContain("CLOSED");
+
+    // Reset to BACKLOG for subsequent tests
+    await suite.cli("ticket", "transition", ticketId, "--to", "BACKLOG");
+  });
+
+  it("should allow transition REFINED → CLOSED", async () => {
+    // Move to REFINED
+    await suite.cli("ticket", "transition", ticketId, "--to", "REFINED");
+
+    const result = await suite.cli("ticket", "transition", ticketId, "--to", "CLOSED");
+    expect(result.exitCode).toBe(0);
+    const output = result.stdout + result.stderr;
+    expect(output).toContain("CLOSED");
+
+    // Reset to BACKLOG for subsequent tests
+    await suite.cli("ticket", "transition", ticketId, "--to", "BACKLOG");
   });
 
   it("should reject invalid transition BACKLOG → IN_PROGRESS", async () => {
