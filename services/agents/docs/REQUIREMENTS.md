@@ -58,6 +58,7 @@ As a user, I can manage agent sessions through the gRPC API.
 - Duplicate session names are rejected with an appropriate error
 - If I don't provide a session name, one is auto-generated
 - Session names are validated for tmux-safe characters (`[a-zA-Z0-9_-]`)
+- Extra args are validated (no null bytes, max 64 args, max 4096 bytes each) and individually shell-escaped before template rendering
 
 **E2E test file**: `test/e2e/session_lifecycle_test.go`
 
