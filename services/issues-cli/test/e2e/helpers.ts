@@ -2,7 +2,7 @@ import { spawn, execSync, type ChildProcess } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { createServer } from "node:net";
+
 import jwt from "jsonwebtoken";
 
 // Resolve paths relative to repo root (two levels up from issues-cli/)
@@ -12,25 +12,6 @@ const ISSUES_CLI_DIR = join(REPO_ROOT, "services", "issues-cli");
 
 const TEST_JWT_SECRET = "test-secret";
 export const TEST_USER_ID = "test-user-id-000";
-
-/**
- * Find a free port by briefly listening on port 0 and reading the assigned port.
- */
-async function getFreePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const srv = createServer();
-    srv.listen(0, () => {
-      const addr = srv.address();
-      if (addr && typeof addr === "object") {
-        const port = addr.port;
-        srv.close(() => resolve(port));
-      } else {
-        srv.close(() => reject(new Error("Could not determine port")));
-      }
-    });
-    srv.on("error", reject);
-  });
-}
 
 export interface TestServer {
   url: string;
@@ -47,12 +28,11 @@ export async function createTestServer(): Promise<TestServer> {
   const tmpDir = mkdtempSync(join(tmpdir(), "issues-e2e-"));
   const dbPath = join(tmpDir, "test.db");
   const databaseUrl = `file:${dbPath}`;
-  const port = await getFreePort();
 
   const env = {
     ...process.env,
     DATABASE_URL: databaseUrl,
-    PORT: String(port),
+    PORT: "0",
     JWT_SECRET: TEST_JWT_SECRET,
   };
 
@@ -91,10 +71,8 @@ export async function createTestServer(): Promise<TestServer> {
     stdio: ["pipe", "pipe", "pipe"],
   });
 
-  const url = `http://localhost:${port}`;
-
-  // Wait for "Server ready" in stdout
-  await new Promise<void>((resolvePromise, reject) => {
+  // Wait for "Server ready at <url>" in stdout and extract the actual bound URL
+  const url = await new Promise<string>((resolvePromise, reject) => {
     const timeout = setTimeout(() => {
       reject(new Error("Server did not start within 15 seconds"));
     }, 15_000);
@@ -103,9 +81,10 @@ export async function createTestServer(): Promise<TestServer> {
 
     serverProcess.stdout.on("data", (data: Buffer) => {
       const text = data.toString();
-      if (text.includes("Server ready")) {
+      const match = text.match(/Server ready at (http:\/\/localhost:\d+)/);
+      if (match) {
         clearTimeout(timeout);
-        resolvePromise();
+        resolvePromise(match[1]);
       }
     });
 
