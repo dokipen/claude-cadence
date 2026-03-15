@@ -230,9 +230,9 @@ In both cases:
    - If checks pass: the merge proceeds automatically
    - If checks fail: report the specific failed check(s) to the user
    - If timeout is exceeded: report the timeout and the still-pending check(s) to the user
-2. Remove in-progress status:
-   - **GitHub (default):** `gh issue edit [NUMBER] --remove-label "in-progress"`
-   - **Issues API:** No-op — merging the PR with `Fixes #[NUMBER]` closes the ticket automatically
+2. Close the ticket:
+   - **GitHub (default):** `gh issue edit [NUMBER] --remove-label "in-progress"` (the PR's `Fixes #N` auto-closes it)
+   - **Issues API:** `issues ticket transition TICKET_ID --to CLOSED`
 3. Sync blocked labels using the `update-blocked-labels.sh` script in this command's `scripts/` directory
 4. Return to default branch and pull latest
 5. Clean up worktree using the `project-ops` skill's `cleanup-worktree.sh` script
