@@ -68,7 +68,7 @@ Before reviewing, read `CLAUDE.md` for:
 |----------|----------|---------|----------------|
 | Critical/High/Medium/Low/Info | file:line | ... | ... |
 
-2. Detail sections for Critical and High findings only (brief paragraph each)
+2. Detail sections for Critical, High, and Medium findings only (brief paragraph each)
 3. Low/Info findings as a one-line bullet list (no detail blocks)
 
 **Deferred findings:** One-line summary with recommended target and priority. No multi-paragraph justification.
