@@ -111,7 +111,7 @@ type ConnectedAgent struct {
 }
 ```
 
-WebSocket accept endpoint: `GET /ws/agent?name=<name>&token=<token>`
+WebSocket accept endpoint: `GET /ws/agent?name=<name>` with `Authorization: Bearer <token>` header
 
 REST endpoint: `GET /api/v1/agents` — list registered agents with status
 
@@ -207,8 +207,11 @@ Messages over the agentd ↔ hub WebSocket:
 {"jsonrpc": "2.0", "id": "req-2", "error": {"code": -32001, "message": "session not found"}}
 {"jsonrpc": "2.0", "id": "ping-1", "result": {"pong": true}}
 
-// agentd → hub (notification, no id = no response expected)
-{"jsonrpc": "2.0", "method": "register", "params": {"name": "mac-1", "profiles": {...}, "ttyd": {"advertise_address": "192.168.1.50", "base_port": 7681}}}
+// agentd → hub (request — hub must acknowledge registration)
+{"jsonrpc": "2.0", "id": "reg-1", "method": "register", "params": {"name": "mac-1", "profiles": {...}, "ttyd": {"advertise_address": "192.168.1.50", "base_port": 7681}}}
+
+// hub → agentd (registration acknowledgment)
+{"jsonrpc": "2.0", "id": "reg-1", "result": {"accepted": true}}
 ```
 
 ---
@@ -258,7 +261,7 @@ The browser never needs direct network access to agent machines.
 |------|--------|
 | `services/agents/internal/config/config.go` | Add `HubConfig` struct, validation, defaults |
 | `services/agents/cmd/agentd/main.go` | Start hub client goroutine when hub config present |
-| `services/agents/internal/ttyd/ttyd.go` | Add `bind_address` and `advertise_address` (Phase 3) |
+| `services/agents/internal/ttyd/ttyd.go` | Add `bind_address` and `advertise_address` (Phase 3); update `Start()` signature to accept bind address instead of hardcoded `127.0.0.1` |
 | `infrastructure/Caddyfile` | Add routes for hub REST, agent WS, terminal WS |
 
 ## Files to Create
