@@ -148,8 +148,8 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=${SCRIPT_DIR}
-ExecStart=${DOCKER_BIN} compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --force-recreate
-ExecStop=${DOCKER_BIN} compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" down
+ExecStart="${DOCKER_BIN}" compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --force-recreate
+ExecStop="${DOCKER_BIN}" compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" down
 
 [Install]
 WantedBy=default.target
