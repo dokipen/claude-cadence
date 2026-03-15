@@ -591,6 +591,7 @@ export function registerTicketCommand(program: Command): void {
   // --- update ---
   ticket
     .command("update <id>")
+    .alias("edit")
     .description("Update a ticket")
     .option("--project <id>", "Project ID (required when using ticket number)")
     .option("--title <title>", "New title")
