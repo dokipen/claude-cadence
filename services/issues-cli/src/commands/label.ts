@@ -4,6 +4,7 @@ import chalk from "chalk";
 import ora from "ora";
 import { getClient } from "../client.js";
 import { handleError } from "../errors.js";
+import { resolveLabelId } from "../resolve-label.js";
 import { resolveTicketId } from "../resolve-ticket.js";
 
 // --- GraphQL Documents ---
@@ -135,16 +136,19 @@ export function registerLabelCommand(program: Command): void {
     .command("add <ticket-id>")
     .description("Add a label to a ticket")
     .option("--project <id>", "Project ID (required when using ticket number)")
-    .requiredOption("--label <id>", "Label ID")
+    .requiredOption("--label <name-or-id>", "Label name or ID")
     .option("--json", "Output raw JSON")
     .action(async (ticketId: string, opts: { label: string; project?: string; json?: boolean }) => {
       const spinner = ora("Adding label...").start();
       try {
-        const resolvedId = await resolveTicketId(ticketId, opts.project);
+        const [resolvedId, labelId] = await Promise.all([
+          resolveTicketId(ticketId, opts.project),
+          resolveLabelId(opts.label),
+        ]);
         const client = getClient();
         const data = await client.request<{
           addLabel: { id: string; title: string; labels: Array<{ id: string; name: string }> };
-        }>(ADD_LABEL, { ticketId: resolvedId, labelId: opts.label });
+        }>(ADD_LABEL, { ticketId: resolvedId, labelId });
 
         if (opts.json) {
           spinner.stop();
@@ -169,16 +173,19 @@ export function registerLabelCommand(program: Command): void {
     .command("remove <ticket-id>")
     .description("Remove a label from a ticket")
     .option("--project <id>", "Project ID (required when using ticket number)")
-    .requiredOption("--label <id>", "Label ID")
+    .requiredOption("--label <name-or-id>", "Label name or ID")
     .option("--json", "Output raw JSON")
     .action(async (ticketId: string, opts: { label: string; project?: string; json?: boolean }) => {
       const spinner = ora("Removing label...").start();
       try {
-        const resolvedId = await resolveTicketId(ticketId, opts.project);
+        const [resolvedId, labelId] = await Promise.all([
+          resolveTicketId(ticketId, opts.project),
+          resolveLabelId(opts.label),
+        ]);
         const client = getClient();
         const data = await client.request<{
           removeLabel: { id: string; title: string; labels: Array<{ id: string; name: string }> };
-        }>(REMOVE_LABEL, { ticketId: resolvedId, labelId: opts.label });
+        }>(REMOVE_LABEL, { ticketId: resolvedId, labelId });
 
         if (opts.json) {
           spinner.stop();

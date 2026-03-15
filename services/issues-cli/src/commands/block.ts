@@ -4,6 +4,7 @@ import chalk from "chalk";
 import ora from "ora";
 import { getClient } from "../client.js";
 import { handleError } from "../errors.js";
+import { resolveTicketId } from "../resolve-ticket.js";
 
 // --- GraphQL Documents ---
 
@@ -44,12 +45,17 @@ export function registerBlockCommand(program: Command): void {
   block
     .command("add")
     .description("Add a blocking relationship")
-    .requiredOption("--blocker <id>", "Blocker ticket ID")
-    .requiredOption("--blocked <id>", "Blocked ticket ID")
+    .requiredOption("--blocker <id>", "Blocker ticket number or ID")
+    .requiredOption("--blocked <id>", "Blocked ticket number or ID")
+    .option("--project <project>", "Project name or ID (required when using ticket numbers)")
     .option("--json", "Output raw JSON")
-    .action(async (opts: { blocker: string; blocked: string; json?: boolean }) => {
+    .action(async (opts: { blocker: string; blocked: string; project?: string; json?: boolean }) => {
       const spinner = ora("Adding block relation...").start();
       try {
+        const [blockerId, blockedId] = await Promise.all([
+          resolveTicketId(opts.blocker, opts.project),
+          resolveTicketId(opts.blocked, opts.project),
+        ]);
         const client = getClient();
         const data = await client.request<{
           addBlockRelation: {
@@ -57,7 +63,7 @@ export function registerBlockCommand(program: Command): void {
             title: string;
             blockedBy: { id: string; title: string; state: string }[];
           };
-        }>(ADD_BLOCK_RELATION, { blockerId: opts.blocker, blockedId: opts.blocked });
+        }>(ADD_BLOCK_RELATION, { blockerId, blockedId });
 
         if (opts.json) {
           spinner.stop();
@@ -86,12 +92,17 @@ export function registerBlockCommand(program: Command): void {
   block
     .command("remove")
     .description("Remove a blocking relationship")
-    .requiredOption("--blocker <id>", "Blocker ticket ID")
-    .requiredOption("--blocked <id>", "Blocked ticket ID")
+    .requiredOption("--blocker <id>", "Blocker ticket number or ID")
+    .requiredOption("--blocked <id>", "Blocked ticket number or ID")
+    .option("--project <project>", "Project name or ID (required when using ticket numbers)")
     .option("--json", "Output raw JSON")
-    .action(async (opts: { blocker: string; blocked: string; json?: boolean }) => {
+    .action(async (opts: { blocker: string; blocked: string; project?: string; json?: boolean }) => {
       const spinner = ora("Removing block relation...").start();
       try {
+        const [blockerId, blockedId] = await Promise.all([
+          resolveTicketId(opts.blocker, opts.project),
+          resolveTicketId(opts.blocked, opts.project),
+        ]);
         const client = getClient();
         const data = await client.request<{
           removeBlockRelation: {
@@ -99,7 +110,7 @@ export function registerBlockCommand(program: Command): void {
             title: string;
             blockedBy: { id: string; title: string; state: string }[];
           };
-        }>(REMOVE_BLOCK_RELATION, { blockerId: opts.blocker, blockedId: opts.blocked });
+        }>(REMOVE_BLOCK_RELATION, { blockerId, blockedId });
 
         if (opts.json) {
           spinner.stop();
