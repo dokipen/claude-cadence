@@ -51,7 +51,7 @@ Use this value to select the correct commands throughout the workflow.
 
    **Issues API:**
    ```bash
-   issues ticket transition 123 --project $PROJECT --to REFINED
+   issues ticket transition TICKET_ID --to REFINED
    ```
 
 ### Batch Refinement (`/refine`)
