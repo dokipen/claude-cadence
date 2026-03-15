@@ -62,9 +62,9 @@ When using `issues-api`, also verify and set these native fields:
 
 | Field | Check | Update Command |
 |-------|-------|----------------|
-| State | `issues ticket view N --project $PROJECT_ID` (State field) | `issues ticket transition N --project $PROJECT_ID --to REFINED` |
-| Story Points | `issues ticket view N --project $PROJECT_ID` (Story Points field) | `issues ticket update N --project $PROJECT_ID --points X` |
-| Priority | `issues ticket view N --project $PROJECT_ID` (Priority field) | `issues ticket update N --project $PROJECT_ID --priority X` |
+| State | `issues ticket view N --project $PROJECT_ID` (State field) | `issues ticket transition TICKET_ID --to REFINED` |
+| Story Points | `issues ticket view N --project $PROJECT_ID` (Story Points field) | `issues ticket update TICKET_ID --points X` |
+| Priority | `issues ticket view N --project $PROJECT_ID` (Priority field) | `issues ticket update TICKET_ID --priority X` |
 
 After refinement with `issues-api`, transition the ticket state from `BACKLOG` to `REFINED`.
 

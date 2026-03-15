@@ -108,7 +108,7 @@ If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, 
 
    **Issues API:**
    ```bash
-   issues ticket transition [NUMBER] --project $PROJECT_ID --to IN_PROGRESS
+   issues ticket transition TICKET_ID --to IN_PROGRESS
    ```
 
 ---
@@ -123,7 +123,7 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 
 | Phase | Channel | Command (GitHub) | Command (Issues API) |
 |-------|---------|------------------|----------------------|
-| Pre-PR (research, planning, implementation) | Ticket | `gh issue comment [N] --body "..."` | `issues comment add [N] --project $PROJECT_ID --body "..."` |
+| Pre-PR (research, planning, implementation) | Ticket | `gh issue comment [N] --body "..."` | `issues comment add TICKET_ID --body "..."` |
 | Post-PR (code review, QA feedback) | GitHub PR | `gh pr review [N] --comment --body "..."` | `gh pr review [N] --comment --body "..."` |
 
 ---
