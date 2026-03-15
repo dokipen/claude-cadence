@@ -44,8 +44,26 @@ type CreateRequest struct {
 	ExtraArgs    []string
 }
 
+const (
+	maxExtraArgs    = 64
+	maxExtraArgLen  = 4096
+)
+
 // Create validates inputs, creates tmux session, starts command, returns Session.
 func (m *Manager) Create(req CreateRequest) (*Session, error) {
+	// Validate ExtraArgs limits and content.
+	if len(req.ExtraArgs) > maxExtraArgs {
+		return nil, &Error{Code: ErrInvalidArgument, Message: fmt.Sprintf("too many extra_args: %d (max %d)", len(req.ExtraArgs), maxExtraArgs)}
+	}
+	for i, arg := range req.ExtraArgs {
+		if len(arg) > maxExtraArgLen {
+			return nil, &Error{Code: ErrInvalidArgument, Message: fmt.Sprintf("extra_args[%d] too long: %d bytes (max %d)", i, len(arg), maxExtraArgLen)}
+		}
+		if strings.ContainsRune(arg, '\x00') {
+			return nil, &Error{Code: ErrInvalidArgument, Message: fmt.Sprintf("extra_args[%d] contains null byte", i)}
+		}
+	}
+
 	// Validate profile exists.
 	profile, ok := m.profiles[req.AgentProfile]
 	if !ok {
@@ -244,7 +262,7 @@ func (m *Manager) renderCommand(cmdTemplate string, sess *Session, extraArgs []s
 	data := templateData{
 		SessionID:    sess.ID,
 		SessionName:  sess.Name,
-		ExtraArgs:    strings.Join(extraArgs, " "),
+		ExtraArgs:    shellJoinArgs(extraArgs),
 		WorktreePath: "", // Phase 1: no worktrees
 	}
 
@@ -253,6 +271,27 @@ func (m *Manager) renderCommand(cmdTemplate string, sess *Session, extraArgs []s
 		return "", fmt.Errorf("executing command template: %w", err)
 	}
 	return buf.String(), nil
+}
+
+// shellEscapeArg wraps a single argument in single quotes, escaping any
+// embedded single quotes. This is the safest quoting method for POSIX shells:
+// within single quotes, no characters are special except ' itself.
+func shellEscapeArg(arg string) string {
+	// Replace each ' with '\'' (end quote, escaped quote, start quote)
+	return "'" + strings.ReplaceAll(arg, "'", `'\''`) + "'"
+}
+
+// shellJoinArgs escapes each argument and joins them with spaces.
+// Returns empty string for empty/nil slices.
+func shellJoinArgs(args []string) string {
+	if len(args) == 0 {
+		return ""
+	}
+	escaped := make([]string, len(args))
+	for i, arg := range args {
+		escaped[i] = shellEscapeArg(arg)
+	}
+	return strings.Join(escaped, " ")
 }
 
 func isProcessAlive(pid int) bool {
