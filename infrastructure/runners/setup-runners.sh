@@ -282,11 +282,11 @@ verify_checksum() {
 
     info "  Fetching SHA256 checksum from release v${RUNNER_VERSION}..."
     local release_body
-    release_body=$(gh release view "v${RUNNER_VERSION}" --repo actions/runner --json body --jq '.body' 2>/dev/null) \
+    release_body=$(gh release view "v${RUNNER_VERSION}" --repo actions/runner --json body --jq '.body') \
         || error "Failed to fetch release notes for v${RUNNER_VERSION}. Cannot verify checksum."
 
     local expected_hash
-    expected_hash=$(printf '%s' "$release_body" | sed -n "s/.*<!-- BEGIN SHA ${sha_tag} -->\([a-f0-9]*\)<!-- END SHA ${sha_tag} -->.*/\1/p")
+    expected_hash=$(printf '%s' "$release_body" | sed -n "s/.*<!-- BEGIN SHA ${sha_tag} -->\([a-f0-9]\{64\}\)<!-- END SHA ${sha_tag} -->.*/\1/p")
 
     if [[ -z "$expected_hash" ]]; then
         error "No SHA256 checksum found for ${sha_tag} in release v${RUNNER_VERSION}."
@@ -345,12 +345,16 @@ setup_runner() {
         run_cmd tar -xzf "$runner_dir/actions-runner.tar.gz" -C "$runner_dir"
         run_cmd rm -f "$runner_dir/actions-runner.tar.gz"
     elif [[ "$OS" == "darwin" ]]; then
-        curl -sL "$tarball_url" -o "$runner_dir/actions-runner.tar.gz"
+        curl -sfL "$tarball_url" -o "$runner_dir/actions-runner.tar.gz" \
+            || error "Failed to download actions-runner tarball from $tarball_url"
         verify_checksum "$runner_dir/actions-runner.tar.gz"
         tar -xzf "$runner_dir/actions-runner.tar.gz" -C "$runner_dir"
         rm -f "$runner_dir/actions-runner.tar.gz"
     else
-        sudo -u "$RUNNER_USER" -- sh -c 'cd "$1" && curl -sL "$2" -o actions-runner.tar.gz' _ "$runner_dir" "$tarball_url"
+        sudo -u "$RUNNER_USER" -- sh -c 'cd "$1" && curl -sfL "$2" -o actions-runner.tar.gz' _ "$runner_dir" "$tarball_url" \
+            || error "Failed to download actions-runner tarball from $tarball_url"
+        # Ensure tarball is readable for checksum verification (downloaded as RUNNER_USER)
+        chmod a+r "$runner_dir/actions-runner.tar.gz"
         verify_checksum "$runner_dir/actions-runner.tar.gz"
         sudo -u "$RUNNER_USER" -- sh -c 'cd "$1" && tar -xzf actions-runner.tar.gz && rm -f actions-runner.tar.gz' _ "$runner_dir"
     fi
