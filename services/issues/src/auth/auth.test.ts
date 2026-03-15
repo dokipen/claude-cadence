@@ -1,6 +1,10 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { signToken, verifyToken } from "./jwt.js";
+import { describe, it, expect } from "vitest";
 import jwt from "jsonwebtoken";
+
+// Set JWT_SECRET before importing jwt module
+process.env.JWT_SECRET = "test-secret-for-unit-tests";
+
+const { signToken, verifyToken } = await import("./jwt.js");
 
 describe("JWT", () => {
   it("should sign and verify a token", () => {
@@ -27,7 +31,7 @@ describe("JWT", () => {
   it("should reject an expired token", () => {
     const token = jwt.sign(
       { userId: "user-123" },
-      process.env.JWT_SECRET || "change-me-in-production",
+      process.env.JWT_SECRET!,
       { expiresIn: "-1s" }
     );
     expect(() => verifyToken(token)).toThrow();

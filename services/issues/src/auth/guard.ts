@@ -2,52 +2,45 @@ import type { ApolloServerPlugin } from "@apollo/server";
 import { GraphQLError } from "graphql";
 import type { AuthenticatedContext } from "../schema/resolvers/auth.js";
 
-// Operations that don't require authentication
-const PUBLIC_OPERATIONS = new Set([
+// Root fields that don't require authentication
+const PUBLIC_FIELDS = new Set([
   "authenticateWithGitHubCode",
   "authenticateWithGitHubPAT",
-  "IntrospectionQuery",
+  "__schema",
+  "__type",
 ]);
 
 /**
  * Apollo Server plugin that enforces authentication on all operations
  * except the public auth mutations and introspection.
+ *
+ * Uses field-level checking: every root field in the operation must be
+ * in the PUBLIC_FIELDS set, otherwise authentication is required.
+ * This prevents bypass via anonymous operations or mixed queries.
  */
 export function authGuardPlugin(): ApolloServerPlugin<AuthenticatedContext> {
   return {
     async requestDidStart() {
       return {
         async didResolveOperation(requestContext) {
-          const operationName = requestContext.operationName;
-
-          // Allow public operations by name
-          if (operationName && PUBLIC_OPERATIONS.has(operationName)) {
+          // Already authenticated — allow everything
+          if (requestContext.contextValue.currentUser) {
             return;
           }
 
-          // Check if all root fields are public
+          // Check if ALL root fields across all definitions are public
           const document = requestContext.document;
-          const definitions = document.definitions;
 
-          for (const definition of definitions) {
+          for (const definition of document.definitions) {
             if (definition.kind !== "OperationDefinition") continue;
 
-            const selections = definition.selectionSet.selections;
-            const allPublic = selections.every((sel) => {
-              if (sel.kind === "Field") {
-                return PUBLIC_OPERATIONS.has(sel.name.value) || sel.name.value === "__schema" || sel.name.value === "__type";
+            for (const sel of definition.selectionSet.selections) {
+              if (sel.kind !== "Field" || !PUBLIC_FIELDS.has(sel.name.value)) {
+                throw new GraphQLError("Authentication required", {
+                  extensions: { code: "UNAUTHENTICATED" },
+                });
               }
-              return false;
-            });
-
-            if (allPublic) return;
-          }
-
-          // Require authentication for everything else
-          if (!requestContext.contextValue.currentUser) {
-            throw new GraphQLError("Authentication required", {
-              extensions: { code: "UNAUTHENTICATED" },
-            });
+            }
           }
         },
       };
