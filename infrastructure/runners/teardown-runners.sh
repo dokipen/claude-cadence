@@ -91,9 +91,9 @@ REPO_NAME="${REPO#*/}"
 
 if [[ "$OS" == "darwin" ]]; then
     RUNNER_USER="$(whoami)"
-    [[ -z "$BASE_DIR" ]] && BASE_DIR="$HOME/actions-runner"
+    if [[ -z "$BASE_DIR" ]]; then BASE_DIR="$HOME/actions-runner"; fi
 else
-    [[ -z "$BASE_DIR" ]] && BASE_DIR="/home/$RUNNER_USER"
+    if [[ -z "$BASE_DIR" ]]; then BASE_DIR="/home/$RUNNER_USER"; fi
 fi
 
 case "$BASE_DIR" in

@@ -247,15 +247,19 @@ is_service_running() {
         if [[ -f "$runner_dir/.service" ]]; then
             local svc_name
             svc_name=$(cat "$runner_dir/.service")
-            [[ "$svc_name" =~ ^[A-Za-z0-9_.@-]+$ ]] && systemctl is-active "$svc_name" >/dev/null 2>&1
-            return $?
+            if [[ "$svc_name" =~ ^[A-Za-z0-9_.@-]+$ ]]; then
+                systemctl is-active "$svc_name" >/dev/null 2>&1
+                return $?
+            fi
         fi
     elif [[ "$OS" == "darwin" ]]; then
         if [[ -f "$runner_dir/.service" ]]; then
             local svc_name
             svc_name=$(cat "$runner_dir/.service")
-            [[ "$svc_name" =~ ^[A-Za-z0-9_.@-]+$ ]] && launchctl list "$svc_name" >/dev/null 2>&1
-            return $?
+            if [[ "$svc_name" =~ ^[A-Za-z0-9_.@-]+$ ]]; then
+                launchctl list "$svc_name" >/dev/null 2>&1
+                return $?
+            fi
         fi
     fi
     return 1
