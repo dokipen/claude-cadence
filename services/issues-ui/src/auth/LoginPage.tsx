@@ -1,0 +1,143 @@
+import { useState, type FormEvent } from "react";
+import { useAuth } from "./AuthContext";
+
+export function LoginPage() {
+  const { login } = useAuth();
+  const [pat, setPat] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setIsSubmitting(true);
+
+    try {
+      await login(pat.trim());
+    } catch {
+      setError("Authentication failed. Please check your token and try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div style={styles.container}>
+      <div style={styles.card}>
+        <img
+          src="/cadence-icon.svg"
+          alt="Cadence"
+          width={48}
+          height={48}
+          style={{ marginBottom: "1rem" }}
+        />
+        <h1 style={styles.title}>Cadence</h1>
+        <p style={styles.subtitle}>Sign in to continue</p>
+
+        <form onSubmit={handleSubmit} style={styles.form}>
+          <label htmlFor="pat" style={styles.label}>
+            GitHub Personal Access Token
+          </label>
+          <input
+            id="pat"
+            type="password"
+            value={pat}
+            onChange={(e) => setPat(e.target.value)}
+            placeholder="ghp_..."
+            required
+            disabled={isSubmitting}
+            style={styles.input}
+          />
+
+          {error && <p style={styles.error} role="alert">{error}</p>}
+
+          <button
+            type="submit"
+            disabled={isSubmitting || !pat.trim()}
+            style={{
+              ...styles.button,
+              opacity: isSubmitting || !pat.trim() ? 0.6 : 1,
+            }}
+          >
+            {isSubmitting ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+const styles: Record<string, React.CSSProperties> = {
+  container: {
+    minHeight: "100vh",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "var(--bg)",
+    padding: "1rem",
+  },
+  card: {
+    background: "var(--surface)",
+    border: "1px solid var(--border)",
+    borderRadius: "12px",
+    padding: "2.5rem",
+    width: "100%",
+    maxWidth: "400px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+  },
+  title: {
+    fontFamily: "'Space Grotesk', sans-serif",
+    fontWeight: 700,
+    fontSize: "1.8rem",
+    letterSpacing: "-0.02em",
+    color: "var(--primary)",
+    margin: 0,
+  },
+  subtitle: {
+    color: "var(--text-secondary)",
+    marginTop: "0.25rem",
+    marginBottom: "1.5rem",
+    fontSize: "0.95rem",
+  },
+  form: {
+    width: "100%",
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.75rem",
+  },
+  label: {
+    fontSize: "0.85rem",
+    fontWeight: 600,
+    color: "var(--text)",
+  },
+  input: {
+    width: "100%",
+    padding: "0.6rem 0.75rem",
+    border: "1px solid var(--border)",
+    borderRadius: "6px",
+    fontSize: "0.95rem",
+    fontFamily: "inherit",
+    background: "var(--bg)",
+    color: "var(--text)",
+    boxSizing: "border-box",
+  },
+  error: {
+    color: "#d73a4a",
+    fontSize: "0.85rem",
+    margin: 0,
+  },
+  button: {
+    marginTop: "0.5rem",
+    padding: "0.65rem 1rem",
+    background: "var(--primary)",
+    color: "#fff",
+    border: "none",
+    borderRadius: "6px",
+    fontSize: "0.95rem",
+    fontWeight: 600,
+    fontFamily: "inherit",
+    cursor: "pointer",
+  },
+};
