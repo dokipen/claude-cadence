@@ -73,7 +73,14 @@ func setupGitTestEnv(t *testing.T) *gitTestEnv {
 	mgr := session.NewManager(store, tmuxClient, nil, gitClient, profiles)
 	svc := service.NewAgentService(mgr)
 
-	srv, err := server.New(svc, "127.0.0.1", 0)
+	gitTestCfg := &config.Config{
+		Host:       "127.0.0.1",
+		Port:       0,
+		Reflection: true,
+		Auth:       config.AuthConfig{Mode: "none"},
+	}
+
+	srv, err := server.New(svc, gitTestCfg)
 	if err != nil {
 		t.Fatalf("creating git test server: %v", err)
 	}
