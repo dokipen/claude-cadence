@@ -1,12 +1,12 @@
 ---
 name: refine
-description: Refine GitHub issues to ensure quality standards before work begins
+description: Refine tickets to ensure quality standards before work begins
 disable-model-invocation: true
 ---
 
 # Ticket Refinement
 
-Refine GitHub issues to meet quality standards before implementation begins.
+Refine tickets to meet quality standards before implementation begins. Supports both GitHub Issues and the issues microservice as backends.
 
 ## Usage
 
@@ -14,6 +14,17 @@ Refine GitHub issues to meet quality standards before implementation begins.
 /refine           # Refine all unrefined open issues
 /refine 123       # Refine specific issue #123
 ```
+
+## Provider Detection
+
+Before any ticket operation, detect the configured provider. Refer to the `ticket-provider` skill for full details.
+
+```bash
+# Extract provider from project's CLAUDE.md (defaults to "github")
+PROVIDER=$(grep -A2 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'provider:' | awk '{print $2}' || echo "github")
+```
+
+Use this value to select the correct commands throughout the workflow.
 
 ## Workflow
 
@@ -31,16 +42,30 @@ Refine GitHub issues to meet quality standards before implementation begins.
 2. **Apply all fixes** including estimates, labels, and title improvements
 
 3. **Mark refined** when all criteria pass:
+
+   **GitHub (default):**
    ```bash
    gh issue edit 123 --add-label "refined"
+   ```
+
+   **Issues API:**
+   ```bash
+   issues ticket transition 123 --to REFINED
    ```
 
 ### Batch Refinement (`/refine`)
 
 1. **Get unrefined open issues:**
+
+   **GitHub (default):**
    ```bash
    gh issue list --state open --json number,title,labels \
      --jq '.[] | select(.labels | map(.name) | contains(["refined"]) | not) | "\(.number): \(.title)"'
+   ```
+
+   **Issues API:**
+   ```bash
+   issues ticket list --state BACKLOG
    ```
 
 2. **For each issue**, delegate to ticket-refiner agent
@@ -51,29 +76,31 @@ Refine GitHub issues to meet quality standards before implementation begins.
 
 An issue is refined when it has ALL of:
 
-| Criterion | Description |
-|-----------|-------------|
-| Clear title | Descriptive, categorized via labels |
-| Acceptance criteria | Checkboxes defining "done" |
-| Estimate label | estimate:1 through estimate:13 (best-effort guess) |
-| Type label | bug, enhancement, documentation, testing, or performance |
-| Assigned | Assigned to a developer |
-| Blockers linked | Via GitHub dependencies API (not just markdown) |
-| Blocked label | `blocked` label if open blockers exist, removed if not |
-| Refined label | Added after all criteria met |
+| Criterion | GitHub Issues | Issues API |
+|-----------|--------------|------------|
+| Clear title | Descriptive, categorized via labels | Same |
+| Acceptance criteria | Checkboxes defining "done" | `--acceptance-criteria` field |
+| Estimate | `estimate:N` label (1-13) | Story points field (`--points N`) |
+| Type label | Label by name: bug, enhancement, etc. | Label by ID (use `issues label list` to look up) |
+| Assigned | Assigned to a developer | `issues assign N --user USER_ID` |
+| Blockers linked | Via GitHub dependencies API | `issues block add --blocker X --blocked N` |
+| Blocked label | `blocked` label if open blockers exist | Blocked tickets auto-tracked; cannot transition to `IN_PROGRESS` |
+| Refined | `refined` label added after all criteria met | Transition to `REFINED` state |
 
 ## Quick Reference
 
 ### Estimate Scale
 
-| Label | Description |
-|-------|-------------|
-| estimate:1 | Trivial, <1 hour |
-| estimate:2 | Simple, few hours |
-| estimate:3 | Straightforward, half day |
-| estimate:5 | Moderate, 1 day |
-| estimate:8 | Significant, 2-3 days |
-| estimate:13 | Very large, consider breaking down |
+| Points | Description |
+|--------|-------------|
+| 1 | Trivial, <1 hour |
+| 2 | Simple, few hours |
+| 3 | Straightforward, half day |
+| 5 | Moderate, 1 day |
+| 8 | Significant, 2-3 days |
+| 13 | Very large, consider breaking down |
+
+GitHub uses labels (`estimate:5`). Issues API uses story points (`--points 5`).
 
 ### Title Conventions
 

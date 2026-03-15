@@ -12,7 +12,9 @@ An issue-driven, multi-agent development workflow plugin for Claude Code.
 - `new-work` — Create git worktrees for isolated feature development
 - `create-pr` — Create pull requests with pre-flight verification
 - `create-skill` — Bootstrap new Claude Code skills
+- `ticket-provider` — Ticket provider abstraction (dispatches to GitHub Issues or issues microservice)
 - `github-issues` — Background knowledge for `gh` CLI patterns
+- `issues-api` — CLI commands for the issues microservice backend
 - `project-ops` — Shared worktree management scripts
 
 ### Agents (6 core specialists)
@@ -33,9 +35,15 @@ Consuming projects provide their own `CLAUDE.md` with:
 
 ## Build
 <your build command here, if needed>
+
+## Ticket Provider
+provider: github          # or "issues-api"
+api_url: http://localhost:4000  # required for issues-api
 ```
 
-Agents read the project's `CLAUDE.md` to discover stack-specific commands.
+The `Ticket Provider` section is optional. When omitted, the default provider is `github` (GitHub Issues via `gh` CLI), maintaining full backward compatibility.
+
+Agents read the project's `CLAUDE.md` to discover stack-specific commands and the ticket provider.
 
 ## Plugin Structure
 

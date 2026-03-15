@@ -1,6 +1,6 @@
 ---
 name: lead
-description: Coordinate implementation work through structured phases with specialist agents. All work is tracked via GitHub issues.
+description: Coordinate implementation work through structured phases with specialist agents. All work is tracked via a ticket provider (GitHub Issues or issues-api).
 disable-model-invocation: true
 ---
 
@@ -16,21 +16,47 @@ You are now acting as the technical lead, coordinating specialist agents on this
 
 ## Issue-First Workflow
 
-**All work MUST be tracked via GitHub issues.**
+**All work MUST be tracked via a ticket provider.**
+
+### Ticket Provider Setup
+
+Detect the provider from the project's `CLAUDE.md` before performing any ticket operations. Refer to the `ticket-provider` skill for full detection logic and command reference.
+
+```bash
+PROVIDER=$(grep -A2 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'provider:' | awk '{print $2}' || echo "github")
+```
+
+If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, use `issues` CLI commands. **PR operations always use `gh` CLI regardless of provider.**
 
 ### Before Any Work Begins
 
 1. **Search for existing issue**:
+
+   **GitHub (default):**
    ```bash
    gh issue list --search "[relevant keywords]" --state open
    ```
 
+   **Issues API:**
+   ```bash
+   issues ticket list --label "[relevant label]"
+   ```
+
 2. **If issue exists**: Verify it has clear acceptance criteria
+
+   **GitHub (default):**
    ```bash
    gh issue view [NUMBER]
    ```
 
+   **Issues API:**
+   ```bash
+   issues ticket view [NUMBER]
+   ```
+
 3. **If no issue exists**: Create one with a descriptive title and initial context:
+
+   **GitHub (default):**
    ```bash
    gh issue create \
      --title "Descriptive title" \
@@ -42,18 +68,45 @@ You are now acting as the technical lead, coordinating specialist agents on this
    [Any additional context]"
    ```
 
+   **Issues API:**
+   ```bash
+   issues ticket create \
+     --title "Descriptive title" \
+     --labels "BUG_LABEL_ID" \
+     --description "## Description
+   [Clear explanation of the work]
+
+   ## Notes
+   [Any additional context]"
+   ```
+
 4. **Ensure issue is refined**:
+
+   **GitHub (default):**
    ```bash
    gh issue view [NUMBER] --json labels --jq '.labels[].name | select(. == "refined")'
    ```
    If the `refined` label is missing, run `/refine [NUMBER]` before proceeding.
 
+   **Issues API:**
+   ```bash
+   issues ticket view [NUMBER]
+   ```
+   If the state is not `REFINED` (or later), run `/refine [NUMBER]` before proceeding.
+
 5. **Check if work is already complete**:
    Before claiming, delegate to an appropriate specialist to verify the work isn't already done.
 
 6. **Claim the issue**:
+
+   **GitHub (default):**
    ```bash
    gh issue edit [NUMBER] --add-label "in-progress"
+   ```
+
+   **Issues API:**
+   ```bash
+   issues ticket transition [NUMBER] --to IN_PROGRESS
    ```
 
 ---
@@ -66,10 +119,10 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 
 ## Communication Channels
 
-| Phase | Channel | Command |
-|-------|---------|---------|
-| Pre-PR (research, planning, implementation) | GitHub Issue | `gh issue comment [N] --body "..."` |
-| Post-PR (code review, QA feedback) | GitHub PR | `gh pr review [N] --comment --body "..."` |
+| Phase | Channel | Command (GitHub) | Command (Issues API) |
+|-------|---------|------------------|----------------------|
+| Pre-PR (research, planning, implementation) | Ticket | `gh issue comment [N] --body "..."` | `issues comment add [N] --body "..."` |
+| Post-PR (code review, QA feedback) | GitHub PR | `gh pr review [N] --comment --body "..."` | `gh pr review [N] --comment --body "..."` |
 
 ---
 
@@ -159,7 +212,9 @@ In both cases:
 
 1. Verify PR checks pass: `gh pr checks`
 2. Merge: `gh pr merge --squash --delete-branch`
-3. Remove in-progress label: `gh issue edit [NUMBER] --remove-label "in-progress"`
+3. Remove in-progress status:
+   - **GitHub (default):** `gh issue edit [NUMBER] --remove-label "in-progress"`
+   - **Issues API:** No-op — merging the PR with `Fixes #[NUMBER]` closes the ticket automatically
 4. Sync blocked labels using the `update-blocked-labels.sh` script in this command's `scripts/` directory
 5. Return to default branch and pull latest
 6. Clean up worktree using the `project-ops` skill's `cleanup-worktree.sh` script

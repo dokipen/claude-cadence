@@ -4,22 +4,36 @@
 # Usage: ./scripts/update-blocked-labels.sh
 #
 # This script:
-# 1. Iterates through all open issues
-# 2. Checks each issue's blocker relationships via GitHub API
-# 3. Adds "blocked" label if issue has open blockers
-# 4. Removes "blocked" label if issue has no open blockers
+# 1. Detects the ticket provider (github or issues-api) from CLAUDE.md
+# 2. For github: iterates through all open issues, checks blocker
+#    relationships via GitHub API, and adds/removes "blocked" labels
+# 3. For issues-api: no-op (blocking is enforced by the state machine)
 
 set -e
 
-REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
+# Detect ticket provider from the project's CLAUDE.md
+PROVIDER=$(grep -A2 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'provider:' | awk '{print $2}' || echo "github")
 
 if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
   echo "Usage: ./scripts/update-blocked-labels.sh"
   echo ""
   echo "Syncs 'blocked' labels for all open issues based on their"
   echo "blocker relationships. Run after closing/merging issues."
+  echo ""
+  echo "Detected provider: ${PROVIDER}"
   exit 0
 fi
+
+# For issues-api, blocking is enforced by the state machine — tickets with
+# open blockers cannot transition to IN_PROGRESS. No label management needed.
+if [ "$PROVIDER" = "issues-api" ]; then
+  echo "Provider: issues-api"
+  echo "Blocked labels are not needed — blocking is enforced by the state machine."
+  echo "Tickets with open blockers cannot transition to IN_PROGRESS."
+  exit 0
+fi
+
+REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 
 echo "Syncing blocked labels for all open issues"
 echo "==========================================="
