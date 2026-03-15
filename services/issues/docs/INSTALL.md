@@ -99,6 +99,12 @@ provider: issues-api
 api_url: http://localhost:4000
 ```
 
+## Reverse Proxy (Caddy)
+
+A shared Caddyfile in `infrastructure/Caddyfile` provides a single entry point for both the issues and agents services. See the [Caddy setup section](../../../infrastructure/README.md) for full details.
+
+When running behind Caddy, the issues service is available at `/graphql` on the Caddy host instead of directly on port 4000.
+
 ## Auto-Deploy Strategy
 
 The CI workflow validates Docker builds on every PR and push to `main`, but does not deploy automatically. To set up auto-deploy, add a separate workflow that pushes to a container registry and triggers deployment to your target environment on merge to `main`.
