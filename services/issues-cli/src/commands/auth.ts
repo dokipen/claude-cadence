@@ -23,9 +23,15 @@ const AUTHENTICATE_WITH_PAT = gql`
   }
 `;
 
+const GENERATE_OAUTH_STATE = gql`
+  mutation GenerateOAuthState {
+    generateOAuthState
+  }
+`;
+
 const AUTHENTICATE_WITH_CODE = gql`
-  mutation AuthenticateWithGitHubCode($code: String!) {
-    authenticateWithGitHubCode(code: $code) {
+  mutation AuthenticateWithGitHubCode($code: String!, $state: String!) {
+    authenticateWithGitHubCode(code: $code, state: $state) {
       token
       user {
         id
@@ -130,9 +136,13 @@ export function registerAuthCommand(program: Command): void {
           spinner.succeed(`Authenticated as ${chalk.bold(result.user.login)} (${result.user.displayName})`);
         } else if (options.code) {
           const spinner = ora("Authenticating...").start();
+          const stateData = await client.request<{ generateOAuthState: string }>(
+            GENERATE_OAUTH_STATE
+          );
+          const state = stateData.generateOAuthState;
           const data = await client.request<{ authenticateWithGitHubCode: AuthPayload }>(
             AUTHENTICATE_WITH_CODE,
-            { code: options.code }
+            { code: options.code, state }
           );
           result = data.authenticateWithGitHubCode;
           setAuthToken(result.token);
