@@ -31,7 +31,11 @@ Caddy serves HTTPS on port 443 using its built-in CA and redirects HTTP (port 80
 
 **gRPC clients:** Caddy terminates TLS at the edge and forwards to the agents service over plaintext h2c internally. gRPC clients must connect using TLS (e.g., `grpcurl cadence.bootsy.internal:443 ...` instead of `-plaintext`).
 
-### Security: enable agentd token auth
+### Security notes
+
+**Firewall:** Caddy binds on all interfaces (0.0.0.0). On multi-homed hosts, ensure firewall rules restrict ports 80/443 to your LAN.
+
+### Enable agentd token auth
 
 > **Important:** When exposing Caddy to a network (any non-localhost deployment), you **must** enable token authentication on `agentd`. By default, `agentd` skips auth when bound to loopback (`127.0.0.1`), but Caddy forwards external traffic to that loopback port — bypassing the bind-address guard.
 >
