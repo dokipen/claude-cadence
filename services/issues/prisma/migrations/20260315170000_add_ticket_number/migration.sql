@@ -3,7 +3,7 @@ PRAGMA defer_foreign_keys=ON;
 PRAGMA foreign_keys=OFF;
 CREATE TABLE "new_Ticket" (
     "id" TEXT NOT NULL PRIMARY KEY,
-    "number" INTEGER NOT NULL DEFAULT 0,
+    "number" INTEGER NOT NULL,
     "title" TEXT NOT NULL,
     "description" TEXT,
     "acceptanceCriteria" TEXT,
@@ -21,7 +21,7 @@ CREATE TABLE "new_Ticket" (
 -- Copy existing tickets, assigning sequential numbers per project ordered by creation date
 INSERT INTO "new_Ticket" ("id", "number", "title", "description", "acceptanceCriteria", "state", "storyPoints", "priority", "assigneeId", "projectId", "createdAt", "updatedAt")
 SELECT "id",
-       ROW_NUMBER() OVER (PARTITION BY "projectId" ORDER BY "createdAt" ASC),
+       ROW_NUMBER() OVER (PARTITION BY "projectId" ORDER BY "createdAt" ASC, "id" ASC),
        "title", "description", "acceptanceCriteria", "state", "storyPoints", "priority", "assigneeId", "projectId", "createdAt", "updatedAt"
 FROM "Ticket";
 

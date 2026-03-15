@@ -119,6 +119,48 @@ describe("createTicket — number assignment", () => {
       )
     ).rejects.toThrow("Project not found: nonexistent");
   });
+
+  it("retries on P2002 unique constraint violation", async () => {
+    const { context, txMock } = makeMockContext();
+
+    txMock.project.findUnique.mockResolvedValue({ id: "proj-1", name: "Test" });
+    txMock.ticket.findFirst.mockResolvedValue({ number: 5 });
+
+    // First attempt: unique constraint violation
+    const p2002Error = Object.assign(new Error("Unique constraint"), { code: "P2002" });
+    txMock.ticket.create
+      .mockRejectedValueOnce(p2002Error)
+      .mockResolvedValueOnce({ id: "t-1", number: 6, title: "Retry success" });
+
+    const result = await createTicket(
+      {},
+      { input: { title: "Retry success", projectId: "proj-1" } },
+      context
+    );
+
+    expect(result).toEqual({ id: "t-1", number: 6, title: "Retry success" });
+    expect(context.prisma.$transaction).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws after exhausting retries on repeated P2002", async () => {
+    const { context, txMock } = makeMockContext();
+
+    txMock.project.findUnique.mockResolvedValue({ id: "proj-1", name: "Test" });
+    txMock.ticket.findFirst.mockResolvedValue({ number: 5 });
+
+    const p2002Error = Object.assign(new Error("Unique constraint"), { code: "P2002" });
+    txMock.ticket.create.mockRejectedValue(p2002Error);
+
+    await expect(
+      createTicket(
+        {},
+        { input: { title: "Always fails", projectId: "proj-1" } },
+        context
+      )
+    ).rejects.toThrow("Unique constraint");
+
+    expect(context.prisma.$transaction).toHaveBeenCalledTimes(3);
+  });
 });
 
 describe("ticketByNumber", () => {
