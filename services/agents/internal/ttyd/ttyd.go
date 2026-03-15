@@ -75,6 +75,9 @@ func (c *Client) Start(sessionID, tmuxSocketName, tmuxSessionName string) (strin
 	cmd.Stderr = io.Discard
 
 	if err := cmd.Start(); err != nil {
+		c.mu.Lock()
+		c.freePorts = append(c.freePorts, port)
+		c.mu.Unlock()
 		return "", fmt.Errorf("starting ttyd: %w", err)
 	}
 

@@ -69,6 +69,32 @@ func TestPortReusedAfterExhaustion(t *testing.T) {
 	c.mu.Unlock()
 }
 
+func TestPortReturnedOnStartFailure(t *testing.T) {
+	c := NewClient(true, 10000, 2)
+
+	// Start will fail because "ttyd" binary likely doesn't exist in test env,
+	// or we use a non-existent binary name. Either way, the port should be
+	// returned to freePorts on failure.
+	_, err := c.Start("s1", "sock", "sess")
+	if err == nil {
+		// ttyd binary exists; skip this test.
+		c.Stop("s1")
+		t.Skip("ttyd binary is available; cannot test start failure path")
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// The port should be back in the free list, not leaked.
+	if len(c.freePorts) != 1 || c.freePorts[0] != 10000 {
+		t.Fatalf("expected port 10000 returned to freePorts on failure, got %v", c.freePorts)
+	}
+	// nextPort should have advanced (the port was allocated then returned to freePorts).
+	if c.nextPort != 10001 {
+		t.Fatalf("expected nextPort=10001, got %d", c.nextPort)
+	}
+}
+
 func TestDisabledClientNoOps(t *testing.T) {
 	c := NewClient(false, 10000, 5)
 

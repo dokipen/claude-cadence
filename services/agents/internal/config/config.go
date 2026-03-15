@@ -194,6 +194,19 @@ func validate(cfg *Config) error {
 		}
 	}
 
+	// Validate ttyd port range.
+	if cfg.Ttyd.Enabled {
+		if cfg.Ttyd.BasePort < 1 || cfg.Ttyd.BasePort > 65535 {
+			return fmt.Errorf("ttyd.base_port must be between 1 and 65535")
+		}
+		if cfg.Ttyd.MaxPorts < 1 {
+			return fmt.Errorf("ttyd.max_ports must be at least 1")
+		}
+		if cfg.Ttyd.BasePort+cfg.Ttyd.MaxPorts > 65536 {
+			return fmt.Errorf("ttyd port range exceeds maximum port number (base_port + max_ports > 65536)")
+		}
+	}
+
 	// Require authentication for non-loopback bindings.
 	if cfg.Host != "127.0.0.1" && cfg.Host != "localhost" && cfg.Host != "::1" {
 		if cfg.Auth.Mode == "none" {
