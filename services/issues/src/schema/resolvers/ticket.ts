@@ -1,5 +1,6 @@
 import type { PrismaClient, Ticket, Prisma } from "@prisma/client";
 import type { Loaders } from "../../loaders.js";
+import { validateTransition, checkBlockerGuard } from "../../fsm/ticket-machine.js";
 
 export interface Context {
   prisma: PrismaClient;
@@ -263,6 +264,75 @@ export const ticketResolvers = {
       return prisma.user.create({
         data: { githubId, login, displayName, avatarUrl: avatarUrl ?? null },
       });
+    },
+
+    transitionTicket: async (
+      _: unknown,
+      { id, to }: { id: string; to: string },
+      { prisma }: Context
+    ) => {
+      return prisma.$transaction(async (tx) => {
+        const ticket = await tx.ticket.findUnique({ where: { id } });
+        if (!ticket) throw new Error("Ticket not found");
+
+        const transition = validateTransition(ticket.state, to);
+        if (!transition.valid) {
+          throw new Error(`Invalid transition: ${transition.error}`);
+        }
+
+        if (to === "IN_PROGRESS") {
+          const guard = await checkBlockerGuard(id, tx as unknown as PrismaClient);
+          if (!guard.allowed) {
+            throw new Error(guard.error);
+          }
+        }
+
+        return tx.ticket.update({
+          where: { id },
+          data: { state: to },
+        });
+      });
+    },
+
+    addBlockRelation: async (
+      _: unknown,
+      { blockerId, blockedId }: { blockerId: string; blockedId: string },
+      { prisma }: Context
+    ) => {
+      if (blockerId === blockedId) {
+        throw new Error("A ticket cannot block itself");
+      }
+
+      const blocker = await prisma.ticket.findUnique({ where: { id: blockerId } });
+      if (!blocker) throw new Error(`Ticket not found: ${blockerId}`);
+
+      const blocked = await prisma.ticket.findUnique({ where: { id: blockedId } });
+      if (!blocked) throw new Error(`Ticket not found: ${blockedId}`);
+
+      await prisma.blockRelation.upsert({
+        where: { blockerId_blockedId: { blockerId, blockedId } },
+        create: { blockerId, blockedId },
+        update: {},
+      });
+
+      return blocked;
+    },
+
+    removeBlockRelation: async (
+      _: unknown,
+      { blockerId, blockedId }: { blockerId: string; blockedId: string },
+      { prisma }: Context
+    ) => {
+      const existing = await prisma.blockRelation.findUnique({
+        where: { blockerId_blockedId: { blockerId, blockedId } },
+      });
+      if (!existing) throw new Error("Block relation not found");
+
+      await prisma.blockRelation.delete({
+        where: { blockerId_blockedId: { blockerId, blockedId } },
+      });
+
+      return prisma.ticket.findUniqueOrThrow({ where: { id: blockedId } });
     },
   },
 
