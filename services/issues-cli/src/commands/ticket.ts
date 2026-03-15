@@ -281,7 +281,7 @@ interface ListOptions {
   blocked?: boolean;
   priority?: string;
   project?: string;
-  first?: string;
+  limit?: string;
   after?: string;
 }
 
@@ -500,14 +500,14 @@ export function registerTicketCommand(program: Command): void {
     .option("--blocked", "Filter to only blocked tickets")
     .option("--priority <priority>", "Filter by priority (HIGHEST, HIGH, MEDIUM, LOW, LOWEST)")
     .option("--project <id>", "Filter by project ID")
-    .option("--first <count>", "Number of tickets to fetch", "20")
+    .option("-l, --limit <count>", "Max number of tickets to return", "100")
     .option("--after <cursor>", "Cursor for pagination")
     .action(async (opts: ListOptions) => {
       const spinner = ora("Fetching tickets...").start();
       try {
         const client = getClient();
         const variables: Record<string, unknown> = {
-          first: parseInt(opts.first ?? "20", 10),
+          first: parseInt(opts.limit ?? "100", 10),
         };
         if (opts.state) variables.state = opts.state;
         if (opts.label) variables.labelName = opts.label;

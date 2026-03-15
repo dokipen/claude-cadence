@@ -123,6 +123,24 @@ describe("Ticket Management", () => {
     expect(result.stdout).not.toContain("Simple ticket");
   });
 
+  it("should limit results with --limit flag", async () => {
+    // We have 3 tickets created above; requesting limit of 1 should return only 1
+    const result = await suite.cli("ticket", "list", "--limit", "1");
+    expect(result.exitCode).toBe(0);
+    // Count ticket rows (each has a # prefix from formatTicketRow)
+    const ticketLines = result.stdout.split("\n").filter(l => l.includes("#"));
+    expect(ticketLines).toHaveLength(1);
+    // Should indicate more results available
+    expect(result.stdout).toContain("More results available");
+  });
+
+  it("should limit results with -l shorthand", async () => {
+    const result = await suite.cli("ticket", "list", "-l", "2");
+    expect(result.exitCode).toBe(0);
+    const ticketLines = result.stdout.split("\n").filter(l => l.includes("#"));
+    expect(ticketLines).toHaveLength(2);
+  });
+
   it("should update a ticket's title", async () => {
     const result = await suite.cli("ticket", "update", createdTicketId, "--title", "Updated title");
     expect(result.exitCode).toBe(0);
