@@ -1,0 +1,101 @@
+name: Deploy Issues Service
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/issues/**'
+      - 'services/issues-cli/**'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-issues
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    # Runs directly on Bootsy via self-hosted runner — no SSH needed.
+    # Prerequisites:
+    #   1. ISSUES_JWT_SECRET repo secret set (matches the running service's JWT_SECRET)
+    #   2. github-runner user is in the docker group
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
+    env:
+      JWT_SECRET: ${{ secrets.ISSUES_JWT_SECRET }}
+    defaults:
+      run:
+        working-directory: services/issues
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and deploy
+        run: |
+          if [ -z "$JWT_SECRET" ]; then
+            echo "::error::ISSUES_JWT_SECRET secret is not set"
+            exit 1
+          fi
+          echo "==> Building Docker image..."
+          docker compose build --no-cache
+          echo "==> Recreating container..."
+          docker compose up -d --force-recreate --wait
+          echo "==> Deploy complete"
+
+      - name: Verify service is healthy
+        run: |
+          echo "==> Waiting for service to be ready..."
+          for i in $(seq 1 30); do
+            status=$(curl -so /dev/null -w '%{http_code}' \
+              http://localhost:4000/graphql \
+              -H 'Content-Type: application/json' \
+              -d '{"query":"{ __typename }"}' 2>/dev/null || true)
+            if [ "$status" -gt 0 ] 2>/dev/null; then
+              echo "==> Service is healthy (HTTP $status)"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "::error::Service failed health check after 60 seconds"
+          docker compose ps
+          docker compose logs --tail=50
+          exit 1
+
+      - name: Post success summary
+        if: success()
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          echo "### Issues service deployed successfully" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Commit:** \`${COMMIT_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Service:** https://cadence.bootsy.internal/graphql" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post failure summary
+        if: failure()
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          echo "### Issues service deployment failed" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Commit:** \`${COMMIT_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Check the logs above for details." >> "$GITHUB_STEP_SUMMARY"
+
+  notify-cli-update:
+    needs: deploy
+    # Remind dev machines to rebuild the CLI after successful deploys.
+    # The Bootsy CLI is rebuilt as part of install.sh via systemd on boot;
+    # this notification is for other machines.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post CLI update notice
+        run: |
+          echo "### Issues CLI updated" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "The issues CLI source was modified. Rebuild on dev machines:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```bash' >> "$GITHUB_STEP_SUMMARY"
+          echo "cd services/issues-cli && npm install && npm run build && npm link" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

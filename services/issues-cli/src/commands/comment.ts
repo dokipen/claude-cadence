@@ -4,6 +4,7 @@ import chalk from "chalk";
 import ora from "ora";
 import { getClient } from "../client.js";
 import { handleError } from "../errors.js";
+import { resolveTicketId } from "../resolve-ticket.js";
 
 // --- GraphQL Documents ---
 
@@ -54,10 +55,13 @@ export function registerCommentCommand(program: Command): void {
   comment
     .command("add <ticket-id>")
     .description("Add a comment to a ticket")
+    .option("--project <id>", "Project ID (required when using ticket number)")
     .requiredOption("--body <body>", "Comment body")
-    .action(async (ticketId: string, opts: { body: string }) => {
+    .option("--json", "Output raw JSON")
+    .action(async (ticketId: string, opts: { body: string; project?: string; json?: boolean }) => {
       const spinner = ora("Adding comment...").start();
       try {
+        const resolvedId = await resolveTicketId(ticketId, opts.project);
         const client = getClient();
         const data = await client.request<{
           addComment: {
@@ -66,7 +70,13 @@ export function registerCommentCommand(program: Command): void {
             author: { login: string; displayName: string };
             createdAt: string;
           };
-        }>(ADD_COMMENT, { ticketId, body: opts.body });
+        }>(ADD_COMMENT, { ticketId: resolvedId, body: opts.body });
+
+        if (opts.json) {
+          spinner.stop();
+          console.log(JSON.stringify(data.addComment, null, 2));
+          return;
+        }
 
         spinner.succeed("Comment added");
         const c = data.addComment;
@@ -85,7 +95,8 @@ export function registerCommentCommand(program: Command): void {
     .command("edit <id>")
     .description("Update a comment")
     .requiredOption("--body <body>", "Updated comment body")
-    .action(async (id: string, opts: { body: string }) => {
+    .option("--json", "Output raw JSON")
+    .action(async (id: string, opts: { body: string; json?: boolean }) => {
       const spinner = ora("Updating comment...").start();
       try {
         const client = getClient();
@@ -98,6 +109,12 @@ export function registerCommentCommand(program: Command): void {
             updatedAt: string;
           };
         }>(UPDATE_COMMENT, { id, body: opts.body });
+
+        if (opts.json) {
+          spinner.stop();
+          console.log(JSON.stringify(data.updateComment, null, 2));
+          return;
+        }
 
         spinner.succeed("Comment updated");
         const c = data.updateComment;
@@ -115,13 +132,20 @@ export function registerCommentCommand(program: Command): void {
   comment
     .command("delete <id>")
     .description("Delete a comment")
-    .action(async (id: string) => {
+    .option("--json", "Output raw JSON")
+    .action(async (id: string, opts: { json?: boolean }) => {
       const spinner = ora("Deleting comment...").start();
       try {
         const client = getClient();
         const data = await client.request<{
           deleteComment: { id: string; body: string };
         }>(DELETE_COMMENT, { id });
+
+        if (opts.json) {
+          spinner.stop();
+          console.log(JSON.stringify(data.deleteComment, null, 2));
+          return;
+        }
 
         spinner.succeed("Comment deleted");
         const c = data.deleteComment;

@@ -22,7 +22,7 @@ Before any ticket operation, detect the configured provider. Refer to the `ticke
 ```bash
 # Extract provider from project's CLAUDE.md (defaults to "github")
 PROVIDER=$(grep -A3 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'provider:' | tail -1 | awk '{print $2}' || echo "github")
-PROJECT_ID=$(grep -A4 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'project_id:' | tail -1 | awk '{print $2}')
+PROJECT=$(grep -A4 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'project_id:' | tail -1 | awk '{print $2}')
 ```
 
 Use this value to select the correct commands throughout the workflow.
@@ -66,7 +66,7 @@ Use this value to select the correct commands throughout the workflow.
 
    **Issues API:**
    ```bash
-   issues ticket list --project $PROJECT_ID --state BACKLOG
+   issues ticket list --project $PROJECT --state BACKLOG --json
    ```
 
 2. **For each issue**, delegate to ticket-refiner agent

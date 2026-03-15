@@ -46,7 +46,8 @@ export function registerBlockCommand(program: Command): void {
     .description("Add a blocking relationship")
     .requiredOption("--blocker <id>", "Blocker ticket ID")
     .requiredOption("--blocked <id>", "Blocked ticket ID")
-    .action(async (opts: { blocker: string; blocked: string }) => {
+    .option("--json", "Output raw JSON")
+    .action(async (opts: { blocker: string; blocked: string; json?: boolean }) => {
       const spinner = ora("Adding block relation...").start();
       try {
         const client = getClient();
@@ -57,6 +58,12 @@ export function registerBlockCommand(program: Command): void {
             blockedBy: { id: string; title: string; state: string }[];
           };
         }>(ADD_BLOCK_RELATION, { blockerId: opts.blocker, blockedId: opts.blocked });
+
+        if (opts.json) {
+          spinner.stop();
+          console.log(JSON.stringify(data.addBlockRelation, null, 2));
+          return;
+        }
 
         spinner.succeed("Block relation added");
         const t = data.addBlockRelation;
@@ -81,7 +88,8 @@ export function registerBlockCommand(program: Command): void {
     .description("Remove a blocking relationship")
     .requiredOption("--blocker <id>", "Blocker ticket ID")
     .requiredOption("--blocked <id>", "Blocked ticket ID")
-    .action(async (opts: { blocker: string; blocked: string }) => {
+    .option("--json", "Output raw JSON")
+    .action(async (opts: { blocker: string; blocked: string; json?: boolean }) => {
       const spinner = ora("Removing block relation...").start();
       try {
         const client = getClient();
@@ -92,6 +100,12 @@ export function registerBlockCommand(program: Command): void {
             blockedBy: { id: string; title: string; state: string }[];
           };
         }>(REMOVE_BLOCK_RELATION, { blockerId: opts.blocker, blockedId: opts.blocked });
+
+        if (opts.json) {
+          spinner.stop();
+          console.log(JSON.stringify(data.removeBlockRelation, null, 2));
+          return;
+        }
 
         spinner.succeed("Block relation removed");
         const t = data.removeBlockRelation;

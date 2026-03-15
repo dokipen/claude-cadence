@@ -14,6 +14,10 @@ This skill documents the `issues` CLI client for the issues microservice. Use th
 - The CLI must be authenticated: `issues auth whoami`
 - If not authenticated: `issues auth login --pat <github-pat>`
 
+## Project Name Resolution
+
+All `--project` flags and project positional arguments accept either a project **name** (e.g., `claude-cadence`) or a **CUID** (e.g., `cmmryin270000ny01dc2msx3t`). The CLI resolves names to IDs automatically.
+
 ## Project Management
 
 ### Create a project
@@ -31,26 +35,30 @@ issues project list
 ### View a project
 
 ```bash
-issues project view PROJECT_ID
+issues project view PROJECT
 ```
 
 ### Update a project
 
 ```bash
-issues project update PROJECT_ID --name "New Name"
-issues project update PROJECT_ID --repository "org/new-repo"
+issues project update PROJECT --name "New Name"
+issues project update PROJECT --repository "org/new-repo"
 ```
+
+## Project Inference
+
+The CLI can infer the project from the current directory's git remote origin URL. When `--project` is omitted, the CLI reads `git remote get-url origin`, normalizes it to an `owner/repo` slug, and matches it against known projects. Explicit `--project` always takes precedence.
 
 ## Ticket Management
 
-**ID types:** Most commands accept either a ticket number or a CUID. When using a ticket number, `ticket view` requires `--project PROJECT_ID` to resolve it. When using a CUID, `--project` is not needed. Commands like `ticket update`, `ticket transition`, `comment add`, `label add/remove`, `assign`, and `unassign` only accept a CUID and do not use `--project`. Use `ticket view` to look up a ticket's CUID from its number.
+**ID types:** Commands accept either a ticket number or a CUID. When using a ticket number, include `--project PROJECT` to resolve it (project name or ID; inferred from git origin if omitted). When using a CUID, `--project` is not needed.
 
 ### Create a ticket
 
 ```bash
 issues ticket create \
   --title "Brief descriptive title" \
-  --project PROJECT_ID \
+  --project PROJECT \
   --description "Detailed description" \
   --acceptance-criteria "- [ ] Criterion 1\n- [ ] Criterion 2" \
   --labels "LABEL_ID1,LABEL_ID2" \
@@ -59,11 +67,15 @@ issues ticket create \
   --priority MEDIUM
 ```
 
+Note: `--project` is optional if you're in a git repo whose origin matches a known project.
+
 ### View a ticket
 
 ```bash
-issues ticket view 42 --project PROJECT_ID
+issues ticket view 42 --project PROJECT
 ```
+
+Note: `--project` is optional when viewing by ticket number if you're in a matching git repo.
 
 Shows: title, state, priority, story points, assignee, labels, description, acceptance criteria, blockers, comments.
 
@@ -76,7 +88,7 @@ issues ticket list --label "bug"
 issues ticket list --assignee "username"
 issues ticket list --blocked
 issues ticket list --priority HIGH
-issues ticket list --project PROJECT_ID
+issues ticket list --project PROJECT
 issues ticket list --limit 50
 issues ticket list --after "cursor_value"
 ```
@@ -101,8 +113,8 @@ issues ticket transition TICKET_ID --to BACKLOG
 ```
 
 Valid transitions:
-- `BACKLOG` -> `REFINED`
-- `REFINED` -> `IN_PROGRESS`, `BACKLOG`
+- `BACKLOG` -> `REFINED`, `CLOSED`
+- `REFINED` -> `IN_PROGRESS`, `BACKLOG`, `CLOSED`
 - `IN_PROGRESS` -> `CLOSED`, `REFINED`
 - `CLOSED` -> `BACKLOG`
 
@@ -207,6 +219,31 @@ issues auth whoami
 ```bash
 issues auth logout
 ```
+
+## JSON Output
+
+All commands (except `auth`) support a `--json` flag that outputs raw JSON instead of formatted text. Use `--json` when parsing output programmatically.
+
+```bash
+# Get ticket data as JSON
+issues ticket view 42 --project PROJECT_ID --json
+
+# List tickets as JSON (includes pagination info)
+issues ticket list --project PROJECT_ID --json
+
+# Create and get structured response
+issues ticket create --project PROJECT_ID --title "Title" --json
+
+# Get label list as JSON array
+issues label list --json
+```
+
+When `--json` is used:
+- Output is valid JSON written to stdout (no spinner text, no ANSI codes)
+- The JSON structure matches the GraphQL response data
+- Errors still go to stderr in plain text
+
+**Best practice for agents:** Always use `--json` when you need to extract specific fields from command output. Parse with `jq` or read the JSON directly.
 
 ## Data Model Notes
 

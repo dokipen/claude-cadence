@@ -8,6 +8,7 @@
 - As a user, I can demote a ticket from Refined to Backlog so that deprioritized work returns to triage
 - As a user, I can return a ticket from In-Progress to Refined so that paused or re-scoped work goes back to the ready queue
 - As a user, I can reopen a ticket from Closed to Backlog so that regressions or incomplete work can be reworked
+- As a user, I can close a ticket from any state so that tickets can be terminated without stepping through intermediate states
 - As a user, I get a clear error when attempting an invalid transition so that I understand the allowed workflow
 - As a user, I get a clear error when moving a blocked ticket to In-Progress so that I resolve dependencies first
 
@@ -18,8 +19,8 @@
 Four states with the following allowed transitions:
 
 ```
-BACKLOG     -> [REFINED]
-REFINED     -> [IN_PROGRESS, BACKLOG]
+BACKLOG     -> [REFINED, CLOSED]
+REFINED     -> [IN_PROGRESS, BACKLOG, CLOSED]
 IN_PROGRESS -> [CLOSED, REFINED]
 CLOSED      -> [BACKLOG]
 ```
@@ -52,7 +53,7 @@ No external state machine library is needed for 4 states.
 ### Edge Cases
 
 - Transitioning to the current state (e.g., BACKLOG -> BACKLOG) is invalid
-- Attempting a skip transition (e.g., BACKLOG -> CLOSED, BACKLOG -> IN_PROGRESS) returns a clear error with the allowed transitions
+- Attempting an invalid transition (e.g., BACKLOG -> IN_PROGRESS) returns a clear error with the allowed transitions
 - Transitioning a non-existent ticket returns a not-found error
 - The blocker guard only fires on transitions targeting IN_PROGRESS
 
@@ -64,7 +65,9 @@ No external state machine library is needed for 4 states.
 - [ ] REFINED -> BACKLOG demotion succeeds
 - [ ] IN_PROGRESS -> REFINED return succeeds
 - [ ] CLOSED -> BACKLOG reopen succeeds
-- [ ] Invalid transitions (e.g., BACKLOG -> CLOSED, BACKLOG -> IN_PROGRESS) return an error with a message listing allowed transitions
+- [ ] BACKLOG -> CLOSED transition succeeds
+- [ ] REFINED -> CLOSED transition succeeds
+- [ ] Invalid transitions (e.g., BACKLOG -> IN_PROGRESS) return an error with a message listing allowed transitions
 - [ ] Transitioning a blocked ticket to IN_PROGRESS returns an error identifying the unresolved blockers
 - [ ] Transitioning a ticket whose blockers are all CLOSED to IN_PROGRESS succeeds
 - [ ] `transitionTicket` mutation updates the ticket state and returns the updated ticket

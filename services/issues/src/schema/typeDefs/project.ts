@@ -19,6 +19,7 @@ export const projectTypeDefs = `
 
   extend type Query {
     project(id: ID!): Project
+    projectByName(name: String!): Project
     projects: [Project!]!
   }
 
