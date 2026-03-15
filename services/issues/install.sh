@@ -135,8 +135,8 @@ systemd_install() {
   cat > "$unit" <<EOF
 [Unit]
 Description=Claude Cadence Issues Service
-After=docker.service
-Requires=docker.service
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=oneshot
@@ -187,7 +187,17 @@ install_cli() {
   local cli_dir="$SCRIPT_DIR/../issues-cli"
   if [ -d "$cli_dir" ]; then
     log "Installing issues CLI..."
-    (cd "$cli_dir" && npm install && npm run build && npm link)
+    (cd "$cli_dir" && npm install && npm run build)
+    # npm link writes to the global node_modules which may require elevated
+    # privileges on Linux. Try without sudo first, fall back to sudo.
+    if (cd "$cli_dir" && npm link 2>/dev/null); then
+      :
+    elif command -v sudo >/dev/null 2>&1; then
+      log "Retrying npm link with sudo..."
+      (cd "$cli_dir" && sudo npm link)
+    else
+      err "npm link failed and sudo is not available. Run 'sudo npm link' manually in $cli_dir"
+    fi
     log "CLI installed. Run 'issues --help' to verify."
   else
     log "Warning: issues-cli directory not found at $cli_dir, skipping CLI install"
