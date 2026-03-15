@@ -129,12 +129,15 @@ Use `/create-pr` to create the pull request. Link to the issue with `Fixes #[NUM
 
 > **Note:** Do NOT use GitHub's approval system. Post review status as comments.
 
-1. Delegate to `code-reviewer`
-2. Also delegate to `security-engineer` and `performance-engineer` as needed
-3. Triage findings by severity (Critical/Warning block merge, Suggestions don't)
-4. Fix-review loop: assign fixes, push, re-review (max 3 cycles before escalation)
-5. Handle deferred findings using the convention below
-6. Once all blocking findings are resolved, proceed directly to Phase 7 (skip Phase 6 unless the PR contains visual/UI changes)
+1. Delegate ALL applicable reviews simultaneously using parallel Agent tool calls:
+   - `code-reviewer` — always
+   - `security-engineer` — always for PRs that add or modify code, scripts, agent definitions, or workflow instructions; skip for purely informational doc changes
+   - `performance-engineer` — when the PR touches I/O, data structures, concurrency, or hot paths
+   - `tester` — when the PR adds or modifies tests (validate test quality and coverage)
+2. Collect all findings, then triage by severity (Critical/Warning block merge, Suggestions don't)
+3. Fix-review loop: assign fixes, push, re-review (max 3 cycles before escalation)
+4. Handle deferred findings using the convention below
+5. Once all blocking findings are resolved, proceed directly to Phase 7 (skip Phase 6 unless the PR contains visual/UI changes)
 
 #### Deferred Findings Convention
 
