@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/subtle"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -43,7 +44,7 @@ func validateToken(ctx context.Context, expected string) error {
 	if len(token) < len(prefix) || token[:len(prefix)] != prefix {
 		return status.Error(codes.Unauthenticated, "invalid authorization format")
 	}
-	if token[len(prefix):] != expected {
+	if subtle.ConstantTimeCompare([]byte(token[len(prefix):]), []byte(expected)) != 1 {
 		return status.Error(codes.Unauthenticated, "invalid token")
 	}
 	return nil

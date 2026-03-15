@@ -92,6 +92,22 @@ func TestValidate_NonLocalhostWithTokenAuth(t *testing.T) {
 	}
 }
 
+func TestValidate_NonLocalhostWithoutAuth(t *testing.T) {
+	cfg := &Config{
+		Host:     "0.0.0.0",
+		Auth:     AuthConfig{Mode: "none"},
+		Profiles: validProfiles(),
+	}
+	err := validate(cfg)
+	if err == nil {
+		t.Fatal("expected error for non-localhost without auth")
+	}
+	want := "authentication required for non-localhost bindings"
+	if err.Error() != want {
+		t.Errorf("expected %q, got %q", want, err.Error())
+	}
+}
+
 func TestResolveToken_ReturnsTokenWhenNoEnvVar(t *testing.T) {
 	a := &AuthConfig{Token: "hardcoded"}
 	if got := a.ResolveToken(); got != "hardcoded" {
