@@ -40,7 +40,7 @@ If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, 
 
    **Issues API:**
    ```bash
-   issues ticket list --project $PROJECT --label "[relevant label]"
+   issues ticket list --project $PROJECT --label "[relevant label]" --json
    ```
 
 2. **If issue exists**: Verify it has clear acceptance criteria
@@ -79,7 +79,8 @@ If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, 
    [Clear explanation of the work]
 
    ## Notes
-   [Any additional context]"
+   [Any additional context]" \
+     --json
    ```
 
 4. **Ensure issue is refined**:
@@ -108,7 +109,7 @@ If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, 
 
    **Issues API:**
    ```bash
-   issues ticket transition TICKET_ID --to IN_PROGRESS
+   issues ticket transition TICKET_ID --to IN_PROGRESS --json
    ```
 
 ---
@@ -123,7 +124,7 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 
 | Phase | Channel | Command (GitHub) | Command (Issues API) |
 |-------|---------|------------------|----------------------|
-| Pre-PR (research, planning, implementation) | Ticket | `gh issue comment [N] --body "..."` | `issues comment add TICKET_ID --body "..."` |
+| Pre-PR (research, planning, implementation) | Ticket | `gh issue comment [N] --body "..."` | `issues comment add TICKET_ID --body "..." --json` |
 | Post-PR (code review, QA feedback) | GitHub PR | `gh pr review [N] --comment --body "..."` | `gh pr review [N] --comment --body "..."` |
 
 ---
@@ -232,7 +233,7 @@ In both cases:
    - If timeout is exceeded: report the timeout and the still-pending check(s) to the user
 2. Close the ticket:
    - **GitHub (default):** `gh issue edit [NUMBER] --remove-label "in-progress"` (the PR's `Fixes #N` auto-closes it)
-   - **Issues API:** `issues ticket transition TICKET_ID --to CLOSED`
+   - **Issues API:** `issues ticket transition TICKET_ID --to CLOSED --json`
 3. Sync blocked labels using the `update-blocked-labels.sh` script in this command's `scripts/` directory
 4. Return to default branch and pull latest
 5. Clean up worktree using the `project-ops` skill's `cleanup-worktree.sh` script

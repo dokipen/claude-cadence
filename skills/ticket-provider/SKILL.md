@@ -59,20 +59,20 @@ When `provider: issues-api`, use the `issues` CLI. Refer to the `issues-api` ski
 
 | Operation | Command |
 |-----------|---------|
-| List tickets | `issues ticket list --project $PROJECT [filters]` |
-| View ticket | `issues ticket view N --project $PROJECT` |
-| Create ticket | `issues ticket create --project $PROJECT --title "..." [options]` |
-| Update ticket | `issues ticket update TICKET_ID [options]` |
-| Add label | `issues label add TICKET_ID --label LABEL_ID` |
-| Remove label | `issues label remove TICKET_ID --label LABEL_ID` |
-| Comment | `issues comment add TICKET_ID --body "..."` |
-| Close ticket | `issues ticket transition TICKET_ID --to CLOSED` |
+| List tickets | `issues ticket list --project $PROJECT [filters] --json` |
+| View ticket | `issues ticket view N --project $PROJECT --json` |
+| Create ticket | `issues ticket create --project $PROJECT --title "..." [options] --json` |
+| Update ticket | `issues ticket update TICKET_ID [options] --json` |
+| Add label | `issues label add TICKET_ID --label LABEL_ID --json` |
+| Remove label | `issues label remove TICKET_ID --label LABEL_ID --json` |
+| Comment | `issues comment add TICKET_ID --body "..." --json` |
+| Close ticket | `issues ticket transition TICKET_ID --to CLOSED --json` |
 | Check blockers | `issues ticket view N --project $PROJECT --json` (read `blockedBy` array) |
 | Check state | `issues ticket view N --project $PROJECT --json` (read `state` field) |
 | Check assignee | `issues ticket view N --project $PROJECT --json` (read `assignee` field) |
 | Check estimate | `issues ticket view N --project $PROJECT --json` (read `storyPoints` field) |
 
-**Tip:** Use `--json` on any command to get structured output for programmatic parsing. See the `issues-api` skill for details.
+**Important:** Always use `--json` on `issues` CLI commands. This outputs structured JSON instead of chalk-formatted text, making output reliable for programmatic parsing. See the `issues-api` skill for details.
 
 ## Concept Mapping
 
@@ -84,10 +84,10 @@ The two providers use different terminology in some areas:
 | State | `open` / `closed` | `BACKLOG` / `REFINED` / `IN_PROGRESS` / `CLOSED` |
 | Estimate | Label (`estimate:5`) | Story points field (`--points 5`) |
 | Priority | Not native (use labels) | Native field (`--priority HIGH`) |
-| Labels | By name | By ID (use `issues label list` to look up) |
+| Labels | By name | By ID (use `issues label list --json` to resolve) |
 | Claim/start work | Add `in-progress` label | Transition to `IN_PROGRESS` |
 | Mark refined | Add `refined` label | Transition to `REFINED` |
-| Blocking | GitHub dependencies API | `issues block add/remove --blocker X --blocked Y` |
+| Blocking | GitHub dependencies API | `issues block add/remove --blocker X --blocked Y --json` |
 
 ## Important Notes
 

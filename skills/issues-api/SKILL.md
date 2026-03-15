@@ -23,26 +23,26 @@ All `--project` flags and project positional arguments accept either a project *
 ### Create a project
 
 ```bash
-issues project create --name "My Project" --repository "org/repo"
+issues project create --name "My Project" --repository "org/repo" --json
 ```
 
 ### List projects
 
 ```bash
-issues project list
+issues project list --json
 ```
 
 ### View a project
 
 ```bash
-issues project view PROJECT
+issues project view PROJECT --json
 ```
 
 ### Update a project
 
 ```bash
-issues project update PROJECT --name "New Name"
-issues project update PROJECT --repository "org/new-repo"
+issues project update PROJECT --name "New Name" --json
+issues project update PROJECT --repository "org/new-repo" --json
 ```
 
 ## Project Inference
@@ -64,7 +64,8 @@ issues ticket create \
   --labels "LABEL_ID1,LABEL_ID2" \
   --assignee USER_ID \
   --points 5 \
-  --priority MEDIUM
+  --priority MEDIUM \
+  --json
 ```
 
 Note: `--project` is optional if you're in a git repo whose origin matches a known project.
@@ -72,7 +73,7 @@ Note: `--project` is optional if you're in a git repo whose origin matches a kno
 ### View a ticket
 
 ```bash
-issues ticket view 42 --project PROJECT
+issues ticket view 42 --project PROJECT --json
 ```
 
 Note: `--project` is optional when viewing by ticket number if you're in a matching git repo.
@@ -82,34 +83,34 @@ Shows: title, state, priority, story points, assignee, labels, description, acce
 ### List tickets
 
 ```bash
-issues ticket list
-issues ticket list --state REFINED
-issues ticket list --label "bug"
-issues ticket list --assignee "username"
-issues ticket list --blocked
-issues ticket list --priority HIGH
-issues ticket list --project PROJECT
-issues ticket list --limit 50
-issues ticket list --after "cursor_value"
+issues ticket list --json
+issues ticket list --state REFINED --json
+issues ticket list --label "bug" --json
+issues ticket list --assignee "username" --json
+issues ticket list --blocked --json
+issues ticket list --priority HIGH --json
+issues ticket list --project PROJECT --json
+issues ticket list --limit 50 --json
+issues ticket list --after "cursor_value" --json
 ```
 
 ### Update a ticket
 
 ```bash
-issues ticket update TICKET_ID --title "New title"
-issues ticket update TICKET_ID --description "New description"
-issues ticket update TICKET_ID --acceptance-criteria "Updated criteria"
-issues ticket update TICKET_ID --points 8
-issues ticket update TICKET_ID --priority HIGH
+issues ticket update TICKET_ID --title "New title" --json
+issues ticket update TICKET_ID --description "New description" --json
+issues ticket update TICKET_ID --acceptance-criteria "Updated criteria" --json
+issues ticket update TICKET_ID --points 8 --json
+issues ticket update TICKET_ID --priority HIGH --json
 ```
 
 ### Transition a ticket (state changes)
 
 ```bash
-issues ticket transition TICKET_ID --to REFINED
-issues ticket transition TICKET_ID --to IN_PROGRESS
-issues ticket transition TICKET_ID --to CLOSED
-issues ticket transition TICKET_ID --to BACKLOG
+issues ticket transition TICKET_ID --to REFINED --json
+issues ticket transition TICKET_ID --to IN_PROGRESS --json
+issues ticket transition TICKET_ID --to CLOSED --json
+issues ticket transition TICKET_ID --to BACKLOG --json
 ```
 
 Valid transitions:
@@ -125,25 +126,25 @@ Blocked tickets cannot transition to `IN_PROGRESS`.
 ### List labels
 
 ```bash
-issues label list
+issues label list --json
 ```
 
 ### Create a label
 
 ```bash
-issues label create --name "bug" --color "#d73a4a"
+issues label create --name "bug" --color "#d73a4a" --json
 ```
 
 ### Add a label to a ticket
 
 ```bash
-issues label add TICKET_ID --label LABEL_ID
+issues label add TICKET_ID --label LABEL_ID --json
 ```
 
 ### Remove a label from a ticket
 
 ```bash
-issues label remove TICKET_ID --label LABEL_ID
+issues label remove TICKET_ID --label LABEL_ID --json
 ```
 
 ## Comments
@@ -151,19 +152,19 @@ issues label remove TICKET_ID --label LABEL_ID
 ### Add a comment
 
 ```bash
-issues comment add TICKET_ID --body "Comment text"
+issues comment add TICKET_ID --body "Comment text" --json
 ```
 
 ### Edit a comment
 
 ```bash
-issues comment edit COMMENT_ID --body "Updated text"
+issues comment edit COMMENT_ID --body "Updated text" --json
 ```
 
 ### Delete a comment
 
 ```bash
-issues comment delete COMMENT_ID
+issues comment delete COMMENT_ID --json
 ```
 
 ## Blocking Relationships
@@ -171,13 +172,13 @@ issues comment delete COMMENT_ID
 ### Add a blocker
 
 ```bash
-issues block add --blocker 10 --blocked 42
+issues block add --blocker 10 --blocked 42 --json
 ```
 
 ### Remove a blocker
 
 ```bash
-issues block remove --blocker 10 --blocked 42
+issues block remove --blocker 10 --blocked 42 --json
 ```
 
 ## Assignment
@@ -185,13 +186,13 @@ issues block remove --blocker 10 --blocked 42
 ### Assign a ticket
 
 ```bash
-issues assign TICKET_ID --user USER_ID
+issues assign TICKET_ID --user USER_ID --json
 ```
 
 ### Unassign a ticket
 
 ```bash
-issues unassign TICKET_ID
+issues unassign TICKET_ID --json
 ```
 
 ## Authentication
@@ -243,7 +244,7 @@ When `--json` is used:
 - The JSON structure matches the GraphQL response data
 - Errors still go to stderr in plain text
 
-**Best practice for agents:** Always use `--json` when you need to extract specific fields from command output. Parse with `jq` or read the JSON directly.
+**Best practice for agents:** Always use `--json` when invoking `issues` CLI commands. This avoids parsing chalk-formatted terminal output with ANSI escape codes. Parse with `jq` or read the JSON directly.
 
 ## Data Model Notes
 
