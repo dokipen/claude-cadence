@@ -4,6 +4,9 @@ port: 0  # random port for tests
 tmux:
   socket_name: "agentd-test"
 
+ttyd:
+  enabled: false
+
 log:
   level: "debug"
   format: "text"

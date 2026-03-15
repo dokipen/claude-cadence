@@ -12,6 +12,7 @@ import (
 
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
 	"github.com/dokipen/claude-cadence/services/agents/internal/tmux"
+	"github.com/dokipen/claude-cadence/services/agents/internal/ttyd"
 	"github.com/google/uuid"
 )
 
@@ -24,14 +25,16 @@ var (
 type Manager struct {
 	store    *Store
 	tmux     *tmux.Client
+	ttyd     *ttyd.Client
 	profiles map[string]config.Profile
 }
 
 // NewManager creates a new session Manager.
-func NewManager(store *Store, tmuxClient *tmux.Client, profiles map[string]config.Profile) *Manager {
+func NewManager(store *Store, tmuxClient *tmux.Client, ttydClient *ttyd.Client, profiles map[string]config.Profile) *Manager {
 	return &Manager{
 		store:    store,
 		tmux:     tmuxClient,
+		ttyd:     ttydClient,
 		profiles: profiles,
 	}
 }
@@ -129,9 +132,21 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		slog.Warn("failed to get pane PID", "error", err)
 	}
 
+	// Start ttyd if enabled.
+	var websocketURL string
+	if m.ttyd != nil {
+		wsURL, err := m.ttyd.Start(sessionID, m.tmux.SocketName(), sessionName)
+		if err != nil {
+			slog.Warn("failed to start ttyd", "session", sessionName, "error", err)
+		} else {
+			websocketURL = wsURL
+		}
+	}
+
 	m.store.Update(sessionID, func(s *Session) {
 		s.State = StateRunning
 		s.AgentPID = pid
+		s.WebsocketURL = websocketURL
 	})
 
 	return m.mustGet(sessionID), nil
@@ -179,6 +194,11 @@ func (m *Manager) Destroy(id string, force bool) error {
 	m.store.Update(id, func(s *Session) {
 		s.State = StateDestroying
 	})
+
+	// Stop ttyd before killing tmux session.
+	if m.ttyd != nil {
+		m.ttyd.Stop(id)
+	}
 
 	if m.tmux.HasSession(sess.TmuxSession) {
 		if err := m.tmux.KillSession(sess.TmuxSession); err != nil {

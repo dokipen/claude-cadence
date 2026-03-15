@@ -17,6 +17,11 @@ func NewClient(socketName string) *Client {
 	return &Client{socketName: socketName}
 }
 
+// SocketName returns the tmux socket name.
+func (c *Client) SocketName() string {
+	return c.socketName
+}
+
 // NewSession creates a new tmux session. Returns error if it already exists.
 func (c *Client) NewSession(name string, workdir string) error {
 	cmd := exec.Command("tmux", "-L", c.socketName, "new-session", "-d", "-s", name, "-c", workdir)

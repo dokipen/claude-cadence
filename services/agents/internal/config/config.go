@@ -13,6 +13,7 @@ type Config struct {
 	Port     int                `yaml:"port"`
 	RootDir  string             `yaml:"root_dir"`
 	Tmux     TmuxConfig         `yaml:"tmux"`
+	Ttyd     TtydConfig         `yaml:"ttyd"`
 	Log      LogConfig          `yaml:"log"`
 	Profiles map[string]Profile `yaml:"profiles"`
 }
@@ -20,6 +21,12 @@ type Config struct {
 // TmuxConfig holds tmux-specific settings.
 type TmuxConfig struct {
 	SocketName string `yaml:"socket_name"`
+}
+
+// TtydConfig holds ttyd websocket terminal settings.
+type TtydConfig struct {
+	Enabled  bool `yaml:"enabled"`
+	BasePort int  `yaml:"base_port"`
 }
 
 // LogConfig holds logging settings.
@@ -65,6 +72,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Tmux.SocketName == "" {
 		cfg.Tmux.SocketName = "agentd"
+	}
+	if cfg.Ttyd.BasePort == 0 {
+		cfg.Ttyd.BasePort = 7681
 	}
 	if cfg.Log.Level == "" {
 		cfg.Log.Level = "info"
