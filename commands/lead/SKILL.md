@@ -165,9 +165,9 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 **Before any fix is attempted**, delegate to `tester`:
 1. Write a failing test that reproduces the reported bug
 2. Verify the test fails for the right reason (the bug, not test setup issues)
-3. If reproduction fails, report back — the lead must clarify the bug or adjust scope before proceeding
+3. If reproduction fails, report back — the lead must clarify the bug or adjust scope, then re-run Phase 1b from step 1
 
-**Do NOT proceed to Phase 2 until a failing reproduction test exists.** This gate ensures the fix targets the actual bug and prevents regressions.
+**Do NOT proceed to Phase 2 until a failing reproduction test exists.**
 
 ### Phase 2: Implementation
 
