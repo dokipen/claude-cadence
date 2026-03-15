@@ -1,11 +1,14 @@
 package vault
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
 )
@@ -20,8 +23,10 @@ type Client struct {
 // NewClient creates a Vault client from config, performing authentication if needed.
 func NewClient(cfg *config.VaultConfig) (*Client, error) {
 	c := &Client{
-		address:    strings.TrimRight(cfg.Address, "/"),
-		httpClient: http.DefaultClient,
+		address: strings.TrimRight(cfg.Address, "/"),
+		httpClient: &http.Client{
+			Timeout: 15 * time.Second,
+		},
 	}
 
 	switch cfg.AuthMethod {
@@ -47,9 +52,9 @@ func NewClient(cfg *config.VaultConfig) (*Client, error) {
 // the data map (the "data" field inside the response's "data" object
 // for KV v2, or the "data" object itself for KV v1).
 func (c *Client) GetSecret(path string) (map[string]interface{}, error) {
-	url := fmt.Sprintf("%s/v1/%s", c.address, strings.TrimPrefix(path, "/"))
+	reqURL := fmt.Sprintf("%s/v1/%s", c.address, strings.TrimPrefix(path, "/"))
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
@@ -67,7 +72,8 @@ func (c *Client) GetSecret(path string) (map[string]interface{}, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("vault returned %d: %s", resp.StatusCode, string(body))
+		slog.Debug("vault error response", "status", resp.StatusCode, "path", path)
+		return nil, fmt.Errorf("vault returned status %d for path %q", resp.StatusCode, path)
 	}
 
 	var result struct {
@@ -95,10 +101,17 @@ func (c *Client) GetSecret(path string) (map[string]interface{}, error) {
 
 // loginAppRole authenticates using the AppRole method and returns the client token.
 func (c *Client) loginAppRole(roleID, secretID string) (string, error) {
-	url := fmt.Sprintf("%s/v1/auth/approle/login", c.address)
+	reqURL := fmt.Sprintf("%s/v1/auth/approle/login", c.address)
 
-	payload := fmt.Sprintf(`{"role_id":%q,"secret_id":%q}`, roleID, secretID)
-	req, err := http.NewRequest("POST", url, strings.NewReader(payload))
+	payload, err := json.Marshal(map[string]string{
+		"role_id":   roleID,
+		"secret_id": secretID,
+	})
+	if err != nil {
+		return "", fmt.Errorf("marshaling approle payload: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", reqURL, bytes.NewReader(payload))
 	if err != nil {
 		return "", fmt.Errorf("creating request: %w", err)
 	}
@@ -116,7 +129,8 @@ func (c *Client) loginAppRole(roleID, secretID string) (string, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("approle login returned %d: %s", resp.StatusCode, string(body))
+		slog.Debug("vault approle login error", "status", resp.StatusCode)
+		return "", fmt.Errorf("approle login returned status %d", resp.StatusCode)
 	}
 
 	var result struct {

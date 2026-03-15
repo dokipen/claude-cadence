@@ -86,7 +86,8 @@ func (c *Client) EnsureClone(repoURL string, creds *Credentials) (string, error)
 	}
 
 	cmd := exec.Command("git", "clone", repoURL, cloneDir)
-	c.applyCredentials(cmd, repoURL, creds)
+	cleanup := c.applyCredentials(cmd, repoURL, creds)
+	defer cleanup()
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return "", fmt.Errorf("git clone: %w: %s", err, string(output))
 	}
@@ -193,10 +194,15 @@ func (c *Client) pullDefaultBranch(cloneDir string, creds *Credentials) error {
 	fetch := exec.Command("git", "-C", cloneDir, "fetch", "origin", branch)
 	// Determine repo URL for credential type detection.
 	urlCmd := exec.Command("git", "-C", cloneDir, "remote", "get-url", "origin")
+	var cleanup func()
 	if urlOut, err := urlCmd.Output(); err == nil {
-		c.applyCredentials(fetch, strings.TrimSpace(string(urlOut)), creds)
+		cleanup = c.applyCredentials(fetch, strings.TrimSpace(string(urlOut)), creds)
+	} else {
+		cleanup = func() {}
 	}
-	if output, err := fetch.CombinedOutput(); err != nil {
+	output, err := fetch.CombinedOutput()
+	cleanup()
+	if err != nil {
 		return fmt.Errorf("git fetch: %w: %s", err, string(output))
 	}
 
@@ -209,44 +215,68 @@ func (c *Client) pullDefaultBranch(cloneDir string, creds *Credentials) error {
 }
 
 // applyCredentials sets environment variables on a git command for authentication.
-func (c *Client) applyCredentials(cmd *exec.Cmd, repoURL string, creds *Credentials) {
+// Returns a cleanup function that removes any temporary credential files.
+func (c *Client) applyCredentials(cmd *exec.Cmd, repoURL string, creds *Credentials) func() {
+	noop := func() {}
 	if creds == nil {
-		return
+		return noop
 	}
 
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 
+	var tempFiles []string
+
 	if strings.HasPrefix(repoURL, "git@") || strings.Contains(repoURL, "ssh://") {
 		// SSH repo — use SSH key via GIT_SSH_COMMAND with a temp key file.
 		if creds.SSHKey != "" {
-			keyFile, err := writeSSHKey(creds.SSHKey)
+			keyFile, err := writeTempSecret(creds.SSHKey, "agentd-ssh-key-*")
 			if err == nil {
+				tempFiles = append(tempFiles, keyFile)
 				cmd.Env = append(cmd.Env,
 					fmt.Sprintf("GIT_SSH_COMMAND=ssh -i %s -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new", keyFile),
 				)
 			}
 		}
 	} else {
-		// HTTPS repo — use token via credential helper.
+		// HTTPS repo — use token via a git-credential-store temp file.
 		if creds.Token != "" {
-			// Use a one-shot credential helper that echoes the token.
-			helper := fmt.Sprintf("!f() { echo \"password=%s\"; echo \"username=x-access-token\"; }; f", creds.Token)
-			cmd.Env = append(cmd.Env,
-				fmt.Sprintf("GIT_CONFIG_KEY_0=credential.helper"),
-				fmt.Sprintf("GIT_CONFIG_VALUE_0=%s", helper),
-				"GIT_CONFIG_COUNT=1",
-			)
+			credFile, err := writeGitCredentials(repoURL, creds.Token)
+			if err == nil {
+				tempFiles = append(tempFiles, credFile)
+				cmd.Env = append(cmd.Env,
+					"GIT_CONFIG_KEY_0=credential.helper",
+					fmt.Sprintf("GIT_CONFIG_VALUE_0=store --file=%s", credFile),
+					"GIT_CONFIG_COUNT=1",
+				)
+			}
+		}
+	}
+
+	return func() {
+		for _, f := range tempFiles {
+			os.Remove(f)
 		}
 	}
 }
 
-// writeSSHKey writes a PEM key to a temp file and returns its path.
-func writeSSHKey(key string) (string, error) {
-	f, err := os.CreateTemp("", "agentd-ssh-key-*")
+// writeGitCredentials writes a git-credential-store formatted file for HTTPS auth.
+// Format: https://username:token@hostname
+func writeGitCredentials(repoURL, token string) (string, error) {
+	u, err := url.Parse(repoURL)
+	if err != nil {
+		return "", fmt.Errorf("parsing repo URL for credentials: %w", err)
+	}
+	credLine := fmt.Sprintf("%s://x-access-token:%s@%s\n", u.Scheme, token, u.Host)
+	return writeTempSecret(credLine, "agentd-git-cred-*")
+}
+
+// writeTempSecret writes sensitive data to a temp file with 0600 permissions.
+func writeTempSecret(data, pattern string) (string, error) {
+	f, err := os.CreateTemp("", pattern)
 	if err != nil {
 		return "", err
 	}
-	if _, err := f.WriteString(key); err != nil {
+	if _, err := f.WriteString(data); err != nil {
 		f.Close()
 		os.Remove(f.Name())
 		return "", err
