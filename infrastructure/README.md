@@ -1,10 +1,11 @@
 # Infrastructure — Caddy Reverse Proxy
 
-Caddy provides a single entry point for the Claude Cadence backend services with automatic HTTPS for production deployments.
+Caddy provides a single entry point for the Claude Cadence backend services with TLS via Caddy's internal CA.
 
 ## Prerequisites
 
-Install Caddy: https://caddyserver.com/docs/install
+- Install Caddy: https://caddyserver.com/docs/install
+- Trust Caddy's root CA on LAN clients (see [Caddy docs](https://caddyserver.com/docs/running#local-https))
 
 ## Routes
 
@@ -13,30 +14,22 @@ Install Caddy: https://caddyserver.com/docs/install
 | `/graphql` | `localhost:4000` | HTTP — Issues service (GraphQL) |
 | `/agents/*` | `localhost:4141` | gRPC (h2c) — Agent service |
 
-## Development (localhost)
+## Usage
 
-Start both backend services first, then run Caddy:
-
-```bash
-caddy run --config infrastructure/Caddyfile
-```
-
-This binds to `http://localhost` with no TLS. The services are available at:
-
-- `http://localhost/graphql` — Issues GraphQL API
-- `http://localhost/agents/` — Agents gRPC endpoint
-
-## Production
-
-Set the `CADENCE_DOMAIN` environment variable to enable automatic HTTPS:
+`CADENCE_DOMAIN` is required. Start both backend services first, then run Caddy:
 
 ```bash
-CADENCE_DOMAIN=cadence.example.com caddy run --config infrastructure/Caddyfile
+CADENCE_DOMAIN=cadence.bootsy.internal caddy run --config infrastructure/Caddyfile
 ```
 
-Caddy will automatically obtain and renew TLS certificates via Let's Encrypt for the configured domain.
+Caddy serves HTTPS on port 443 using its built-in CA and redirects HTTP (port 80) to HTTPS. Services are available at:
 
-**gRPC clients:** In production mode, Caddy terminates TLS at the edge and forwards to the agents service over plaintext h2c internally. gRPC clients must connect to Caddy using TLS (e.g., `grpcurl cadence.example.com:443 ...` instead of `-plaintext`).
+- `https://cadence.bootsy.internal/graphql` — Issues GraphQL API
+- `https://cadence.bootsy.internal/agents/` — Agents gRPC endpoint
+
+**DNS:** Ensure `CADENCE_DOMAIN` resolves to the host running Caddy on your LAN.
+
+**gRPC clients:** Caddy terminates TLS at the edge and forwards to the agents service over plaintext h2c internally. gRPC clients must connect using TLS (e.g., `grpcurl cadence.bootsy.internal:443 ...` instead of `-plaintext`).
 
 ### Security: enable agentd token auth
 
