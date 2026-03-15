@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   changes:
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
     outputs:
       issues-service: ${{ steps.filter.outputs.issues-service }}
       agent-service: ${{ steps.filter.outputs.agent-service }}
@@ -34,7 +34,7 @@ jobs:
   issues-service-test:
     needs: changes
     if: needs.changes.outputs.issues-service == 'true'
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
     defaults:
       run:
         working-directory: services/issues
@@ -54,7 +54,7 @@ jobs:
   issues-cli-test:
     needs: [changes, issues-service-test]
     if: needs.changes.outputs.issues-service == 'true'
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -72,7 +72,7 @@ jobs:
   issues-service-docker:
     needs: [changes, issues-service-test, issues-cli-test]
     if: needs.changes.outputs.issues-service == 'true'
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
     steps:
       - uses: actions/checkout@v4
       - name: Build Docker image
@@ -81,7 +81,7 @@ jobs:
   agent-service-test:
     needs: changes
     if: needs.changes.outputs.agent-service == 'true'
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -100,7 +100,7 @@ jobs:
   agent-service-build:
     needs: [changes, agent-service-test]
     if: needs.changes.outputs.agent-service == 'true'
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
