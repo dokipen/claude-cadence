@@ -49,6 +49,12 @@ for dir in "$WORKTREES_DIR"/*/; do
 
   echo "Cleaning up worktree '$branch_name' (PR #$merged_pr merged)..."
 
+  # Re-check active worktrees immediately before destructive steps to narrow TOCTOU window
+  if git worktree list --porcelain 2>/dev/null | grep -q "^branch refs/heads/$branch_name$"; then
+    echo "Skipping '$branch_name' — became active since scan started"
+    continue
+  fi
+
   # Delete remote branch (may already be deleted by PR merge)
   git push origin --delete "$branch_name" 2>/dev/null || true
 
