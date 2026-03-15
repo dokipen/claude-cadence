@@ -17,32 +17,39 @@ permissions:
 
 jobs:
   deploy:
-    # Runs on Bootsy (the deployment target) via self-hosted runner.
+    # Runs directly on Bootsy via self-hosted runner — no SSH needed.
     # Prerequisites:
-    #   1. github-runner user can SSH to doki_pen@localhost (see infrastructure/setup-deploy-ssh.sh)
-    #   2. doki_pen has the repo cloned at ~/src/claude-cadence with install.sh already run once
+    #   1. ISSUES_JWT_SECRET repo secret set (matches the running service's JWT_SECRET)
+    #   2. github-runner user is in the docker group
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 15
-    env:
-      DEPLOY_USER: doki_pen
+    defaults:
+      run:
+        working-directory: services/issues
     steps:
-      - name: Deploy issues service
+      - uses: actions/checkout@v4
+
+      - name: Write .env file
+        env:
+          JWT_SECRET: ${{ secrets.ISSUES_JWT_SECRET }}
         run: |
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "${DEPLOY_USER}@localhost" bash -s <<'DEPLOY_SCRIPT'
-          set -euo pipefail
-          cd "$HOME/src/claude-cadence"
-          echo "==> Pulling latest changes..."
-          git pull --ff-only origin main
-          echo "==> Running install.sh..."
-          services/issues/install.sh install
+          if [ -z "$JWT_SECRET" ]; then
+            echo "::error::ISSUES_JWT_SECRET secret is not set"
+            exit 1
+          fi
+          umask 077
+          echo "JWT_SECRET=${JWT_SECRET}" > .env
+
+      - name: Build and deploy
+        run: |
+          echo "==> Building Docker image..."
+          docker compose build --no-cache
+          echo "==> Recreating container..."
+          docker compose up -d --force-recreate --wait
           echo "==> Deploy complete"
-          DEPLOY_SCRIPT
 
       - name: Verify service is healthy
         run: |
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "${DEPLOY_USER}@localhost" bash -s <<'HEALTH_SCRIPT'
-          set -euo pipefail
-
           echo "==> Waiting for service to be ready..."
           for i in $(seq 1 30); do
             if curl -sf http://localhost:4000/graphql \
@@ -55,11 +62,9 @@ jobs:
           done
 
           echo "::error::Service failed health check after 60 seconds"
-          cd "$HOME/src/claude-cadence"
-          docker compose -f services/issues/docker-compose.yml ps
-          docker compose -f services/issues/docker-compose.yml logs --tail=50
+          docker compose ps
+          docker compose logs --tail=50
           exit 1
-          HEALTH_SCRIPT
 
       - name: Post success summary
         if: success()
@@ -84,7 +89,8 @@ jobs:
   notify-cli-update:
     needs: deploy
     # Remind dev machines to rebuild the CLI after successful deploys.
-    # install.sh handles the Bootsy CLI rebuild; this is for other machines.
+    # The Bootsy CLI is rebuilt as part of install.sh via systemd on boot;
+    # this notification is for other machines.
     runs-on: ubuntu-latest
     steps:
       - name: Post CLI update notice
