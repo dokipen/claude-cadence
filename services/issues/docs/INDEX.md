@@ -21,4 +21,4 @@ A GraphQL-based ticket tracking service with CLI client for Claude Cadence.
 
 ## CLI
 
-See the CLI client at [`services/issues-cli/`](../../issues-cli/).
+See the [CLI README](../../issues-cli/README.md) for installation, configuration, authentication, and command reference.
