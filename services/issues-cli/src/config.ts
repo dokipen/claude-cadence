@@ -7,7 +7,7 @@ const CONFIG_FILE = join(CONFIG_DIR, "config.json");
 const AUTH_FILE = join(CONFIG_DIR, "auth.json");
 
 function ensureConfigDir(): void {
-  mkdirSync(CONFIG_DIR, { recursive: true });
+  mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
 }
 
 interface ConfigFile {

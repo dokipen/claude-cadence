@@ -85,10 +85,13 @@ function readStdin(): Promise<string> {
 
 function promptSecret(prompt: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const rl = createInterface({ input: process.stdin, output: process.stderr });
     process.stderr.write(prompt);
+    const rl = createInterface({ input: process.stdin, output: process.stderr, terminal: true });
+    // Suppress echo so the PAT is not visible on screen
+    (rl as unknown as { output: { write: () => void } }).output.write = () => {};
     rl.once("line", (line) => {
       rl.close();
+      process.stderr.write("\n");
       resolve(line.trim());
     });
     rl.once("error", reject);
