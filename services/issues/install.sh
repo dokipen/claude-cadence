@@ -135,6 +135,8 @@ systemd_install() {
   cat > "$unit" <<EOF
 [Unit]
 Description=Claude Cadence Issues Service
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=oneshot
