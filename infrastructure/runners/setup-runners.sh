@@ -1,16 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Provision N self-hosted GitHub Actions runners as systemd services.
+# Provision N self-hosted GitHub Actions runners as systemd (Linux) or launchd (macOS) services.
 # Usage: setup-runners.sh --repo OWNER/REPO --count N [--user USER] [--base-dir DIR] [--labels LABELS] [--runner-version VERSION] [--dry-run]
 
 # --- Defaults ---
 
 DEFAULT_COUNT=3
 DEFAULT_USER="github-runner"
-DEFAULT_LABELS="Linux,X64"
 DEFAULT_RUNNER_VERSION="latest"
-RUNNER_ARCH="x64"
 
 # --- Helpers ---
 
@@ -19,7 +17,6 @@ warn()  { printf "\033[1;33mWarning:\033[0m %s\n" "$1"; }
 error() { printf "\033[1;31mError:\033[0m %s\n" "$1" >&2; exit 1; }
 
 dry_run_print() {
-    # Print a shell-safe representation of the command
     local prefix="$1"; shift
     printf "\033[0;36m[dry-run]\033[0m %s" "$prefix"
     printf " %q" "$@"
@@ -42,6 +39,31 @@ sudo_cmd() {
     fi
 }
 
+# --- Platform detection ---
+
+detect_platform() {
+    case "$(uname -s)" in
+        Linux)
+            OS="linux"
+            RUNNER_OS="linux"
+            ;;
+        Darwin)
+            OS="darwin"
+            RUNNER_OS="osx"
+            ;;
+        *)
+            error "Unsupported operating system: $(uname -s)"
+            ;;
+    esac
+
+    case "$(uname -m)" in
+        x86_64)  RUNNER_ARCH="x64" ;;
+        aarch64) RUNNER_ARCH="arm64" ;;
+        arm64)   RUNNER_ARCH="arm64" ;;
+        *)       error "Unsupported architecture: $(uname -m)" ;;
+    esac
+}
+
 # --- Argument parsing ---
 
 usage() {
@@ -51,12 +73,16 @@ Usage: $(basename "$0") --repo OWNER/REPO [OPTIONS]
 Options:
   --repo OWNER/REPO       GitHub repo to register runners against (required)
   --count N               Number of runner instances (default: $DEFAULT_COUNT)
-  --user USER             System user to run under (default: $DEFAULT_USER)
-  --base-dir DIR          Base directory for runner installs (default: /home/<user>)
-  --labels LABELS         Extra runner labels (default: $DEFAULT_LABELS)
+  --user USER             System user to run under (default: $DEFAULT_USER, ignored on macOS)
+  --base-dir DIR          Base directory for runner installs (default: platform-dependent)
+  --labels LABELS         Extra runner labels (default: platform-dependent)
   --runner-version VER    Actions runner version (default: latest)
   --dry-run               Print commands instead of executing them
   -h, --help              Show this help
+
+Platform defaults:
+  Linux:  --base-dir /home/<user>  --labels Linux,X64
+  macOS:  --base-dir ~/actions-runner  --labels macOS,<arch>
 EOF
     exit 0
 }
@@ -65,7 +91,7 @@ REPO=""
 COUNT="$DEFAULT_COUNT"
 RUNNER_USER="$DEFAULT_USER"
 BASE_DIR=""
-LABELS="$DEFAULT_LABELS"
+LABELS=""
 RUNNER_VERSION="$DEFAULT_RUNNER_VERSION"
 DRY_RUN="false"
 
@@ -89,13 +115,42 @@ done
 [[ ! "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] && error "Invalid repo format: '$REPO'. Expected OWNER/REPO."
 [[ ! "$COUNT" =~ ^[1-9][0-9]*$ ]] && error "Invalid count: '$COUNT'. Must be a positive integer."
 [[ ! "$RUNNER_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] && error "Invalid user name: '$RUNNER_USER'. Must match [a-z_][a-z0-9_-]{0,31}."
-[[ ! "$LABELS" =~ ^[A-Za-z0-9_.,:-]+$ ]] && error "Invalid labels: '$LABELS'. Only alphanumeric, comma, period, colon, hyphen, and underscore allowed."
+if [[ -n "$LABELS" ]]; then
+    [[ ! "$LABELS" =~ ^[A-Za-z0-9_.,:-]+$ ]] && error "Invalid labels: '$LABELS'. Only alphanumeric, comma, period, colon, hyphen, and underscore allowed."
+fi
 if [[ "$RUNNER_VERSION" != "latest" ]]; then
     [[ ! "$RUNNER_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && error "Invalid runner version: '$RUNNER_VERSION'. Expected semver (e.g., 2.321.0)."
 fi
 
+# Detect platform and set defaults
+detect_platform
+
 REPO_NAME="${REPO#*/}"
-[[ -z "$BASE_DIR" ]] && BASE_DIR="/home/$RUNNER_USER"
+
+# Set platform-dependent defaults
+if [[ -z "$BASE_DIR" ]]; then
+    if [[ "$OS" == "darwin" ]]; then
+        BASE_DIR="$HOME/actions-runner"
+    else
+        BASE_DIR="/home/$RUNNER_USER"
+    fi
+fi
+
+if [[ -z "$LABELS" ]]; then
+    if [[ "$OS" == "darwin" ]]; then
+        if [[ "$RUNNER_ARCH" == "arm64" ]]; then
+            LABELS="macOS,ARM64"
+        else
+            LABELS="macOS,X64"
+        fi
+    else
+        if [[ "$RUNNER_ARCH" == "arm64" ]]; then
+            LABELS="Linux,ARM64"
+        else
+            LABELS="Linux,X64"
+        fi
+    fi
+fi
 
 # Canonicalize and reject path traversal
 case "$BASE_DIR" in
@@ -115,14 +170,17 @@ check_prerequisites() {
     command -v curl >/dev/null 2>&1 || missing+=("curl")
     command -v tar >/dev/null 2>&1 || missing+=("tar")
 
-    if [[ "$(uname -s)" != "Linux" ]]; then
-        if [[ "$DRY_RUN" == "true" ]]; then
-            warn "Not running on Linux — dry-run mode will show what would happen on a Linux host."
-        else
-            error "This script requires Linux with systemd."
+    # Verify gh is authenticated (GH_TOKEN env var or gh auth status)
+    if [[ -z "${GH_TOKEN:-}" ]]; then
+        if ! gh auth status >/dev/null 2>&1; then
+            error "GitHub CLI is not authenticated. Run 'gh auth login' or set GH_TOKEN."
         fi
-    else
+    fi
+
+    if [[ "$OS" == "linux" ]]; then
         command -v systemctl >/dev/null 2>&1 || missing+=("systemctl")
+    elif [[ "$OS" == "darwin" ]]; then
+        command -v launchctl >/dev/null 2>&1 || missing+=("launchctl")
     fi
 
     if [[ ${#missing[@]} -gt 0 ]]; then
@@ -135,6 +193,16 @@ check_prerequisites() {
 # --- User management ---
 
 ensure_user() {
+    if [[ "$OS" == "darwin" ]]; then
+        # On macOS, runners run as the current user — no system user needed
+        if [[ "$RUNNER_USER" != "$(whoami)" ]] && [[ "$RUNNER_USER" != "$DEFAULT_USER" ]]; then
+            warn "Ignoring --user '$RUNNER_USER' on macOS — runners run as current user."
+        fi
+        RUNNER_USER="$(whoami)"
+        info "macOS: runners will run as current user '$RUNNER_USER'."
+        return 0
+    fi
+
     if id "$RUNNER_USER" >/dev/null 2>&1; then
         info "User '$RUNNER_USER' already exists."
     else
@@ -171,19 +239,41 @@ fetch_registration_token() {
     fi
 }
 
+# --- Service status check ---
+
+is_service_running() {
+    local runner_dir="$1"
+    if [[ "$OS" == "linux" ]]; then
+        if [[ -f "$runner_dir/.service" ]]; then
+            local svc_name
+            svc_name=$(cat "$runner_dir/.service")
+            [[ "$svc_name" =~ ^[A-Za-z0-9_.@-]+$ ]] && systemctl is-active "$svc_name" >/dev/null 2>&1
+            return $?
+        fi
+    elif [[ "$OS" == "darwin" ]]; then
+        if [[ -f "$runner_dir/.service" ]]; then
+            local svc_name
+            svc_name=$(cat "$runner_dir/.service")
+            [[ "$svc_name" =~ ^[A-Za-z0-9_.@-]+$ ]] && launchctl list "$svc_name" >/dev/null 2>&1
+            return $?
+        fi
+    fi
+    return 1
+}
+
 # --- Runner setup ---
 
 setup_runner() {
     local index="$1"
     local runner_name="${HOSTNAME_PREFIX}-${REPO_NAME}-${index}"
     local runner_dir="${BASE_DIR}/actions-runner-${REPO_NAME}-${index}"
-    local tarball_url="https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-${RUNNER_ARCH}-${RUNNER_VERSION}.tar.gz"
+    local tarball_url="https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-${RUNNER_OS}-${RUNNER_ARCH}-${RUNNER_VERSION}.tar.gz"
 
     info "Setting up runner $index: $runner_name"
 
     # Idempotency: skip if runner directory exists, is configured, and service is running
     if [[ -f "$runner_dir/.runner" ]] && [[ "$DRY_RUN" != "true" ]]; then
-        if [[ -f "$runner_dir/.service" ]] && systemctl is-active "$(cat "$runner_dir/.service")" >/dev/null 2>&1; then
+        if is_service_running "$runner_dir"; then
             warn "Runner '$runner_name' already configured and running at $runner_dir — skipping."
             return 0
         fi
@@ -192,14 +282,20 @@ setup_runner() {
 
     # Create and extract
     info "  Creating directory $runner_dir..."
-    sudo_cmd mkdir -p "$runner_dir"
-    sudo_cmd chown "$RUNNER_USER:$(id -gn "$RUNNER_USER" 2>/dev/null || echo "$RUNNER_USER")" "$runner_dir"
+    if [[ "$OS" == "darwin" ]]; then
+        run_cmd mkdir -p "$runner_dir"
+    else
+        sudo_cmd mkdir -p "$runner_dir"
+        sudo_cmd chown "$RUNNER_USER:$(id -gn "$RUNNER_USER" 2>/dev/null || echo "$RUNNER_USER")" "$runner_dir"
+    fi
 
-    info "  Downloading actions-runner v${RUNNER_VERSION}..."
+    info "  Downloading actions-runner v${RUNNER_VERSION} (${RUNNER_OS}/${RUNNER_ARCH})..."
     if [[ "$DRY_RUN" == "true" ]]; then
         run_cmd curl -sL "$tarball_url" -o "$runner_dir/actions-runner.tar.gz"
         run_cmd tar -xzf "$runner_dir/actions-runner.tar.gz" -C "$runner_dir"
         run_cmd rm -f "$runner_dir/actions-runner.tar.gz"
+    elif [[ "$OS" == "darwin" ]]; then
+        (cd "$runner_dir" && curl -sL "$tarball_url" -o actions-runner.tar.gz && tar -xzf actions-runner.tar.gz && rm -f actions-runner.tar.gz)
     else
         sudo -u "$RUNNER_USER" -- sh -c 'cd "$1" && curl -sL "$2" -o actions-runner.tar.gz && tar -xzf actions-runner.tar.gz && rm -f actions-runner.tar.gz' _ "$runner_dir" "$tarball_url"
     fi
@@ -207,10 +303,17 @@ setup_runner() {
     # Configure — pass token via environment variable to avoid process list exposure
     info "  Configuring runner '$runner_name'..."
     if [[ "$DRY_RUN" == "true" ]]; then
-        dry_run_print "ACTIONS_RUNNER_INPUT_TOKEN=<token> sudo -u $RUNNER_USER" \
+        dry_run_print "ACTIONS_RUNNER_INPUT_TOKEN=<token>" \
             "$runner_dir/config.sh" --unattended \
             --url "https://github.com/$REPO" \
             --name "$runner_name" --labels "$LABELS" --replace
+    elif [[ "$OS" == "darwin" ]]; then
+        ACTIONS_RUNNER_INPUT_TOKEN="$REG_TOKEN" "$runner_dir/config.sh" \
+            --unattended \
+            --url "https://github.com/$REPO" \
+            --name "$runner_name" \
+            --labels "$LABELS" \
+            --replace
     else
         export ACTIONS_RUNNER_INPUT_TOKEN="$REG_TOKEN"
         sudo -u "$RUNNER_USER" --preserve-env=ACTIONS_RUNNER_INPUT_TOKEN \
@@ -223,19 +326,35 @@ setup_runner() {
         unset ACTIONS_RUNNER_INPUT_TOKEN
     fi
 
-    # Install and start systemd service
-    info "  Installing systemd service..."
-    if [[ "$DRY_RUN" == "true" ]]; then
-        dry_run_print "sudo" sh -c "cd $runner_dir && ./svc.sh install $RUNNER_USER"
-    else
-        (cd "$runner_dir" && sudo ./svc.sh install "$RUNNER_USER")
-    fi
+    # Install and start service (svc.sh handles both systemd and launchd)
+    if [[ "$OS" == "darwin" ]]; then
+        info "  Installing launchd service..."
+        if [[ "$DRY_RUN" == "true" ]]; then
+            dry_run_print "" sh -c "cd $runner_dir && ./svc.sh install"
+        else
+            (cd "$runner_dir" && ./svc.sh install)
+        fi
 
-    info "  Starting service..."
-    if [[ "$DRY_RUN" == "true" ]]; then
-        dry_run_print "sudo" sh -c "cd $runner_dir && ./svc.sh start"
+        info "  Starting service..."
+        if [[ "$DRY_RUN" == "true" ]]; then
+            dry_run_print "" sh -c "cd $runner_dir && ./svc.sh start"
+        else
+            (cd "$runner_dir" && ./svc.sh start)
+        fi
     else
-        (cd "$runner_dir" && sudo ./svc.sh start)
+        info "  Installing systemd service..."
+        if [[ "$DRY_RUN" == "true" ]]; then
+            dry_run_print "sudo" sh -c "cd $runner_dir && ./svc.sh install $RUNNER_USER"
+        else
+            (cd "$runner_dir" && sudo ./svc.sh install "$RUNNER_USER")
+        fi
+
+        info "  Starting service..."
+        if [[ "$DRY_RUN" == "true" ]]; then
+            dry_run_print "sudo" sh -c "cd $runner_dir && ./svc.sh start"
+        else
+            (cd "$runner_dir" && sudo ./svc.sh start)
+        fi
     fi
 
     info "  Runner '$runner_name' is ready."
@@ -244,17 +363,18 @@ setup_runner() {
 # --- Main ---
 
 main() {
-    info "GitHub Actions Runner Setup"
-    info "  Repo:    $REPO"
-    info "  Count:   $COUNT"
-    info "  User:    $RUNNER_USER"
-    info "  Base:    $BASE_DIR"
-    info "  Labels:  $LABELS"
-    [[ "$DRY_RUN" == "true" ]] && info "  Mode:    DRY RUN"
-    echo
-
     check_prerequisites
     ensure_user
+
+    info "GitHub Actions Runner Setup"
+    info "  Repo:      $REPO"
+    info "  Count:     $COUNT"
+    info "  User:      $RUNNER_USER"
+    info "  Base:      $BASE_DIR"
+    info "  Labels:    $LABELS"
+    info "  Platform:  $OS/$RUNNER_ARCH"
+    [[ "$DRY_RUN" == "true" ]] && info "  Mode:      DRY RUN"
+    echo
     resolve_runner_version
     fetch_registration_token
 
