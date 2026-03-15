@@ -15,7 +15,10 @@ import (
 	"github.com/google/uuid"
 )
 
-var tmuxNameRe = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+var (
+	tmuxNameRe = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+	envKeyRe   = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+)
 
 // Manager orchestrates session lifecycle using Store and tmux.Client.
 type Manager struct {
@@ -52,7 +55,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	// Auto-generate name if empty.
 	sessionName := req.SessionName
 	if sessionName == "" {
-		sessionName = fmt.Sprintf("%s-%d", req.AgentProfile, time.Now().Unix())
+		sessionName = fmt.Sprintf("%s-%d", req.AgentProfile, time.Now().UnixNano())
 	}
 
 	// Validate name is tmux-safe.
@@ -86,15 +89,20 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 
 	// Create tmux session. Use "/" as workdir for Phase 1 (no worktrees).
 	if err := m.tmux.NewSession(sessionName, "/"); err != nil {
+		errMsg := fmt.Sprintf("failed to create tmux session: %v", err)
 		m.store.Update(sessionID, func(s *Session) {
 			s.State = StateError
-			s.ErrorMessage = fmt.Sprintf("failed to create tmux session: %v", err)
+			s.ErrorMessage = errMsg
 		})
-		return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: sess.ErrorMessage}
+		return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
 	}
 
-	// Set env vars.
+	// Set env vars (validate keys to prevent injection via tmux set-environment).
 	for k, v := range req.Env {
+		if !envKeyRe.MatchString(k) {
+			m.cleanup(sessionID, sessionName, fmt.Sprintf("invalid env var key: %q", k))
+			return m.mustGet(sessionID), &Error{Code: ErrInvalidArgument, Message: fmt.Sprintf("invalid env var key: %q", k)}
+		}
 		if err := m.tmux.SetEnv(sessionName, k, v); err != nil {
 			slog.Warn("failed to set env var", "key", k, "error", err)
 		}
@@ -103,14 +111,16 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	// Render command template.
 	cmdStr, err := m.renderCommand(profile.Command, sess, req.ExtraArgs)
 	if err != nil {
-		m.cleanup(sessionID, sessionName, fmt.Sprintf("failed to render command: %v", err))
-		return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: sess.ErrorMessage}
+		errMsg := fmt.Sprintf("failed to render command: %v", err)
+		m.cleanup(sessionID, sessionName, errMsg)
+		return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
 	}
 
 	// Send command to tmux.
 	if err := m.tmux.SendKeys(sessionName, cmdStr); err != nil {
-		m.cleanup(sessionID, sessionName, fmt.Sprintf("failed to send keys: %v", err))
-		return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: sess.ErrorMessage}
+		errMsg := fmt.Sprintf("failed to send keys: %v", err)
+		m.cleanup(sessionID, sessionName, errMsg)
+		return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
 	}
 
 	// Get PID.

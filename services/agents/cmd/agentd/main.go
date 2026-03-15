@@ -68,19 +68,21 @@ func main() {
 	}
 
 	// Start server in goroutine.
+	errCh := make(chan error, 1)
 	go func() {
 		slog.Info("starting agentd", "addr", srv.Addr())
-		if err := srv.Start(); err != nil {
-			slog.Error("server error", "error", err)
-			os.Exit(1)
-		}
+		errCh <- srv.Start()
 	}()
 
-	// Wait for signal.
+	// Wait for signal or server error.
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	sig := <-sigCh
-	slog.Info("received signal, shutting down", "signal", sig)
+	select {
+	case sig := <-sigCh:
+		slog.Info("received signal, shutting down", "signal", sig)
+	case err := <-errCh:
+		slog.Error("server error, shutting down", "error", err)
+	}
 
 	srv.Stop()
 	slog.Info("agentd stopped")

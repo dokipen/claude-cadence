@@ -173,18 +173,23 @@ func TestGetSession_Stopped(t *testing.T) {
 		})
 	})
 
-	// Wait for the fast-exit process to complete
-	time.Sleep(1500 * time.Millisecond)
-
-	getResp, err := client.GetSession(ctx, &agentsv1.GetSessionRequest{
-		SessionId: sessionID,
-	})
-	if err != nil {
-		t.Fatalf("GetSession: %v", err)
+	// Poll until the session transitions to STOPPED (tmux session exits).
+	deadline := time.Now().Add(5 * time.Second)
+	var lastState agentsv1.SessionState
+	for time.Now().Before(deadline) {
+		getResp, err := client.GetSession(ctx, &agentsv1.GetSessionRequest{
+			SessionId: sessionID,
+		})
+		if err != nil {
+			t.Fatalf("GetSession: %v", err)
+		}
+		lastState = getResp.GetSession().GetState()
+		if lastState == agentsv1.SessionState_SESSION_STATE_STOPPED {
+			return
+		}
+		time.Sleep(250 * time.Millisecond)
 	}
-	if getResp.GetSession().GetState() != agentsv1.SessionState_SESSION_STATE_STOPPED {
-		t.Errorf("expected state STOPPED, got %v", getResp.GetSession().GetState())
-	}
+	t.Errorf("expected state STOPPED within 5s, last state was %v", lastState)
 }
 
 func TestGetSession_NotFound(t *testing.T) {
