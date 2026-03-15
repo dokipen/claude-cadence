@@ -534,14 +534,13 @@ export function registerTicketCommand(program: Command): void {
       }
       const spinner = ora("Fetching tickets...").start();
       try {
-        // Try to infer project if not explicitly provided
-        let projectId = opts.project;
-        if (!projectId) {
-          try {
-            projectId = await resolveProjectId(undefined);
-          } catch {
-            // Inference is best-effort for list — continue without project filter
-          }
+        // Resolve project: explicit name/ID takes precedence, otherwise infer from git origin
+        let projectId: string | undefined;
+        try {
+          projectId = await resolveProjectId(opts.project);
+        } catch (e) {
+          if (opts.project) throw e; // Re-throw if user explicitly provided a project
+          // Inference is best-effort for list — continue without project filter
         }
 
         const client = getClient();

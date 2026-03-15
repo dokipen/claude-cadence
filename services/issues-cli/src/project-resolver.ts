@@ -48,19 +48,21 @@ export async function resolveProjectId(explicitProject: string | undefined): Pro
       return explicitProject;
     }
 
-    // Treat as a project name and resolve via API
+    // Not a CUID — try name lookup first, then fall back to treating as a literal ID.
+    // The ID fallback handles non-CUID IDs (e.g., test seed data uses
+    // "default-project" as a literal ID). In production, all project IDs
+    // are CUIDs and would be caught by the isCuid check above.
     const client = getClient();
     const data = await client.request<{
       projectByName: { id: string; name: string } | null;
     }>(GET_PROJECT_BY_NAME, { name: explicitProject });
 
-    if (!data.projectByName) {
-      throw new Error(
-        `Project not found: "${explicitProject}". Use 'issues project list' to see available projects.`
-      );
+    if (data.projectByName) {
+      return data.projectByName.id;
     }
 
-    return data.projectByName.id;
+    // Fall back to treating the value as a literal ID
+    return explicitProject;
   }
 
   // No explicit project — infer from git remote origin

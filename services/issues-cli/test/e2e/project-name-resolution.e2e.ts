@@ -15,7 +15,10 @@ describe("Project Name Resolution", () => {
       "--repository", "org/my-test-repo"
     );
     const idMatch = result.stdout.match(/#(\S+)\s+My Test Project/);
-    testProjectId = idMatch![1];
+    if (!idMatch) {
+      throw new Error(`Failed to parse project ID from output.\nstdout: ${result.stdout}\nstderr: ${result.stderr}\nexitCode: ${result.exitCode}`);
+    }
+    testProjectId = idMatch[1];
   });
 
   afterAll(() => {
@@ -37,7 +40,9 @@ describe("Project Name Resolution", () => {
     expect(result.stdout).toContain("My Test Project");
   });
 
-  it("should view the seed project by its non-CUID ID", async () => {
+  it("should fall back to literal ID for non-CUID values", async () => {
+    // "default-project" is a literal ID in seed data that doesn't match any project name.
+    // When name lookup fails, it falls back to treating the value as a literal ID.
     const result = await suite.cli("project", "view", "default-project");
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Default");
