@@ -13,6 +13,7 @@ An issue-driven, multi-agent development workflow plugin for Claude Code.
 - `create-pr` — Create pull requests with pre-flight verification
 - `create-skill` — Bootstrap new Claude Code skills
 - `github-issues` — Background knowledge for `gh` CLI patterns
+- `agent-service` — Interacting with the agentd gRPC API
 - `project-ops` — Shared worktree management scripts
 
 ### Agents (6 core specialists)
