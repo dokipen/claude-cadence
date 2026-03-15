@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cadence — Branding Guidelines</title>
+  <link rel="icon" type="image/svg+xml" href="cadence-icon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #2D3A8C;
+      --primary-light: #4F5FD9;
+      --primary-dark: #1A2356;
+      --accent: #00C9A7;
+      --accent-bright: #00E4BD;
+      --amber: #F5A623;
+      --bg: #FAFBFC;
+      --surface: #FFFFFF;
+      --border: #E1E5EB;
+      --text: #1E2A3A;
+      --text-secondary: #5A6B7F;
+      --text-muted: #94A3B8;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.6;
+    }
+
+    h1, h2, h3 {
+      font-family: 'Space Grotesk', sans-serif;
+      letter-spacing: -0.02em;
+    }
+
+    /* HEADER */
+    .page-header {
+      background: var(--primary-dark);
+      padding: 4rem 2rem;
+      text-align: center;
+    }
+
+    .page-header h1 {
+      color: #fff;
+      font-size: 2.4rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+
+    .page-header p {
+      color: rgba(255,255,255,0.6);
+      font-size: 1.05rem;
+    }
+
+    /* LAYOUT */
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 2rem;
+    }
+
+    section {
+      padding: 4rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    section:last-child { border-bottom: none; }
+
+    section > .container > h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+
+    section > .container > p.section-desc {
+      color: var(--text-secondary);
+      margin-bottom: 2.5rem;
+      font-size: 0.95rem;
+    }
+
+    .subsection {
+      margin-bottom: 2.5rem;
+    }
+
+    .subsection:last-child { margin-bottom: 0; }
+
+    .subsection h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1.25rem;
+    }
+
+    /* LOGO SHOWCASE GRID */
+    .logo-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1.5rem;
+    }
+
+    .logo-cell {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .logo-cell-preview {
+      height: 160px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .logo-cell-preview.bg-light {
+      background: #FFFFFF;
+    }
+
+    .logo-cell-preview.bg-dark {
+      background: var(--primary-dark);
+    }
+
+    .logo-cell-preview.bg-gradient {
+      background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 40%, var(--primary-light) 100%);
+    }
+
+    .logo-cell-preview.bg-black {
+      background: #0F1629;
+    }
+
+    .logo-cell-label {
+      padding: 0.75rem 1rem;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    /* LOCKUP: icon + text precisely aligned */
+    .lockup {
+      display: flex;
+      align-items: center;
+    }
+
+    .lockup img {
+      display: block;
+      flex-shrink: 0;
+    }
+
+    .lockup .wordmark {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      display: block;
+    }
+
+    /* Horizontal lockup sizes */
+    .lockup-h-lg img { width: 52px; height: 52px; }
+    .lockup-h-lg .wordmark { font-size: 2.2rem; margin-left: 1px; margin-top: 6px; }
+
+    .lockup-h-md img { width: 36px; height: 36px; }
+    .lockup-h-md .wordmark { font-size: 1.5rem; margin-left: 0; margin-top: 4px; }
+
+    .lockup-h-sm img { width: 24px; height: 24px; }
+    .lockup-h-sm .wordmark { font-size: 1rem; margin-left: 0; margin-top: 3px; }
+
+    /* Vertical lockup */
+    .lockup-v {
+      flex-direction: column;
+    }
+
+    .lockup-v img { width: 64px; height: 64px; }
+    .lockup-v .wordmark { font-size: 1.5rem; margin-top: -2px; margin-left: -6px; }
+
+    /* Icon only */
+    .icon-only img {
+      display: block;
+    }
+
+    .icon-only-lg img { width: 64px; height: 64px; }
+    .icon-only-md img { width: 40px; height: 40px; }
+    .icon-only-sm img { width: 24px; height: 24px; }
+
+    .icon-row {
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+    }
+
+    /* COLOR PALETTE */
+    .color-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+    }
+
+    .color-card {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .color-swatch {
+      height: 80px;
+    }
+
+    .color-info {
+      padding: 0.75rem 1rem;
+      background: var(--surface);
+    }
+
+    .color-name {
+      font-weight: 600;
+      font-size: 0.9rem;
+      margin-bottom: 0.15rem;
+    }
+
+    .color-hex {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    /* TYPOGRAPHY */
+    .type-sample {
+      margin-bottom: 1.5rem;
+      padding: 1.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+
+    .type-sample-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+
+    .type-heading {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .type-body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+    }
+
+    /* CLEAR SPACE / DON'TS */
+    .clearspace-demo {
+      display: inline-flex;
+      align-items: center;
+      position: relative;
+      padding: 2rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+
+    .clearspace-demo .lockup {
+      position: relative;
+      z-index: 1;
+    }
+
+    .clearspace-zone {
+      position: absolute;
+      border: 1.5px dashed var(--accent);
+      border-radius: 4px;
+      pointer-events: none;
+    }
+
+    .clearspace-label {
+      position: absolute;
+      font-size: 0.65rem;
+      color: var(--accent);
+      font-weight: 600;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+
+    .donts-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+
+    .dont-card {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .dont-preview {
+      height: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--surface);
+      padding: 1rem;
+      position: relative;
+    }
+
+    .dont-preview::after {
+      content: '';
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 22px;
+      height: 22px;
+      background: #DC2626;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .dont-label {
+      padding: 0.6rem 1rem;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      background: #FEF2F2;
+      border-top: 1px solid #FECACA;
+    }
+
+    /* Misuse examples */
+    .stretched { transform: scaleX(1.4); }
+    .rotated { transform: rotate(15deg); }
+    .low-contrast .wordmark { color: #B0B8C8; }
+
+    /* RESPONSIVE */
+    @media (max-width: 768px) {
+      .logo-grid { grid-template-columns: 1fr; }
+      .donts-grid { grid-template-columns: 1fr; }
+      .page-header h1 { font-size: 1.8rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="page-header">
+    <h1>Branding Guidelines</h1>
+    <p>Rules and assets for using the Cadence brand consistently.</p>
+  </header>
+
+  <!-- LOGO LOCKUPS -->
+  <section>
+    <div class="container">
+      <h2>Logo</h2>
+      <p class="section-desc">The Cadence logo combines the chevron icon with the wordmark set in Space Grotesk Bold. Always use the provided lockups — never recreate them.</p>
+
+      <div class="subsection">
+        <h3>Horizontal lockup</h3>
+        <div class="logo-grid">
+          <div class="logo-cell">
+            <div class="logo-cell-preview bg-light">
+              <div class="lockup lockup-h-lg">
+                <img src="cadence-icon.svg" alt="Cadence">
+                <span class="wordmark" style="color: var(--primary);">Cadence</span>
+              </div>
+            </div>
+            <div class="logo-cell-label">Primary — Light background</div>
+          </div>
+          <div class="logo-cell">
+            <div class="logo-cell-preview bg-dark">
+              <div class="lockup lockup-h-lg">
+                <img src="cadence-icon-light.svg" alt="Cadence">
+                <span class="wordmark" style="color: #FFFFFF;">Cadence</span>
+              </div>
+            </div>
+            <div class="logo-cell-label">Reversed — Dark background</div>
+          </div>
+          <div class="logo-cell">
+            <div class="logo-cell-preview bg-gradient">
+              <div class="lockup lockup-h-lg">
+                <img src="cadence-icon-light.svg" alt="Cadence">
+                <span class="wordmark" style="color: #FFFFFF;">Cadence</span>
+              </div>
+            </div>
+            <div class="logo-cell-label">Reversed — Gradient background</div>
+          </div>
+          <div class="logo-cell">
+            <div class="logo-cell-preview bg-black">
+              <div class="lockup lockup-h-lg">
+                <img src="cadence-icon-light.svg" alt="Cadence">
+                <span class="wordmark" style="color: #FFFFFF;">Cadence</span>
+              </div>
+            </div>
+            <div class="logo-cell-label">Reversed — Deep dark background</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Vertical lockup</h3>
+        <div class="logo-grid">
+          <div class="logo-cell">
+            <div class="logo-cell-preview bg-light">
+              <div class="lockup lockup-v">
+                <img src="cadence-icon.svg" alt="Cadence">
+                <span class="wordmark" style="color: var(--primary);">Cadence</span>
+              </div>
+            </div>
+            <div class="logo-cell-label">Stacked — Light background</div>
+          </div>
+          <div class="logo-cell">
+            <div class="logo-cell-preview bg-dark">
+              <div class="lockup lockup-v">
+                <img src="cadence-icon-light.svg" alt="Cadence">
+                <span class="wordmark" style="color: #FFFFFF;">Cadence</span>
+              </div>
+            </div>
+            <div class="logo-cell-label">Stacked — Dark background</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Icon only</h3>
+        <div class="logo-grid">
+          <div class="logo-cell">
+            <div class="logo-cell-preview bg-light">
+              <div class="icon-row">
+                <div class="icon-only icon-only-lg"><img src="cadence-icon.svg" alt="Cadence"></div>
+                <div class="icon-only icon-only-md"><img src="cadence-icon.svg" alt="Cadence"></div>
+                <div class="icon-only icon-only-sm"><img src="cadence-icon.svg" alt="Cadence"></div>
+              </div>
+            </div>
+            <div class="logo-cell-label">Icon only — Light (64px, 40px, 24px)</div>
+          </div>
+          <div class="logo-cell">
+            <div class="logo-cell-preview bg-dark">
+              <div class="icon-row">
+                <div class="icon-only icon-only-lg"><img src="cadence-icon-light.svg" alt="Cadence"></div>
+                <div class="icon-only icon-only-md"><img src="cadence-icon-light.svg" alt="Cadence"></div>
+                <div class="icon-only icon-only-sm"><img src="cadence-icon-light.svg" alt="Cadence"></div>
+              </div>
+            </div>
+            <div class="logo-cell-label">Icon only — Dark (64px, 40px, 24px)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Sizes</h3>
+        <div class="logo-grid">
+          <div class="logo-cell" style="grid-column: 1 / -1;">
+            <div class="logo-cell-preview bg-light" style="height: auto; padding: 2.5rem; flex-direction: column; gap: 2rem;">
+              <div class="lockup lockup-h-lg">
+                <img src="cadence-icon.svg" alt="Cadence">
+                <span class="wordmark" style="color: var(--primary);">Cadence</span>
+              </div>
+              <div class="lockup lockup-h-md">
+                <img src="cadence-icon.svg" alt="Cadence">
+                <span class="wordmark" style="color: var(--primary);">Cadence</span>
+              </div>
+              <div class="lockup lockup-h-sm">
+                <img src="cadence-icon.svg" alt="Cadence">
+                <span class="wordmark" style="color: var(--primary);">Cadence</span>
+              </div>
+            </div>
+            <div class="logo-cell-label">Large (52px icon), Medium (36px icon), Small (24px icon) — minimum size is 24px icon height</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- COLOR PALETTE -->
+  <section>
+    <div class="container">
+      <h2>Color Palette</h2>
+      <p class="section-desc">The core palette balances technical depth with energy. Indigo conveys trust, teal provides action, and amber draws attention.</p>
+
+      <div class="subsection">
+        <h3>Primary</h3>
+        <div class="color-grid">
+          <div class="color-card">
+            <div class="color-swatch" style="background: #1A2356;"></div>
+            <div class="color-info">
+              <div class="color-name">Primary Dark</div>
+              <div class="color-hex">#1A2356</div>
+            </div>
+          </div>
+          <div class="color-card">
+            <div class="color-swatch" style="background: #2D3A8C;"></div>
+            <div class="color-info">
+              <div class="color-name">Primary</div>
+              <div class="color-hex">#2D3A8C</div>
+            </div>
+          </div>
+          <div class="color-card">
+            <div class="color-swatch" style="background: #4F5FD9;"></div>
+            <div class="color-info">
+              <div class="color-name">Primary Light</div>
+              <div class="color-hex">#4F5FD9</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Accent</h3>
+        <div class="color-grid">
+          <div class="color-card">
+            <div class="color-swatch" style="background: #00C9A7;"></div>
+            <div class="color-info">
+              <div class="color-name">Teal</div>
+              <div class="color-hex">#00C9A7</div>
+            </div>
+          </div>
+          <div class="color-card">
+            <div class="color-swatch" style="background: #00E4BD;"></div>
+            <div class="color-info">
+              <div class="color-name">Teal Bright</div>
+              <div class="color-hex">#00E4BD</div>
+            </div>
+          </div>
+          <div class="color-card">
+            <div class="color-swatch" style="background: #F5A623;"></div>
+            <div class="color-info">
+              <div class="color-name">Amber</div>
+              <div class="color-hex">#F5A623</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Neutrals</h3>
+        <div class="color-grid">
+          <div class="color-card">
+            <div class="color-swatch" style="background: #1E2A3A;"></div>
+            <div class="color-info">
+              <div class="color-name">Charcoal</div>
+              <div class="color-hex">#1E2A3A</div>
+            </div>
+          </div>
+          <div class="color-card">
+            <div class="color-swatch" style="background: #5A6B7F;"></div>
+            <div class="color-info">
+              <div class="color-name">Slate</div>
+              <div class="color-hex">#5A6B7F</div>
+            </div>
+          </div>
+          <div class="color-card">
+            <div class="color-swatch" style="background: #94A3B8;"></div>
+            <div class="color-info">
+              <div class="color-name">Fog</div>
+              <div class="color-hex">#94A3B8</div>
+            </div>
+          </div>
+          <div class="color-card">
+            <div class="color-swatch" style="background: #E1E5EB;"></div>
+            <div class="color-info">
+              <div class="color-name">Mist</div>
+              <div class="color-hex">#E1E5EB</div>
+            </div>
+          </div>
+          <div class="color-card">
+            <div class="color-swatch" style="background: #FAFBFC; border-bottom: 1px solid #E1E5EB;"></div>
+            <div class="color-info">
+              <div class="color-name">Snow</div>
+              <div class="color-hex">#FAFBFC</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TYPOGRAPHY -->
+  <section>
+    <div class="container">
+      <h2>Typography</h2>
+      <p class="section-desc">Space Grotesk for headings and brand text. System sans-serif for body copy.</p>
+
+      <div class="type-sample">
+        <div class="type-sample-label">Heading — Space Grotesk Bold</div>
+        <div class="type-heading" style="font-size: 2.4rem;">Ship faster with AI agents</div>
+      </div>
+      <div class="type-sample">
+        <div class="type-sample-label">Subheading — Space Grotesk Semibold</div>
+        <div class="type-heading" style="font-size: 1.4rem; font-weight: 600;">Everything you need to ship with confidence</div>
+      </div>
+      <div class="type-sample">
+        <div class="type-sample-label">Body — System sans-serif (Inter / SF Pro / Segoe UI)</div>
+        <div class="type-body" style="font-size: 1rem; color: var(--text-secondary);">Cadence is an issue-driven, multi-agent development workflow plugin for Claude Code. Specialist agents handle reviews, testing, security, and more — orchestrated by you.</div>
+      </div>
+      <div class="type-sample">
+        <div class="type-sample-label">Brand wordmark — Space Grotesk Bold, -0.02em tracking</div>
+        <div class="type-heading" style="font-size: 2rem; color: var(--primary);">Cadence</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CLEAR SPACE & DON'TS -->
+  <section>
+    <div class="container">
+      <h2>Usage Rules</h2>
+      <p class="section-desc">Maintain clear space around the logo and avoid common misuses.</p>
+
+      <div class="subsection">
+        <h3>Clear space</h3>
+        <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.25rem;">Maintain a minimum clear space equal to the icon height on all sides of the logo.</p>
+        <div class="clearspace-demo">
+          <div class="clearspace-zone" style="inset: 0; opacity: 0.4;"></div>
+          <div class="lockup lockup-h-md">
+            <img src="cadence-icon.svg" alt="Cadence">
+            <span class="wordmark" style="color: var(--primary);">Cadence</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="subsection">
+        <h3>Don'ts</h3>
+        <div class="donts-grid">
+          <div class="dont-card">
+            <div class="dont-preview">
+              <div class="lockup lockup-h-md stretched">
+                <img src="cadence-icon.svg" alt="">
+                <span class="wordmark" style="color: var(--primary);">Cadence</span>
+              </div>
+            </div>
+            <div class="dont-label">Don't stretch or distort</div>
+          </div>
+          <div class="dont-card">
+            <div class="dont-preview">
+              <div class="lockup lockup-h-md rotated">
+                <img src="cadence-icon.svg" alt="">
+                <span class="wordmark" style="color: var(--primary);">Cadence</span>
+              </div>
+            </div>
+            <div class="dont-label">Don't rotate the lockup</div>
+          </div>
+          <div class="dont-card">
+            <div class="dont-preview low-contrast">
+              <div class="lockup lockup-h-md">
+                <img src="cadence-icon.svg" alt="" style="opacity: 0.3;">
+                <span class="wordmark">Cadence</span>
+              </div>
+            </div>
+            <div class="dont-label">Don't use low contrast</div>
+          </div>
+          <div class="dont-card">
+            <div class="dont-preview">
+              <div class="lockup lockup-h-md">
+                <img src="cadence-icon.svg" alt="">
+                <span class="wordmark" style="color: #DC2626;">Cadence</span>
+              </div>
+            </div>
+            <div class="dont-label">Don't change brand colors</div>
+          </div>
+          <div class="dont-card">
+            <div class="dont-preview">
+              <div class="lockup lockup-h-md">
+                <img src="cadence-icon.svg" alt="">
+                <span class="wordmark" style="color: var(--primary); font-family: 'Georgia', serif; font-weight: 400; font-style: italic;">Cadence</span>
+              </div>
+            </div>
+            <div class="dont-label">Don't change the typeface</div>
+          </div>
+          <div class="dont-card">
+            <div class="dont-preview">
+              <div class="lockup lockup-h-md" style="gap: 0;">
+                <img src="cadence-icon.svg" alt="">
+                <span class="wordmark" style="color: var(--primary); margin-left: 2px;">Cadence</span>
+              </div>
+            </div>
+            <div class="dont-label">Don't alter spacing</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer style="background: var(--primary-dark); color: rgba(255,255,255,0.5); padding: 2rem; text-align: center; font-size: 0.85rem;">
+    <p>Cadence Branding Guidelines — Version 1.0</p>
+  </footer>
+
+</body>
+</html>
