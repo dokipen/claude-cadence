@@ -4,6 +4,7 @@ import chalk from "chalk";
 import ora from "ora";
 import { getClient } from "../client.js";
 import { handleError } from "../errors.js";
+import { resolveTicketId } from "../resolve-ticket.js";
 
 // --- GraphQL Documents ---
 
@@ -42,11 +43,13 @@ export function registerAssignCommand(program: Command): void {
   program
     .command("assign <ticket-id>")
     .description("Assign a ticket to a user")
+    .option("--project <id>", "Project ID (required when using ticket number)")
     .requiredOption("--user <id>", "User ID")
     .option("--json", "Output raw JSON")
-    .action(async (ticketId: string, opts: { user: string; json?: boolean }) => {
+    .action(async (ticketId: string, opts: { user: string; project?: string; json?: boolean }) => {
       const spinner = ora("Assigning ticket...").start();
       try {
+        const resolvedId = await resolveTicketId(ticketId, opts.project);
         const client = getClient();
         const data = await client.request<{
           assignTicket: {
@@ -54,7 +57,7 @@ export function registerAssignCommand(program: Command): void {
             title: string;
             assignee: { id: string; login: string; displayName: string } | null;
           };
-        }>(ASSIGN_TICKET, { ticketId, userId: opts.user });
+        }>(ASSIGN_TICKET, { ticketId: resolvedId, userId: opts.user });
 
         if (opts.json) {
           spinner.stop();
@@ -80,10 +83,12 @@ export function registerAssignCommand(program: Command): void {
   program
     .command("unassign <ticket-id>")
     .description("Unassign a ticket")
+    .option("--project <id>", "Project ID (required when using ticket number)")
     .option("--json", "Output raw JSON")
-    .action(async (ticketId: string, opts: { json?: boolean }) => {
+    .action(async (ticketId: string, opts: { project?: string; json?: boolean }) => {
       const spinner = ora("Unassigning ticket...").start();
       try {
+        const resolvedId = await resolveTicketId(ticketId, opts.project);
         const client = getClient();
         const data = await client.request<{
           unassignTicket: {
@@ -91,7 +96,7 @@ export function registerAssignCommand(program: Command): void {
             title: string;
             assignee: null;
           };
-        }>(UNASSIGN_TICKET, { ticketId });
+        }>(UNASSIGN_TICKET, { ticketId: resolvedId });
 
         if (opts.json) {
           spinner.stop();
