@@ -10,17 +10,7 @@ describe("Comment Management", () => {
   beforeAll(async () => {
     suite = await setupTestSuite();
 
-    // Create a user (required for comment authorship)
-    const client = new GraphQLClient(suite.url);
-    await client.request(
-      gql`
-        mutation {
-          createUser(githubId: 99, login: "commenter", displayName: "Comment User") {
-            id
-          }
-        }
-      `
-    );
+    // Test user is created by the test helper (testuser)
 
     // Create a ticket for comment operations
     const result = await suite.cli("ticket", "create", "--title", "Comment test ticket");
@@ -38,7 +28,7 @@ describe("Comment Management", () => {
 
     const output = result.stdout + result.stderr;
     expect(output).toContain("Comment added");
-    expect(result.stdout).toContain("@commenter");
+    expect(result.stdout).toContain("@testuser");
     expect(result.stdout).toContain("First comment");
   });
 
@@ -46,7 +36,7 @@ describe("Comment Management", () => {
     const result = await suite.cli("ticket", "view", ticketId);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Comments (1)");
-    expect(result.stdout).toContain("@commenter");
+    expect(result.stdout).toContain("@testuser");
     expect(result.stdout).toContain("First comment");
   });
 
@@ -56,7 +46,9 @@ describe("Comment Management", () => {
     expect(result.stdout).toContain("Second comment");
 
     // View ticket to see both comments and get the second comment's ID via GraphQL
-    const client = new GraphQLClient(suite.url);
+    const client = new GraphQLClient(suite.url, {
+      headers: { Authorization: `Bearer ${suite.authToken}` },
+    });
     const data = await client.request<{
       ticket: { comments: { id: string; body: string }[] };
     }>(
