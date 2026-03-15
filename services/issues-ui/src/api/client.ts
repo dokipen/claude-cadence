@@ -49,25 +49,41 @@ export function createRawClient(token?: string | null): GraphQLClient {
   return new GraphQLClient(url, { headers });
 }
 
+// Shared in-flight refresh promise to prevent parallel 401s from
+// triggering multiple refresh calls and causing token thrashing.
+let inflightRefresh: Promise<string | null> | null = null;
+
 async function tryRefresh(): Promise<string | null> {
-  const refreshTokenValue = getStoredRefreshToken();
-  if (!refreshTokenValue) {
-    return null;
+  if (inflightRefresh) {
+    return inflightRefresh;
   }
 
-  try {
-    const client = createRawClient();
-    const result = await client.request<RefreshResult>(
-      REFRESH_TOKEN_MUTATION,
-      { refreshToken: refreshTokenValue },
-    );
+  inflightRefresh = (async () => {
+    const refreshTokenValue = getStoredRefreshToken();
+    if (!refreshTokenValue) {
+      return null;
+    }
 
-    const newToken = result.refreshToken.token;
-    const newRefreshToken = result.refreshToken.refreshToken;
-    setStoredTokens(newToken, newRefreshToken);
-    return newToken;
-  } catch {
-    return null;
+    try {
+      const client = createRawClient();
+      const result = await client.request<RefreshResult>(
+        REFRESH_TOKEN_MUTATION,
+        { refreshToken: refreshTokenValue },
+      );
+
+      const newToken = result.refreshToken.token;
+      const newRefreshToken = result.refreshToken.refreshToken;
+      setStoredTokens(newToken, newRefreshToken);
+      return newToken;
+    } catch {
+      return null;
+    }
+  })();
+
+  try {
+    return await inflightRefresh;
+  } finally {
+    inflightRefresh = null;
   }
 }
 
