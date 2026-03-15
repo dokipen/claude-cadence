@@ -124,6 +124,8 @@ message CreateSessionRequest {
   map<string, string> env = 4;
 
   // Optional args appended to the command template.
+  // Each arg is individually shell-escaped (single-quoted) before joining.
+  // Validated: no null bytes, max 64 args, max 4096 bytes each.
   repeated string extra_args = 5;
 }
 
@@ -253,7 +255,7 @@ profiles:
 
 **Template variables** available in `command`:
 - `{{.WorktreePath}}` -- absolute path to the session's worktree
-- `{{.ExtraArgs}}` -- joined extra_args from CreateSessionRequest
+- `{{.ExtraArgs}}` -- extra_args from CreateSessionRequest, each individually shell-escaped with single quotes then joined with spaces
 - `{{.SessionName}}` -- the session name
 - `{{.SessionID}}` -- the session UUID
 
@@ -261,7 +263,7 @@ profiles:
 
 ### CreateSession Flow
 
-1. **Validate** -- profile exists, session_name unique (check in-memory store AND `tmux has-session`), name is tmux-safe (`[a-zA-Z0-9_-]`, max 200 chars). Auto-generate name if empty.
+1. **Validate** -- profile exists, session_name unique (check in-memory store AND `tmux has-session`), name is tmux-safe (`[a-zA-Z0-9_-]`, max 200 chars), extra_args validated (no null bytes, max 64 args, max 4096 bytes each). Auto-generate name if empty.
 2. **Create record** -- UUID v4, state=CREATING, store in memory.
 3. **[Phase 2+] Ensure repo clone** -- clone to `{root_dir}/repos/{owner}/{repo}` if not exists. Fetch + pull default branch.
 4. **[Phase 2+] Create worktree** -- `git worktree add {root_dir}/worktrees/{session-id} {base_ref}`
@@ -316,11 +318,11 @@ profiles:
   sleeper:
     command: "sleep 3600"
   fast-exit:
-    command: "true"
-  file-writer:
-    command: "bash -c 'echo done > {{.WorktreePath}}/output.txt && sleep 3600'"
+    command: "exit"
   echo-and-exit:
     command: "bash -c 'echo hello && sleep 1'"
+  echo-args:
+    command: "echo {{.ExtraArgs}}"
 ```
 
 ### Test cleanup (3 layers)
