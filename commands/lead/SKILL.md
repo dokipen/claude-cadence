@@ -215,8 +215,17 @@ In both cases:
 
 ### Phase 7: Merge and Cleanup
 
-1. Verify PR checks pass: `gh pr checks`
-2. Merge: `gh pr merge --squash --delete-branch`
+1. Wait for PR checks to pass, then merge:
+   ```bash
+   gh pr checks --watch --fail-fast && gh pr merge --squash --delete-branch
+   ```
+   Use a 10-minute timeout to avoid blocking indefinitely on stuck checks:
+   ```bash
+   timeout 600 gh pr checks --watch --fail-fast && gh pr merge --squash --delete-branch
+   ```
+   - If checks pass: the merge proceeds automatically
+   - If checks fail: report the specific failed check(s) to the user
+   - If timeout is exceeded: report the timeout and the still-pending check(s) to the user
 3. Remove in-progress status:
    - **GitHub (default):** `gh issue edit [NUMBER] --remove-label "in-progress"`
    - **Issues API:** No-op — merging the PR with `Fixes #[NUMBER]` closes the ticket automatically
