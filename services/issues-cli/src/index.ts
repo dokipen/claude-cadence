@@ -1,5 +1,14 @@
 #!/usr/bin/env node
 
+// Trust macOS Keychain certificates (e.g. Caddy internal CA)
+if (process.platform === "darwin") {
+  try {
+    await import("mac-ca/register");
+  } catch {
+    // mac-ca is optional — continue without it
+  }
+}
+
 import { Command } from "commander";
 import { registerTicketCommand } from "./commands/ticket.js";
 import { registerLabelCommand } from "./commands/label.js";
