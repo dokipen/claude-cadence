@@ -196,12 +196,17 @@ install_cli() {
     (cd "$cli_dir" && npm install && npm run build)
     # Install to a user-local prefix to avoid privilege escalation.
     local prefix="$HOME/.local"
+    mkdir -p "$prefix/lib"
     (cd "$cli_dir" && npm link --prefix "$prefix") \
       || err "npm link --prefix \"$prefix\" failed in $cli_dir"
     if [[ ":$PATH:" != *":$prefix/bin:"* ]]; then
       log ""
       log "Add $prefix/bin to your PATH so the 'issues' command is available:"
-      log "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.$(basename "$SHELL")rc"
+      case "$(basename "$SHELL")" in
+        bash) log "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc" ;;
+        zsh)  log "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc" ;;
+        *)    log "  Add \$HOME/.local/bin to your shell's PATH configuration" ;;
+      esac
       log ""
     fi
     log "CLI installed. Run 'issues --help' to verify."
@@ -215,7 +220,7 @@ uninstall_cli() {
   if [ -d "$cli_dir" ]; then
     log "Unlinking issues CLI..."
     local prefix="$HOME/.local"
-    (cd "$cli_dir" && npm unlink --prefix "$prefix" 2>/dev/null || true)
+    rm -f "$prefix/bin/issues"
     log "CLI unlinked"
   fi
 }

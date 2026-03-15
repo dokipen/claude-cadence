@@ -23,7 +23,7 @@ npm link --prefix "$HOME/.local"
 This makes the `issues` command available in `~/.local/bin`. Ensure `~/.local/bin` is on your `PATH`. To uninstall:
 
 ```bash
-npm unlink --prefix "$HOME/.local"
+rm -f "$HOME/.local/bin/issues"
 ```
 
 For development without building:
