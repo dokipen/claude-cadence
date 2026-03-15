@@ -15,7 +15,7 @@ describe("Workflow States", () => {
   let ticketId: string;
 
   it("should create a ticket in BACKLOG state", async () => {
-    const result = await suite.cli("ticket", "create", "--title", "FSM test ticket");
+    const result = await suite.cli("ticket", "create", "--project", "default-project", "--title", "FSM test ticket");
     expect(result.exitCode).toBe(0);
     const output = result.stdout + result.stderr;
     expect(output).toContain("BACKLOG");
@@ -113,7 +113,7 @@ describe("Workflow States", () => {
 
   it("should block transition to IN_PROGRESS when ticket has unresolved blockers", async () => {
     // Create blocker ticket
-    const blockerResult = await suite.cli("ticket", "create", "--title", "Blocker ticket");
+    const blockerResult = await suite.cli("ticket", "create", "--project", "default-project", "--title", "Blocker ticket");
     const blockerIdMatch = blockerResult.stdout.match(/#(\S+)\s+Blocker ticket/);
     const blockerId = blockerIdMatch![1];
 
@@ -132,11 +132,11 @@ describe("Workflow States", () => {
 
   it("should allow transition to IN_PROGRESS after all blockers are CLOSED", async () => {
     // Create a fresh pair of tickets
-    const blockerResult = await suite.cli("ticket", "create", "--title", "Resolved blocker");
+    const blockerResult = await suite.cli("ticket", "create", "--project", "default-project", "--title", "Resolved blocker");
     const blockerIdMatch = blockerResult.stdout.match(/#(\S+)\s+Resolved blocker/);
     const blockerId = blockerIdMatch![1];
 
-    const blockedResult = await suite.cli("ticket", "create", "--title", "Unblocked ticket");
+    const blockedResult = await suite.cli("ticket", "create", "--project", "default-project", "--title", "Unblocked ticket");
     const blockedIdMatch = blockedResult.stdout.match(/#(\S+)\s+Unblocked ticket/);
     const blockedId = blockedIdMatch![1];
 

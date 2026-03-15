@@ -12,6 +12,7 @@ if (process.platform === "darwin") {
 import { Command } from "commander";
 import { registerTicketCommand } from "./commands/ticket.js";
 import { registerLabelCommand } from "./commands/label.js";
+import { registerProjectCommand } from "./commands/project.js";
 import { registerAssignCommand } from "./commands/assign.js";
 import { registerBlockCommand } from "./commands/block.js";
 import { registerCommentCommand } from "./commands/comment.js";
@@ -26,6 +27,7 @@ program
 
 registerTicketCommand(program);
 registerLabelCommand(program);
+registerProjectCommand(program);
 registerAssignCommand(program);
 registerBlockCommand(program);
 registerCommentCommand(program);

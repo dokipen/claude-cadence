@@ -16,13 +16,13 @@ describe("Blocking", () => {
   let ticketBId: string;
 
   it("should create two tickets for blocking tests", async () => {
-    const resultA = await suite.cli("ticket", "create", "--title", "Ticket A");
+    const resultA = await suite.cli("ticket", "create", "--project", "default-project", "--title", "Ticket A");
     expect(resultA.exitCode).toBe(0);
     const idMatchA = resultA.stdout.match(/#(\S+)\s+Ticket A/);
     expect(idMatchA).toBeTruthy();
     ticketAId = idMatchA![1];
 
-    const resultB = await suite.cli("ticket", "create", "--title", "Ticket B");
+    const resultB = await suite.cli("ticket", "create", "--project", "default-project", "--title", "Ticket B");
     expect(resultB.exitCode).toBe(0);
     const idMatchB = resultB.stdout.match(/#(\S+)\s+Ticket B/);
     expect(idMatchB).toBeTruthy();

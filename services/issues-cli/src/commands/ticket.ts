@@ -39,6 +39,10 @@ const GET_TICKET = gql`
         login
         displayName
       }
+      project {
+        id
+        name
+      }
       labels {
         id
         name
@@ -76,6 +80,7 @@ const LIST_TICKETS = gql`
     $assigneeLogin: String
     $isBlocked: Boolean
     $priority: Priority
+    $projectId: ID
     $first: Int
     $after: String
   ) {
@@ -85,6 +90,7 @@ const LIST_TICKETS = gql`
       assigneeLogin: $assigneeLogin
       isBlocked: $isBlocked
       priority: $priority
+      projectId: $projectId
       first: $first
       after: $after
     ) {
@@ -98,6 +104,10 @@ const LIST_TICKETS = gql`
           storyPoints
           assignee {
             login
+          }
+          project {
+            id
+            name
           }
           labels {
             name
@@ -195,6 +205,7 @@ interface CreateOptions {
   acceptanceCriteria?: string;
   labels?: string;
   assignee?: string;
+  project: string;
   points?: string;
   priority?: string;
 }
@@ -205,6 +216,7 @@ interface ListOptions {
   assignee?: string;
   blocked?: boolean;
   priority?: string;
+  project?: string;
   first?: string;
   after?: string;
 }
@@ -229,6 +241,7 @@ export function registerTicketCommand(program: Command): void {
     .command("create")
     .description("Create a new ticket")
     .requiredOption("--title <title>", "Ticket title")
+    .requiredOption("--project <id>", "Project ID")
     .option("--description <description>", "Ticket description")
     .option("--acceptance-criteria <criteria>", "Acceptance criteria")
     .option("--labels <ids>", "Comma-separated label IDs")
@@ -241,6 +254,7 @@ export function registerTicketCommand(program: Command): void {
         const client = getClient();
         const input: Record<string, unknown> = {
           title: opts.title,
+          projectId: opts.project,
         };
         if (opts.description) input.description = opts.description;
         if (opts.acceptanceCriteria) input.acceptanceCriteria = opts.acceptanceCriteria;
@@ -297,6 +311,7 @@ export function registerTicketCommand(program: Command): void {
             storyPoints: number | null;
             priority: string;
             assignee: { id: string; login: string; displayName: string } | null;
+            project: { id: string; name: string };
             labels: { id: string; name: string; color: string }[];
             comments: {
               id: string;
@@ -324,6 +339,8 @@ export function registerTicketCommand(program: Command): void {
         console.log(
           `  State: ${formatState(t.state)}  Priority: ${formatPriority(t.priority)}`
         );
+
+        console.log(`  Project: ${chalk.bold(t.project.name)}`);
 
         if (t.storyPoints != null) {
           console.log(`  Story Points: ${chalk.magenta(String(t.storyPoints))}`);
@@ -397,6 +414,7 @@ export function registerTicketCommand(program: Command): void {
     .option("--assignee <login>", "Filter by assignee login")
     .option("--blocked", "Filter to only blocked tickets")
     .option("--priority <priority>", "Filter by priority (HIGHEST, HIGH, MEDIUM, LOW, LOWEST)")
+    .option("--project <id>", "Filter by project ID")
     .option("--first <count>", "Number of tickets to fetch", "20")
     .option("--after <cursor>", "Cursor for pagination")
     .action(async (opts: ListOptions) => {
@@ -411,6 +429,7 @@ export function registerTicketCommand(program: Command): void {
         if (opts.assignee) variables.assigneeLogin = opts.assignee;
         if (opts.blocked) variables.isBlocked = true;
         if (opts.priority) variables.priority = opts.priority;
+        if (opts.project) variables.projectId = opts.project;
         if (opts.after) variables.after = opts.after;
 
         const data = await client.request<{

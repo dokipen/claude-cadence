@@ -18,7 +18,7 @@ describe("Ticket Management", () => {
   let labelTicketId: string;
 
   it("should create a ticket with title only", async () => {
-    const result = await suite.cli("ticket", "create", "--title", "Simple ticket");
+    const result = await suite.cli("ticket", "create", "--project", "default-project", "--title", "Simple ticket");
     expect(result.exitCode).toBe(0);
 
     // ora spinner writes to stderr, actual data to stdout
@@ -37,6 +37,7 @@ describe("Ticket Management", () => {
   it("should create a ticket with all fields", async () => {
     const result = await suite.cli(
       "ticket", "create",
+      "--project", "default-project",
       "--title", "Full ticket",
       "--description", "A detailed description",
       "--acceptance-criteria", "It must work",
@@ -63,6 +64,7 @@ describe("Ticket Management", () => {
     // test will be added when label CLI commands land.
     const result = await suite.cli(
       "ticket", "create",
+      "--project", "default-project",
       "--title", "Labeled ticket",
       "--description", "Ticket with labels"
     );
