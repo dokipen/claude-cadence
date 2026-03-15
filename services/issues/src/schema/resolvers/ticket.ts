@@ -271,24 +271,26 @@ export const ticketResolvers = {
       { id, to }: { id: string; to: string },
       { prisma }: Context
     ) => {
-      const ticket = await prisma.ticket.findUnique({ where: { id } });
-      if (!ticket) throw new Error("Ticket not found");
+      return prisma.$transaction(async (tx) => {
+        const ticket = await tx.ticket.findUnique({ where: { id } });
+        if (!ticket) throw new Error("Ticket not found");
 
-      const transition = validateTransition(ticket.state, to);
-      if (!transition.valid) {
-        throw new Error(`Invalid transition: ${transition.error}`);
-      }
-
-      if (to === "IN_PROGRESS") {
-        const guard = await checkBlockerGuard(id, prisma);
-        if (!guard.allowed) {
-          throw new Error(guard.error);
+        const transition = validateTransition(ticket.state, to);
+        if (!transition.valid) {
+          throw new Error(`Invalid transition: ${transition.error}`);
         }
-      }
 
-      return prisma.ticket.update({
-        where: { id },
-        data: { state: to },
+        if (to === "IN_PROGRESS") {
+          const guard = await checkBlockerGuard(id, tx as unknown as PrismaClient);
+          if (!guard.allowed) {
+            throw new Error(guard.error);
+          }
+        }
+
+        return tx.ticket.update({
+          where: { id },
+          data: { state: to },
+        });
       });
     },
 
