@@ -92,6 +92,8 @@ issues ticket list --priority HIGH --json
 issues ticket list --project PROJECT --json
 issues ticket list --limit 50 --json
 issues ticket list --after "cursor_value" --json
+issues ticket list --verbose              # includes description, acceptance criteria, and label IDs
+issues ticket list -v --state REFINED     # verbose + filter
 ```
 
 ### Update a ticket
