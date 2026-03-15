@@ -220,7 +220,20 @@ uninstall_cli() {
   local cli_dir="$SCRIPT_DIR/../issues-cli"
   if [ -d "$cli_dir" ]; then
     log "Unlinking issues CLI..."
-    (cd "$cli_dir" && npm unlink -g @claude-cadence/issues-cli 2>/dev/null || true)
+    local unlink_err
+    unlink_err=$(mktemp)
+    if (cd "$cli_dir" && npm unlink -g @claude-cadence/issues-cli 2>"$unlink_err"); then
+      rm -f "$unlink_err"
+    elif command -v sudo >/dev/null 2>&1; then
+      log "npm unlink failed ($(cat "$unlink_err")), retrying with sudo..."
+      rm -f "$unlink_err"
+      (cd "$cli_dir" && sudo npm unlink -g @claude-cadence/issues-cli) || err "sudo npm unlink failed"
+    else
+      local reason
+      reason=$(cat "$unlink_err")
+      rm -f "$unlink_err"
+      err "npm unlink failed ($reason) and sudo is not available. Run 'sudo npm unlink -g @claude-cadence/issues-cli' manually in $cli_dir"
+    fi
     log "CLI unlinked"
   fi
 }
