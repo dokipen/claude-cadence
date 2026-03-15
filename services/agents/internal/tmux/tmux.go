@@ -1,0 +1,98 @@
+package tmux
+
+import (
+	"fmt"
+	"os/exec"
+	"strconv"
+	"strings"
+)
+
+// Client wraps tmux CLI operations using a dedicated socket.
+type Client struct {
+	socketName string
+}
+
+// NewClient creates a new tmux client using the given socket name.
+func NewClient(socketName string) *Client {
+	return &Client{socketName: socketName}
+}
+
+// NewSession creates a new tmux session. Returns error if it already exists.
+func (c *Client) NewSession(name string, workdir string) error {
+	cmd := exec.Command("tmux", "-L", c.socketName, "new-session", "-d", "-s", name, "-c", workdir)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("tmux new-session: %w: %s", err, string(output))
+	}
+	return nil
+}
+
+// HasSession checks if a tmux session exists.
+func (c *Client) HasSession(name string) bool {
+	cmd := exec.Command("tmux", "-L", c.socketName, "has-session", "-t", name)
+	return cmd.Run() == nil
+}
+
+// KillSession destroys a tmux session.
+func (c *Client) KillSession(name string) error {
+	cmd := exec.Command("tmux", "-L", c.socketName, "kill-session", "-t", name)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("tmux kill-session: %w: %s", err, string(output))
+	}
+	return nil
+}
+
+// SendKeys sends a command string to a tmux session.
+func (c *Client) SendKeys(name string, keys string) error {
+	cmd := exec.Command("tmux", "-L", c.socketName, "send-keys", "-t", name, keys, "Enter")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("tmux send-keys: %w: %s", err, string(output))
+	}
+	return nil
+}
+
+// SetEnv sets an environment variable in a tmux session.
+func (c *Client) SetEnv(name string, key string, value string) error {
+	cmd := exec.Command("tmux", "-L", c.socketName, "set-environment", "-t", name, key, value)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("tmux set-environment: %w: %s", err, string(output))
+	}
+	return nil
+}
+
+// GetPanePID returns the PID of the process running in the session's pane.
+func (c *Client) GetPanePID(name string) (int, error) {
+	cmd := exec.Command("tmux", "-L", c.socketName, "list-panes", "-t", name, "-F", "#{pane_pid}")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return 0, fmt.Errorf("tmux list-panes: %w: %s", err, string(output))
+	}
+	pidStr := strings.TrimSpace(string(output))
+	// Take only the first line in case of multiple panes.
+	if lines := strings.Split(pidStr, "\n"); len(lines) > 0 {
+		pidStr = strings.TrimSpace(lines[0])
+	}
+	pid, err := strconv.Atoi(pidStr)
+	if err != nil {
+		return 0, fmt.Errorf("parsing pane PID %q: %w", pidStr, err)
+	}
+	return pid, nil
+}
+
+// ListSessions returns names of all tmux sessions on this socket.
+func (c *Client) ListSessions() ([]string, error) {
+	cmd := exec.Command("tmux", "-L", c.socketName, "list-sessions", "-F", "#{session_name}")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// If no server is running, tmux exits with error. Return empty list.
+		if strings.Contains(string(output), "no server running") ||
+			strings.Contains(string(output), "no sessions") {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("tmux list-sessions: %w: %s", err, string(output))
+	}
+	raw := strings.TrimSpace(string(output))
+	if raw == "" {
+		return nil, nil
+	}
+	return strings.Split(raw, "\n"), nil
+}

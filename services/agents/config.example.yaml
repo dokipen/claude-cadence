@@ -1,0 +1,30 @@
+# agentd configuration example
+# Copy to ~/.config/agentd/config.yaml and customize.
+
+# Network binding
+host: "127.0.0.1"
+port: 4141
+
+# Root directory for git clones and worktrees
+root_dir: "/var/lib/agentd"
+
+# tmux configuration
+tmux:
+  socket_name: "agentd"
+
+# Logging
+log:
+  level: "info"    # debug, info, warn, error
+  format: "json"   # json, text
+
+# Agent profiles
+profiles:
+  claude-reviewer:
+    repo: "https://github.com/org/project.git"
+    command: "claude --model sonnet --permission-mode accept --cwd {{.WorktreePath}} {{.ExtraArgs}}"
+    description: "Claude Code reviewer"
+
+  claude-opus:
+    repo: "https://github.com/org/project.git"
+    command: "claude --model opus --permission-mode accept --cwd {{.WorktreePath}} {{.ExtraArgs}}"
+    description: "Claude Opus agent"
