@@ -231,29 +231,19 @@ In both cases:
 
 ## Coordination Protocol
 
-### Working Directory for Sub-Agents
+### Delegation Template
 
-Sub-agents do not inherit the lead's working directory. Always instruct them to `cd` first:
+When delegating to any agent, include all of the following:
 
-```
-First, change to the worktree directory:
-cd [path-to-worktree]
-
-Then proceed with your task...
-```
-
-### Task Assignment Guidelines
-
-Always tell agents to:
-1. `cd` to the worktree first
-2. Read the issue for full context
-
-### Task Completion
-
-Specialists should conclude with one of:
-- **TASK COMPLETE**: Summary of what was done
-- **TASK BLOCKED**: What's blocking and what's needed
-- **TASK NEEDS REVIEW**: Ready for next phase
+1. **Worktree path:** `cd /path/to/.worktrees/branch-name` (sub-agents do not inherit the lead's working directory)
+2. **Issue context:** `Read issue #N for full context: gh issue view N`
+3. **Scope:** Which files, directories, or areas to focus on
+4. **Constraints:** What NOT to modify (other agents' files, out-of-scope areas)
+5. **Expected output:** What the lead needs back (findings list, code changes, test results)
+6. **Completion signal:** End with one of:
+   - **TASK COMPLETE**: Summary of what was done
+   - **TASK BLOCKED**: What's blocking and what's needed
+   - **TASK NEEDS REVIEW**: Ready for next phase
 
 ### File Ownership
 - No two specialists modify the same file in the same phase
