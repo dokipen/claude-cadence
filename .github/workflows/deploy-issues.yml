@@ -1,0 +1,98 @@
+name: Deploy Issues Service
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/issues/**'
+      - 'services/issues-cli/**'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-issues
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    # Runs on Bootsy (the deployment target) via self-hosted runner.
+    # Prerequisites:
+    #   1. github-runner user can SSH to doki_pen@localhost (see infrastructure/setup-deploy-ssh.sh)
+    #   2. doki_pen has the repo cloned at ~/src/claude-cadence with install.sh already run once
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
+    env:
+      DEPLOY_USER: doki_pen
+    steps:
+      - name: Deploy issues service
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "${DEPLOY_USER}@localhost" bash -s <<'DEPLOY_SCRIPT'
+          set -euo pipefail
+          cd "$HOME/src/claude-cadence"
+          echo "==> Pulling latest changes..."
+          git pull --ff-only origin main
+          echo "==> Running install.sh..."
+          services/issues/install.sh install
+          echo "==> Deploy complete"
+          DEPLOY_SCRIPT
+
+      - name: Verify service is healthy
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "${DEPLOY_USER}@localhost" bash -s <<'HEALTH_SCRIPT'
+          set -euo pipefail
+
+          echo "==> Waiting for service to be ready..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:4000/graphql \
+                 -H 'Content-Type: application/json' \
+                 -d '{"query":"{ __typename }"}' > /dev/null 2>&1; then
+              echo "==> Service is healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "::error::Service failed health check after 60 seconds"
+          cd "$HOME/src/claude-cadence"
+          docker compose -f services/issues/docker-compose.yml ps
+          docker compose -f services/issues/docker-compose.yml logs --tail=50
+          exit 1
+          HEALTH_SCRIPT
+
+      - name: Post success summary
+        if: success()
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          echo "### Issues service deployed successfully" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Commit:** \`${COMMIT_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Service:** https://cadence.bootsy.internal/graphql" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post failure summary
+        if: failure()
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          echo "### Issues service deployment failed" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Commit:** \`${COMMIT_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Check the logs above for details." >> "$GITHUB_STEP_SUMMARY"
+
+  notify-cli-update:
+    needs: deploy
+    # Remind dev machines to rebuild the CLI after successful deploys.
+    # install.sh handles the Bootsy CLI rebuild; this is for other machines.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post CLI update notice
+        run: |
+          echo "### Issues CLI updated" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "The issues CLI source was modified. Rebuild on dev machines:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```bash' >> "$GITHUB_STEP_SUMMARY"
+          echo "cd services/issues-cli && npm install && npm run build && npm link" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
