@@ -119,7 +119,7 @@ jobs:
       - issues-service-docker
       - agent-service-test
       - agent-service-build
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     steps:
       - name: Check CI status
         env:
