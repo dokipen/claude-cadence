@@ -135,8 +135,6 @@ systemd_install() {
   cat > "$unit" <<EOF
 [Unit]
 Description=Claude Cadence Issues Service
-After=network-online.target
-Wants=network-online.target
 
 [Service]
 Type=oneshot
@@ -190,13 +188,19 @@ install_cli() {
     (cd "$cli_dir" && npm install && npm run build)
     # npm link writes to the global node_modules which may require elevated
     # privileges on Linux. Try without sudo first, fall back to sudo.
-    if (cd "$cli_dir" && npm link 2>/dev/null); then
-      :
+    local link_err
+    link_err=$(mktemp)
+    if (cd "$cli_dir" && npm link 2>"$link_err"); then
+      rm -f "$link_err"
     elif command -v sudo >/dev/null 2>&1; then
-      log "Retrying npm link with sudo..."
-      (cd "$cli_dir" && sudo npm link)
+      log "npm link failed ($(cat "$link_err")), retrying with sudo..."
+      rm -f "$link_err"
+      (cd "$cli_dir" && sudo npm link) || err "sudo npm link failed in $cli_dir"
     else
-      err "npm link failed and sudo is not available. Run 'sudo npm link' manually in $cli_dir"
+      local reason
+      reason=$(cat "$link_err")
+      rm -f "$link_err"
+      err "npm link failed ($reason) and sudo is not available. Run 'sudo npm link' manually in $cli_dir"
     fi
     log "CLI installed. Run 'issues --help' to verify."
   else
