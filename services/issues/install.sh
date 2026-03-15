@@ -135,8 +135,8 @@ systemd_install() {
   cat > "$unit" <<EOF
 [Unit]
 Description=Claude Cadence Issues Service
-After=docker.service
-Requires=docker.service
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=oneshot
