@@ -33,7 +33,7 @@ func TestMain(m *testing.M) {
 	tmuxClient := tmux.NewClient(cfg.Tmux.SocketName)
 	ttydClient := ttyd.NewClient(cfg.Ttyd.Enabled, cfg.Ttyd.BasePort)
 	store := session.NewStore()
-	mgr := session.NewManager(store, tmuxClient, ttydClient, nil, cfg.Profiles)
+	mgr := session.NewManager(store, tmuxClient, ttydClient, nil, nil, cfg.Profiles)
 	svc := service.NewAgentService(mgr)
 
 	// Create a minimal config for test server

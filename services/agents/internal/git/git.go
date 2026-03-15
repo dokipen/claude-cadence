@@ -18,6 +18,14 @@ var (
 	repoSegmentRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]*$`)
 )
 
+// Credentials holds authentication data for git operations.
+type Credentials struct {
+	// Token is used for HTTPS repos via a credential helper.
+	Token string
+	// SSHKey is a PEM-encoded private key for SSH repos.
+	SSHKey string
+}
+
 // Client wraps git CLI operations for repo cloning and worktree management.
 type Client struct {
 	rootDir   string
@@ -37,7 +45,8 @@ func (c *Client) getCloneLock(clonePath string) *sync.Mutex {
 
 // EnsureClone clones the repo if it doesn't exist, or pulls the default branch
 // if it does. Returns the path to the clone directory.
-func (c *Client) EnsureClone(repoURL string) (string, error) {
+// If creds is non-nil, credentials are injected into the git environment.
+func (c *Client) EnsureClone(repoURL string, creds *Credentials) (string, error) {
 	owner, repo, err := parseRepoURL(repoURL)
 	if err != nil {
 		return "", fmt.Errorf("parsing repo URL: %w", err)
@@ -65,7 +74,7 @@ func (c *Client) EnsureClone(repoURL string) (string, error) {
 
 	if _, err := os.Stat(filepath.Join(cloneDir, ".git")); err == nil {
 		// Already cloned — pull default branch.
-		if err := c.pullDefaultBranch(cloneDir); err != nil {
+		if err := c.pullDefaultBranch(cloneDir, creds); err != nil {
 			return "", fmt.Errorf("pulling default branch: %w", err)
 		}
 		return cloneDir, nil
@@ -77,6 +86,7 @@ func (c *Client) EnsureClone(repoURL string) (string, error) {
 	}
 
 	cmd := exec.Command("git", "clone", repoURL, cloneDir)
+	c.applyCredentials(cmd, repoURL, creds)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return "", fmt.Errorf("git clone: %w: %s", err, string(output))
 	}
@@ -173,7 +183,7 @@ func (c *Client) CloneDir(repoURL string) (string, error) {
 	return filepath.Join(c.rootDir, "repos", owner, repo), nil
 }
 
-func (c *Client) pullDefaultBranch(cloneDir string) error {
+func (c *Client) pullDefaultBranch(cloneDir string, creds *Credentials) error {
 	branch, err := c.DefaultBranch(cloneDir)
 	if err != nil {
 		return err
@@ -181,6 +191,11 @@ func (c *Client) pullDefaultBranch(cloneDir string) error {
 
 	// Fetch then update the local branch ref to match origin.
 	fetch := exec.Command("git", "-C", cloneDir, "fetch", "origin", branch)
+	// Determine repo URL for credential type detection.
+	urlCmd := exec.Command("git", "-C", cloneDir, "remote", "get-url", "origin")
+	if urlOut, err := urlCmd.Output(); err == nil {
+		c.applyCredentials(fetch, strings.TrimSpace(string(urlOut)), creds)
+	}
 	if output, err := fetch.CombinedOutput(); err != nil {
 		return fmt.Errorf("git fetch: %w: %s", err, string(output))
 	}
@@ -191,6 +206,57 @@ func (c *Client) pullDefaultBranch(cloneDir string) error {
 	}
 
 	return nil
+}
+
+// applyCredentials sets environment variables on a git command for authentication.
+func (c *Client) applyCredentials(cmd *exec.Cmd, repoURL string, creds *Credentials) {
+	if creds == nil {
+		return
+	}
+
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+
+	if strings.HasPrefix(repoURL, "git@") || strings.Contains(repoURL, "ssh://") {
+		// SSH repo — use SSH key via GIT_SSH_COMMAND with a temp key file.
+		if creds.SSHKey != "" {
+			keyFile, err := writeSSHKey(creds.SSHKey)
+			if err == nil {
+				cmd.Env = append(cmd.Env,
+					fmt.Sprintf("GIT_SSH_COMMAND=ssh -i %s -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new", keyFile),
+				)
+			}
+		}
+	} else {
+		// HTTPS repo — use token via credential helper.
+		if creds.Token != "" {
+			// Use a one-shot credential helper that echoes the token.
+			helper := fmt.Sprintf("!f() { echo \"password=%s\"; echo \"username=x-access-token\"; }; f", creds.Token)
+			cmd.Env = append(cmd.Env,
+				fmt.Sprintf("GIT_CONFIG_KEY_0=credential.helper"),
+				fmt.Sprintf("GIT_CONFIG_VALUE_0=%s", helper),
+				"GIT_CONFIG_COUNT=1",
+			)
+		}
+	}
+}
+
+// writeSSHKey writes a PEM key to a temp file and returns its path.
+func writeSSHKey(key string) (string, error) {
+	f, err := os.CreateTemp("", "agentd-ssh-key-*")
+	if err != nil {
+		return "", err
+	}
+	if _, err := f.WriteString(key); err != nil {
+		f.Close()
+		os.Remove(f.Name())
+		return "", err
+	}
+	f.Close()
+	if err := os.Chmod(f.Name(), 0o600); err != nil {
+		os.Remove(f.Name())
+		return "", err
+	}
+	return f.Name(), nil
 }
 
 // parseRepoURL extracts owner and repo from HTTPS, SSH, or local path git URLs.

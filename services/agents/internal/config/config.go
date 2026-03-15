@@ -24,6 +24,43 @@ func (a *AuthConfig) ResolveToken() string {
 	return a.Token
 }
 
+// VaultConfig holds HashiCorp Vault connection settings.
+type VaultConfig struct {
+	Address    string `yaml:"address"`     // Vault server address
+	AuthMethod string `yaml:"auth_method"` // "token" or "approle"
+
+	// Token auth fields.
+	Token       string `yaml:"token"`
+	TokenEnvVar string `yaml:"token_env_var"` // env var override (default: VAULT_TOKEN)
+
+	// AppRole auth fields.
+	RoleID        string `yaml:"role_id"`
+	SecretID      string `yaml:"secret_id"`
+	SecretIDEnvVar string `yaml:"secret_id_env_var"` // env var override for secret_id
+}
+
+// ResolveToken returns the Vault token, preferring the env var if set.
+func (v *VaultConfig) ResolveToken() string {
+	envVar := v.TokenEnvVar
+	if envVar == "" {
+		envVar = "VAULT_TOKEN"
+	}
+	if val := os.Getenv(envVar); val != "" {
+		return val
+	}
+	return v.Token
+}
+
+// ResolveSecretID returns the AppRole secret ID, preferring the env var if set.
+func (v *VaultConfig) ResolveSecretID() string {
+	if v.SecretIDEnvVar != "" {
+		if val := os.Getenv(v.SecretIDEnvVar); val != "" {
+			return val
+		}
+	}
+	return v.SecretID
+}
+
 // Config is the top-level agentd configuration.
 type Config struct {
 	Host       string             `yaml:"host"`
@@ -34,6 +71,7 @@ type Config struct {
 	Log        LogConfig          `yaml:"log"`
 	Profiles   map[string]Profile `yaml:"profiles"`
 	Auth       AuthConfig         `yaml:"auth"`
+	Vault      *VaultConfig       `yaml:"vault"`
 	Reflection bool               `yaml:"reflection"`
 }
 
@@ -59,6 +97,7 @@ type Profile struct {
 	Repo        string `yaml:"repo"`
 	Command     string `yaml:"command"`
 	Description string `yaml:"description"`
+	VaultSecret string `yaml:"vault_secret"` // Vault path for credentials (e.g. "secret/data/agentd/github/repo")
 }
 
 // Load reads and validates a YAML config file.
@@ -133,6 +172,30 @@ func validate(cfg *Config) error {
 		}
 	default:
 		return fmt.Errorf("invalid auth mode %q: must be \"none\" or \"token\"", cfg.Auth.Mode)
+	}
+
+	// Vault config validation.
+	if cfg.Vault != nil {
+		if cfg.Vault.Address == "" {
+			return fmt.Errorf("vault.address is required when vault is configured")
+		}
+		switch cfg.Vault.AuthMethod {
+		case "token":
+			// Token is resolved at runtime from env var.
+		case "approle":
+			if cfg.Vault.RoleID == "" {
+				return fmt.Errorf("vault.role_id is required for approle auth")
+			}
+		default:
+			return fmt.Errorf("invalid vault.auth_method %q: must be \"token\" or \"approle\"", cfg.Vault.AuthMethod)
+		}
+	}
+
+	// Validate profiles with vault_secret have vault configured.
+	for name, p := range cfg.Profiles {
+		if p.VaultSecret != "" && cfg.Vault == nil {
+			return fmt.Errorf("profile %q has vault_secret but no vault config", name)
+		}
 	}
 
 	return nil
