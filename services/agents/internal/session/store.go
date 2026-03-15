@@ -24,6 +24,7 @@ type Session struct {
 	State        SessionState
 	TmuxSession  string
 	CreatedAt    time.Time
+	StoppedAt    time.Time
 	ErrorMessage string
 	AgentPID     int
 	WebsocketURL string
