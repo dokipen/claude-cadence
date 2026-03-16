@@ -16,5 +16,10 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=agentd
 
+NoNewPrivileges=true
+ProtectSystem=strict
+PrivateTmp=true
+ReadWritePaths=__ROOT_DIR__ __LOG_DIR__
+
 [Install]
 WantedBy=multi-user.target
