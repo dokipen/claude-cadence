@@ -9,6 +9,9 @@ if (!Number.isInteger(agentHubPort) || agentHubPort < 1 || agentHubPort > 65535)
 
 export default defineConfig({
   plugins: [react()],
+  test: {
+    exclude: ["e2e/**", "node_modules/**"],
+  },
   server: {
     proxy: {
       "/graphql": `http://localhost:${apiPort}`,
