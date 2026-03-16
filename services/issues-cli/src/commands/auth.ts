@@ -133,7 +133,7 @@ export function registerAuthCommand(program: Command): void {
           if (options.pat !== "-") {
             console.error(chalk.yellow(
               "Warning: passing a token directly via --pat <token> is deprecated (exposes token in shell history and process list).\n" +
-              "  Use instead: echo $TOKEN | issues auth login --pat -\n" +
+              "  Use instead: issues auth login --pat -  (reads from stdin)\n" +
               "  Or run without arguments for an interactive prompt."
             ));
           }

@@ -93,6 +93,7 @@ describe("Auth", () => {
       const output = result.stdout + result.stderr;
       expect(output).toContain("deprecated");
       expect(output).toContain("--pat -");
+      expect(result.exitCode).not.toBe(0); // fake token fails auth, but warning was printed
     });
 
     it("should not print deprecation warning when --pat - is used", async () => {
