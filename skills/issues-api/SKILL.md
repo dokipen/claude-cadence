@@ -149,6 +149,14 @@ issues label add TICKET_ID --label bug --json
 issues label remove TICKET_ID --label bug --json
 ```
 
+### Delete a label
+
+```bash
+issues label delete LABEL_NAME_OR_ID --json
+```
+
+Deletes a label entirely. If the label is attached to any tickets, it is automatically removed from them.
+
 ## Comments
 
 ### Add a comment

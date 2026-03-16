@@ -128,5 +128,6 @@ export const ticketTypeDefs = `
     addComment(ticketId: ID!, body: String!): Comment!
     updateComment(id: ID!, body: String!): Comment!
     deleteComment(id: ID!): Comment!
+    deleteLabel(id: ID!): Label!
   }
 `;
