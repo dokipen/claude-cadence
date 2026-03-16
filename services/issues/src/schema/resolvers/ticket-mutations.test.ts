@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { GraphQLError } from "graphql";
 import type { User } from "@prisma/client";
 
 process.env.JWT_SECRET = "test-secret-for-unit-tests";
@@ -89,6 +90,46 @@ describe("createTicket", () => {
       data: expect.objectContaining({ number: 1, title: "New ticket" }),
     });
   });
+
+  it("throws NOT_FOUND when project does not exist", async () => {
+    const { ctx, txMock } = makeMockContext(mockUser);
+    txMock.project.findUnique.mockResolvedValue(null);
+
+    await expect(
+      createTicket(undefined, { input: { title: "t", projectId: "missing" } }, ctx)
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      createTicket(undefined, { input: { title: "t", projectId: "missing" } }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "NOT_FOUND" } });
+  });
+
+  it("throws BAD_USER_INPUT for invalid priority", async () => {
+    const { ctx } = makeMockContext(mockUser);
+
+    await expect(
+      createTicket(undefined, { input: { title: "t", projectId: "p1", priority: "INVALID" } }, ctx)
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      createTicket(undefined, { input: { title: "t", projectId: "p1", priority: "INVALID" } }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "BAD_USER_INPUT" } });
+  });
+
+  it("throws INTERNAL_SERVER_ERROR on unexpected DB failure", async () => {
+    const { ctx, txMock } = makeMockContext(mockUser);
+    txMock.project.findUnique.mockResolvedValue({ id: "proj-1", name: "Test" });
+    txMock.ticket.findFirst.mockResolvedValue(null);
+    txMock.ticket.create.mockRejectedValue(new Error("DB connection lost"));
+
+    await expect(
+      createTicket(undefined, { input: { title: "t", projectId: "proj-1" } }, ctx)
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      createTicket(undefined, { input: { title: "t", projectId: "proj-1" } }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "INTERNAL_SERVER_ERROR" } });
+  });
 });
 
 describe("updateTicket", () => {
@@ -118,6 +159,45 @@ describe("updateTicket", () => {
       data: expect.objectContaining({ title: "New title" }),
     });
   });
+
+  it("throws NOT_FOUND when ticket does not exist", async () => {
+    const { ctx } = makeMockContext(mockUser);
+    ctx.prisma.ticket.findUnique.mockResolvedValue(null);
+
+    await expect(
+      updateTicket(undefined, { id: "missing", input: { title: "x" } }, ctx)
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      updateTicket(undefined, { id: "missing", input: { title: "x" } }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "NOT_FOUND" } });
+  });
+
+  it("throws BAD_USER_INPUT for invalid priority", async () => {
+    const { ctx } = makeMockContext(mockUser);
+
+    await expect(
+      updateTicket(undefined, { id: "t1", input: { priority: "WRONG" } }, ctx)
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      updateTicket(undefined, { id: "t1", input: { priority: "WRONG" } }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "BAD_USER_INPUT" } });
+  });
+
+  it("throws INTERNAL_SERVER_ERROR on unexpected DB failure", async () => {
+    const { ctx } = makeMockContext(mockUser);
+    ctx.prisma.ticket.findUnique.mockResolvedValue({ id: "t1", title: "Existing" });
+    ctx.prisma.ticket.update.mockRejectedValue(new Error("DB failure"));
+
+    await expect(
+      updateTicket(undefined, { id: "t1", input: { title: "New" } }, ctx)
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      updateTicket(undefined, { id: "t1", input: { title: "New" } }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "INTERNAL_SERVER_ERROR" } });
+  });
 });
 
 describe("createLabel", () => {
@@ -145,12 +225,29 @@ describe("createLabel", () => {
     });
   });
 
-  it("rejects invalid color format", async () => {
+  it("throws BAD_USER_INPUT for invalid color format", async () => {
     const { ctx } = makeMockContext(mockUser);
 
     await expect(
       createLabel(undefined, { name: "bad", color: "not-a-color" }, ctx)
-    ).rejects.toThrow("Invalid color");
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      createLabel(undefined, { name: "bad", color: "not-a-color" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "BAD_USER_INPUT" } });
+  });
+
+  it("throws INTERNAL_SERVER_ERROR on DB failure", async () => {
+    const { ctx } = makeMockContext(mockUser);
+    ctx.prisma.label.create.mockRejectedValue(new Error("DB error"));
+
+    await expect(
+      createLabel(undefined, { name: "bug", color: "#ff0000" }, ctx)
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      createLabel(undefined, { name: "bug", color: "#ff0000" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "INTERNAL_SERVER_ERROR" } });
   });
 });
 
@@ -180,6 +277,33 @@ describe("addLabel", () => {
       data: { ticketId: "t1", labelId: "l1" },
     });
   });
+
+  it("throws NOT_FOUND when ticket does not exist", async () => {
+    const { ctx } = makeMockContext(mockUser);
+    ctx.prisma.ticket.findUnique.mockResolvedValue(null);
+
+    await expect(
+      addLabel(undefined, { ticketId: "missing", labelId: "l1" }, ctx)
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      addLabel(undefined, { ticketId: "missing", labelId: "l1" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "NOT_FOUND" } });
+  });
+
+  it("throws NOT_FOUND when label does not exist", async () => {
+    const { ctx } = makeMockContext(mockUser);
+    ctx.prisma.ticket.findUnique.mockResolvedValue({ id: "t1" });
+    ctx.prisma.label.findUnique.mockResolvedValue(null);
+
+    await expect(
+      addLabel(undefined, { ticketId: "t1", labelId: "missing" }, ctx)
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      addLabel(undefined, { ticketId: "t1", labelId: "missing" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "NOT_FOUND" } });
+  });
 });
 
 describe("removeLabel", () => {
@@ -206,14 +330,31 @@ describe("removeLabel", () => {
     expect(result).toEqual(ticket);
   });
 
-  it("rejects when label is not on ticket", async () => {
+  it("throws NOT_FOUND when ticket does not exist", async () => {
+    const { ctx } = makeMockContext(mockUser);
+    ctx.prisma.ticket.findUnique.mockResolvedValue(null);
+
+    await expect(
+      removeLabel(undefined, { ticketId: "missing", labelId: "l1" }, ctx)
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      removeLabel(undefined, { ticketId: "missing", labelId: "l1" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "NOT_FOUND" } });
+  });
+
+  it("throws NOT_FOUND when label is not on ticket", async () => {
     const { ctx } = makeMockContext(mockUser);
     ctx.prisma.ticket.findUnique.mockResolvedValue({ id: "t1", title: "My ticket" });
     ctx.prisma.ticketLabel.findUnique.mockResolvedValue(null);
 
     await expect(
       removeLabel(undefined, { ticketId: "t1", labelId: "l1" }, ctx)
-    ).rejects.toThrow("is not on ticket");
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      removeLabel(undefined, { ticketId: "t1", labelId: "l1" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "NOT_FOUND" } });
   });
 });
 
@@ -244,6 +385,33 @@ describe("assignTicket", () => {
       data: { assigneeId: "u1" },
     });
   });
+
+  it("throws NOT_FOUND when ticket does not exist", async () => {
+    const { ctx } = makeMockContext(mockUser);
+    ctx.prisma.ticket.findUnique.mockResolvedValue(null);
+
+    await expect(
+      assignTicket(undefined, { ticketId: "missing", userId: "u1" }, ctx)
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      assignTicket(undefined, { ticketId: "missing", userId: "u1" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "NOT_FOUND" } });
+  });
+
+  it("throws INTERNAL_SERVER_ERROR on DB failure", async () => {
+    const { ctx } = makeMockContext(mockUser);
+    ctx.prisma.ticket.findUnique.mockResolvedValue({ id: "t1" });
+    ctx.prisma.ticket.update.mockRejectedValue(new Error("DB error"));
+
+    await expect(
+      assignTicket(undefined, { ticketId: "t1", userId: "u1" }, ctx)
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      assignTicket(undefined, { ticketId: "t1", userId: "u1" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "INTERNAL_SERVER_ERROR" } });
+  });
 });
 
 describe("unassignTicket", () => {
@@ -272,6 +440,19 @@ describe("unassignTicket", () => {
       where: { id: "t1" },
       data: { assigneeId: null },
     });
+  });
+
+  it("throws NOT_FOUND when ticket does not exist", async () => {
+    const { ctx } = makeMockContext(mockUser);
+    ctx.prisma.ticket.findUnique.mockResolvedValue(null);
+
+    await expect(
+      unassignTicket(undefined, { ticketId: "missing" }, ctx)
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      unassignTicket(undefined, { ticketId: "missing" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "NOT_FOUND" } });
   });
 });
 
@@ -342,12 +523,44 @@ describe("addBlockRelation", () => {
     });
   });
 
-  it("rejects self-blocking", async () => {
+  it("throws BAD_USER_INPUT for self-blocking", async () => {
     const { ctx } = makeMockContext(mockUser);
 
     await expect(
       addBlockRelation(undefined, { blockerId: "t1", blockedId: "t1" }, ctx)
-    ).rejects.toThrow("cannot block itself");
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      addBlockRelation(undefined, { blockerId: "t1", blockedId: "t1" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "BAD_USER_INPUT" } });
+  });
+
+  it("throws NOT_FOUND when blocker ticket does not exist", async () => {
+    const { ctx } = makeMockContext(mockUser);
+    ctx.prisma.ticket.findUnique.mockResolvedValueOnce(null);
+
+    await expect(
+      addBlockRelation(undefined, { blockerId: "missing", blockedId: "t2" }, ctx)
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      addBlockRelation(undefined, { blockerId: "missing", blockedId: "t2" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "NOT_FOUND" } });
+  });
+
+  it("throws NOT_FOUND when blocked ticket does not exist", async () => {
+    const { ctx } = makeMockContext(mockUser);
+    ctx.prisma.ticket.findUnique
+      .mockResolvedValueOnce({ id: "t1" })
+      .mockResolvedValueOnce(null);
+
+    await expect(
+      addBlockRelation(undefined, { blockerId: "t1", blockedId: "missing" }, ctx)
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      addBlockRelation(undefined, { blockerId: "t1", blockedId: "missing" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "NOT_FOUND" } });
   });
 });
 
@@ -376,12 +589,30 @@ describe("removeBlockRelation", () => {
     expect(result).toEqual(blockedTicket);
   });
 
-  it("rejects when relation not found", async () => {
+  it("throws NOT_FOUND when relation does not exist", async () => {
     const { ctx } = makeMockContext(mockUser);
     ctx.prisma.blockRelation.findUnique.mockResolvedValue(null);
 
     await expect(
       removeBlockRelation(undefined, { blockerId: "t1", blockedId: "t2" }, ctx)
-    ).rejects.toThrow("Block relation not found");
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      removeBlockRelation(undefined, { blockerId: "t1", blockedId: "t2" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "NOT_FOUND" } });
+  });
+
+  it("throws INTERNAL_SERVER_ERROR on DB failure during delete", async () => {
+    const { ctx } = makeMockContext(mockUser);
+    ctx.prisma.blockRelation.findUnique.mockResolvedValue({ blockerId: "t1", blockedId: "t2" });
+    ctx.prisma.blockRelation.delete.mockRejectedValue(new Error("DB error"));
+
+    await expect(
+      removeBlockRelation(undefined, { blockerId: "t1", blockedId: "t2" }, ctx)
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      removeBlockRelation(undefined, { blockerId: "t1", blockedId: "t2" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "INTERNAL_SERVER_ERROR" } });
   });
 });
