@@ -116,8 +116,12 @@ export const ticketResolvers = {
       }
 
       let tickets: Ticket[];
+      let totalCount: number;
       try {
-        tickets = await prisma.ticket.findMany(queryArgs);
+        [tickets, totalCount] = await Promise.all([
+          prisma.ticket.findMany(queryArgs),
+          prisma.ticket.count({ where }),
+        ]);
       } catch (error) {
         console.error("tickets query failed:", error instanceof Error ? error.message : String(error));
         throw new GraphQLError("Failed to query tickets", {
@@ -137,6 +141,7 @@ export const ticketResolvers = {
           hasNextPage,
           endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
         },
+        totalCount,
       };
     },
 

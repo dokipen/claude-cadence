@@ -75,6 +75,7 @@ export const ticketTypeDefs = `
   type TicketConnection {
     edges: [TicketEdge!]!
     pageInfo: PageInfo!
+    totalCount: Int!
   }
 
   input CreateTicketInput {

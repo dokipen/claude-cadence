@@ -4,11 +4,12 @@ process.env.JWT_SECRET = "test-secret-for-unit-tests";
 
 const { ticketResolvers } = await import("./ticket.js");
 
-function makeMockContext(findManyResult: unknown[] = []) {
+function makeMockContext(findManyResult: unknown[] = [], countResult = 0) {
   return {
     prisma: {
       ticket: {
         findMany: vi.fn().mockResolvedValue(findManyResult),
+        count: vi.fn().mockResolvedValue(countResult),
       },
     } as any,
     loaders: {} as any,
@@ -195,6 +196,7 @@ describe("tickets — error handling", () => {
       prisma: {
         ticket: {
           findMany: vi.fn().mockRejectedValue(new Error("DB connection failed")),
+          count: vi.fn().mockRejectedValue(new Error("DB connection failed")),
         },
       } as any,
       loaders: {} as any,
@@ -270,6 +272,28 @@ describe("tickets — pagination query args", () => {
     const call = ctx.prisma.ticket.findMany.mock.calls[0][0];
     expect(call.cursor).toBeUndefined();
     expect(call.skip).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// totalCount
+// ---------------------------------------------------------------------------
+describe("tickets — totalCount", () => {
+  it("returns totalCount from prisma.ticket.count with the same where clause", async () => {
+    const ctx = makeMockContext([{ id: "t1" }], 47);
+    const result = await tickets(undefined, { state: "CLOSED", projectId: "proj-1" }, ctx);
+
+    expect(result.totalCount).toBe(47);
+    const countCall = ctx.prisma.ticket.count.mock.calls[0][0];
+    expect(countCall.where.state).toBe("CLOSED");
+    expect(countCall.where.projectId).toBe("proj-1");
+  });
+
+  it("returns totalCount of 0 when no tickets match", async () => {
+    const ctx = makeMockContext([], 0);
+    const result = await tickets(undefined, { state: "CLOSED" }, ctx);
+
+    expect(result.totalCount).toBe(0);
   });
 });
 

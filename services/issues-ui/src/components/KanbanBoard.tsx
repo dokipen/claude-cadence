@@ -23,11 +23,13 @@ function ColumnFetcher({
   filters?: TicketFilters;
   repoUrl?: string;
 }) {
-  const { tickets, loading, error } = useTickets(state, projectId, first, filters);
+  const { tickets, totalCount, hasNextPage, loading, error } = useTickets(state, projectId, first, filters);
   return (
     <KanbanColumn
       state={state}
       tickets={tickets}
+      totalCount={totalCount}
+      hasNextPage={hasNextPage}
       loading={loading}
       error={error}
       repoUrl={repoUrl}

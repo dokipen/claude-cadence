@@ -75,6 +75,11 @@ test.describe("app header lockup (authenticated)", () => {
       });
     expect(gap).toBe("0px");
   });
+  test("header logo links to home", async ({ page }) => {
+    const logoLink = page.locator("header a[href='/']");
+    await expect(logoLink).toBeVisible();
+    await expect(logoLink).toHaveAttribute("href", "/");
+  });
 });
 
 unauthTest.describe("login page lockup (unauthenticated)", () => {

@@ -14,11 +14,20 @@ interface TicketsResponse {
       hasNextPage: boolean;
       endCursor: string | null;
     };
+    totalCount: number;
   };
+}
+
+interface TransformedTickets {
+  tickets: Ticket[];
+  totalCount: number;
+  hasNextPage: boolean;
 }
 
 interface UseTicketsResult {
   tickets: Ticket[];
+  totalCount: number;
+  hasNextPage: boolean;
   loading: boolean;
   error: string | null;
 }
@@ -29,8 +38,11 @@ export interface TicketFilters {
   priority?: Priority;
 }
 
-const transformTickets = (result: TicketsResponse): Ticket[] =>
-  result.tickets.edges.map((e) => e.node);
+const transformTickets = (result: TicketsResponse): TransformedTickets => ({
+  tickets: result.tickets.edges.map((e) => e.node),
+  totalCount: result.tickets.totalCount,
+  hasNextPage: result.tickets.pageInfo.hasNextPage,
+});
 
 export function useTickets(
   state: TicketState,
@@ -57,13 +69,13 @@ export function useTickets(
     [state, projectId, first, labelName, isBlocked, priority],
   );
 
-  const { data, loading, error } = usePollingQuery<TicketsResponse, Ticket[]>({
+  const { data, loading, error } = usePollingQuery<TicketsResponse, TransformedTickets>({
     query: BOARD_TICKETS_QUERY,
     variables,
     transform: transformTickets,
-    initialData: [],
+    initialData: { tickets: [], totalCount: 0, hasNextPage: false },
     errorMessage: "Failed to load tickets",
   });
 
-  return { tickets: data, loading, error };
+  return { tickets: data.tickets, totalCount: data.totalCount, hasNextPage: data.hasNextPage, loading, error };
 }

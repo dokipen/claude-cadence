@@ -85,6 +85,7 @@ export const BOARD_TICKETS_QUERY = gql`
         hasNextPage
         endCursor
       }
+      totalCount
     }
   }
 `;
