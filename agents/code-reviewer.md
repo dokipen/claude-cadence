@@ -98,8 +98,8 @@ Deferred findings that result in new issues should default to low priority unles
 Example in review output:
 ```
 **Deferred**:
-- Missing input validation on `parseConfig()` → fits #10 (API hardening phase), priority: medium, discovered in #14 review
-- Unused error codes enum → new issue recommended, priority: low, discovered in #14 review
+- Missing input validation on `parseConfig()` → fits #10 (API hardening phase), medium priority, discovered in #14 review
+- Unused error codes enum → new issue recommended, low priority, discovered in #14 review
 ```
 
 ## Posting Reviews

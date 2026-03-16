@@ -98,8 +98,8 @@ Deferred findings that result in new issues should default to low priority unles
 Example in review output:
 ```
 **Deferred**:
-- Dependency X has a known Low-severity CVE → fits #10 (dependency update phase), priority: low, discovered in #14 review
-- Missing rate limiting on endpoint Y → new issue recommended, priority: medium, discovered in #14 review
+- Dependency X has a known Low-severity CVE → fits #10 (dependency update phase), low priority, discovered in #14 review
+- Missing rate limiting on endpoint Y → new issue recommended, medium priority, discovered in #14 review
 ```
 
 ## Vulnerability Response
