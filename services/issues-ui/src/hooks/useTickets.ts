@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { Ticket, TicketState } from "../types";
+import type { Ticket, TicketState, Priority } from "../types";
 import { getClient } from "../api/client";
 import { BOARD_TICKETS_QUERY } from "../api/queries";
 import { useAuth } from "../auth/AuthContext";
@@ -24,10 +24,17 @@ interface UseTicketsResult {
   error: string | null;
 }
 
+export interface TicketFilters {
+  labelName?: string;
+  isBlocked?: boolean;
+  priority?: Priority;
+}
+
 export function useTickets(
   state: TicketState,
   projectId: string | null,
   first: number,
+  filters?: TicketFilters,
 ): UseTicketsResult {
   const { logout } = useAuth();
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -37,6 +44,11 @@ export function useTickets(
   const handleAuthFailure = useCallback(() => {
     logout();
   }, [logout]);
+
+  // Stabilize filter values for the dependency array
+  const labelName = filters?.labelName;
+  const isBlocked = filters?.isBlocked;
+  const priority = filters?.priority;
 
   useEffect(() => {
     if (!projectId) {
@@ -53,6 +65,9 @@ export function useTickets(
           state,
           projectId,
           first,
+          labelName: labelName || undefined,
+          isBlocked,
+          priority: priority || undefined,
         })
         .then((result) => {
           if (!cancelled) setTickets(result.tickets.edges.map((e) => e.node));
@@ -77,7 +92,7 @@ export function useTickets(
       cancelled = true;
       clearInterval(interval);
     };
-  }, [state, projectId, first, handleAuthFailure]);
+  }, [state, projectId, first, labelName, isBlocked, priority, handleAuthFailure]);
 
   return { tickets, loading, error };
 }
