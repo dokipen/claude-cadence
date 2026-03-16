@@ -21,8 +21,8 @@ function ColumnFetcher({
   first: number;
   filters?: TicketFilters;
 }) {
-  const { tickets, loading, error } = useTickets(state, projectId, first, filters);
-  return <KanbanColumn state={state} tickets={tickets} loading={loading} error={error} />;
+  const { tickets, totalCount, hasNextPage, loading, error } = useTickets(state, projectId, first, filters);
+  return <KanbanColumn state={state} tickets={tickets} totalCount={totalCount} hasNextPage={hasNextPage} loading={loading} error={error} />;
 }
 
 export function KanbanBoard({
