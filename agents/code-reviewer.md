@@ -66,7 +66,7 @@ Before reviewing, understand the project's stack and conventions:
 
 ### 9. Dead Code Detection
 - Unused exports, providers, or declarations introduced or left behind by the change
-- Stale localization keys, feature flags, or config entries that no longer have references
+- Stale feature flags, config entries, or constants that no longer have references
 - Commented-out code blocks that should be removed rather than left in
 
 ## Review Process
