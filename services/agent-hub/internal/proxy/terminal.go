@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -17,6 +16,10 @@ import (
 const (
 	// rpcCallTimeout is the maximum time to wait for a getTerminalEndpoint response.
 	rpcCallTimeout = 30 * time.Second
+
+	// maxRelayMessageSize is the maximum size of a single WebSocket message
+	// relayed through the terminal proxy (1 MiB).
+	maxRelayMessageSize = 1024 * 1024
 )
 
 // HandleTerminalProxy returns an HTTP handler that proxies WebSocket connections
@@ -64,16 +67,25 @@ func HandleTerminalProxy(h *hub.Hub) http.HandlerFunc {
 		defer ttydConn.Close(websocket.StatusGoingAway, "proxy closing")
 
 		// Accept the browser's WebSocket upgrade.
-		browserConn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-			// ttyd uses binary frames; allow any subprotocol the browser requests.
-			InsecureSkipVerify: true,
-		})
+		// Origin checking is enforced by default (InsecureSkipVerify is false),
+		// preventing cross-origin WebSocket hijacking.
+		browserConn, err := websocket.Accept(w, r, nil)
 		if err != nil {
 			slog.Error("failed to accept browser websocket", "error", err)
 			ttydConn.Close(websocket.StatusGoingAway, "browser accept failed")
 			return
 		}
 		defer browserConn.Close(websocket.StatusGoingAway, "proxy closing")
+
+		// Clear the server's WriteTimeout so idle terminal sessions aren't killed.
+		// coder/websocket extends the deadline on each write, but idle sessions
+		// with no writes would hit the server's 35s timeout.
+		rc := http.NewResponseController(w)
+		rc.SetWriteDeadline(time.Time{})
+
+		// Apply read limits to prevent memory exhaustion.
+		browserConn.SetReadLimit(maxRelayMessageSize)
+		ttydConn.SetReadLimit(maxRelayMessageSize)
 
 		// Relay bidirectionally.
 		ctx, ctxCancel := context.WithCancel(r.Context())
@@ -113,7 +125,7 @@ func relay(ctx context.Context, dst, src *websocket.Conn) error {
 func writeJSONError(w http.ResponseWriter, statusCode int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	io.WriteString(w, `{"error":"`+message+`"}`)
+	json.NewEncoder(w).Encode(map[string]string{"error": message})
 }
 
 // writeRPCError maps hub RPC errors to HTTP responses.
