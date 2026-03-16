@@ -6,6 +6,7 @@ import { AuthCallback } from "./auth/AuthCallback";
 import { KanbanBoard } from "./components/KanbanBoard";
 import { FilterBar } from "./components/FilterBar";
 import { TicketDetail } from "./components/TicketDetail";
+import { AgentManager } from "./components/AgentManager";
 import { ProjectSelector, STORAGE_KEY } from "./components/ProjectSelector";
 import { useProjects } from "./hooks/useProjects";
 import type { TicketFilters } from "./hooks/useTickets";
@@ -51,7 +52,7 @@ function AppShell() {
     () => localStorage.getItem(STORAGE_KEY),
   );
   const [filters, setFilters] = useState<TicketFilters>({});
-  const showFilters = !location.pathname.startsWith("/ticket/");
+  const showFilters = !location.pathname.startsWith("/ticket/") && !location.pathname.startsWith("/agents");
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
   const repoUrl = selectedProject?.repository;
@@ -68,6 +69,9 @@ function AppShell() {
           <Link to="/" className={layoutStyles.logoLink}>
             <img src="/cadence-icon-light.svg" alt="" width={24} height={24} />
             <span className={layoutStyles.logoText}>Cadence</span>
+          </Link>
+          <Link to="/agents" className={layoutStyles.navLink} data-testid="agents-nav-link">
+            Agents
           </Link>
         </div>
         <div className={layoutStyles.headerCenter}>
@@ -95,6 +99,7 @@ function AppShell() {
       <main className={layoutStyles.main}>
         <Routes>
           <Route path="/ticket/:id" element={<TicketDetail />} />
+          <Route path="/agents" element={<AgentManager />} />
           <Route
             path="/*"
             element={<KanbanBoard projectId={selectedProjectId} filters={filters} repoUrl={repoUrl} />}
