@@ -15,7 +15,12 @@ import {
   getClient,
   createRawClient,
 } from "../api/client";
-import { AUTHENTICATE_WITH_PAT, LOGOUT_MUTATION, ME_QUERY } from "../api/queries";
+import {
+  AUTHENTICATE_WITH_PAT,
+  AUTHENTICATE_WITH_GITHUB_CODE,
+  LOGOUT_MUTATION,
+  ME_QUERY,
+} from "../api/queries";
 
 interface AuthContextValue {
   user: User | null;
@@ -23,6 +28,7 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (pat: string) => Promise<void>;
+  loginWithCode: (code: string, state: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -79,6 +85,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const loginWithCode = useCallback(
+    async (code: string, state: string) => {
+      const client = createRawClient();
+      const result = await client.request<{
+        authenticateWithGitHubCode: AuthPayload;
+      }>(AUTHENTICATE_WITH_GITHUB_CODE, { code, state });
+
+      const { token: newToken, refreshToken, user: newUser } =
+        result.authenticateWithGitHubCode;
+      setStoredTokens(newToken, refreshToken);
+      setToken(newToken);
+      setUser(newUser);
+    },
+    [],
+  );
+
   const logout = useCallback(async () => {
     const refreshToken = getStoredRefreshToken();
     if (refreshToken && token) {
@@ -100,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!token && !!user,
         isLoading,
         login,
+        loginWithCode,
         logout,
       }}
     >

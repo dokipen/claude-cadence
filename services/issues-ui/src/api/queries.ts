@@ -74,6 +74,27 @@ export const PROJECTS_QUERY = gql`
   }
 `;
 
+export const GENERATE_OAUTH_STATE = gql`
+  mutation GenerateOAuthState {
+    generateOAuthState
+  }
+`;
+
+export const AUTHENTICATE_WITH_GITHUB_CODE = gql`
+  mutation AuthenticateWithGitHubCode($code: String!, $state: String!) {
+    authenticateWithGitHubCode(code: $code, state: $state) {
+      token
+      refreshToken
+      user {
+        id
+        login
+        displayName
+        avatarUrl
+      }
+    }
+  }
+`;
+
 export const TICKET_DETAIL_QUERY = gql`
   query TicketDetail($id: ID!) {
     ticket(id: $id) {

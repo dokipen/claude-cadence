@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { LoginPage } from "./auth/LoginPage";
+import { AuthCallback } from "./auth/AuthCallback";
 import { KanbanBoard } from "./components/KanbanBoard";
 import { TicketDetail } from "./components/TicketDetail";
 import { ProjectSelector, STORAGE_KEY } from "./components/ProjectSelector";
@@ -86,6 +87,7 @@ function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
           <Route
             path="/*"
             element={
