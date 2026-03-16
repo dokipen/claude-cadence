@@ -31,3 +31,45 @@ export const ME_QUERY = gql`
     }
   }
 `;
+
+export const BOARD_TICKETS_QUERY = gql`
+  query BoardTickets($state: TicketState!, $projectId: ID!, $first: Int) {
+    tickets(state: $state, projectId: $projectId, first: $first) {
+      edges {
+        node {
+          id
+          title
+          state
+          priority
+          storyPoints
+          assignee {
+            login
+            avatarUrl
+          }
+          labels {
+            id
+            name
+            color
+          }
+          blockedBy {
+            id
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+`;
+
+export const PROJECTS_QUERY = gql`
+  query Projects {
+    projects {
+      id
+      name
+      repository
+    }
+  }
+`;
