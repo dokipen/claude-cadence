@@ -1,10 +1,16 @@
 import jwt from "jsonwebtoken";
 import { randomBytes } from "node:crypto";
+import { isProduction } from "../env.js";
 
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
-    throw new Error("JWT_SECRET environment variable is required");
+    if (isProduction) {
+      throw new Error("JWT_SECRET environment variable is required");
+    }
+    const generated = randomBytes(32).toString("hex");
+    console.warn("JWT_SECRET not set — using random secret (sessions won't survive restarts)");
+    return generated;
   }
   return secret;
 }
