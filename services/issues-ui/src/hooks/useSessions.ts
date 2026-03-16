@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { hubFetch } from "../api/agentHubClient";
 import { usePageVisibility } from "./usePageVisibility";
 import type { Agent, Session } from "../types";
@@ -22,11 +22,12 @@ export function useSessions(agents: Agent[]): UseSessionsResult {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const hasFetchedRef = useRef(false);
+  const failuresRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
     const isInitialFetch = !hasFetchedRef.current;
-    let consecutiveFailures = 0;
+    failuresRef.current = 0;
 
     const onlineAgents = agents.filter((a) => a.status === "online");
 
@@ -54,13 +55,13 @@ export function useSessions(agents: Agent[]): UseSessionsResult {
         );
         if (!cancelled) {
           setSessions(results);
-          consecutiveFailures = 0;
+          failuresRef.current = 0;
           setError(null);
         }
       } catch {
         if (!cancelled) {
-          consecutiveFailures++;
-          if (isInitialFetch || consecutiveFailures >= 3) {
+          failuresRef.current++;
+          if (isInitialFetch || failuresRef.current >= 3) {
             setError("Failed to fetch sessions");
           }
         }

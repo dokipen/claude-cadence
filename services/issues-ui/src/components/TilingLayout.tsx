@@ -82,10 +82,27 @@ export function TilingLayout({ windows, onMinimize, onTerminated }: TilingLayout
   const [ratios, setRatios] = useState<Map<string, number>>(new Map());
   const draggingRef = useRef<{ path: string; direction: "horizontal" | "vertical"; startPos: number; startRatio: number; containerSize: number } | null>(null);
 
-  // Reset ratios when window count changes
+  // Prune stale ratio entries when layout changes
+  const keysJson = JSON.stringify(keys);
   useEffect(() => {
-    setRatios(new Map());
-  }, [keys.length]);
+    setRatios((prev) => {
+      if (prev.size === 0) return prev;
+      // Build the set of valid paths for the current layout
+      const validPaths = new Set<string>();
+      function collectPaths(node: LayoutNode | null, path: string) {
+        if (!node || node.type === "leaf") return;
+        validPaths.add(path);
+        collectPaths(node.first, `${path}.0`);
+        collectPaths(node.second, `${path}.1`);
+      }
+      collectPaths(layout, "root");
+      const pruned = new Map<string, number>();
+      for (const [path, ratio] of prev) {
+        if (validPaths.has(path)) pruned.set(path, ratio);
+      }
+      return pruned.size === prev.size ? prev : pruned;
+    });
+  }, [keysJson]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleMouseDown = useCallback((e: React.MouseEvent, path: string, direction: "horizontal" | "vertical") => {
     e.preventDefault();

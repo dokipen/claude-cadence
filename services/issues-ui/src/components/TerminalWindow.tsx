@@ -1,5 +1,5 @@
 import { Terminal } from "./Terminal";
-import { hubFetch } from "../api/agentHubClient";
+import { hubFetch, HubError } from "../api/agentHubClient";
 import type { Session } from "../types";
 import styles from "../styles/agents.module.css";
 
@@ -24,10 +24,14 @@ export function TerminalWindow({
         `/agents/${encodeURIComponent(agentName)}/sessions/${encodeURIComponent(session.id)}`,
         { method: "DELETE" },
       );
-    } catch {
-      // Session may already be gone
+      onTerminated();
+    } catch (err) {
+      // 404 means session is already gone — treat as success
+      if (err instanceof HubError && err.status === 404) {
+        onTerminated();
+      }
+      // Other errors: leave window in place so user can retry
     }
-    onTerminated();
   };
 
   return (

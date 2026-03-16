@@ -220,7 +220,11 @@ test.describe("agent manager page", () => {
     // Mock DELETE endpoint
     await page.route("**/api/v1/agents/*/sessions/*", (route) => {
       if (route.request().method() === "DELETE") {
-        route.fulfill({ status: 204 });
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({}),
+        });
       } else {
         route.continue();
       }
@@ -273,6 +277,32 @@ test.describe("agent manager page", () => {
     // Click same session again
     await page.getByTestId("sidebar-session").first().click();
     await expect(page.getByTestId("terminal-window")).toHaveCount(1);
+  });
+
+  test("stopped sessions appear dimmed in sidebar", async ({ page }) => {
+    // Override mac-mini-1 sessions to include a stopped session
+    await page.route("**/api/v1/agents/mac-mini-1/sessions", (route) => {
+      if (route.request().method() === "GET") {
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([
+            MOCK_SESSIONS_AGENT1[0],
+            { ...MOCK_SESSIONS_AGENT1[1], state: "stopped" },
+          ]),
+        });
+      } else {
+        route.continue();
+      }
+    });
+
+    await page.goto("/agents");
+    await expect(page.getByTestId("sidebar-session")).toHaveCount(3, { timeout: 15000 });
+
+    // The stopped session should have the stopped class (dimmed)
+    const sessions = page.getByTestId("sidebar-session");
+    // Second session in mac-mini-1 group should show empty circle (non-running)
+    await expect(sessions.nth(1)).toContainText("○");
   });
 
   test("minimized session can be restored from sidebar", async ({ page }) => {

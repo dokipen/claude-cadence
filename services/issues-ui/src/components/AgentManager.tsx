@@ -57,9 +57,6 @@ export function AgentManager() {
     });
   }, []);
 
-  // Filter to only show non-minimized windows
-  const visibleWindows = openWindows;
-
   const loading = agentsLoading || sessionsLoading;
 
   return (
@@ -77,7 +74,7 @@ export function AgentManager() {
           </div>
         ) : (
           <TilingLayout
-            windows={visibleWindows}
+            windows={openWindows}
             onMinimize={handleMinimize}
             onTerminated={handleTerminated}
           />
