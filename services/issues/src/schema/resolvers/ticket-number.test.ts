@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { GraphQLError } from "graphql";
 import type { User } from "@prisma/client";
 
 process.env.JWT_SECRET = "test-secret-for-unit-tests";
@@ -118,7 +119,7 @@ describe("createTicket — number assignment", () => {
     });
   });
 
-  it("throws when project is not found", async () => {
+  it("throws NOT_FOUND when project is not found", async () => {
     const { context, txMock } = makeMockContext();
     txMock.project.findUnique.mockResolvedValue(null);
 
@@ -128,7 +129,15 @@ describe("createTicket — number assignment", () => {
         { input: { title: "Orphan ticket", projectId: "nonexistent" } },
         context
       )
-    ).rejects.toThrow("Project not found: nonexistent");
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      createTicket(
+        {},
+        { input: { title: "Orphan ticket", projectId: "nonexistent" } },
+        context
+      )
+    ).rejects.toMatchObject({ extensions: { code: "NOT_FOUND" } });
   });
 
   it("retries on P2002 unique constraint violation", async () => {
@@ -153,7 +162,7 @@ describe("createTicket — number assignment", () => {
     expect(context.prisma.$transaction).toHaveBeenCalledTimes(2);
   });
 
-  it("throws after exhausting retries on repeated P2002", async () => {
+  it("throws INTERNAL_SERVER_ERROR after exhausting retries on repeated P2002", async () => {
     const { context, txMock } = makeMockContext();
 
     txMock.project.findUnique.mockResolvedValue({ id: "proj-1", name: "Test" });
@@ -168,9 +177,15 @@ describe("createTicket — number assignment", () => {
         { input: { title: "Always fails", projectId: "proj-1" } },
         context
       )
-    ).rejects.toThrow("Unique constraint");
+    ).rejects.toThrow(GraphQLError);
 
-    expect(context.prisma.$transaction).toHaveBeenCalledTimes(3);
+    await expect(
+      createTicket(
+        {},
+        { input: { title: "Always fails", projectId: "proj-1" } },
+        context
+      )
+    ).rejects.toMatchObject({ extensions: { code: "INTERNAL_SERVER_ERROR" } });
   });
 });
 

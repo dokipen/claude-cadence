@@ -9,6 +9,7 @@ import { authGuardPlugin } from "./auth/guard.js";
 import { rateLimitPlugin } from "./auth/rate-limit-plugin.js";
 import { isProduction } from "./env.js";
 import { startCleanupSchedule } from "./auth/cleanup.js";
+import { formatError } from "./format-error.js";
 
 const prisma = new PrismaClient();
 
@@ -20,6 +21,7 @@ const server = new ApolloServer({
   ],
   introspection: !isProduction,
   plugins: [rateLimitPlugin(), authGuardPlugin()],
+  formatError,
 });
 
 const port = parseInt(process.env.PORT || "4000", 10);

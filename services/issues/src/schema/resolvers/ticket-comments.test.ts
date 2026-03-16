@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { GraphQLError } from "graphql";
 import type { User } from "@prisma/client";
 
 process.env.JWT_SECRET = "test-secret-for-unit-tests";
@@ -75,6 +76,45 @@ describe("addComment", () => {
     });
     expect(result.authorId).toBe(mockUser.id);
   });
+
+  it("throws BAD_USER_INPUT for empty body", async () => {
+    const ctx = makeMockContext(mockUser);
+
+    await expect(
+      addComment(undefined, { ticketId: "t1", body: "   " }, ctx)
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      addComment(undefined, { ticketId: "t1", body: "   " }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "BAD_USER_INPUT" } });
+  });
+
+  it("throws NOT_FOUND when ticket does not exist", async () => {
+    const ctx = makeMockContext(mockUser);
+    ctx.prisma.ticket.findUnique.mockResolvedValue(null);
+
+    await expect(
+      addComment(undefined, { ticketId: "missing", body: "hello" }, ctx)
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      addComment(undefined, { ticketId: "missing", body: "hello" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "NOT_FOUND" } });
+  });
+
+  it("throws INTERNAL_SERVER_ERROR on DB failure", async () => {
+    const ctx = makeMockContext(mockUser);
+    ctx.prisma.ticket.findUnique.mockResolvedValue({ id: "t1" });
+    ctx.prisma.comment.create.mockRejectedValue(new Error("DB error"));
+
+    await expect(
+      addComment(undefined, { ticketId: "t1", body: "hello" }, ctx)
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      addComment(undefined, { ticketId: "t1", body: "hello" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "INTERNAL_SERVER_ERROR" } });
+  });
 });
 
 describe("updateComment", () => {
@@ -106,7 +146,32 @@ describe("updateComment", () => {
     expect(result.body).toBe("updated");
   });
 
-  it("rejects a different user from updating the comment", async () => {
+  it("throws BAD_USER_INPUT for empty body", async () => {
+    const ctx = makeMockContext(mockUser);
+
+    await expect(
+      updateComment(undefined, { id: "c1", body: "" }, ctx)
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      updateComment(undefined, { id: "c1", body: "" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "BAD_USER_INPUT" } });
+  });
+
+  it("throws NOT_FOUND when comment does not exist", async () => {
+    const ctx = makeMockContext(mockUser);
+    ctx.prisma.comment.findUnique.mockResolvedValue(null);
+
+    await expect(
+      updateComment(undefined, { id: "missing", body: "text" }, ctx)
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      updateComment(undefined, { id: "missing", body: "text" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "NOT_FOUND" } });
+  });
+
+  it("throws FORBIDDEN when a different user attempts to edit", async () => {
     const ctx = makeMockContext(otherUser);
     ctx.prisma.comment.findUnique.mockResolvedValue({
       id: "c1",
@@ -115,22 +180,11 @@ describe("updateComment", () => {
 
     await expect(
       updateComment(undefined, { id: "c1", body: "hacked" }, ctx)
-    ).rejects.toThrow("You can only edit your own comments");
-  });
+    ).rejects.toThrow(GraphQLError);
 
-  it("throws FORBIDDEN code for ownership violations", async () => {
-    const ctx = makeMockContext(otherUser);
-    ctx.prisma.comment.findUnique.mockResolvedValue({
-      id: "c1",
-      authorId: mockUser.id,
-    });
-
-    try {
-      await updateComment(undefined, { id: "c1", body: "hacked" }, ctx);
-      expect.unreachable("should have thrown");
-    } catch (err: any) {
-      expect(err.extensions?.code).toBe("FORBIDDEN");
-    }
+    await expect(
+      updateComment(undefined, { id: "c1", body: "hacked" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "FORBIDDEN" } });
   });
 });
 
@@ -159,7 +213,20 @@ describe("deleteComment", () => {
     });
   });
 
-  it("rejects a different user from deleting the comment", async () => {
+  it("throws NOT_FOUND when comment does not exist", async () => {
+    const ctx = makeMockContext(mockUser);
+    ctx.prisma.comment.findUnique.mockResolvedValue(null);
+
+    await expect(
+      deleteComment(undefined, { id: "missing" }, ctx)
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      deleteComment(undefined, { id: "missing" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "NOT_FOUND" } });
+  });
+
+  it("throws FORBIDDEN when a different user attempts to delete", async () => {
     const ctx = makeMockContext(otherUser);
     ctx.prisma.comment.findUnique.mockResolvedValue({
       id: "c1",
@@ -169,22 +236,28 @@ describe("deleteComment", () => {
 
     await expect(
       deleteComment(undefined, { id: "c1" }, ctx)
-    ).rejects.toThrow("You can only delete your own comments");
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      deleteComment(undefined, { id: "c1" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "FORBIDDEN" } });
   });
 
-  it("throws FORBIDDEN code for ownership violations", async () => {
-    const ctx = makeMockContext(otherUser);
+  it("throws INTERNAL_SERVER_ERROR on DB failure during delete", async () => {
+    const ctx = makeMockContext(mockUser);
     ctx.prisma.comment.findUnique.mockResolvedValue({
       id: "c1",
       authorId: mockUser.id,
       author: mockUser,
     });
+    ctx.prisma.comment.delete.mockRejectedValue(new Error("DB error"));
 
-    try {
-      await deleteComment(undefined, { id: "c1" }, ctx);
-      expect.unreachable("should have thrown");
-    } catch (err: any) {
-      expect(err.extensions?.code).toBe("FORBIDDEN");
-    }
+    await expect(
+      deleteComment(undefined, { id: "c1" }, ctx)
+    ).rejects.toThrow(GraphQLError);
+
+    await expect(
+      deleteComment(undefined, { id: "c1" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "INTERNAL_SERVER_ERROR" } });
   });
 });
