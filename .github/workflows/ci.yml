@@ -97,8 +97,8 @@ jobs:
         with:
           name: issues-service-build
           path: services/issues/
-      - name: Restore Prisma CLI binary
-        run: npx --prefix services/issues prisma generate
+      - name: Rebuild issues service binaries
+        run: npm rebuild --prefix services/issues
       - name: Test CLI
         run: cd services/issues-cli && npm ci && npm run typecheck && npm test
       - name: Cleanup workspace
