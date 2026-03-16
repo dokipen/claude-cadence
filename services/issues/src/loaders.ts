@@ -69,7 +69,10 @@ export function createLoaders(prisma: PrismaClient): Loaders {
 
   const blockedByTicketId = new DataLoader<string, Ticket[]>(async (ticketIds) => {
     const relations = await prisma.blockRelation.findMany({
-      where: { blockedId: { in: [...ticketIds] } },
+      where: {
+        blockedId: { in: [...ticketIds] },
+        blocker: { state: { not: "CLOSED" } },
+      },
       include: { blocker: true },
     });
     const map = new Map<string, Ticket[]>();
