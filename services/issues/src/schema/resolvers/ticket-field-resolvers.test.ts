@@ -53,6 +53,7 @@ describe("Ticket.project — error handling", () => {
   });
 
   it("throws GraphQLError when project is null", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const ctx = makeLoaderContext({
       projectByProjectId: {
         load: vi.fn().mockResolvedValue(null),
@@ -69,6 +70,9 @@ describe("Ticket.project — error handling", () => {
       message: "Project not found for ticket",
       extensions: { code: "INTERNAL_SERVER_ERROR" },
     });
+
+    expect(consoleSpy).not.toHaveBeenCalled();
+    consoleSpy.mockRestore();
   });
 });
 
