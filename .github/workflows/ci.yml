@@ -161,7 +161,7 @@ jobs:
       - name: Typecheck
         run: cd services/issues-ui && npm run typecheck
       - name: Install Playwright browsers
-        run: cd services/issues-ui && npx playwright install chromium --with-deps
+        run: cd services/issues-ui && npx playwright install chromium
       - name: Run e2e tests
         run: cd services/issues-ui && npm run test:e2e
         env:
