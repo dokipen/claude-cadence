@@ -145,7 +145,7 @@ export function registerAuthCommand(program: Command): void {
           setAuthTokens(result.token, result.refreshToken);
           spinner.succeed(`Authenticated as ${chalk.bold(result.user.login)} (${result.user.displayName})`);
         } else if (options.code) {
-          const code = options.code === "-" ? await readStdin() : options.code;
+          const code = options.code === "-" ? await readStdin() : options.code.trim();
           if (!code) {
             console.error(chalk.red("Error: no code received from stdin"));
             process.exit(1);
