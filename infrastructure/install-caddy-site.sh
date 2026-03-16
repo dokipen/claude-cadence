@@ -69,21 +69,21 @@ fi
 # Verify agentd token auth is configured — Caddy forwards external traffic to
 # loopback, bypassing agentd's own bind-address guard.
 AGENTD_CONFIG="${HOME}/.config/agentd/config.yaml"
-if [ ! -f "$AGENTD_CONFIG" ] || ! grep -q 'mode:.*token' "$AGENTD_CONFIG" 2>/dev/null; then
+if [ ! -f "$AGENTD_CONFIG" ] || ! grep -v '^\s*#' "$AGENTD_CONFIG" 2>/dev/null | grep -q 'mode:.*token'; then
   warn "agentd token authentication is not configured."
-  warn ""
+  printf '\n' >&2
   warn "  This Caddy site block forwards external traffic to agentd on localhost,"
   warn "  bypassing agentd's bind-address guard. Without token auth, the gRPC API"
   warn "  will be accessible to anyone on the network without authentication."
-  warn ""
+  printf '\n' >&2
   warn "  To fix, set auth.mode to \"token\" in:"
   warn "    ${AGENTD_CONFIG}"
-  warn ""
+  printf '\n' >&2
   warn "  Example:"
   warn "    auth:"
   warn "      mode: \"token\""
   warn "      token_env_var: \"AGENTD_TOKEN\""
-  warn ""
+  printf '\n' >&2
   if [ "$force" = true ]; then
     warn "Continuing anyway (--force)."
   else
