@@ -78,11 +78,11 @@ export const ticketResolvers = {
 
       if (isBlocked === true) {
         where.blockedBy = {
-          some: {},
+          some: { blocker: { state: { not: "CLOSED" } } },
         };
       } else if (isBlocked === false) {
         where.blockedBy = {
-          none: {},
+          none: { blocker: { state: { not: "CLOSED" } } },
         };
       }
 

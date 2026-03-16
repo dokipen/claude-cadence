@@ -64,10 +64,10 @@ describe("formatTicketTable", () => {
     expect(firstLine).not.toMatch(/^\s+#\s+State/);
   });
 
-  it("shows BLOCKED in red when ticket has blockers", () => {
+  it("shows BLOCKED in red when ticket has non-CLOSED blockers", () => {
     const blockedTicket: TicketNode = {
       ...ticket,
-      blockedBy: [{ id: "blocker1" }],
+      blockedBy: [{ id: "blocker1", state: "IN_PROGRESS" }],
     };
     const output = formatTicketTable([blockedTicket]);
     const dataLine = stripAnsi(output.split("\n")[2]);
@@ -91,6 +91,31 @@ describe("formatTicketTable", () => {
     const dataLine = stripAnsi(output.split("\n")[2]);
     expect(dataLine).not.toContain("BLOCKED");
     expect(dataLine).toContain("[OPEN]");
+  });
+
+  it("does not show BLOCKED when all blockers are CLOSED", () => {
+    const closedBlockerTicket: TicketNode = {
+      ...ticket,
+      blockedBy: [{ id: "blocker1", state: "CLOSED" }],
+    };
+    const output = formatTicketTable([closedBlockerTicket]);
+    const dataLine = stripAnsi(output.split("\n")[2]);
+    expect(dataLine).not.toContain("BLOCKED");
+    expect(dataLine).toContain("[OPEN]");
+  });
+
+  it("shows BLOCKED when at least one blocker is not CLOSED", () => {
+    const mixedBlockerTicket: TicketNode = {
+      ...ticket,
+      blockedBy: [
+        { id: "blocker1", state: "CLOSED" },
+        { id: "blocker2", state: "IN_PROGRESS" },
+      ],
+    };
+    const output = formatTicketTable([mixedBlockerTicket]);
+    const dataLine = stripAnsi(output.split("\n")[2]);
+    expect(dataLine).toContain("BLOCKED");
+    expect(dataLine).not.toContain("[OPEN]");
   });
 
   it("aligns header and data columns", () => {
