@@ -12,15 +12,36 @@ export interface Context {
 export const projectResolvers = {
   Query: {
     project: async (_: unknown, { id }: { id: string }, { prisma }: Context) => {
-      return prisma.project.findUnique({ where: { id } });
+      try {
+        return await prisma.project.findUnique({ where: { id } });
+      } catch (error) {
+        console.error("project query failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to fetch project", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
 
     projectByName: async (_: unknown, { name }: { name: string }, { prisma }: Context) => {
-      return prisma.project.findUnique({ where: { name } });
+      try {
+        return await prisma.project.findUnique({ where: { name } });
+      } catch (error) {
+        console.error("projectByName query failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to fetch project by name", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
 
     projects: async (_: unknown, __: unknown, { prisma }: Context) => {
-      return prisma.project.findMany({ orderBy: { name: "asc" } });
+      try {
+        return await prisma.project.findMany({ orderBy: { name: "asc" } });
+      } catch (error) {
+        console.error("projects query failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to fetch projects", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
   },
 
