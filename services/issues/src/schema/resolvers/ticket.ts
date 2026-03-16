@@ -97,7 +97,15 @@ export const ticketResolvers = {
         queryArgs.skip = 1;
       }
 
-      const tickets = await prisma.ticket.findMany(queryArgs);
+      let tickets: Ticket[];
+      try {
+        tickets = await prisma.ticket.findMany(queryArgs);
+      } catch (error) {
+        console.error("tickets query failed:", error);
+        throw new GraphQLError("Failed to query tickets", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
 
       const hasNextPage = tickets.length > first;
       const edges = tickets.slice(0, first).map((ticket: Ticket) => ({
