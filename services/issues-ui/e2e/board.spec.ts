@@ -64,6 +64,36 @@ test.describe("kanban board", () => {
     await expect(refinedColumn.getByTestId("story-points")).toHaveText("3");
   });
 
+  test("story points are right-aligned regardless of assignee", async ({ page }) => {
+    // Ticket with assignee (REFINED column, ticket #2)
+    const withAssignee = page.getByTestId("column-REFINED").getByTestId("ticket-card").first();
+    await expect(withAssignee.getByTestId("assignee")).toBeVisible();
+    const actionsWithAssignee = withAssignee.locator('[class*="cardActions"]');
+    const footerWithAssignee = withAssignee.locator('[class*="cardFooter"]');
+    const actionsBoxWith = await actionsWithAssignee.boundingBox();
+    const footerBoxWith = await footerWithAssignee.boundingBox();
+    expect(actionsBoxWith).toBeTruthy();
+    expect(footerBoxWith).toBeTruthy();
+    // cardActions right edge should align with cardFooter right edge
+    const rightEdgeWith = actionsBoxWith!.x + actionsBoxWith!.width;
+    const footerRightWith = footerBoxWith!.x + footerBoxWith!.width;
+    expect(rightEdgeWith).toBeCloseTo(footerRightWith, 0);
+
+    // Ticket without assignee (CLOSED column, ticket #4 has story points but no assignee)
+    const withoutAssignee = page.getByTestId("column-CLOSED").getByTestId("ticket-card").first();
+    await expect(withoutAssignee.getByTestId("assignee")).not.toBeVisible();
+    const actionsWithout = withoutAssignee.locator('[class*="cardActions"]');
+    const footerWithout = withoutAssignee.locator('[class*="cardFooter"]');
+    const actionsBoxWithout = await actionsWithout.boundingBox();
+    const footerBoxWithout = await footerWithout.boundingBox();
+    expect(actionsBoxWithout).toBeTruthy();
+    expect(footerBoxWithout).toBeTruthy();
+    // cardActions right edge should align with cardFooter right edge (right-justified)
+    const rightEdgeWithout = actionsBoxWithout!.x + actionsBoxWithout!.width;
+    const footerRightWithout = footerBoxWithout!.x + footerBoxWithout!.width;
+    expect(rightEdgeWithout).toBeCloseTo(footerRightWithout, 0);
+  });
+
   test("column header shows ticket count", async ({ page }) => {
     await expect(page.getByTestId("count-BACKLOG")).toHaveText("2");
     await expect(page.getByTestId("count-REFINED")).toHaveText("1");
