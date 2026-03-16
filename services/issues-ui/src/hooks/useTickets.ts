@@ -44,25 +44,33 @@ export function useTickets(
       return;
     }
 
+    const fetchTickets = () => {
+      const client = getClient(handleAuthFailure);
+      client
+        .request<TicketsResponse>(BOARD_TICKETS_QUERY, {
+          state,
+          projectId,
+          first,
+        })
+        .then((result) => {
+          setTickets(result.tickets.edges.map((e) => e.node));
+        })
+        .catch((err) => {
+          setError(
+            err instanceof Error ? err.message : "Failed to load tickets",
+          );
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    };
+
     setLoading(true);
     setError(null);
+    fetchTickets();
 
-    const client = getClient(handleAuthFailure);
-    client
-      .request<TicketsResponse>(BOARD_TICKETS_QUERY, {
-        state,
-        projectId,
-        first,
-      })
-      .then((result) => {
-        setTickets(result.tickets.edges.map((e) => e.node));
-      })
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : "Failed to load tickets");
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+    const interval = setInterval(fetchTickets, 60_000);
+    return () => clearInterval(interval);
   }, [state, projectId, first, handleAuthFailure]);
 
   return { tickets, loading, error };

@@ -30,26 +30,34 @@ export function useTicket(id: string | undefined): UseTicketResult {
       return;
     }
 
-    setLoading(true);
-    setError(null);
     let cancelled = false;
 
-    const client = getClient(handleAuthFailure);
-    client
-      .request<TicketDetailResponse>(TICKET_DETAIL_QUERY, { id })
-      .then((result) => {
-        if (!cancelled) setTicket(result.ticket);
-      })
-      .catch((err) => {
-        if (!cancelled)
-          setError(err instanceof Error ? err.message : "Failed to load ticket");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    const fetchTicket = () => {
+      const client = getClient(handleAuthFailure);
+      client
+        .request<TicketDetailResponse>(TICKET_DETAIL_QUERY, { id })
+        .then((result) => {
+          if (!cancelled) setTicket(result.ticket);
+        })
+        .catch((err) => {
+          if (!cancelled)
+            setError(
+              err instanceof Error ? err.message : "Failed to load ticket",
+            );
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    };
 
+    setLoading(true);
+    setError(null);
+    fetchTicket();
+
+    const interval = setInterval(fetchTicket, 60_000);
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
   }, [id, handleAuthFailure]);
 

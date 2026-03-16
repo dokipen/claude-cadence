@@ -97,9 +97,11 @@ ${vhost} {
 		reverse_proxy localhost:4200
 	}
 
-	# Fallback — generic 404, no service identity
+	# Issues UI — static SPA with client-side routing
 	handle {
-		respond "Not Found" 404
+		root * /srv/issues-ui/current
+		try_files {path} /index.html
+		file_server
 	}
 }
 
@@ -125,6 +127,7 @@ log "Reloading Caddy..."
 sudo systemctl reload caddy
 
 log "Done! Services available at:"
-log "  https://${vhost}/graphql  — Issues GraphQL API"
+log "  https://${vhost}/          — Issues UI"
+log "  https://${vhost}/graphql   — Issues GraphQL API"
 log "  https://${vhost}/agents.v1.AgentService/<Method>  — Agents gRPC endpoint"
-log "  https://${vhost}/api/v1/  — Agent Hub REST API"
+log "  https://${vhost}/api/v1/   — Agent Hub REST API"

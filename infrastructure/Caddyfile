@@ -56,9 +56,11 @@
 		reverse_proxy localhost:4200
 	}
 
-	# Fallback — generic 404, no service identity
+	# Issues UI — static SPA with client-side routing
 	handle {
-		respond "Not Found" 404
+		root * /srv/issues-ui/current
+		try_files {path} /index.html
+		file_server
 	}
 }
 

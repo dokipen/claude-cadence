@@ -26,7 +26,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: `cd ${issuesDir} && DATABASE_URL=${testDbUrl} JWT_SECRET=e2e-test-secret npm start`,
+      command: `cd ${issuesDir} && DATABASE_URL=${testDbUrl} JWT_SECRET=e2e-test-secret RATE_LIMIT_GENERAL_MAX=10000 npm start`,
       port: 4000,
       reuseExistingServer: !process.env.CI,
     },
