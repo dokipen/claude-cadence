@@ -53,13 +53,13 @@ export function SessionList({ agents, sessions, openKeys, onSessionClick }: Sess
               return (
                 <button
                   key={as.session.id}
-                  className={`${styles.sidebarSession} ${isOpen ? styles.sidebarSessionOpen : ""} ${!isRunning ? styles.sidebarSessionStopped : ""}`}
+                  className={`${styles.sidebarSession} ${isOpen ? styles.sidebarSessionOpen : ""} ${!isRunning ? styles.sidebarSessionStopped : ""} ${as.session.waiting_for_input ? styles.sidebarSessionWaiting : ""}`}
                   onClick={() => onSessionClick(as)}
                   data-testid="sidebar-session"
                   title={`${as.session.name} (${as.session.state})`}
                 >
                   <span className={styles.sessionDot}>
-                    {isRunning ? "●" : "○"}
+                    {as.session.waiting_for_input ? "◉" : isRunning ? "●" : "○"}
                   </span>
                   <span className={styles.sessionName}>{as.session.name}</span>
                 </button>

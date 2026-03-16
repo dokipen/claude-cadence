@@ -89,6 +89,16 @@ func (c *Client) GetPanePID(name string) (int, error) {
 	return pid, nil
 }
 
+// CapturePane captures the visible content of a tmux pane.
+func (c *Client) CapturePane(name string) (string, error) {
+	cmd := exec.Command("tmux", "-L", c.socketName, "capture-pane", "-t", name, "-p")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("tmux capture-pane: %w: %s", err, string(output))
+	}
+	return string(output), nil
+}
+
 // ListSessions returns names of all tmux sessions on this socket.
 func (c *Client) ListSessions() ([]string, error) {
 	cmd := exec.Command("tmux", "-L", c.socketName, "list-sessions", "-F", "#{session_name}")

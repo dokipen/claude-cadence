@@ -10,6 +10,8 @@ import { AgentManager } from "./components/AgentManager";
 import { ProjectSelector } from "./components/ProjectSelector";
 import { useProjects } from "./hooks/useProjects";
 import type { TicketFilters } from "./hooks/useTickets";
+import { useWaitingSessions } from "./hooks/useWaitingSessions";
+import { NotificationDropdown } from "./components/NotificationDropdown";
 import type { ReactNode } from "react";
 import layoutStyles from "./styles/layout.module.css";
 
@@ -77,6 +79,7 @@ function ProjectRedirect() {
 function AppShell() {
   const { user, logout } = useAuth();
   const { projects } = useProjects();
+  const { waitingSessions } = useWaitingSessions();
   const location = useLocation();
   const navigate = useNavigate();
   const boardMatch = useMatch("/projects/:projectId/*");
@@ -103,6 +106,7 @@ function AppShell() {
           <Link to="/agents" className={layoutStyles.navLink} data-testid="agents-nav-link">
             Agents
           </Link>
+          <NotificationDropdown waitingSessions={waitingSessions} />
         </div>
         <div className={layoutStyles.headerCenter}>
           {projectId !== null ? (

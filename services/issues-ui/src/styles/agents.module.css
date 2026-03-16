@@ -523,3 +523,11 @@
   display: flex;
   min-height: 0;
 }
+
+.sidebarSessionWaiting {
+  color: #d29922;
+}
+
+.sidebarSessionWaiting .sessionDot {
+  color: #d29922;
+}
