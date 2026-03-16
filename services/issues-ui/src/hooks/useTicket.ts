@@ -32,19 +32,25 @@ export function useTicket(id: string | undefined): UseTicketResult {
 
     setLoading(true);
     setError(null);
+    let cancelled = false;
 
     const client = getClient(handleAuthFailure);
     client
       .request<TicketDetailResponse>(TICKET_DETAIL_QUERY, { id })
       .then((result) => {
-        setTicket(result.ticket);
+        if (!cancelled) setTicket(result.ticket);
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : "Failed to load ticket");
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : "Failed to load ticket");
       })
       .finally(() => {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [id, handleAuthFailure]);
 
   return { ticket, loading, error };

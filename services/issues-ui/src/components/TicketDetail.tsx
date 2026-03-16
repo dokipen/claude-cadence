@@ -53,10 +53,16 @@ function CommentList({ comments }: { comments: CommentType[] }) {
   );
 }
 
-function BlockingList({ tickets, label }: { tickets: RelatedTicket[]; label: string }) {
+function BlockingList({
+  tickets,
+  label,
+  testId,
+}: {
+  tickets: RelatedTicket[];
+  label: string;
+  testId: string;
+}) {
   if (tickets.length === 0) return null;
-
-  const testId = label === "Blocked by" ? "detail-blocked-by" : "detail-blocks";
 
   return (
     <div className={styles.section} data-testid={testId}>
@@ -100,7 +106,7 @@ export function TicketDetail() {
     return (
       <div className={styles.container}>
         <div className={styles.error} data-testid="detail-error">
-          {error || "Ticket not found"}
+          {error ? "Failed to load ticket" : "Ticket not found"}
         </div>
       </div>
     );
@@ -194,8 +200,8 @@ export function TicketDetail() {
         </div>
       )}
 
-      <BlockingList tickets={ticket.blockedBy} label="Blocked by" />
-      <BlockingList tickets={ticket.blocks} label="Blocks" />
+      <BlockingList tickets={ticket.blockedBy} label="Blocked by" testId="detail-blocked-by" />
+      <BlockingList tickets={ticket.blocks} label="Blocks" testId="detail-blocks" />
 
       <div className={styles.section}>
         <h3 className={styles.sectionTitle}>Comments</h3>

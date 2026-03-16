@@ -78,13 +78,15 @@ test.describe("ticket detail page", () => {
     await expect(page.getByTestId("detail-acceptance-criteria")).toContainText("Criteria one");
   });
 
-  test("detail page shows comments chronologically", async ({ page }) => {
+  test("detail page shows comments with author and body", async ({ page }) => {
     await page.goto("/");
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
 
     await expect(page.getByTestId("detail-comments")).toBeVisible();
-    await expect(page.getByTestId("comment-body")).toHaveText("This is a test comment on the refined ticket.");
+    const comment = page.getByTestId("comment");
+    await expect(comment.getByTestId("comment-body")).toHaveText("This is a test comment on the refined ticket.");
+    await expect(comment.locator("[class*=commentAuthor]")).toContainText("E2E Tester");
   });
 
   test("detail page shows blocked-by relationships", async ({ page }) => {
@@ -156,6 +158,25 @@ test.describe("ticket detail page", () => {
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
 
     await expect(page.getByTestId("detail-assignee")).toContainText("Unassigned");
+  });
+
+  test("ticket with no labels shows none", async ({ page }) => {
+    await page.goto("/");
+    // In-progress ticket has no labels
+    await page.getByTestId("column-IN_PROGRESS").getByTestId("ticket-card").click();
+    await expect(page.getByTestId("ticket-detail")).toBeVisible();
+
+    await expect(page.getByTestId("detail-labels")).toContainText("None");
+  });
+
+  test("detail page shows blocks relationships", async ({ page }) => {
+    await page.goto("/");
+    // In-progress ticket blocks the refined ticket
+    await page.getByTestId("column-IN_PROGRESS").getByTestId("ticket-card").click();
+    await expect(page.getByTestId("ticket-detail")).toBeVisible();
+
+    await expect(page.getByTestId("detail-blocks")).toBeVisible();
+    await expect(page.getByTestId("blocking-ticket")).toContainText("Refined ticket");
   });
 });
 
