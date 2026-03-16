@@ -238,19 +238,18 @@ For each task from the Phase 1 breakdown, delegate to an agent:
 
 ### Phase 4: PR Creation
 
-Use `/create-pr` to create the pull request. Link to the issue with `Fixes #[NUMBER]`.
+1. Use `/create-pr` to create the pull request. Link to the issue with `Fixes #[NUMBER]`.
+2. **Post PR link to issue**:
 
-Post PR link to issue:
+   **GitHub (default):**
+   ```bash
+   gh issue comment [N] --body "PR created: #[PR-NUMBER] ([PR-URL])"
+   ```
 
-**GitHub (default):**
-```bash
-gh issue comment [N] --body "PR created: #[PR-NUMBER]"
-```
-
-**Issues API:**
-```bash
-issues comment add TICKET_ID --body "PR created: #[PR-NUMBER] ([PR-URL])" --json
-```
+   **Issues API:**
+   ```bash
+   issues comment add TICKET_ID --body "PR created: #[PR-NUMBER] ([PR-URL])" --json
+   ```
 
 ### Phase 5: Code Review Gate
 
