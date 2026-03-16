@@ -452,7 +452,7 @@ export const ticketResolvers = {
 
           const transition = validateTransition(ticket.state, to);
           if (!transition.valid) {
-            throw new GraphQLError(`Invalid state transition: ${transition.error}`, {
+            throw new GraphQLError(`Invalid transition: ${transition.error}`, {
               extensions: { code: "BAD_USER_INPUT" },
             });
           }
