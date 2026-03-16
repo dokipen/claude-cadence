@@ -2,6 +2,7 @@ import { useParams, Link } from "react-router";
 import { useTicket } from "../hooks/useTicket";
 import { PriorityBadge } from "./PriorityBadge";
 import { LabelBadge } from "./LabelBadge";
+import { Markdown } from "./Markdown";
 import type { Comment as CommentType, RelatedTicket, TicketState } from "../types";
 import styles from "../styles/detail.module.css";
 
@@ -46,7 +47,7 @@ function CommentList({ comments }: { comments: CommentType[] }) {
             <span className={styles.commentAuthor}>{comment.author.displayName || comment.author.login}</span>
             <span className={styles.commentDate}>{formatDate(comment.createdAt)}</span>
           </div>
-          <div className={styles.commentBody} data-testid="comment-body">{comment.body}</div>
+          <div className={styles.commentBody} data-testid="comment-body"><Markdown>{comment.body}</Markdown></div>
         </div>
       ))}
     </div>
@@ -189,14 +190,14 @@ export function TicketDetail() {
       {ticket.description && (
         <div className={styles.section} data-testid="detail-description">
           <h3 className={styles.sectionTitle}>Description</h3>
-          <div className={styles.body}>{ticket.description}</div>
+          <div className={styles.body}><Markdown>{ticket.description}</Markdown></div>
         </div>
       )}
 
       {ticket.acceptanceCriteria && (
         <div className={styles.section} data-testid="detail-acceptance-criteria">
           <h3 className={styles.sectionTitle}>Acceptance Criteria</h3>
-          <div className={styles.body}>{ticket.acceptanceCriteria}</div>
+          <div className={styles.body}><Markdown>{ticket.acceptanceCriteria}</Markdown></div>
         </div>
       )}
 

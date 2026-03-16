@@ -7,10 +7,11 @@
   },
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "NODE_ENV=development DEV_AUTH=1 tsx watch --env-file=.env src/index.ts",
+    "dev:setup": "cp -n .env.example .env; npx prisma migrate deploy && npx tsx --env-file=.env prisma/seed-e2e.ts",
     "build": "tsc",
     "start": "node dist/src/index.js",
-    "test": "vitest run",
+    "test": "NODE_ENV=test vitest run",
     "typecheck": "tsc --noEmit",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed"

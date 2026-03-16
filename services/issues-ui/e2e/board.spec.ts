@@ -40,7 +40,7 @@ test.describe("kanban board", () => {
 
   test("card shows priority badge with correct value", async ({ page }) => {
     const backlogColumn = page.getByTestId("column-BACKLOG");
-    const badge = backlogColumn.getByTestId("priority-badge");
+    const badge = backlogColumn.getByTestId("priority-badge").first();
     await expect(badge).toBeVisible();
     await expect(badge).toHaveText("Low");
     await expect(badge).toHaveAttribute("data-priority", "LOW");
@@ -65,7 +65,7 @@ test.describe("kanban board", () => {
   });
 
   test("column header shows ticket count", async ({ page }) => {
-    await expect(page.getByTestId("count-BACKLOG")).toHaveText("1");
+    await expect(page.getByTestId("count-BACKLOG")).toHaveText("2");
     await expect(page.getByTestId("count-REFINED")).toHaveText("1");
     await expect(page.getByTestId("count-IN_PROGRESS")).toHaveText("1");
     await expect(page.getByTestId("count-CLOSED")).toHaveText("1");

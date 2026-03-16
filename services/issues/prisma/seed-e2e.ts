@@ -1,8 +1,9 @@
 import { PrismaClient } from "@prisma/client";
 
 const dbUrl = process.env.DATABASE_URL ?? "";
-if (!dbUrl.includes("test")) {
-  throw new Error(`Refusing to seed non-test database: ${dbUrl}`);
+const isLocalDb = dbUrl.includes("test") || dbUrl.includes("dev");
+if (!isLocalDb) {
+  throw new Error(`Refusing to seed non-local database: ${dbUrl}`);
 }
 
 const prisma = new PrismaClient();
@@ -128,6 +129,34 @@ async function main() {
     },
   });
 
+  const markdownTicket = await prisma.ticket.create({
+    data: {
+      number: 6,
+      title: "Markdown ticket",
+      description: `Check out [Example](https://example.com) for more.
+
+This has **bold text** and \`code\` inline.
+
+- Item one
+- Item two
+- Item three`,
+      state: "BACKLOG",
+      priority: "LOW",
+      projectId: project.id,
+    },
+  });
+
+  // Add comment with markdown on the markdown ticket
+  await prisma.comment.create({
+    data: {
+      body: `See [the docs](https://example.com/docs) for details. Use \`npm install\` to get started.
+
+**Important:** this is a **bold** note.`,
+      ticketId: markdownTicket.id,
+      authorId: user.id,
+    },
+  });
+
   // Attach labels
   await prisma.ticketLabel.create({
     data: { ticketId: backlogTicket.id, labelId: bugLabel.id },
@@ -157,8 +186,8 @@ async function main() {
   console.log(`  User: ${user.login} (${user.id})`);
   console.log(`  Project 1: ${project.name} (${project.id})`);
   console.log(`  Project 2: ${project2.name} (${project2.id})`);
-  console.log(`  Tickets: 5 (4 in project 1, 1 in project 2)`);
-  console.log(`  Labels: 2, Comments: 1, Block relations: 1`);
+  console.log(`  Tickets: 6 (5 in project 1, 1 in project 2)`);
+  console.log(`  Labels: 2, Comments: 3, Block relations: 1`);
 }
 
 main()

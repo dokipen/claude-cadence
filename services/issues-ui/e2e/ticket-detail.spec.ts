@@ -144,8 +144,8 @@ test.describe("ticket detail page", () => {
 
   test("ticket with no comments shows empty state", async ({ page }) => {
     await page.goto("/");
-    // Backlog ticket has no comments
-    await page.getByTestId("column-BACKLOG").getByTestId("ticket-card").click();
+    // Backlog ticket has no comments — use first() since markdown ticket is also in BACKLOG
+    await page.getByTestId("column-BACKLOG").getByTestId("ticket-card").first().click();
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
 
     await expect(page.getByTestId("no-comments")).toBeVisible();
@@ -153,8 +153,8 @@ test.describe("ticket detail page", () => {
 
   test("ticket with no assignee shows unassigned", async ({ page }) => {
     await page.goto("/");
-    // Backlog ticket has no assignee
-    await page.getByTestId("column-BACKLOG").getByTestId("ticket-card").click();
+    // Backlog ticket has no assignee — use first() since markdown ticket is also in BACKLOG
+    await page.getByTestId("column-BACKLOG").getByTestId("ticket-card").first().click();
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
 
     await expect(page.getByTestId("detail-assignee")).toContainText("Unassigned");
@@ -177,6 +177,115 @@ test.describe("ticket detail page", () => {
 
     await expect(page.getByTestId("detail-blocks")).toBeVisible();
     await expect(page.getByTestId("blocking-ticket")).toContainText("Refined ticket");
+  });
+});
+
+
+test.describe("markdown rendering in ticket detail", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("cadence_project_id", "e2e-test-project");
+    });
+  });
+
+  test("description renders link as anchor with target=_blank", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+
+    // Navigate to the markdown ticket (in BACKLOG column, title "Markdown ticket")
+    const markdownCard = page.getByTestId("column-BACKLOG").getByText("Markdown ticket");
+    await markdownCard.click();
+    await expect(page.getByTestId("ticket-detail")).toBeVisible();
+
+    const description = page.getByTestId("detail-description");
+    const link = description.locator("a[href='https://example.com']");
+    await expect(link).toBeVisible();
+    await expect(link).toHaveText("Example");
+    await expect(link).toHaveAttribute("target", "_blank");
+  });
+
+  test("description renders bold text as strong element", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+
+    const markdownCard = page.getByTestId("column-BACKLOG").getByText("Markdown ticket");
+    await markdownCard.click();
+    await expect(page.getByTestId("ticket-detail")).toBeVisible();
+
+    const description = page.getByTestId("detail-description");
+    const bold = description.locator("strong");
+    await expect(bold).toHaveText("bold text");
+  });
+
+  test("description renders inline code as code element", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+
+    const markdownCard = page.getByTestId("column-BACKLOG").getByText("Markdown ticket");
+    await markdownCard.click();
+    await expect(page.getByTestId("ticket-detail")).toBeVisible();
+
+    const description = page.getByTestId("detail-description");
+    const code = description.locator("code");
+    await expect(code).toHaveText("code");
+  });
+
+  test("description renders list items", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+
+    const markdownCard = page.getByTestId("column-BACKLOG").getByText("Markdown ticket");
+    await markdownCard.click();
+    await expect(page.getByTestId("ticket-detail")).toBeVisible();
+
+    const description = page.getByTestId("detail-description");
+    const items = description.locator("li");
+    await expect(items).toHaveCount(3);
+    await expect(items.nth(0)).toHaveText("Item one");
+    await expect(items.nth(1)).toHaveText("Item two");
+    await expect(items.nth(2)).toHaveText("Item three");
+  });
+
+  test("comment renders link as anchor with target=_blank", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+
+    const markdownCard = page.getByTestId("column-BACKLOG").getByText("Markdown ticket");
+    await markdownCard.click();
+    await expect(page.getByTestId("ticket-detail")).toBeVisible();
+
+    const comment = page.getByTestId("comment");
+    const link = comment.locator("a[href='https://example.com/docs']");
+    await expect(link).toBeVisible();
+    await expect(link).toHaveText("the docs");
+    await expect(link).toHaveAttribute("target", "_blank");
+  });
+
+  test("comment renders inline code as code element", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+
+    const markdownCard = page.getByTestId("column-BACKLOG").getByText("Markdown ticket");
+    await markdownCard.click();
+    await expect(page.getByTestId("ticket-detail")).toBeVisible();
+
+    const comment = page.getByTestId("comment");
+    const code = comment.locator("code");
+    await expect(code).toHaveText("npm install");
+  });
+
+  test("comment renders bold text as strong element", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+
+    const markdownCard = page.getByTestId("column-BACKLOG").getByText("Markdown ticket");
+    await markdownCard.click();
+    await expect(page.getByTestId("ticket-detail")).toBeVisible();
+
+    const comment = page.getByTestId("comment");
+    const boldElements = comment.locator("strong");
+    await expect(boldElements.first()).toBeVisible();
+    await expect(boldElements.first()).toHaveText("Important:");
   });
 });
 
