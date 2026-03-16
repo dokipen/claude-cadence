@@ -308,7 +308,7 @@ test.describe("markdown rendering in ticket detail", () => {
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
 
     const ac = page.getByTestId("detail-acceptance-criteria");
-    const code = ac.locator("code");
+    const code = ac.locator("code").first();
     await expect(code).toHaveText("inline code");
   });
 
