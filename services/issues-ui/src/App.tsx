@@ -45,12 +45,20 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 }
 
 function ProjectRedirect() {
-  const { projects, loading } = useProjects();
+  const { projects, loading, error } = useProjects();
 
   if (loading) {
     return (
       <div style={loadingStyle}>
         <p style={{ color: "var(--text-muted)" }}>Loading…</p>
+      </div>
+    );
+  }
+
+  if (error && projects.length === 0) {
+    return (
+      <div style={loadingStyle}>
+        <p style={{ color: "var(--text-muted)" }}>Failed to load projects</p>
       </div>
     );
   }
