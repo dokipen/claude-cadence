@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -44,7 +45,14 @@ func startTestHub(t *testing.T) (*Hub, string) {
 		respData, _ := json.Marshal(resp)
 		conn.Write(r.Context(), websocket.MessageText, respData)
 
-		agent := h.Register(params.Name, conn, &params)
+		agent, err := h.Register(params.Name, conn, &params)
+		if err != nil {
+			resp, _ := NewResponse(req.ID, &RegisterResult{Accepted: false})
+			respData, _ := json.Marshal(resp)
+			conn.Write(r.Context(), websocket.MessageText, respData)
+			conn.Close(websocket.StatusPolicyViolation, err.Error())
+			return
+		}
 		h.HandleAgentConnection(r.Context(), agent)
 	}))
 	t.Cleanup(srv.Close)
@@ -295,7 +303,9 @@ func TestMarkOffline(t *testing.T) {
 		Name:     "agent-b",
 		Profiles: map[string]ProfileInfo{},
 	}
-	h.Register("agent-b", nil, params)
+	if _, err := h.Register("agent-b", nil, params); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
 
 	agent, ok := h.Get("agent-b")
 	if !ok {
@@ -323,14 +333,18 @@ func TestList(t *testing.T) {
 		t.Errorf("expected empty list, got %d items", len(got))
 	}
 
-	h.Register("alpha", nil, &RegisterParams{
+	if _, err := h.Register("alpha", nil, &RegisterParams{
 		Name:     "alpha",
 		Profiles: map[string]ProfileInfo{"p1": {Description: "one"}},
-	})
-	h.Register("beta", nil, &RegisterParams{
+	}); err != nil {
+		t.Fatalf("Register alpha: %v", err)
+	}
+	if _, err := h.Register("beta", nil, &RegisterParams{
 		Name:     "beta",
 		Profiles: map[string]ProfileInfo{"p2": {Description: "two"}, "p3": {Description: "three"}},
-	})
+	}); err != nil {
+		t.Fatalf("Register beta: %v", err)
+	}
 
 	list := h.List()
 	if len(list) != 2 {
@@ -371,14 +385,18 @@ func TestReaper(t *testing.T) {
 		h.Stop()
 	})
 
-	h.Register("online-agent", nil, &RegisterParams{
+	if _, err := h.Register("online-agent", nil, &RegisterParams{
 		Name:     "online-agent",
 		Profiles: map[string]ProfileInfo{},
-	})
-	h.Register("offline-agent", nil, &RegisterParams{
+	}); err != nil {
+		t.Fatalf("Register online-agent: %v", err)
+	}
+	if _, err := h.Register("offline-agent", nil, &RegisterParams{
 		Name:     "offline-agent",
 		Profiles: map[string]ProfileInfo{},
-	})
+	}); err != nil {
+		t.Fatalf("Register offline-agent: %v", err)
+	}
 
 	// Mark one agent offline so the reaper targets it.
 	h.MarkOffline("offline-agent")
@@ -443,18 +461,24 @@ func TestAgentCount(t *testing.T) {
 		t.Fatalf("expected 0 online agents, got %d", got)
 	}
 
-	h.Register("a1", nil, &RegisterParams{
+	if _, err := h.Register("a1", nil, &RegisterParams{
 		Name:     "a1",
 		Profiles: map[string]ProfileInfo{},
-	})
-	h.Register("a2", nil, &RegisterParams{
+	}); err != nil {
+		t.Fatalf("Register a1: %v", err)
+	}
+	if _, err := h.Register("a2", nil, &RegisterParams{
 		Name:     "a2",
 		Profiles: map[string]ProfileInfo{},
-	})
-	h.Register("a3", nil, &RegisterParams{
+	}); err != nil {
+		t.Fatalf("Register a2: %v", err)
+	}
+	if _, err := h.Register("a3", nil, &RegisterParams{
 		Name:     "a3",
 		Profiles: map[string]ProfileInfo{},
-	})
+	}); err != nil {
+		t.Fatalf("Register a3: %v", err)
+	}
 
 	if got := h.AgentCount(); got != 3 {
 		t.Errorf("expected 3 agents, got %d", got)
@@ -472,5 +496,145 @@ func TestAgentCount(t *testing.T) {
 	}
 	if got := h.OnlineAgentCount(); got != 1 {
 		t.Errorf("expected 1 online agent, got %d", got)
+	}
+}
+
+
+// TestRegister_RejectChangedAdvertiseAddress reproduces the bug described in issue #97:
+// Hub.Register unconditionally replaces the agent entry on re-registration,
+// including TtydConfig.AdvertiseAddress. A reconnecting agent should NOT be
+// allowed to silently change its AdvertiseAddress.
+//
+// This test MUST FAIL until the bug is fixed: it asserts that the stored
+// AdvertiseAddress remains "10.0.0.1" after a re-registration attempt with
+// "10.0.0.2", but the current code overwrites it.
+//
+// The first agent is registered via a real WebSocket connection (using
+// startTestHub) so that the subsequent Register call does not panic when
+// trying to close the existing connection. The resulting nil-conn entry is
+// cleaned up before h.Stop via a LIFO t.Cleanup.
+func TestRegister_RejectChangedAdvertiseAddress(t *testing.T) {
+	h, url := startTestHub(t)
+
+	// Remove any nil-conn agents before h.Stop (registered by startTestHub)
+	// runs, so Stop does not panic trying to close a nil WebSocket conn.
+	// t.Cleanup is LIFO, so this executes before the cleanup registered by
+	// startTestHub above.
+	t.Cleanup(func() {
+		h.mu.Lock()
+		for name, a := range h.agents {
+			if a.Conn() == nil {
+				delete(h.agents, name)
+			}
+		}
+		h.mu.Unlock()
+	})
+
+	// Register "agent-addr" via the real WebSocket path.
+	connectAgent(t, url, "agent-addr")
+
+	// Wait until the hub has the agent.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, ok := h.Get("agent-addr"); ok {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, ok := h.Get("agent-addr"); !ok {
+		t.Fatal("agent-addr did not register in time")
+	}
+
+	// Overwrite the stored TtydConfig to simulate an initial registration
+	// with AdvertiseAddress "10.0.0.1".
+	h.mu.Lock()
+	h.agents["agent-addr"].TtydConfig = TtydInfo{
+		AdvertiseAddress: "10.0.0.1",
+		BasePort:         7681,
+	}
+	h.mu.Unlock()
+
+	// Attempt re-registration with a DIFFERENT AdvertiseAddress.
+	// The hub should reject this and leave the stored entry unchanged.
+	_, err := h.Register("agent-addr", nil, &RegisterParams{
+		Name:     "agent-addr",
+		Profiles: map[string]ProfileInfo{},
+		Ttyd: TtydInfo{
+			AdvertiseAddress: "10.0.0.2", // changed — must be rejected
+			BasePort:         7681,
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error when re-registering with changed AdvertiseAddress")
+	}
+	if !errors.Is(err, ErrAdvertiseAddressChanged) {
+		t.Fatalf("expected ErrAdvertiseAddressChanged, got: %v", err)
+	}
+
+	agent, ok := h.Get("agent-addr")
+	if !ok {
+		t.Fatal("agent-addr not found after re-registration attempt")
+	}
+
+	if agent.TtydConfig.AdvertiseAddress != "10.0.0.1" {
+		t.Errorf("AdvertiseAddress was overwritten: got %q, want %q",
+			agent.TtydConfig.AdvertiseAddress, "10.0.0.1")
+	}
+}
+
+// TestRegister_AllowSameAdvertiseAddress verifies that re-registration with the
+// same AdvertiseAddress is accepted: a new ConnectedAgent pointer is stored and
+// the address is preserved.
+func TestRegister_AllowSameAdvertiseAddress(t *testing.T) {
+	h := newTestHubNoReaper(t)
+
+	// Initial registration.
+	first, err := h.Register("agent-same", nil, &RegisterParams{
+		Name:     "agent-same",
+		Profiles: map[string]ProfileInfo{},
+		Ttyd: TtydInfo{
+			AdvertiseAddress: "10.0.0.1",
+			BasePort:         7681,
+		},
+	})
+	if err != nil {
+		t.Fatalf("first Register: %v", err)
+	}
+
+	// Remove the first entry from the hub so the second Register call does
+	// not try to close the nil conn when replacing it.
+	h.mu.Lock()
+	delete(h.agents, "agent-same")
+	h.mu.Unlock()
+
+	// Re-register with the SAME AdvertiseAddress — this must succeed.
+	second, err := h.Register("agent-same", nil, &RegisterParams{
+		Name:     "agent-same",
+		Profiles: map[string]ProfileInfo{},
+		Ttyd: TtydInfo{
+			AdvertiseAddress: "10.0.0.1",
+			BasePort:         7681,
+		},
+	})
+	if err != nil {
+		t.Fatalf("second Register: %v", err)
+	}
+
+	if second == nil {
+		t.Fatal("expected non-nil agent on re-registration with same address")
+	}
+	if second == first {
+		t.Error("expected a new ConnectedAgent pointer on re-registration")
+	}
+
+	stored, ok := h.Get("agent-same")
+	if !ok {
+		t.Fatal("agent-same not found after re-registration")
+	}
+	if stored != second {
+		t.Error("Get did not return the newly registered agent")
+	}
+	if stored.TtydConfig.AdvertiseAddress != "10.0.0.1" {
+		t.Errorf("AdvertiseAddress changed unexpectedly: got %q", stored.TtydConfig.AdvertiseAddress)
 	}
 }
