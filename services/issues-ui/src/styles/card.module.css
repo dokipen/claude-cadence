@@ -130,6 +130,12 @@
   color: var(--text-secondary);
 }
 
+.cardActions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .storyPoints {
   background: var(--primary);
   color: var(--on-primary);

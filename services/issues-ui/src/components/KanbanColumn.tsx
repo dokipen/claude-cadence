@@ -14,9 +14,10 @@ interface KanbanColumnProps {
   tickets: Ticket[];
   loading: boolean;
   error: string | null;
+  repoUrl?: string;
 }
 
-export function KanbanColumn({ state, tickets, loading, error }: KanbanColumnProps) {
+export function KanbanColumn({ state, tickets, loading, error, repoUrl }: KanbanColumnProps) {
   return (
     <div className={styles.column} data-testid={`column-${state}`}>
       <div className={styles.columnHeader}>
@@ -41,7 +42,9 @@ export function KanbanColumn({ state, tickets, loading, error }: KanbanColumnPro
         )}
         {!loading &&
           !error &&
-          tickets.map((ticket) => <TicketCard key={ticket.id} ticket={ticket} />)}
+          tickets.map((ticket) => (
+            <TicketCard key={ticket.id} ticket={ticket} repoUrl={repoUrl} />
+          ))}
       </div>
     </div>
   );
