@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 
-const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+export const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
 export async function cleanupExpiredTokens(prisma: PrismaClient) {
   const now = new Date();
@@ -23,13 +23,23 @@ export async function cleanupExpiredTokens(prisma: PrismaClient) {
 }
 
 export function startCleanupSchedule(prisma: PrismaClient): NodeJS.Timeout {
+  function scheduleNext(): NodeJS.Timeout {
+    return setTimeout(async () => {
+      try {
+        await cleanupExpiredTokens(prisma);
+      } catch (err) {
+        console.error("Token cleanup failed:", err);
+      }
+      timer = scheduleNext();
+    }, CLEANUP_INTERVAL_MS);
+  }
+
+  let timer: NodeJS.Timeout;
+
   cleanupExpiredTokens(prisma).catch((err) => {
     console.error("Token cleanup failed:", err);
   });
 
-  return setInterval(() => {
-    cleanupExpiredTokens(prisma).catch((err) => {
-      console.error("Token cleanup failed:", err);
-    });
-  }, CLEANUP_INTERVAL_MS);
+  timer = scheduleNext();
+  return timer;
 }

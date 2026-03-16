@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { cleanupExpiredTokens, startCleanupSchedule } from "./cleanup.js";
+import {
+  cleanupExpiredTokens,
+  startCleanupSchedule,
+  CLEANUP_INTERVAL_MS,
+} from "./cleanup.js";
 
 function makeMockPrisma() {
   return {
@@ -112,8 +116,27 @@ describe("startCleanupSchedule", () => {
 
     const handle = startCleanupSchedule(prisma as any);
     expect(handle).toBeDefined();
-    clearInterval(handle);
+    clearTimeout(handle);
 
+    vi.useRealTimers();
+  });
+
+  it("should reschedule after each run completes", async () => {
+    const prisma = makeMockPrisma();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const handle = startCleanupSchedule(prisma as any);
+    await vi.advanceTimersByTimeAsync(0); // flush initial run
+
+    expect(prisma.refreshToken.deleteMany).toHaveBeenCalledTimes(1);
+
+    // Advance past the interval to trigger the scheduled run
+    await vi.advanceTimersByTimeAsync(CLEANUP_INTERVAL_MS);
+
+    expect(prisma.refreshToken.deleteMany).toHaveBeenCalledTimes(2);
+    expect(prisma.revokedToken.deleteMany).toHaveBeenCalledTimes(2);
+
+    clearTimeout(handle);
     vi.useRealTimers();
   });
 
@@ -130,6 +153,31 @@ describe("startCleanupSchedule", () => {
       expect.any(Error)
     );
 
+    vi.useRealTimers();
+  });
+
+  it("should reschedule even after an error", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const prisma = makeMockPrisma();
+
+    // First scheduled run fails, second succeeds
+    prisma.refreshToken.deleteMany
+      .mockRejectedValueOnce(new Error("db down"))
+      .mockResolvedValue({ count: 0 });
+    prisma.revokedToken.deleteMany.mockResolvedValue({ count: 0 });
+
+    const handle = startCleanupSchedule(prisma as any);
+    await vi.advanceTimersByTimeAsync(0); // flush initial (succeeds)
+
+    // Advance to the first scheduled run (fails)
+    await vi.advanceTimersByTimeAsync(CLEANUP_INTERVAL_MS);
+    expect(errorSpy).toHaveBeenCalled();
+
+    // Advance to the next scheduled run (should still fire)
+    await vi.advanceTimersByTimeAsync(CLEANUP_INTERVAL_MS);
+    expect(prisma.refreshToken.deleteMany).toHaveBeenCalledTimes(3);
+
+    clearTimeout(handle);
     vi.useRealTimers();
   });
 });

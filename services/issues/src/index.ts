@@ -40,4 +40,8 @@ const { url } = await startStandaloneServer(server, {
 
 console.log(`Server ready at ${url}`);
 
-startCleanupSchedule(prisma);
+const cleanupTimer = startCleanupSchedule(prisma);
+
+process.on("SIGTERM", () => {
+  clearTimeout(cleanupTimer);
+});
