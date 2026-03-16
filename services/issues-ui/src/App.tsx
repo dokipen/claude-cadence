@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { LoginPage } from "./auth/LoginPage";
 import { KanbanBoard } from "./components/KanbanBoard";
+import { TicketDetail } from "./components/TicketDetail";
 import { ProjectSelector, STORAGE_KEY } from "./components/ProjectSelector";
 import type { ReactNode } from "react";
 import layoutStyles from "./styles/layout.module.css";
@@ -70,7 +71,10 @@ function AppShell() {
         </div>
       </header>
       <main className={layoutStyles.main}>
-        <KanbanBoard projectId={selectedProjectId} />
+        <Routes>
+          <Route path="/ticket/:id" element={<TicketDetail />} />
+          <Route path="/*" element={<KanbanBoard projectId={selectedProjectId} />} />
+        </Routes>
       </main>
     </div>
   );

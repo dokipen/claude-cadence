@@ -1,3 +1,4 @@
+import { Link } from "react-router";
 import type { Ticket } from "../types";
 import { PriorityBadge } from "./PriorityBadge";
 import { LabelBadge } from "./LabelBadge";
@@ -5,7 +6,7 @@ import styles from "../styles/card.module.css";
 
 export function TicketCard({ ticket }: { ticket: Ticket }) {
   return (
-    <div className={styles.card} data-testid="ticket-card">
+    <Link to={`/ticket/${ticket.id}`} className={styles.cardLink} data-testid="ticket-card">
       <div className={styles.cardTitle} data-testid="card-title">{ticket.title}</div>
       <div className={styles.cardMeta}>
         <PriorityBadge priority={ticket.priority} />
@@ -36,6 +37,6 @@ export function TicketCard({ ticket }: { ticket: Ticket }) {
           </span>
         )}
       </div>
-    </div>
+    </Link>
   );
 }

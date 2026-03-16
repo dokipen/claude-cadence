@@ -8,7 +8,15 @@
   gap: 0.375rem;
 }
 
-.card:hover {
+.cardLink {
+  composes: card;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.card:hover,
+.cardLink:hover {
   border-color: var(--primary-light);
   box-shadow: 0 1px 4px rgba(45, 58, 140, 0.08);
 }
