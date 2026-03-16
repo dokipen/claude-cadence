@@ -58,7 +58,7 @@ export const projectResolvers = {
       try {
         const existing = await prisma.project.findUnique({ where: { id } });
         if (!existing) {
-          throw new GraphQLError(`Project not found: ${id}`, {
+          throw new GraphQLError("Project not found", {
             extensions: { code: "NOT_FOUND" },
           });
         }

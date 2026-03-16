@@ -178,7 +178,7 @@ export const ticketResolvers = {
           return await prisma.$transaction(async (tx) => {
             const project = await tx.project.findUnique({ where: { id: projectId } });
             if (!project) {
-              throw new GraphQLError(`Project not found: ${projectId}`, {
+              throw new GraphQLError("Project not found", {
                 extensions: { code: "NOT_FOUND" },
               });
             }
@@ -259,7 +259,7 @@ export const ticketResolvers = {
       try {
         const existing = await prisma.ticket.findUnique({ where: { id } });
         if (!existing) {
-          throw new GraphQLError(`Ticket not found: ${id}`, {
+          throw new GraphQLError("Ticket not found", {
             extensions: { code: "NOT_FOUND" },
           });
         }
@@ -318,14 +318,14 @@ export const ticketResolvers = {
       try {
         const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
         if (!ticket) {
-          throw new GraphQLError(`Ticket not found: ${ticketId}`, {
+          throw new GraphQLError("Ticket not found", {
             extensions: { code: "NOT_FOUND" },
           });
         }
 
         const label = await prisma.label.findUnique({ where: { id: labelId } });
         if (!label) {
-          throw new GraphQLError(`Label not found: ${labelId}`, {
+          throw new GraphQLError("Label not found", {
             extensions: { code: "NOT_FOUND" },
           });
         }
@@ -353,7 +353,7 @@ export const ticketResolvers = {
       try {
         const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
         if (!ticket) {
-          throw new GraphQLError(`Ticket not found: ${ticketId}`, {
+          throw new GraphQLError("Ticket not found", {
             extensions: { code: "NOT_FOUND" },
           });
         }
@@ -362,7 +362,7 @@ export const ticketResolvers = {
           where: { ticketId_labelId: { ticketId, labelId } },
         });
         if (!existing) {
-          throw new GraphQLError(`Label ${labelId} is not on ticket ${ticketId}`, {
+          throw new GraphQLError("Label is not on ticket", {
             extensions: { code: "NOT_FOUND" },
           });
         }
@@ -390,7 +390,7 @@ export const ticketResolvers = {
       try {
         const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
         if (!ticket) {
-          throw new GraphQLError(`Ticket not found: ${ticketId}`, {
+          throw new GraphQLError("Ticket not found", {
             extensions: { code: "NOT_FOUND" },
           });
         }
@@ -417,7 +417,7 @@ export const ticketResolvers = {
       try {
         const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
         if (!ticket) {
-          throw new GraphQLError(`Ticket not found: ${ticketId}`, {
+          throw new GraphQLError("Ticket not found", {
             extensions: { code: "NOT_FOUND" },
           });
         }
@@ -452,7 +452,7 @@ export const ticketResolvers = {
 
           const transition = validateTransition(ticket.state, to);
           if (!transition.valid) {
-            throw new GraphQLError(`Invalid transition: ${transition.error}`, {
+            throw new GraphQLError(`Invalid state transition: ${transition.error}`, {
               extensions: { code: "BAD_USER_INPUT" },
             });
           }
@@ -496,14 +496,14 @@ export const ticketResolvers = {
       try {
         const blocker = await prisma.ticket.findUnique({ where: { id: blockerId } });
         if (!blocker) {
-          throw new GraphQLError(`Ticket not found: ${blockerId}`, {
+          throw new GraphQLError("Blocker ticket not found", {
             extensions: { code: "NOT_FOUND" },
           });
         }
 
         const blocked = await prisma.ticket.findUnique({ where: { id: blockedId } });
         if (!blocked) {
-          throw new GraphQLError(`Ticket not found: ${blockedId}`, {
+          throw new GraphQLError("Blocked ticket not found", {
             extensions: { code: "NOT_FOUND" },
           });
         }
@@ -570,7 +570,7 @@ export const ticketResolvers = {
       try {
         const ticket = await context.prisma.ticket.findUnique({ where: { id: ticketId } });
         if (!ticket) {
-          throw new GraphQLError(`Ticket not found: ${ticketId}`, {
+          throw new GraphQLError("Ticket not found", {
             extensions: { code: "NOT_FOUND" },
           });
         }
