@@ -20,11 +20,13 @@ jobs:
     # Runs directly on Bootsy via self-hosted runner — no SSH needed.
     # Prerequisites:
     #   1. ISSUES_JWT_SECRET repo secret set (matches the running service's JWT_SECRET)
-    #   2. github-runner user is in the docker group
+    #   2. ISSUES_ALLOWED_USERS repo secret set (comma-separated GitHub logins)
+    #   3. github-runner user is in the docker group
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 15
     env:
       JWT_SECRET: ${{ secrets.ISSUES_JWT_SECRET }}
+      ALLOWED_USERS: ${{ secrets.ISSUES_ALLOWED_USERS }}
     defaults:
       run:
         working-directory: services/issues
