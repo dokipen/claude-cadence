@@ -92,7 +92,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "1rem",
   },
   error: {
-    color: "#d73a4a",
+    color: "var(--error)",
     fontSize: "0.95rem",
     margin: 0,
     textAlign: "center",
