@@ -55,11 +55,32 @@ describe("hubFetch", () => {
       statusText: "Not Found",
       json: () => Promise.resolve({ error: "Agent not found" }),
     });
-    await expect(hubFetch("/test")).rejects.toThrow(HubError);
-    await expect(hubFetch("/test")).rejects.toMatchObject({
-      status: 404,
-      message: "Agent not found",
+    const err = await hubFetch("/test").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HubError);
+    expect(err).toMatchObject({ status: 404, message: "Agent not found" });
+  });
+
+  it("truncates long error messages from server", async () => {
+    mockFetch({
+      ok: false,
+      status: 500,
+      statusText: "Error",
+      json: () => Promise.resolve({ error: "x".repeat(300) }),
     });
+    const err = await hubFetch("/test").catch((e: unknown) => e) as HubError;
+    expect(err.message).toHaveLength(200);
+  });
+
+  it("preserves caller-supplied headers when body is present", async () => {
+    const fn = mockFetch({});
+    await hubFetch("/test", {
+      method: "POST",
+      body: JSON.stringify({ x: 1 }),
+      headers: { Authorization: "Bearer token123" } as Record<string, string>,
+    });
+    const callHeaders = fn.mock.calls[0][1].headers;
+    expect(callHeaders["Authorization"]).toBe("Bearer token123");
+    expect(callHeaders["Content-Type"]).toBe("application/json");
   });
 
   it("falls back to statusText when body has no error field", async () => {
@@ -169,9 +190,25 @@ describe("fetchAgents", () => {
     );
   });
 
+  it("throws HubError when agent is null", async () => {
+    mockFetch({ json: () => Promise.resolve({ agents: [null] }) });
+    await expect(fetchAgents()).rejects.toThrow(
+      "Invalid agent at index 0: expected object",
+    );
+  });
+
   it("throws HubError when agent.name is missing", async () => {
     mockFetch({
       json: () => Promise.resolve({ agents: [{ ...validAgent, name: undefined }] }),
+    });
+    await expect(fetchAgents()).rejects.toThrow(
+      'Invalid agent at index 0: missing or invalid "name"',
+    );
+  });
+
+  it("throws HubError when agent.name is not a string", async () => {
+    mockFetch({
+      json: () => Promise.resolve({ agents: [{ ...validAgent, name: 123 }] }),
     });
     await expect(fetchAgents()).rejects.toThrow(
       'Invalid agent at index 0: missing or invalid "name"',
@@ -204,6 +241,18 @@ describe("fetchAgents", () => {
     });
     await expect(fetchAgents()).rejects.toThrow(
       'Invalid agent at index 0: missing or invalid "last_seen"',
+    );
+  });
+
+  it("throws HubError when profile value is not an object", async () => {
+    mockFetch({
+      json: () =>
+        Promise.resolve({
+          agents: [{ ...validAgent, profiles: { bad: 42 } }],
+        }),
+    });
+    await expect(fetchAgents()).rejects.toThrow(
+      "Invalid agent profile at agents[0].profiles.bad: expected object",
     );
   });
 
@@ -247,12 +296,8 @@ describe("fetchAgents", () => {
 
   it("uses 502 status code for validation errors", async () => {
     mockFetch({ json: () => Promise.resolve("bad") });
-    try {
-      await fetchAgents();
-      expect.fail("should have thrown");
-    } catch (e) {
-      expect(e).toBeInstanceOf(HubError);
-      expect((e as HubError).status).toBe(502);
-    }
+    const err = await fetchAgents().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HubError);
+    expect(err).toMatchObject({ status: 502 });
   });
 });

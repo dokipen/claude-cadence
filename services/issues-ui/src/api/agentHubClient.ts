@@ -12,6 +12,7 @@ export class HubError extends Error {
   }
 }
 
+/** @internal Use typed endpoint wrappers (e.g. fetchAgents) instead of calling hubFetch directly. */
 export async function hubFetch<T>(
   path: string,
   options?: RequestInit,
@@ -28,7 +29,9 @@ export async function hubFetch<T>(
     let message = res.statusText;
     try {
       const body = await res.json();
-      if (body.error) message = body.error;
+      if (typeof body.error === "string") {
+        message = body.error.slice(0, 200);
+      }
     } catch {
       // use statusText
     }
@@ -84,7 +87,8 @@ function validateAgent(data: unknown, index: number): Agent {
 
   const profiles: Record<string, AgentProfile> = {};
   for (const [key, value] of Object.entries(data.profiles)) {
-    profiles[key] = validateAgentProfile(value, `agents[${index}].profiles.${key}`);
+    const safeKey = key.slice(0, 64).replace(/[^\w-]/g, "_");
+    profiles[key] = validateAgentProfile(value, `agents[${index}].profiles.${safeKey}`);
   }
 
   return {
