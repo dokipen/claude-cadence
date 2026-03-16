@@ -276,7 +276,8 @@ func handleAgentWebSocket(h *hub.Hub, agentToken string) http.HandlerFunc {
 		// Build the response based on whether registration succeeded.
 		var resp *hub.Response
 		if regErr != nil {
-			resp = hub.NewErrorResponse(req.ID, hub.RPCErrFailedPrecondition, regErr.Error())
+			slog.Warn("agent registration rejected", "agent", params.Name, "error", regErr)
+			resp = hub.NewErrorResponse(req.ID, hub.RPCErrFailedPrecondition, "registration rejected")
 		} else {
 			resp, err = hub.NewResponse(req.ID, &hub.RegisterResult{Accepted: true})
 			if err != nil {

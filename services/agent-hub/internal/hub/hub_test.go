@@ -41,16 +41,20 @@ func startTestHub(t *testing.T) (*Hub, string) {
 		var params RegisterParams
 		json.Unmarshal(req.Params, &params)
 
-		resp, _ := NewResponse(req.ID, &RegisterResult{Accepted: true})
+		// Register first, then send the appropriate ack (mirrors production handler).
+		agent, regErr := h.Register(params.Name, conn, &params)
+
+		var resp *Response
+		if regErr != nil {
+			resp = NewErrorResponse(req.ID, RPCErrFailedPrecondition, "registration rejected")
+		} else {
+			resp, _ = NewResponse(req.ID, &RegisterResult{Accepted: true})
+		}
 		respData, _ := json.Marshal(resp)
 		conn.Write(r.Context(), websocket.MessageText, respData)
 
-		agent, err := h.Register(params.Name, conn, &params)
-		if err != nil {
-			resp, _ := NewResponse(req.ID, &RegisterResult{Accepted: false})
-			respData, _ := json.Marshal(resp)
-			conn.Write(r.Context(), websocket.MessageText, respData)
-			conn.Close(websocket.StatusPolicyViolation, err.Error())
+		if regErr != nil {
+			conn.Close(websocket.StatusPolicyViolation, "registration rejected")
 			return
 		}
 		h.HandleAgentConnection(r.Context(), agent)
@@ -500,19 +504,11 @@ func TestAgentCount(t *testing.T) {
 }
 
 
-// TestRegister_RejectChangedAdvertiseAddress reproduces the bug described in issue #97:
-// Hub.Register unconditionally replaces the agent entry on re-registration,
-// including TtydConfig.AdvertiseAddress. A reconnecting agent should NOT be
-// allowed to silently change its AdvertiseAddress.
-//
-// This test MUST FAIL until the bug is fixed: it asserts that the stored
-// AdvertiseAddress remains "10.0.0.1" after a re-registration attempt with
-// "10.0.0.2", but the current code overwrites it.
-//
+// TestRegister_RejectChangedAdvertiseAddress verifies that Hub.Register rejects
+// re-registration when the AdvertiseAddress differs from the original.
 // The first agent is registered via a real WebSocket connection (using
 // startTestHub) so that the subsequent Register call does not panic when
-// trying to close the existing connection. The resulting nil-conn entry is
-// cleaned up before h.Stop via a LIFO t.Cleanup.
+// trying to close the existing connection.
 func TestRegister_RejectChangedAdvertiseAddress(t *testing.T) {
 	h, url := startTestHub(t)
 
@@ -583,31 +579,39 @@ func TestRegister_RejectChangedAdvertiseAddress(t *testing.T) {
 }
 
 // TestRegister_AllowSameAdvertiseAddress verifies that re-registration with the
-// same AdvertiseAddress is accepted: a new ConnectedAgent pointer is stored and
-// the address is preserved.
+// same AdvertiseAddress is accepted and the existing entry is replaced.
+// Uses a real WebSocket connection so the existing entry is present when the
+// second Register call runs, exercising the same-address comparison branch.
 func TestRegister_AllowSameAdvertiseAddress(t *testing.T) {
-	h := newTestHubNoReaper(t)
+	h, url := startTestHub(t)
 
-	// Initial registration.
-	first, err := h.Register("agent-same", nil, &RegisterParams{
-		Name:     "agent-same",
-		Profiles: map[string]ProfileInfo{},
-		Ttyd: TtydInfo{
-			AdvertiseAddress: "10.0.0.1",
-			BasePort:         7681,
-		},
-	})
-	if err != nil {
-		t.Fatalf("first Register: %v", err)
+	// Register "agent-same" via WebSocket.
+	connectAgent(t, url, "agent-same")
+
+	deadline := time.Now().Add(2 * time.Second)
+	var first *ConnectedAgent
+	for time.Now().Before(deadline) {
+		var ok bool
+		first, ok = h.Get("agent-same")
+		if ok {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if first == nil {
+		t.Fatal("agent-same did not register in time")
 	}
 
-	// Remove the first entry from the hub so the second Register call does
-	// not try to close the nil conn when replacing it.
+	// Set a known AdvertiseAddress on the existing entry.
 	h.mu.Lock()
-	delete(h.agents, "agent-same")
+	h.agents["agent-same"].TtydConfig = TtydInfo{
+		AdvertiseAddress: "10.0.0.1",
+		BasePort:         7681,
+	}
 	h.mu.Unlock()
 
-	// Re-register with the SAME AdvertiseAddress — this must succeed.
+	// Re-register with the SAME AdvertiseAddress via direct call.
+	// The existing entry has a real WebSocket conn so Close won't panic.
 	second, err := h.Register("agent-same", nil, &RegisterParams{
 		Name:     "agent-same",
 		Profiles: map[string]ProfileInfo{},
@@ -617,8 +621,19 @@ func TestRegister_AllowSameAdvertiseAddress(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("second Register: %v", err)
+		t.Fatalf("re-registration with same address should succeed: %v", err)
 	}
+
+	// Clean up nil-conn entry before h.Stop.
+	t.Cleanup(func() {
+		h.mu.Lock()
+		for name, a := range h.agents {
+			if a.Conn() == nil {
+				delete(h.agents, name)
+			}
+		}
+		h.mu.Unlock()
+	})
 
 	if second == nil {
 		t.Fatal("expected non-nil agent on re-registration with same address")

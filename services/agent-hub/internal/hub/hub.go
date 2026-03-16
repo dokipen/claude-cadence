@@ -132,8 +132,7 @@ func (h *Hub) Register(name string, conn *websocket.Conn, params *RegisterParams
 	defer h.mu.Unlock()
 
 	if existing, ok := h.agents[name]; ok {
-		if existing.TtydConfig.AdvertiseAddress != "" &&
-			params.Ttyd.AdvertiseAddress != existing.TtydConfig.AdvertiseAddress {
+		if params.Ttyd.AdvertiseAddress != existing.TtydConfig.AdvertiseAddress {
 			slog.Warn("rejecting re-registration: AdvertiseAddress changed",
 				"agent", name,
 				"existing", existing.TtydConfig.AdvertiseAddress,
