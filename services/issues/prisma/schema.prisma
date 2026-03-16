@@ -59,6 +59,7 @@ model Ticket {
 
   @@unique([projectId, number])
   @@index([projectId, state])
+  @@index([assigneeId])
 }
 
 model Label {
