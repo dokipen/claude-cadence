@@ -62,6 +62,100 @@ test.describe("OAuth", () => {
     await expect(page.getByTestId("user-info")).toHaveText("E2E Tester");
   });
 
+  test("OAuth callback with oauth_redirect in sessionStorage navigates to that path after auth", async ({
+    page,
+  }) => {
+    const token = jwt.sign(
+      { userId: E2E_USER_ID, jti: "e2e-oauth-redirect-jti" },
+      E2E_JWT_SECRET,
+      { expiresIn: "1h" },
+    );
+
+    // Mock the authenticateWithGitHubCode GraphQL mutation
+    await page.route("**/graphql", async (route) => {
+      const body = route.request().postDataJSON();
+      if (body?.query?.includes("authenticateWithGitHubCode")) {
+        await route.fulfill({
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: {
+              authenticateWithGitHubCode: {
+                token,
+                refreshToken: E2E_REFRESH_TOKEN,
+                user: {
+                  id: E2E_USER_ID,
+                  login: "e2e-tester",
+                  displayName: "E2E Tester",
+                  avatarUrl: null,
+                },
+              },
+            },
+          }),
+        });
+      } else {
+        await route.continue();
+      }
+    });
+
+    // Set both the OAuth state and the redirect target in sessionStorage
+    await page.addInitScript(() => {
+      sessionStorage.setItem("oauth_state", "test-state-456");
+      sessionStorage.setItem("oauth_redirect", "/ticket/some-id");
+    });
+
+    await page.goto("/auth/callback?code=test-code&state=test-state-456");
+
+    // Should redirect to the intended path stored in sessionStorage
+    await expect(page).toHaveURL("/ticket/some-id");
+  });
+
+  test("OAuth callback without oauth_redirect in sessionStorage navigates to home after auth", async ({
+    page,
+  }) => {
+    const token = jwt.sign(
+      { userId: E2E_USER_ID, jti: "e2e-oauth-no-redirect-jti" },
+      E2E_JWT_SECRET,
+      { expiresIn: "1h" },
+    );
+
+    // Mock the authenticateWithGitHubCode GraphQL mutation
+    await page.route("**/graphql", async (route) => {
+      const body = route.request().postDataJSON();
+      if (body?.query?.includes("authenticateWithGitHubCode")) {
+        await route.fulfill({
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: {
+              authenticateWithGitHubCode: {
+                token,
+                refreshToken: E2E_REFRESH_TOKEN,
+                user: {
+                  id: E2E_USER_ID,
+                  login: "e2e-tester",
+                  displayName: "E2E Tester",
+                  avatarUrl: null,
+                },
+              },
+            },
+          }),
+        });
+      } else {
+        await route.continue();
+      }
+    });
+
+    // Set only the OAuth state, no redirect target
+    await page.addInitScript(() => {
+      sessionStorage.setItem("oauth_state", "test-state-789");
+    });
+
+    await page.goto("/auth/callback?code=test-code&state=test-state-789");
+
+    // Should default to home when no redirect is stored
+    await expect(page).toHaveURL("/");
+    await expect(page.getByTestId("user-info")).toHaveText("E2E Tester");
+  });
+
   test("OAuth callback shows error on missing code", async ({ page }) => {
     await page.goto("/auth/callback");
     await expect(page.getByRole("alert")).toHaveText(

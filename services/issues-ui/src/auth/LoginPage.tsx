@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "./AuthContext";
 import { createRawClient } from "../api/client";
 import { GENERATE_OAUTH_STATE } from "../api/queries";
+import { validateRedirect } from "./validateRedirect";
 
 const GITHUB_CLIENT_ID = import.meta.env.VITE_GITHUB_CLIENT_ID;
 
@@ -27,7 +28,7 @@ export function LoginPage() {
 
     try {
       await login(pat.trim());
-      navigate("/", { replace: true });
+      navigate(validateRedirect(searchParams.get("redirect")), { replace: true });
     } catch {
       setError("Authentication failed. Please check your token and try again.");
     } finally {
@@ -46,6 +47,11 @@ export function LoginPage() {
       );
       const state = result.generateOAuthState;
       sessionStorage.setItem("oauth_state", state);
+
+      const redirectParam = searchParams.get("redirect");
+      if (redirectParam) {
+        sessionStorage.setItem("oauth_redirect", redirectParam);
+      }
 
       const params = new URLSearchParams({
         client_id: GITHUB_CLIENT_ID!,
