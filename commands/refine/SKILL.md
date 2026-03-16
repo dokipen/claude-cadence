@@ -58,10 +58,10 @@ Use this value to select the correct commands throughout the workflow.
 
    **Issues API:**
    ```bash
-   ASSIGNEE=$(issues ticket view 123 --project $PROJECT --json | jq -r '.assignee.login // empty')
+   ASSIGNEE=$(issues ticket view 123 --project "$PROJECT" --json | jq -r '.assignee.login // empty')
    if [ -z "$ASSIGNEE" ]; then
      CURRENT_USER_ID=$(issues auth whoami --json | jq -r '.id')
-     issues assign TICKET_ID --user "$CURRENT_USER_ID" --json
+     issues assign "$TICKET_ID" --user "$CURRENT_USER_ID" --json
    fi
    ```
 
@@ -89,10 +89,10 @@ Use this value to select the correct commands throughout the workflow.
 
    **Issues API:**
    ```bash
-   issues ticket list --project $PROJECT --state BACKLOG --json
+   issues ticket list --project "$PROJECT" --state BACKLOG --json
    ```
 
-2. **For each issue**, delegate to ticket-refiner agent
+2. **For each issue**, delegate to ticket-refiner agent with the same assignment instructions as single-issue mode (ensure each ticket is assigned before marking refined)
 
 3. **Present summary** of all issues reviewed and changes made
 
