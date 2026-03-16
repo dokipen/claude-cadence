@@ -53,7 +53,7 @@ jobs:
               http://localhost:4000/graphql \
               -H 'Content-Type: application/json' \
               -d '{"query":"{ __typename }"}' 2>/dev/null || true)
-            if [ "$status" -ge 200 ] && [ "$status" -lt 300 ] 2>/dev/null; then
+            if [ "$status" -ge 200 ] && [ "$status" -lt 300 ]; then
               echo "==> Service is healthy (HTTP $status)"
               exit 0
             fi
