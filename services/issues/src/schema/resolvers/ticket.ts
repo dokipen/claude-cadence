@@ -305,9 +305,10 @@ export const ticketResolvers = {
     transitionTicket: async (
       _: unknown,
       { id, to }: { id: string; to: string },
-      { prisma }: Context
+      context: Context
     ) => {
-      return prisma.$transaction(async (tx) => {
+      requireAuth(context);
+      return context.prisma.$transaction(async (tx) => {
         const ticket = await tx.ticket.findUnique({ where: { id } });
         if (!ticket) throw new Error("Ticket not found");
 
