@@ -25,9 +25,6 @@ func ValidateAdvertiseAddress(addr string) error {
 	if ip.IsLinkLocalUnicast() {
 		return fmt.Errorf("advertise address %q is a link-local unicast address", addr)
 	}
-	if ip.IsLinkLocalMulticast() {
-		return fmt.Errorf("advertise address %q is a link-local multicast address", addr)
-	}
 	if ip.IsUnspecified() {
 		return fmt.Errorf("advertise address %q is the unspecified address", addr)
 	}
@@ -35,5 +32,7 @@ func ValidateAdvertiseAddress(addr string) error {
 		return fmt.Errorf("advertise address %q is a multicast address", addr)
 	}
 
+	// RFC 1918 private ranges (10/8, 172.16/12, 192.168/16) are intentionally
+	// allowed — agents are expected to run on private infrastructure.
 	return nil
 }

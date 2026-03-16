@@ -5,8 +5,6 @@ import (
 )
 
 func TestValidateAdvertiseAddress(t *testing.T) {
-	t.Helper()
-
 	tests := []struct {
 		name    string
 		addr    string
