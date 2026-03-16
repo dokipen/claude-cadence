@@ -2,10 +2,10 @@ package rest
 
 import (
 	"crypto/subtle"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
-
 	"time"
 
 	"github.com/dokipen/claude-cadence/services/agent-hub/internal/config"
@@ -45,38 +45,43 @@ func metricsMiddleware(next http.Handler) http.Handler {
 }
 
 // rateLimiter returns per-IP rate limiting middleware.
+// IP is extracted from RemoteAddr only — X-Forwarded-For is not trusted
+// because the hub may receive direct connections. When deployed behind
+// a trusted reverse proxy (Caddy), the proxy's own rate limiting should
+// be used for client-IP-based throttling.
 func rateLimiter(cfg config.RateLimitConfig) func(http.Handler) http.Handler {
 	var mu sync.Mutex
-	limiters := make(map[string]*rate.Limiter)
+	limiters := make(map[string]*rateLimiterEntry)
 
 	getLimiter := func(ip string) *rate.Limiter {
 		mu.Lock()
 		defer mu.Unlock()
-		if lim, ok := limiters[ip]; ok {
-			return lim
+
+		now := time.Now()
+
+		// Evict stale entries older than 5 minutes.
+		if len(limiters) > 1000 {
+			for k, e := range limiters {
+				if now.Sub(e.lastSeen) > 5*time.Minute {
+					delete(limiters, k)
+				}
+			}
+		}
+
+		if entry, ok := limiters[ip]; ok {
+			entry.lastSeen = now
+			return entry.limiter
 		}
 		lim := rate.NewLimiter(rate.Limit(cfg.RequestsPerSecond), cfg.Burst)
-		limiters[ip] = lim
+		limiters[ip] = &rateLimiterEntry{limiter: lim, lastSeen: now}
 		return lim
 	}
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Extract IP from X-Forwarded-For (behind Caddy) or RemoteAddr.
-			ip := r.Header.Get("X-Forwarded-For")
-			if ip == "" {
+			ip, _, err := net.SplitHostPort(r.RemoteAddr)
+			if err != nil {
 				ip = r.RemoteAddr
-			}
-			// Take only the first IP if comma-separated.
-			if idx := strings.IndexByte(ip, ','); idx != -1 {
-				ip = strings.TrimSpace(ip[:idx])
-			}
-			// Strip port if present (RemoteAddr is "host:port").
-			if idx := strings.LastIndexByte(ip, ':'); idx != -1 {
-				// Avoid stripping from IPv6 addresses without brackets.
-				if strings.Contains(ip, "[") || !strings.Contains(ip[:idx], ":") {
-					ip = ip[:idx]
-				}
 			}
 
 			if !getLimiter(ip).Allow() {
@@ -86,4 +91,9 @@ func rateLimiter(cfg config.RateLimitConfig) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+type rateLimiterEntry struct {
+	limiter  *rate.Limiter
+	lastSeen time.Time
 }

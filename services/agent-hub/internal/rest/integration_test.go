@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"testing"
@@ -53,14 +54,14 @@ func startIntegrationServer(t *testing.T, cfg *config.Config) (*hub.Hub, string)
 	go srv.Start()
 	t.Cleanup(srv.Stop)
 
-	// Wait for the server to be ready.
+	// Wait for the server to be ready by trying to connect.
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		addr := srv.Addr()
 		if addr != "127.0.0.1:0" && addr != "" {
-			resp, err := http.Get("http://" + addr + "/debug/vars")
+			conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
 			if err == nil {
-				resp.Body.Close()
+				conn.Close()
 				return h, "http://" + addr
 			}
 		}
@@ -323,8 +324,21 @@ func TestIntegration_MetricsEndpoint(t *testing.T) {
 
 	_, baseURL := startIntegrationServer(t, cfg)
 
-	// Metrics endpoint should be accessible without auth.
+	// Metrics endpoint should require auth.
 	resp, err := http.Get(baseURL + "/debug/vars")
+	if err != nil {
+		t.Fatalf("metrics request: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without auth, got %d", resp.StatusCode)
+	}
+
+	// With auth, should return metrics.
+	req, _ := http.NewRequest("GET", baseURL+"/debug/vars", nil)
+	req.Header.Set("Authorization", "Bearer "+apiToken)
+
+	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("metrics request: %v", err)
 	}
@@ -350,16 +364,41 @@ func TestIntegration_GracefulShutdown(t *testing.T) {
 	agentToken := "test-agent-token"
 	cfg := testConfig(apiToken, agentToken)
 
-	h, baseURL := startIntegrationServer(t, cfg)
+	// Don't use startIntegrationServer to avoid double-stop via t.Cleanup.
+	h := hub.New(cfg.Heartbeat.Interval, cfg.Heartbeat.Timeout, cfg.AgentTTL)
+	h.Start()
+
+	srv := rest.New(h, cfg)
+	go srv.Start()
+
+	// Wait for server readiness.
+	deadline := time.Now().Add(2 * time.Second)
+	var baseURL string
+	for time.Now().Before(deadline) {
+		addr := srv.Addr()
+		if addr != "127.0.0.1:0" && addr != "" {
+			conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
+			if err == nil {
+				conn.Close()
+				baseURL = "http://" + addr
+				break
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if baseURL == "" {
+		t.Fatal("server did not start in time")
+	}
+
 	simulateAgent(t, baseURL, agentToken, "shutdown-agent")
 	waitForAgent(t, h, "shutdown-agent")
 
-	// Verify agent is registered.
 	if h.AgentCount() != 1 {
 		t.Fatalf("expected 1 agent, got %d", h.AgentCount())
 	}
 
-	// Stop the hub (simulating shutdown) — agents should be cleaned up.
+	// Stop (simulating SIGTERM) — HTTP first, then hub.
+	srv.Stop()
 	h.Stop()
 
 	if h.AgentCount() != 0 {

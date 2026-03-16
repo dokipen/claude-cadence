@@ -2,7 +2,7 @@ package metrics
 
 import (
 	"expvar"
-	"sync/atomic"
+	"sync"
 	"time"
 )
 
@@ -20,22 +20,25 @@ var (
 	// RequestsTotal is the total number of API requests served.
 	RequestsTotal = expvar.NewInt("requests_total")
 
-	// requestLatencySum and requestLatencyCount are used to compute average latency.
-	requestLatencySum   atomic.Int64
-	requestLatencyCount atomic.Int64
-
 	// RequestLatencyAvgMs is the average request latency in milliseconds.
 	RequestLatencyAvgMs = expvar.NewFloat("request_latency_avg_ms")
+
+	latencyMu    sync.Mutex
+	latencySum   int64
+	latencyCount int64
 )
 
 // RecordRequestLatency records the latency of a single API request.
 func RecordRequestLatency(d time.Duration) {
 	RequestsTotal.Add(1)
-	requestLatencySum.Add(d.Microseconds())
-	count := requestLatencyCount.Add(1)
-	sum := requestLatencySum.Load()
-	// Update rolling average.
-	RequestLatencyAvgMs.Set(float64(sum) / float64(count) / 1000.0)
+
+	latencyMu.Lock()
+	latencySum += d.Microseconds()
+	latencyCount++
+	avg := float64(latencySum) / float64(latencyCount) / 1000.0
+	latencyMu.Unlock()
+
+	RequestLatencyAvgMs.Set(avg)
 }
 
 // Snapshot populates the gauge metrics from live hub state.
