@@ -64,6 +64,35 @@ describe("formatTicketTable", () => {
     expect(firstLine).not.toMatch(/^\s+#\s+State/);
   });
 
+  it("shows BLOCKED in red when ticket has blockers", () => {
+    const blockedTicket: TicketNode = {
+      ...ticket,
+      blockedBy: [{ id: "blocker1" }],
+    };
+    const output = formatTicketTable([blockedTicket]);
+    const dataLine = stripAnsi(output.split("\n")[2]);
+    expect(dataLine).toContain("BLOCKED");
+    expect(dataLine).not.toContain("[OPEN]");
+  });
+
+  it("does not show BLOCKED when ticket has no blockers", () => {
+    const output = formatTicketTable([ticket]);
+    const dataLine = stripAnsi(output.split("\n")[2]);
+    expect(dataLine).not.toContain("BLOCKED");
+    expect(dataLine).toContain("[OPEN]");
+  });
+
+  it("does not show BLOCKED when blockedBy is empty array", () => {
+    const unblockedTicket: TicketNode = {
+      ...ticket,
+      blockedBy: [],
+    };
+    const output = formatTicketTable([unblockedTicket]);
+    const dataLine = stripAnsi(output.split("\n")[2]);
+    expect(dataLine).not.toContain("BLOCKED");
+    expect(dataLine).toContain("[OPEN]");
+  });
+
   it("aligns header and data columns", () => {
     const output = formatTicketTable([ticket]);
     const lines = output.split("\n");

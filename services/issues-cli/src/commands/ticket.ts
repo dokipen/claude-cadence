@@ -176,6 +176,9 @@ const LIST_TICKETS = gql`
           labels {
             name
           }
+          blockedBy {
+            id
+          }
         }
       }
       pageInfo {
@@ -228,6 +231,9 @@ const LIST_TICKETS_VERBOSE = gql`
           labels {
             id
             name
+          }
+          blockedBy {
+            id
           }
           createdAt
           updatedAt
@@ -312,6 +318,7 @@ export interface TicketNode {
   assignee?: { login: string } | null;
   project?: { name: string } | null;
   labels?: { name: string }[];
+  blockedBy?: { id: string }[];
 }
 
 export function formatTicketTable(tickets: TicketNode[], options?: { showProject?: boolean; showHeader?: boolean }, maxWidth = 120): string {
@@ -320,7 +327,8 @@ export function formatTicketTable(tickets: TicketNode[], options?: { showProject
 
   const rows = tickets.map((t) => {
     const id = t.number != null ? chalk.bold(`#${t.number}`) : chalk.dim(`#${t.id}`);
-    const state = formatState(t.state);
+    const isBlocked = (t.blockedBy?.length ?? 0) > 0;
+    const state = isBlocked ? chalk.red("BLOCKED") : formatState(t.state);
     const priority = formatPriority(t.priority);
     const project = showProject && t.project ? chalk.green(t.project.name) : "";
     const points = t.storyPoints != null ? chalk.magenta(`${t.storyPoints}pts`) : chalk.dim("-");
@@ -697,6 +705,7 @@ export function registerTicketCommand(program: Command): void {
           assignee: { login: string } | null;
           project: { id: string; name: string } | null;
           labels: { id?: string; name: string }[];
+          blockedBy?: { id: string }[];
           description?: string | null;
           acceptanceCriteria?: string | null;
           createdAt?: string;
