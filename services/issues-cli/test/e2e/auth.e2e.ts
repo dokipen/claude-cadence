@@ -103,6 +103,22 @@ describe("Auth", () => {
     });
   });
 
+  describe("login --code direct (deprecated)", () => {
+    it("should print deprecation warning when a literal code is passed", async () => {
+      const result = await suite.cli("auth", "login", "--code", "fake-oauth-code");
+      const output = result.stdout + result.stderr;
+      expect(output).toContain("deprecated");
+      expect(output).toContain("--code -");
+      expect(result.exitCode).not.toBe(0); // fake code fails auth, but warning was printed
+    });
+
+    it("should not print deprecation warning when --code - is used", async () => {
+      const result = await suite.cliWithStdin("fake-oauth-code", "auth", "login", "--code", "-");
+      const output = result.stdout + result.stderr;
+      expect(output).not.toContain("deprecated");
+    });
+  });
+
   describe("login --code stdin", () => {
     it("should read OAuth code from stdin when --code - is used", async () => {
       const result = await suite.cliWithStdin("fake-oauth-code", "auth", "login", "--code", "-");
