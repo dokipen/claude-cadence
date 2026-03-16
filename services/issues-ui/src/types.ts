@@ -49,7 +49,6 @@ export interface RelatedTicket {
 }
 
 export interface TicketDetail extends Ticket {
-  number: number;
   project: Project;
   comments: Comment[];
   blocks: RelatedTicket[];
