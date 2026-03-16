@@ -46,6 +46,7 @@ function AppShell() {
 
   const handleProjectChange = useCallback((id: string) => {
     setSelectedProjectId(id);
+    setFilters({});
   }, []);
 
   return (

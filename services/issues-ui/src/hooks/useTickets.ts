@@ -66,7 +66,7 @@ export function useTickets(
           projectId,
           first,
           labelName: labelName || undefined,
-          isBlocked: isBlocked ?? undefined,
+          isBlocked,
           priority: priority || undefined,
         })
         .then((result) => {

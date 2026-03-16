@@ -78,3 +78,9 @@
 .clearButton:hover {
   color: var(--text);
 }
+
+@media (max-width: 768px) {
+  .filterBar {
+    flex-wrap: wrap;
+  }
+}

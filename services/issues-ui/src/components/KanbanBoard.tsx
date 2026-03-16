@@ -1,6 +1,5 @@
 import type { TicketState } from "../types";
-import { useTickets } from "../hooks/useTickets";
-import type { TicketFilters } from "../hooks/useTickets";
+import { useTickets, type TicketFilters } from "../hooks/useTickets";
 import { KanbanColumn } from "./KanbanColumn";
 import styles from "../styles/board.module.css";
 
