@@ -14,6 +14,8 @@ interface UseTicketResult {
   error: string | null;
 }
 
+const MAX_CONSECUTIVE_FAILURES = 3;
+
 export function useTicket(id: string | undefined): UseTicketResult {
   const { logout } = useAuth();
   const [ticket, setTicket] = useState<TicketDetail | null>(null);
@@ -31,27 +33,41 @@ export function useTicket(id: string | undefined): UseTicketResult {
     }
 
     let cancelled = false;
+    let isInitialFetch = true;
+    let consecutiveFailures = 0;
 
     const fetchTicket = () => {
+      if (isInitialFetch) {
+        setLoading(true);
+        setError(null);
+      }
+
       const client = getClient(handleAuthFailure);
       client
         .request<TicketDetailResponse>(TICKET_DETAIL_QUERY, { id })
         .then((result) => {
-          if (!cancelled) setTicket(result.ticket);
+          if (!cancelled) {
+            setTicket(result.ticket);
+            consecutiveFailures = 0;
+            setError(null);
+          }
         })
-        .catch((err) => {
-          if (!cancelled)
-            setError(
-              err instanceof Error ? err.message : "Failed to load ticket",
-            );
+        .catch(() => {
+          if (!cancelled) {
+            consecutiveFailures++;
+            if (isInitialFetch || consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+              setError("Failed to load ticket");
+            }
+          }
         })
         .finally(() => {
-          if (!cancelled) setLoading(false);
+          if (!cancelled) {
+            setLoading(false);
+            isInitialFetch = false;
+          }
         });
     };
 
-    setLoading(true);
-    setError(null);
     fetchTicket();
 
     const interval = setInterval(fetchTicket, 60_000);
