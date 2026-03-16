@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import type { Ticket, TicketState, Priority } from "../types";
 import { BOARD_TICKETS_QUERY } from "../api/queries";
 import { usePollingQuery } from "./usePollingQuery";

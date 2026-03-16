@@ -41,12 +41,11 @@ export function usePollingQuery<TResponse, TData>({
   const variablesKey = variables === null ? null : JSON.stringify(variables);
 
   useEffect(() => {
-    if (variablesKey === null) {
+    if (variables === null) {
       setLoading(false);
       return;
     }
 
-    const parsedVariables = JSON.parse(variablesKey);
     let cancelled = false;
     let isInitialFetch = true;
     let consecutiveFailures = 0;
@@ -59,7 +58,7 @@ export function usePollingQuery<TResponse, TData>({
 
       const client = getClient(handleAuthFailure);
       client
-        .request<TResponse>(query, parsedVariables)
+        .request<TResponse>(query, variables)
         .then((result) => {
           if (!cancelled) {
             setData(transform(result));
