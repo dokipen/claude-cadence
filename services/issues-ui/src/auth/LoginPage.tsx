@@ -63,8 +63,8 @@ export function LoginPage() {
         <img
           src="/cadence-icon.svg"
           alt="Cadence"
-          width={48}
-          height={48}
+          width={64}
+          height={64}
           style={{ marginBottom: "1rem" }}
         />
         <h1 style={styles.title}>Cadence</h1>
@@ -148,6 +148,8 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: "-0.02em",
     color: "var(--primary)",
     margin: 0,
+    marginTop: "-2px",
+    marginLeft: "-6px",
   },
   subtitle: {
     color: "var(--text-secondary)",
