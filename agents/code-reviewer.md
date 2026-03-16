@@ -44,6 +44,31 @@ Before reviewing, understand the project's stack and conventions:
 - Resource leaks (unclosed handles, listeners)
 - Proper async/concurrent patterns
 
+### 5. Platform/Environment Edge Cases
+- BSD vs GNU CLI differences (e.g., `sed -i`, `date`, `timeout` vs `gtimeout`)
+- Missing platform guards (`!kIsWeb`, `Platform.isAndroid`, OS-specific paths)
+- Locale-dependent behavior (string sorting, number formatting, date parsing)
+
+### 6. Test Quality
+- Singleton or global state not torn down between tests (leaks across test cases)
+- Non-deterministic tests (time-dependent, order-dependent, random without seed)
+- Misleading test names that don't match what the test actually verifies
+
+### 7. Localization Completeness
+- User-facing strings not routed through localization
+- Missing keys in locale files when new strings are added
+- Stale or orphaned localization keys no longer referenced in code
+
+### 8. Non-Code File Review
+- Fastlane config (Fastfile, Matchfile, Appfile) — correct lanes, signing, and build settings
+- CI/CD YAML (GitHub Actions, GitLab CI) — correct triggers, caching, secret references
+- Build and deploy configs (Dockerfile, Makefile, pubspec.yaml) — version bumps, dependency changes
+
+### 9. Dead Code Detection
+- Unused exports, providers, or declarations introduced or left behind by the change
+- Stale feature flags, config entries, or constants that no longer have references
+- Commented-out code blocks that should be removed rather than left in
+
 ## Review Process
 
 1. Check the diff:
