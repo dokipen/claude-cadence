@@ -57,6 +57,16 @@ const REMOVE_LABEL = gql`
   }
 `;
 
+const DELETE_LABEL = gql`
+  mutation DeleteLabel($id: ID!) {
+    deleteLabel(id: $id) {
+      id
+      name
+      color
+    }
+  }
+`;
+
 // --- Commands ---
 
 export function registerLabelCommand(program: Command): void {
@@ -201,6 +211,37 @@ export function registerLabelCommand(program: Command): void {
         console.log();
       } catch (error) {
         spinner.fail("Failed to remove label");
+        handleError(error);
+      }
+    });
+
+  // --- delete ---
+  label
+    .command("delete <name-or-id>")
+    .description("Delete a label (removes it from all tickets)")
+    .option("--json", "Output raw JSON")
+    .action(async (nameOrId: string, opts: { json?: boolean }) => {
+      const spinner = ora("Deleting label...").start();
+      try {
+        const labelId = await resolveLabelId(nameOrId);
+        const client = getClient();
+        const data = await client.request<{
+          deleteLabel: { id: string; name: string; color: string };
+        }>(DELETE_LABEL, { id: labelId });
+
+        if (opts.json) {
+          spinner.stop();
+          console.log(JSON.stringify(data.deleteLabel, null, 2));
+          return;
+        }
+
+        spinner.succeed("Label deleted");
+        const l = data.deleteLabel;
+        console.log();
+        console.log(`  ${chalk.dim(`#${l.id}`)}  ${chalk.hex(l.color)(l.name)}  ${chalk.dim(l.color)}`);
+        console.log();
+      } catch (error) {
+        spinner.fail("Failed to delete label");
         handleError(error);
       }
     });

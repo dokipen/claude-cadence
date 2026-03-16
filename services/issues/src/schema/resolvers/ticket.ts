@@ -662,6 +662,37 @@ export const ticketResolvers = {
         });
       }
     },
+
+    deleteLabel: async (
+      _: unknown,
+      { id }: { id: string },
+      context: Context
+    ) => {
+      requireAuth(context);
+      const { prisma } = context;
+
+      try {
+        const existing = await prisma.label.findUnique({ where: { id } });
+        if (!existing) {
+          throw new GraphQLError("Label not found", {
+            extensions: { code: "NOT_FOUND" },
+          });
+        }
+
+        await prisma.$transaction(async (tx) => {
+          await tx.ticketLabel.deleteMany({ where: { labelId: id } });
+          await tx.label.delete({ where: { id } });
+        });
+
+        return existing;
+      } catch (error) {
+        if (error instanceof GraphQLError) throw error;
+        console.error("Failed to delete label:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to delete label", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
+    },
   },
 
   Comment: {
