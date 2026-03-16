@@ -5,13 +5,18 @@ CONF_DIR="/etc/caddy/conf.d"
 SITE_FILE="cadence.caddy"
 
 log() { printf '%s\n' "$@"; }
+warn() { printf 'Warning: %s\n' "$@" >&2; }
 err() { printf 'Error: %s\n' "$@" >&2; exit 1; }
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") <hostname>
+Usage: $(basename "$0") [--force] <hostname>
 
 Generate and install a Caddy site block for Claude Cadence services.
+
+Options:
+  --force    Bypass the agentd auth configuration check
+  -h, --help Show this help message
 
 Example:
   $(basename "$0") cadence.bootsy.internal
@@ -26,7 +31,21 @@ EOF
 command -v caddy >/dev/null 2>&1 || err "caddy is not installed"
 command -v systemctl >/dev/null 2>&1 || err "systemctl not found — this script requires systemd"
 
-vhost="${1:-}"
+# --- Arguments ---
+
+force=false
+vhost=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --force) force=true ;;
+    -h|--help) usage; exit 0 ;;
+    -*) err "Unknown option: $1" ;;
+    *) vhost="$1" ;;
+  esac
+  shift
+done
+
 if [ -z "$vhost" ]; then
   usage
   exit 1
@@ -45,6 +64,31 @@ if [ -f /etc/caddy/Caddyfile ]; then
   fi
 else
   err "/etc/caddy/Caddyfile not found"
+fi
+
+# Verify agentd token auth is configured — Caddy forwards external traffic to
+# loopback, bypassing agentd's own bind-address guard.
+AGENTD_CONFIG="${HOME}/.config/agentd/config.yaml"
+if [ ! -f "$AGENTD_CONFIG" ] || ! grep -q 'mode:.*token' "$AGENTD_CONFIG" 2>/dev/null; then
+  warn "agentd token authentication is not configured."
+  warn ""
+  warn "  This Caddy site block forwards external traffic to agentd on localhost,"
+  warn "  bypassing agentd's bind-address guard. Without token auth, the gRPC API"
+  warn "  will be accessible to anyone on the network without authentication."
+  warn ""
+  warn "  To fix, set auth.mode to \"token\" in:"
+  warn "    ${AGENTD_CONFIG}"
+  warn ""
+  warn "  Example:"
+  warn "    auth:"
+  warn "      mode: \"token\""
+  warn "      token_env_var: \"AGENTD_TOKEN\""
+  warn ""
+  if [ "$force" = true ]; then
+    warn "Continuing anyway (--force)."
+  else
+    err "Aborting. Use --force to override this check."
+  fi
 fi
 
 config="$(cat <<EOF
