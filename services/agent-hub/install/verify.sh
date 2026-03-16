@@ -37,7 +37,8 @@ done
 # --- Read API token from remote env file ---
 
 info "Reading API token from $HOST..."
-HUB_API_TOKEN="$(ssh "$HOST" "grep '^HUB_API_TOKEN=' /etc/agent-hub/env | cut -d= -f2")"
+HUB_API_TOKEN="$(ssh "$HOST" "set -o pipefail; grep '^HUB_API_TOKEN=' /etc/agent-hub/env | cut -d= -f2-")" || \
+    error "SSH to $HOST failed or env file not found"
 if [[ -z "$HUB_API_TOKEN" ]]; then
     error "Could not read HUB_API_TOKEN from $HOST:/etc/agent-hub/env"
 fi

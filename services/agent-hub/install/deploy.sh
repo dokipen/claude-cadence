@@ -78,7 +78,7 @@ ssh "$HOST" "sudo mv /tmp/agent-hub $REMOTE_BINARY && sudo chmod 755 $REMOTE_BIN
 
 # --- Ensure config directory ---
 
-ssh "$HOST" "sudo mkdir -p $REMOTE_CONFIG_DIR && sudo chown $SERVICE_USER: $REMOTE_CONFIG_DIR"
+ssh "$HOST" "sudo mkdir -p $REMOTE_CONFIG_DIR && sudo chown $SERVICE_USER: $REMOTE_CONFIG_DIR && sudo chmod 750 $REMOTE_CONFIG_DIR"
 
 # --- Install config (only if missing) ---
 

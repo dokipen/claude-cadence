@@ -50,6 +50,11 @@ done
 
 [[ -z "$NAME" ]] && error "--name is required"
 
+# Validate NAME — alphanumeric, hyphens, underscores only
+if [[ ! "$NAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+    error "Invalid name '$NAME'. Must match [a-zA-Z0-9_-]+"
+fi
+
 # --- Detect deploy mode ---
 
 if [[ -n "$HOST" ]]; then
@@ -65,7 +70,8 @@ info "Deploying agentd '$NAME' ($MODE)..."
 # --- Read HUB_AGENT_TOKEN from hub's env file ---
 
 info "Reading HUB_AGENT_TOKEN from $HUB_HOST..."
-HUB_AGENT_TOKEN="$(ssh "$HUB_HOST" "grep '^HUB_AGENT_TOKEN=' /etc/agent-hub/env | cut -d= -f2")"
+HUB_AGENT_TOKEN="$(ssh "$HUB_HOST" "set -o pipefail; grep '^HUB_AGENT_TOKEN=' /etc/agent-hub/env | cut -d= -f2-")" || \
+    error "SSH to $HUB_HOST failed or env file not found. Deploy agent-hub first."
 if [[ -z "$HUB_AGENT_TOKEN" ]]; then
     error "Could not read HUB_AGENT_TOKEN from $HUB_HOST:/etc/agent-hub/env. Deploy agent-hub first."
 fi
@@ -97,9 +103,9 @@ deploy_remote() {
     # Ensure config dir
     ssh "$HOST" "sudo mkdir -p $remote_config_dir"
 
-    # Write env file with hub token
+    # Write env file with hub token (pipe via stdin to avoid token in process args)
     info "Writing env file..."
-    ssh "$HOST" "printf 'HUB_AGENT_TOKEN=%s\n' '$HUB_AGENT_TOKEN' | sudo tee $remote_env > /dev/null && sudo chmod 600 $remote_env"
+    printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" | ssh "$HOST" "sudo tee $remote_env > /dev/null && sudo chmod 600 $remote_env"
 
     # Add hub section to config if missing
     if ssh "$HOST" "grep -q '^hub:' $remote_config 2>/dev/null"; then
@@ -180,10 +186,10 @@ deploy_local() {
     cp "$binary" "$bin_dir/agentd"
     chmod 755 "$bin_dir/agentd"
 
-    # Write env file
+    # Write env file (create with restricted permissions first to avoid race)
     info "Writing env file..."
+    install -m 600 /dev/null "$env_file"
     printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" > "$env_file"
-    chmod 600 "$env_file"
 
     # Write config if missing
     if [[ -f "$config_file" ]]; then
