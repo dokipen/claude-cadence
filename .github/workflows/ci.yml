@@ -98,7 +98,11 @@ jobs:
           name: issues-service-build
           path: services/issues/
       - name: Restore Prisma CLI
-        run: cd services/issues && npm rebuild prisma @prisma/client && npx prisma generate
+        run: |
+          cd services/issues
+          chmod +x node_modules/@prisma/engines/* 2>/dev/null || true
+          npm rebuild prisma @prisma/client
+          npx prisma generate
       - name: Test CLI
         run: cd services/issues-cli && npm ci && npm run typecheck && npm test
       - name: Cleanup workspace
