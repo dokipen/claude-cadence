@@ -463,7 +463,7 @@ Central docs index, linked from the root `README.md`. Links to:
 Covers:
 - Prerequisites (Node 20+, Docker)
 - Local development setup (`npm install`, env vars, `prisma migrate dev`, `prisma db seed`, `npm run dev`)
-- CLI installation (`cd services/issues-cli && npm install && npm link`)
+- CLI installation (`cd services/issues-cli && npm install && npm link --prefix "$HOME/.local"`)
 - Docker deployment (`docker compose up --build`)
 - Environment variables reference (DATABASE_URL, JWT_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET)
 - Configuring cadence to use the issues service (CLAUDE.md `Ticket Provider` section)
