@@ -18,6 +18,7 @@ export interface AuthenticatedContext {
   loaders: Loaders;
   currentUser: User | null;
   accessToken?: string;
+  clientIp?: string;
 }
 
 const oauthProvider = new GitHubOAuthProvider();
