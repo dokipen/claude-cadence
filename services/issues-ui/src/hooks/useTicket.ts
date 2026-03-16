@@ -52,13 +52,11 @@ export function useTicket(id: string | undefined): UseTicketResult {
             setError(null);
           }
         })
-        .catch((err) => {
+        .catch(() => {
           if (!cancelled) {
             consecutiveFailures++;
-            if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-              setError(
-                err instanceof Error ? err.message : "Failed to load ticket",
-              );
+            if (isInitialFetch || consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+              setError("Failed to load ticket");
             }
           }
         })

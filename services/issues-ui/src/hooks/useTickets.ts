@@ -70,13 +70,11 @@ export function useTickets(
             setError(null);
           }
         })
-        .catch((err) => {
+        .catch(() => {
           if (!cancelled) {
             consecutiveFailures++;
-            if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-              setError(
-                err instanceof Error ? err.message : "Failed to load tickets",
-              );
+            if (isInitialFetch || consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+              setError("Failed to load tickets");
             }
           }
         })
