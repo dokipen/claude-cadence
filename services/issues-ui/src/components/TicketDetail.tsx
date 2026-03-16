@@ -135,7 +135,7 @@ export function TicketDetail() {
 
   return (
     <div className={styles.container} data-testid="ticket-detail">
-      <Link to="/" className={styles.backLink} data-testid="back-link">
+      <Link to={`/projects/${ticket.project.id}`} className={styles.backLink} data-testid="back-link">
         &larr; Back to board
       </Link>
 

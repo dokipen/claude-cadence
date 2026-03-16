@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { BrowserRouter, Routes, Route, Navigate, Link, useLocation } from "react-router";
+import { BrowserRouter, Routes, Route, Navigate, Link, useLocation, useMatch, useNavigate } from "react-router";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { LoginPage } from "./auth/LoginPage";
 import { AuthCallback } from "./auth/AuthCallback";
@@ -7,7 +7,7 @@ import { KanbanBoard } from "./components/KanbanBoard";
 import { FilterBar } from "./components/FilterBar";
 import { TicketDetail } from "./components/TicketDetail";
 import { AgentManager } from "./components/AgentManager";
-import { ProjectSelector, STORAGE_KEY } from "./components/ProjectSelector";
+import { ProjectSelector } from "./components/ProjectSelector";
 import { useProjects } from "./hooks/useProjects";
 import type { TicketFilters } from "./hooks/useTickets";
 import type { ReactNode } from "react";
@@ -44,23 +44,45 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   return children;
 }
 
+function ProjectRedirect() {
+  const { projects, loading } = useProjects();
+
+  if (loading) {
+    return (
+      <div style={loadingStyle}>
+        <p style={{ color: "var(--text-muted)" }}>Loading…</p>
+      </div>
+    );
+  }
+
+  if (projects.length > 0) {
+    return <Navigate to={`/projects/${projects[0].id}`} replace />;
+  }
+
+  return (
+    <div style={loadingStyle}>
+      <p style={{ color: "var(--text-muted)" }}>No projects available</p>
+    </div>
+  );
+}
+
 function AppShell() {
   const { user, logout } = useAuth();
   const { projects } = useProjects();
   const location = useLocation();
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
-    () => localStorage.getItem(STORAGE_KEY),
-  );
+  const navigate = useNavigate();
+  const boardMatch = useMatch("/projects/:projectId/*");
+  const projectId = boardMatch?.params.projectId ?? null;
   const [filters, setFilters] = useState<TicketFilters>({});
-  const showFilters = !location.pathname.startsWith("/ticket/") && !location.pathname.startsWith("/agents");
+  const showFilters = projectId && !location.pathname.startsWith("/ticket/") && !location.pathname.startsWith("/agents");
 
-  const selectedProject = projects.find((p) => p.id === selectedProjectId);
+  const selectedProject = projects.find((p) => p.id === projectId);
   const repoUrl = selectedProject?.repository;
 
   const handleProjectChange = useCallback((id: string) => {
-    setSelectedProjectId(id);
+    navigate(`/projects/${id}`);
     setFilters({});
-  }, []);
+  }, [navigate]);
 
   return (
     <div className={layoutStyles.shell}>
@@ -75,10 +97,12 @@ function AppShell() {
           </Link>
         </div>
         <div className={layoutStyles.headerCenter}>
-          <ProjectSelector
-            selectedProjectId={selectedProjectId}
-            onProjectChange={handleProjectChange}
-          />
+          {projectId !== null ? (
+            <ProjectSelector
+              selectedProjectId={projectId}
+              onProjectChange={handleProjectChange}
+            />
+          ) : null}
         </div>
         <div className={layoutStyles.headerRight}>
           {user && (
@@ -93,17 +117,18 @@ function AppShell() {
           )}
         </div>
       </header>
-      {selectedProjectId && showFilters && (
+      {showFilters && (
         <FilterBar filters={filters} onChange={setFilters} />
       )}
       <main className={layoutStyles.main}>
         <Routes>
-          <Route path="/ticket/:id" element={<TicketDetail />} />
           <Route path="/agents" element={<AgentManager />} />
           <Route
-            path="/*"
-            element={<KanbanBoard projectId={selectedProjectId} filters={filters} repoUrl={repoUrl} />}
+            path="/projects/:projectId/*"
+            element={<KanbanBoard projectId={projectId} filters={filters} repoUrl={repoUrl} />}
           />
+          <Route path="/ticket/:id" element={<TicketDetail />} />
+          <Route path="/*" element={<ProjectRedirect />} />
         </Routes>
       </main>
     </div>

@@ -2,14 +2,10 @@ import { test, expect } from "./fixtures/auth";
 
 test.describe("auto-refresh", () => {
   test("board re-fetches tickets every 60 seconds", async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("cadence_project_id", "e2e-test-project");
-    });
-
     // Install fake timers before navigating
     await page.clock.install();
 
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
     await expect(
       page.getByTestId("column-BACKLOG").getByText("Backlog ticket"),
@@ -40,15 +36,11 @@ test.describe("auto-refresh", () => {
   });
 
   test("ticket detail re-fetches data every 60 seconds", async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("cadence_project_id", "e2e-test-project");
-    });
-
     // Install fake timers before navigating
     await page.clock.install();
 
     // Navigate to board, then click into a ticket detail
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
     await page
       .getByTestId("column-REFINED")
@@ -82,13 +74,9 @@ test.describe("auto-refresh", () => {
   test("board pauses polling when tab is hidden and resumes on visible", async ({
     page,
   }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("cadence_project_id", "e2e-test-project");
-    });
-
     await page.clock.install();
 
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     // Track GraphQL requests
@@ -149,13 +137,9 @@ test.describe("auto-refresh", () => {
   test("ticket detail pauses polling when tab is hidden and resumes on visible", async ({
     page,
   }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("cadence_project_id", "e2e-test-project");
-    });
-
     await page.clock.install();
 
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
     await page
       .getByTestId("column-REFINED")

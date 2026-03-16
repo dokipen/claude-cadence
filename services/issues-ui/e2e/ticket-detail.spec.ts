@@ -2,13 +2,11 @@ import { test, expect } from "./fixtures/auth";
 
 test.describe("ticket detail page", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("cadence_project_id", "e2e-test-project");
-    });
+    // No setup needed — each test navigates to the project URL directly
   });
 
   test("clicking a ticket card navigates to detail page", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     const refinedCard = page.getByTestId("column-REFINED").getByTestId("ticket-card");
@@ -19,7 +17,7 @@ test.describe("ticket detail page", () => {
   });
 
   test("detail page shows ticket title and number", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
@@ -30,7 +28,7 @@ test.describe("ticket detail page", () => {
   });
 
   test("detail page shows state and priority", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
 
@@ -39,7 +37,7 @@ test.describe("ticket detail page", () => {
   });
 
   test("detail page shows assignee", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
 
@@ -47,7 +45,7 @@ test.describe("ticket detail page", () => {
   });
 
   test("detail page shows story points", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
 
@@ -55,7 +53,7 @@ test.describe("ticket detail page", () => {
   });
 
   test("detail page shows labels", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
 
@@ -63,7 +61,7 @@ test.describe("ticket detail page", () => {
   });
 
   test("detail page shows description", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
 
@@ -71,7 +69,7 @@ test.describe("ticket detail page", () => {
   });
 
   test("detail page shows acceptance criteria", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
 
@@ -79,7 +77,7 @@ test.describe("ticket detail page", () => {
   });
 
   test("detail page shows comments with author and body", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
 
@@ -90,7 +88,7 @@ test.describe("ticket detail page", () => {
   });
 
   test("detail page shows blocked-by relationships", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
 
@@ -100,7 +98,7 @@ test.describe("ticket detail page", () => {
   });
 
   test("blocking link navigates to other ticket", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
 
@@ -109,7 +107,7 @@ test.describe("ticket detail page", () => {
   });
 
   test("filter bar is not visible on detail page", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
     await expect(page.getByTestId("filter-bar")).toBeVisible();
 
@@ -120,7 +118,7 @@ test.describe("ticket detail page", () => {
   });
 
   test("back link returns to board", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
 
@@ -129,18 +127,19 @@ test.describe("ticket detail page", () => {
   });
 
   test("back link preserves project selection", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
 
     await page.getByTestId("back-link").click();
     await expect(page.getByTestId("kanban-board")).toBeVisible();
+    await expect(page).toHaveURL(/\/projects\/e2e-test-project/);
     await expect(page.getByTestId("column-REFINED").getByText("Refined ticket")).toBeVisible();
   });
 
   test("direct URL to ticket detail works", async ({ page }) => {
     // First navigate to get a real ticket ID
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     const card = page.getByTestId("column-REFINED").getByTestId("ticket-card");
@@ -154,7 +153,7 @@ test.describe("ticket detail page", () => {
   });
 
   test("ticket with no comments shows empty state", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     // Backlog ticket has no comments — use first() since markdown ticket is also in BACKLOG
     await page.getByTestId("column-BACKLOG").getByTestId("ticket-card").first().click();
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
@@ -163,7 +162,7 @@ test.describe("ticket detail page", () => {
   });
 
   test("ticket with no assignee shows unassigned", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     // Backlog ticket has no assignee — use first() since markdown ticket is also in BACKLOG
     await page.getByTestId("column-BACKLOG").getByTestId("ticket-card").first().click();
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
@@ -172,7 +171,7 @@ test.describe("ticket detail page", () => {
   });
 
   test("ticket with no labels shows none", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     // In-progress ticket has no labels
     await page.getByTestId("column-IN_PROGRESS").getByTestId("ticket-card").click();
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
@@ -181,7 +180,7 @@ test.describe("ticket detail page", () => {
   });
 
   test("detail page shows blocks relationships", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     // In-progress ticket blocks the refined ticket
     await page.getByTestId("column-IN_PROGRESS").getByTestId("ticket-card").click();
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
@@ -194,13 +193,11 @@ test.describe("ticket detail page", () => {
 
 test.describe("markdown rendering in ticket detail", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("cadence_project_id", "e2e-test-project");
-    });
+    // No setup needed — each test navigates to the project URL directly
   });
 
   test("description renders link as anchor with target=_blank", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     // Navigate to the markdown ticket (in BACKLOG column, title "Markdown ticket")
@@ -216,7 +213,7 @@ test.describe("markdown rendering in ticket detail", () => {
   });
 
   test("description renders bold text as strong element", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     const markdownCard = page.getByTestId("column-BACKLOG").getByText("Markdown ticket");
@@ -229,7 +226,7 @@ test.describe("markdown rendering in ticket detail", () => {
   });
 
   test("description renders inline code as code element", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     const markdownCard = page.getByTestId("column-BACKLOG").getByText("Markdown ticket");
@@ -242,7 +239,7 @@ test.describe("markdown rendering in ticket detail", () => {
   });
 
   test("description renders list items", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     const markdownCard = page.getByTestId("column-BACKLOG").getByText("Markdown ticket");
@@ -258,7 +255,7 @@ test.describe("markdown rendering in ticket detail", () => {
   });
 
   test("comment renders link as anchor with target=_blank", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     const markdownCard = page.getByTestId("column-BACKLOG").getByText("Markdown ticket");
@@ -273,7 +270,7 @@ test.describe("markdown rendering in ticket detail", () => {
   });
 
   test("comment renders inline code as code element", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     const markdownCard = page.getByTestId("column-BACKLOG").getByText("Markdown ticket");
@@ -286,7 +283,7 @@ test.describe("markdown rendering in ticket detail", () => {
   });
 
   test("comment renders bold text as strong element", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     const markdownCard = page.getByTestId("column-BACKLOG").getByText("Markdown ticket");
