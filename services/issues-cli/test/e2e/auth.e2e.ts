@@ -87,6 +87,24 @@ describe("Auth", () => {
     });
   });
 
+  describe("login --code stdin", () => {
+    it("should read OAuth code from stdin when --code - is used", async () => {
+      const result = await suite.cliWithStdin("fake-oauth-code", "auth", "login", "--code", "-");
+      // The code reaches the server (auth fails because it's not a real OAuth code,
+      // but the important thing is that it was read from stdin, not treated as literal "-")
+      const output = result.stdout + result.stderr;
+      expect(output).not.toContain("no code received from stdin");
+      expect(result.exitCode).not.toBe(0); // expected: fake code fails OAuth validation
+    });
+
+    it("should fail with empty stdin when --code - is used", async () => {
+      const result = await suite.cliWithStdin("", "auth", "login", "--code", "-");
+      const output = result.stdout + result.stderr;
+      expect(output).toContain("no code received from stdin");
+      expect(result.exitCode).not.toBe(0);
+    });
+  });
+
   describe("logout", () => {
     it("should succeed even without stored token", async () => {
       const result = await suite.cli("auth", "logout");
