@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { getClient } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { usePageVisibility } from "./usePageVisibility";
 
 const MAX_CONSECUTIVE_FAILURES = 3;
 const DEFAULT_INTERVAL_MS = 60_000;
@@ -29,6 +30,7 @@ export function usePollingQuery<TResponse, TData>({
   intervalMs = DEFAULT_INTERVAL_MS,
 }: UsePollingQueryOptions<TResponse, TData>): UsePollingQueryResult<TData> {
   const { logout } = useAuth();
+  const hidden = usePageVisibility();
   const [data, setData] = useState<TData>(initialData);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +38,8 @@ export function usePollingQuery<TResponse, TData>({
   const handleAuthFailure = useCallback(() => {
     logout();
   }, [logout]);
+
+  const hasFetchedRef = useRef(false);
 
   // Serialize variables for stable dependency comparison
   const variablesKey = variables === null ? null : JSON.stringify(variables);
@@ -47,7 +51,7 @@ export function usePollingQuery<TResponse, TData>({
     }
 
     let cancelled = false;
-    let isInitialFetch = true;
+    const isInitialFetch = !hasFetchedRef.current;
     let consecutiveFailures = 0;
 
     const fetchData = () => {
@@ -80,19 +84,23 @@ export function usePollingQuery<TResponse, TData>({
         .finally(() => {
           if (!cancelled) {
             setLoading(false);
-            isInitialFetch = false;
+            hasFetchedRef.current = true;
           }
         });
     };
 
-    fetchData();
+    if (hidden) {
+      if (isInitialFetch) setLoading(false);
+    } else {
+      fetchData();
+    }
 
-    const interval = setInterval(fetchData, intervalMs);
+    const interval = hidden ? null : setInterval(fetchData, intervalMs);
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
     };
-  }, [variablesKey, query, transform, errorMessage, intervalMs, handleAuthFailure]);
+  }, [variablesKey, query, transform, errorMessage, intervalMs, handleAuthFailure, hidden]);
 
   return { data, loading, error };
 }

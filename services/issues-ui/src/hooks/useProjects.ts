@@ -3,6 +3,7 @@ import type { Project } from "../types";
 import { getClient } from "../api/client";
 import { PROJECTS_QUERY } from "../api/queries";
 import { useAuth } from "../auth/AuthContext";
+import { usePageVisibility } from "./usePageVisibility";
 
 interface UseProjectsResult {
   projects: Project[];
@@ -12,6 +13,7 @@ interface UseProjectsResult {
 
 export function useProjects(): UseProjectsResult {
   const { logout } = useAuth();
+  const hidden = usePageVisibility();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,14 +43,18 @@ export function useProjects(): UseProjectsResult {
         });
     };
 
-    fetchProjects();
+    if (hidden) {
+      setLoading(false);
+    } else {
+      fetchProjects();
+    }
 
-    const interval = setInterval(fetchProjects, 60_000);
+    const interval = hidden ? null : setInterval(fetchProjects, 60_000);
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
     };
-  }, [handleAuthFailure]);
+  }, [handleAuthFailure, hidden]);
 
   return { projects, loading, error };
 }
