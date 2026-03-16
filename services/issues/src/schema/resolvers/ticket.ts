@@ -141,7 +141,14 @@ export const ticketResolvers = {
     },
 
     labels: async (_: unknown, __: unknown, { prisma }: Context) => {
-      return prisma.label.findMany({ orderBy: { name: "asc" } });
+      try {
+        return await prisma.label.findMany({ orderBy: { name: "asc" } });
+      } catch (error) {
+        console.error("labels query failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to fetch labels", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
   },
 
@@ -170,58 +177,66 @@ export const ticketResolvers = {
         throw new Error(`Invalid priority: ${priority}. Must be one of: ${[...VALID_PRIORITIES].join(", ")}`);
       }
 
-      const MAX_RETRIES = 3;
-      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-        try {
-          return await prisma.$transaction(async (tx) => {
-            const project = await tx.project.findUnique({ where: { id: projectId } });
-            if (!project) {
-              throw new Error(`Project not found: ${projectId}`);
-            }
+      try {
+        const MAX_RETRIES = 3;
+        for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+          try {
+            return await prisma.$transaction(async (tx) => {
+              const project = await tx.project.findUnique({ where: { id: projectId } });
+              if (!project) {
+                throw new Error(`Project not found: ${projectId}`);
+              }
 
-            // Assign next sequential number within the project
-            const lastTicket = await tx.ticket.findFirst({
-              where: { projectId },
-              orderBy: { number: "desc" },
-              select: { number: true },
-            });
-            const nextNumber = (lastTicket?.number ?? 0) + 1;
+              // Assign next sequential number within the project
+              const lastTicket = await tx.ticket.findFirst({
+                where: { projectId },
+                orderBy: { number: "desc" },
+                select: { number: true },
+              });
+              const nextNumber = (lastTicket?.number ?? 0) + 1;
 
-            const data: Prisma.TicketCreateInput = {
-              number: nextNumber,
-              title,
-              description: description ?? null,
-              acceptanceCriteria: acceptanceCriteria ?? null,
-              storyPoints: storyPoints ?? null,
-              priority: priority ?? "MEDIUM",
-              project: { connect: { id: projectId } },
-            };
-
-            if (assigneeId) {
-              data.assignee = { connect: { id: assigneeId } };
-            }
-
-            if (labelIds && labelIds.length > 0) {
-              data.labels = {
-                create: labelIds.map((labelId: string) => ({
-                  label: { connect: { id: labelId } },
-                })),
+              const data: Prisma.TicketCreateInput = {
+                number: nextNumber,
+                title,
+                description: description ?? null,
+                acceptanceCriteria: acceptanceCriteria ?? null,
+                storyPoints: storyPoints ?? null,
+                priority: priority ?? "MEDIUM",
+                project: { connect: { id: projectId } },
               };
-            }
 
-            return tx.ticket.create({ data });
-          });
-        } catch (error: unknown) {
-          // Retry on unique constraint violation (concurrent number assignment)
-          const prismaError = error as { code?: string };
-          if (prismaError.code === "P2002" && attempt < MAX_RETRIES - 1) {
-            continue;
+              if (assigneeId) {
+                data.assignee = { connect: { id: assigneeId } };
+              }
+
+              if (labelIds && labelIds.length > 0) {
+                data.labels = {
+                  create: labelIds.map((labelId: string) => ({
+                    label: { connect: { id: labelId } },
+                  })),
+                };
+              }
+
+              return tx.ticket.create({ data });
+            });
+          } catch (error: unknown) {
+            // Retry on unique constraint violation (concurrent number assignment)
+            const prismaError = error as { code?: string };
+            if (prismaError.code === "P2002" && attempt < MAX_RETRIES - 1) {
+              continue;
+            }
+            throw error;
           }
-          throw error;
         }
+        // Unreachable, but satisfies TypeScript
+        throw new Error("Failed to create ticket after retries");
+      } catch (error) {
+        if (error instanceof GraphQLError) throw error;
+        console.error("createTicket mutation failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to create ticket", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
       }
-      // Unreachable, but satisfies TypeScript
-      throw new Error("Failed to create ticket after retries");
     },
 
     updateTicket: async (
@@ -244,23 +259,31 @@ export const ticketResolvers = {
         throw new Error(`Invalid priority: ${input.priority}. Must be one of: ${[...VALID_PRIORITIES].join(", ")}`);
       }
 
-      const existing = await prisma.ticket.findUnique({ where: { id } });
-      if (!existing) {
-        throw new Error(`Ticket not found: ${id}`);
+      try {
+        const existing = await prisma.ticket.findUnique({ where: { id } });
+        if (!existing) {
+          throw new Error(`Ticket not found: ${id}`);
+        }
+
+        const data: Prisma.TicketUpdateInput = {};
+
+        if (input.title !== undefined) data.title = input.title;
+        if (input.description !== undefined) data.description = input.description;
+        if (input.acceptanceCriteria !== undefined) data.acceptanceCriteria = input.acceptanceCriteria;
+        if (input.storyPoints !== undefined) data.storyPoints = input.storyPoints;
+        if (input.priority !== undefined) data.priority = input.priority;
+
+        return await prisma.ticket.update({
+          where: { id },
+          data,
+        });
+      } catch (error) {
+        if (error instanceof GraphQLError) throw error;
+        console.error("updateTicket mutation failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to update ticket", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
       }
-
-      const data: Prisma.TicketUpdateInput = {};
-
-      if (input.title !== undefined) data.title = input.title;
-      if (input.description !== undefined) data.description = input.description;
-      if (input.acceptanceCriteria !== undefined) data.acceptanceCriteria = input.acceptanceCriteria;
-      if (input.storyPoints !== undefined) data.storyPoints = input.storyPoints;
-      if (input.priority !== undefined) data.priority = input.priority;
-
-      return prisma.ticket.update({
-        where: { id },
-        data,
-      });
     },
 
     createLabel: async (
@@ -273,7 +296,15 @@ export const ticketResolvers = {
       if (!/^#[0-9a-fA-F]{6}$/.test(color)) {
         throw new Error(`Invalid color: ${color}. Must be a hex color (e.g. #ff0000)`);
       }
-      return prisma.label.create({ data: { name, color } });
+      try {
+        return await prisma.label.create({ data: { name, color } });
+      } catch (error) {
+        if (error instanceof GraphQLError) throw error;
+        console.error("createLabel mutation failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to create label", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
 
     addLabel: async (
@@ -283,16 +314,24 @@ export const ticketResolvers = {
     ) => {
       requireAuth(context);
       const { prisma } = context;
-      const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
-      if (!ticket) throw new Error(`Ticket not found: ${ticketId}`);
+      try {
+        const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+        if (!ticket) throw new Error(`Ticket not found: ${ticketId}`);
 
-      const label = await prisma.label.findUnique({ where: { id: labelId } });
-      if (!label) throw new Error(`Label not found: ${labelId}`);
+        const label = await prisma.label.findUnique({ where: { id: labelId } });
+        if (!label) throw new Error(`Label not found: ${labelId}`);
 
-      await prisma.ticketLabel.create({
-        data: { ticketId, labelId },
-      });
-      return ticket;
+        await prisma.ticketLabel.create({
+          data: { ticketId, labelId },
+        });
+        return ticket;
+      } catch (error) {
+        if (error instanceof GraphQLError) throw error;
+        console.error("addLabel mutation failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to add label", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
 
     removeLabel: async (
@@ -302,18 +341,26 @@ export const ticketResolvers = {
     ) => {
       requireAuth(context);
       const { prisma } = context;
-      const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
-      if (!ticket) throw new Error(`Ticket not found: ${ticketId}`);
+      try {
+        const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+        if (!ticket) throw new Error(`Ticket not found: ${ticketId}`);
 
-      const existing = await prisma.ticketLabel.findUnique({
-        where: { ticketId_labelId: { ticketId, labelId } },
-      });
-      if (!existing) throw new Error(`Label ${labelId} is not on ticket ${ticketId}`);
+        const existing = await prisma.ticketLabel.findUnique({
+          where: { ticketId_labelId: { ticketId, labelId } },
+        });
+        if (!existing) throw new Error(`Label ${labelId} is not on ticket ${ticketId}`);
 
-      await prisma.ticketLabel.delete({
-        where: { ticketId_labelId: { ticketId, labelId } },
-      });
-      return ticket;
+        await prisma.ticketLabel.delete({
+          where: { ticketId_labelId: { ticketId, labelId } },
+        });
+        return ticket;
+      } catch (error) {
+        if (error instanceof GraphQLError) throw error;
+        console.error("removeLabel mutation failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to remove label", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
 
     assignTicket: async (
@@ -323,12 +370,20 @@ export const ticketResolvers = {
     ) => {
       requireAuth(context);
       const { prisma } = context;
-      const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
-      if (!ticket) throw new Error(`Ticket not found: ${ticketId}`);
-      return prisma.ticket.update({
-        where: { id: ticketId },
-        data: { assigneeId: userId },
-      });
+      try {
+        const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+        if (!ticket) throw new Error(`Ticket not found: ${ticketId}`);
+        return await prisma.ticket.update({
+          where: { id: ticketId },
+          data: { assigneeId: userId },
+        });
+      } catch (error) {
+        if (error instanceof GraphQLError) throw error;
+        console.error("assignTicket mutation failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to assign ticket", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
 
     unassignTicket: async (
@@ -338,12 +393,20 @@ export const ticketResolvers = {
     ) => {
       requireAuth(context);
       const { prisma } = context;
-      const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
-      if (!ticket) throw new Error(`Ticket not found: ${ticketId}`);
-      return prisma.ticket.update({
-        where: { id: ticketId },
-        data: { assigneeId: null },
-      });
+      try {
+        const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+        if (!ticket) throw new Error(`Ticket not found: ${ticketId}`);
+        return await prisma.ticket.update({
+          where: { id: ticketId },
+          data: { assigneeId: null },
+        });
+      } catch (error) {
+        if (error instanceof GraphQLError) throw error;
+        console.error("unassignTicket mutation failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to unassign ticket", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
 
     transitionTicket: async (
@@ -353,27 +416,35 @@ export const ticketResolvers = {
     ) => {
       requireAuth(context);
       const { prisma } = context;
-      return prisma.$transaction(async (tx) => {
-        const ticket = await tx.ticket.findUnique({ where: { id } });
-        if (!ticket) throw new Error("Ticket not found");
+      try {
+        return await prisma.$transaction(async (tx) => {
+          const ticket = await tx.ticket.findUnique({ where: { id } });
+          if (!ticket) throw new Error("Ticket not found");
 
-        const transition = validateTransition(ticket.state, to);
-        if (!transition.valid) {
-          throw new Error(`Invalid transition: ${transition.error}`);
-        }
-
-        if (to === "IN_PROGRESS") {
-          const guard = await checkBlockerGuard(id, tx as unknown as PrismaClient);
-          if (!guard.allowed) {
-            throw new Error(guard.error);
+          const transition = validateTransition(ticket.state, to);
+          if (!transition.valid) {
+            throw new Error(`Invalid transition: ${transition.error}`);
           }
-        }
 
-        return tx.ticket.update({
-          where: { id },
-          data: { state: to },
+          if (to === "IN_PROGRESS") {
+            const guard = await checkBlockerGuard(id, tx as unknown as PrismaClient);
+            if (!guard.allowed) {
+              throw new Error(guard.error);
+            }
+          }
+
+          return tx.ticket.update({
+            where: { id },
+            data: { state: to },
+          });
         });
-      });
+      } catch (error) {
+        if (error instanceof GraphQLError) throw error;
+        console.error("transitionTicket mutation failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to transition ticket", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
 
     addBlockRelation: async (
@@ -387,19 +458,27 @@ export const ticketResolvers = {
         throw new Error("A ticket cannot block itself");
       }
 
-      const blocker = await prisma.ticket.findUnique({ where: { id: blockerId } });
-      if (!blocker) throw new Error(`Ticket not found: ${blockerId}`);
+      try {
+        const blocker = await prisma.ticket.findUnique({ where: { id: blockerId } });
+        if (!blocker) throw new Error(`Ticket not found: ${blockerId}`);
 
-      const blocked = await prisma.ticket.findUnique({ where: { id: blockedId } });
-      if (!blocked) throw new Error(`Ticket not found: ${blockedId}`);
+        const blocked = await prisma.ticket.findUnique({ where: { id: blockedId } });
+        if (!blocked) throw new Error(`Ticket not found: ${blockedId}`);
 
-      await prisma.blockRelation.upsert({
-        where: { blockerId_blockedId: { blockerId, blockedId } },
-        create: { blockerId, blockedId },
-        update: {},
-      });
+        await prisma.blockRelation.upsert({
+          where: { blockerId_blockedId: { blockerId, blockedId } },
+          create: { blockerId, blockedId },
+          update: {},
+        });
 
-      return blocked;
+        return blocked;
+      } catch (error) {
+        if (error instanceof GraphQLError) throw error;
+        console.error("addBlockRelation mutation failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to add block relation", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
 
     removeBlockRelation: async (
@@ -409,16 +488,24 @@ export const ticketResolvers = {
     ) => {
       requireAuth(context);
       const { prisma } = context;
-      const existing = await prisma.blockRelation.findUnique({
-        where: { blockerId_blockedId: { blockerId, blockedId } },
-      });
-      if (!existing) throw new Error("Block relation not found");
+      try {
+        const existing = await prisma.blockRelation.findUnique({
+          where: { blockerId_blockedId: { blockerId, blockedId } },
+        });
+        if (!existing) throw new Error("Block relation not found");
 
-      await prisma.blockRelation.delete({
-        where: { blockerId_blockedId: { blockerId, blockedId } },
-      });
+        await prisma.blockRelation.delete({
+          where: { blockerId_blockedId: { blockerId, blockedId } },
+        });
 
-      return prisma.ticket.findUniqueOrThrow({ where: { id: blockedId } });
+        return await prisma.ticket.findUniqueOrThrow({ where: { id: blockedId } });
+      } catch (error) {
+        if (error instanceof GraphQLError) throw error;
+        console.error("removeBlockRelation mutation failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to remove block relation", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
 
     addComment: async (
@@ -429,13 +516,21 @@ export const ticketResolvers = {
       const user = requireAuth(context);
       if (!body.trim()) throw new Error("Comment body cannot be empty");
 
-      const ticket = await context.prisma.ticket.findUnique({ where: { id: ticketId } });
-      if (!ticket) throw new Error(`Ticket not found: ${ticketId}`);
+      try {
+        const ticket = await context.prisma.ticket.findUnique({ where: { id: ticketId } });
+        if (!ticket) throw new Error(`Ticket not found: ${ticketId}`);
 
-      return context.prisma.comment.create({
-        data: { ticketId, body, authorId: user.id },
-        include: { author: true },
-      });
+        return await context.prisma.comment.create({
+          data: { ticketId, body, authorId: user.id },
+          include: { author: true },
+        });
+      } catch (error) {
+        if (error instanceof GraphQLError) throw error;
+        console.error("addComment mutation failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to add comment", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
 
     updateComment: async (
@@ -446,20 +541,28 @@ export const ticketResolvers = {
       const user = requireAuth(context);
       if (!body.trim()) throw new Error("Comment body cannot be empty");
 
-      const existing = await context.prisma.comment.findUnique({ where: { id } });
-      if (!existing) throw new Error("Comment not found");
+      try {
+        const existing = await context.prisma.comment.findUnique({ where: { id } });
+        if (!existing) throw new Error("Comment not found");
 
-      if (existing.authorId !== user.id) {
-        throw new GraphQLError("You can only edit your own comments", {
-          extensions: { code: "FORBIDDEN" },
+        if (existing.authorId !== user.id) {
+          throw new GraphQLError("You can only edit your own comments", {
+            extensions: { code: "FORBIDDEN" },
+          });
+        }
+
+        return await context.prisma.comment.update({
+          where: { id },
+          data: { body },
+          include: { author: true },
+        });
+      } catch (error) {
+        if (error instanceof GraphQLError) throw error;
+        console.error("updateComment mutation failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to update comment", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
         });
       }
-
-      return context.prisma.comment.update({
-        where: { id },
-        data: { body },
-        include: { author: true },
-      });
     },
 
     deleteComment: async (
@@ -469,20 +572,28 @@ export const ticketResolvers = {
     ) => {
       const user = requireAuth(context);
 
-      const existing = await context.prisma.comment.findUnique({
-        where: { id },
-        include: { author: true },
-      });
-      if (!existing) throw new Error("Comment not found");
+      try {
+        const existing = await context.prisma.comment.findUnique({
+          where: { id },
+          include: { author: true },
+        });
+        if (!existing) throw new Error("Comment not found");
 
-      if (existing.authorId !== user.id) {
-        throw new GraphQLError("You can only delete your own comments", {
-          extensions: { code: "FORBIDDEN" },
+        if (existing.authorId !== user.id) {
+          throw new GraphQLError("You can only delete your own comments", {
+            extensions: { code: "FORBIDDEN" },
+          });
+        }
+
+        await context.prisma.comment.delete({ where: { id } });
+        return existing;
+      } catch (error) {
+        if (error instanceof GraphQLError) throw error;
+        console.error("deleteComment mutation failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to delete comment", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
         });
       }
-
-      await context.prisma.comment.delete({ where: { id } });
-      return existing;
     },
   },
 

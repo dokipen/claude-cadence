@@ -1,5 +1,6 @@
 import type { PrismaClient, User } from "@prisma/client";
 import type { Loaders } from "../../loaders.js";
+import { GraphQLError } from "graphql";
 import { requireAuth } from "./auth.js";
 
 export interface Context {
@@ -11,15 +12,36 @@ export interface Context {
 export const projectResolvers = {
   Query: {
     project: async (_: unknown, { id }: { id: string }, { prisma }: Context) => {
-      return prisma.project.findUnique({ where: { id } });
+      try {
+        return await prisma.project.findUnique({ where: { id } });
+      } catch (error) {
+        console.error("project query failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to fetch project", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
 
     projectByName: async (_: unknown, { name }: { name: string }, { prisma }: Context) => {
-      return prisma.project.findUnique({ where: { name } });
+      try {
+        return await prisma.project.findUnique({ where: { name } });
+      } catch (error) {
+        console.error("projectByName query failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to fetch project by name", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
 
     projects: async (_: unknown, __: unknown, { prisma }: Context) => {
-      return prisma.project.findMany({ orderBy: { name: "asc" } });
+      try {
+        return await prisma.project.findMany({ orderBy: { name: "asc" } });
+      } catch (error) {
+        console.error("projects query failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to fetch projects", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
   },
 
@@ -31,12 +53,20 @@ export const projectResolvers = {
     ) => {
       requireAuth(context);
       const { prisma } = context;
-      return prisma.project.create({
-        data: {
-          name: input.name,
-          repository: input.repository,
-        },
-      });
+      try {
+        return await prisma.project.create({
+          data: {
+            name: input.name,
+            repository: input.repository,
+          },
+        });
+      } catch (error) {
+        if (error instanceof GraphQLError) throw error;
+        console.error("createProject mutation failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to create project", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
 
     updateProject: async (
@@ -46,23 +76,31 @@ export const projectResolvers = {
     ) => {
       requireAuth(context);
       const { prisma } = context;
-      const existing = await prisma.project.findUnique({ where: { id } });
-      if (!existing) {
-        throw new Error(`Project not found: ${id}`);
+      try {
+        const existing = await prisma.project.findUnique({ where: { id } });
+        if (!existing) {
+          throw new Error(`Project not found: ${id}`);
+        }
+
+        const data: Record<string, string> = {};
+        if (input.name !== undefined) data.name = input.name;
+        if (input.repository !== undefined) data.repository = input.repository;
+
+        if (Object.keys(data).length === 0) {
+          throw new Error("At least one field to update must be specified");
+        }
+
+        return await prisma.project.update({
+          where: { id },
+          data,
+        });
+      } catch (error) {
+        if (error instanceof GraphQLError) throw error;
+        console.error("updateProject mutation failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to update project", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
       }
-
-      const data: Record<string, string> = {};
-      if (input.name !== undefined) data.name = input.name;
-      if (input.repository !== undefined) data.repository = input.repository;
-
-      if (Object.keys(data).length === 0) {
-        throw new Error("At least one field to update must be specified");
-      }
-
-      return prisma.project.update({
-        where: { id },
-        data,
-      });
     },
   },
 };

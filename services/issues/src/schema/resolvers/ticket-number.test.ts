@@ -128,7 +128,7 @@ describe("createTicket — number assignment", () => {
         { input: { title: "Orphan ticket", projectId: "nonexistent" } },
         context
       )
-    ).rejects.toThrow("Project not found: nonexistent");
+    ).rejects.toThrow("Failed to create ticket");
   });
 
   it("retries on P2002 unique constraint violation", async () => {
@@ -168,7 +168,7 @@ describe("createTicket — number assignment", () => {
         { input: { title: "Always fails", projectId: "proj-1" } },
         context
       )
-    ).rejects.toThrow("Unique constraint");
+    ).rejects.toThrow("Failed to create ticket");
 
     expect(context.prisma.$transaction).toHaveBeenCalledTimes(3);
   });
