@@ -140,6 +140,7 @@ export const TICKET_DETAIL_QUERY = gql`
       project {
         id
         name
+        repository
       }
       labels {
         id

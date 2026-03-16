@@ -62,3 +62,41 @@ export interface Project {
   name: string;
   repository?: string;
 }
+
+// Agent Hub types
+
+export type AgentStatus = "online" | "offline";
+
+export interface AgentProfile {
+  description: string;
+  repo: string;
+}
+
+export interface Agent {
+  name: string;
+  profiles: Record<string, AgentProfile>;
+  status: AgentStatus;
+  last_seen: string;
+}
+
+export type SessionState =
+  | "creating"
+  | "running"
+  | "stopped"
+  | "error"
+  | "destroying";
+
+export interface Session {
+  id: string;
+  name: string;
+  agent_profile: string;
+  state: SessionState;
+  tmux_session: string;
+  created_at: string;
+  stopped_at?: string;
+  error_message?: string;
+  agent_pid: number;
+  worktree_path: string;
+  repo_url: string;
+  base_ref: string;
+}
