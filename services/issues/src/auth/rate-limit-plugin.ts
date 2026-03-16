@@ -4,14 +4,12 @@ import type { AuthenticatedContext } from "../schema/resolvers/auth.js";
 
 /**
  * Auth mutations that are subject to stricter rate limits.
- * These are the public mutations susceptible to brute-force attacks.
+ * Only credential-bearing operations susceptible to brute-force attacks.
  */
 const AUTH_MUTATIONS = new Set([
   "authenticateWithGitHubCode",
   "authenticateWithGitHubPAT",
   "refreshToken",
-  "logout",
-  "generateOAuthState",
 ]);
 
 interface WindowEntry {
@@ -27,7 +25,7 @@ export interface RateLimitConfig {
   windowMs: number;
 }
 
-function loadConfig(): RateLimitConfig {
+export function loadConfig(): RateLimitConfig {
   return {
     authMaxRequests: parseInt(
       process.env.RATE_LIMIT_AUTH_MAX || "10",
@@ -44,21 +42,42 @@ function loadConfig(): RateLimitConfig {
   };
 }
 
+const PURGE_INTERVAL_MS = 30_000;
+
 /**
  * In-memory sliding-window rate limiter.
- * Tracks request timestamps per key and prunes expired entries.
+ * Tracks request timestamps per key and prunes expired entries periodically.
  */
 export class RateLimitStore {
   private windows = new Map<string, WindowEntry>();
   private maxSize = 50_000;
+  private purgeTimer: ReturnType<typeof setInterval> | null = null;
+  private windowMs: number;
+
+  constructor(windowMs = 60_000) {
+    this.windowMs = windowMs;
+  }
+
+  /** Start the periodic purge timer. Call once at startup. */
+  startPurgeSchedule(): void {
+    if (this.purgeTimer) return;
+    this.purgeTimer = setInterval(() => this.purgeExpired(Date.now()), PURGE_INTERVAL_MS);
+    this.purgeTimer.unref();
+  }
+
+  /** Stop the periodic purge timer. */
+  stopPurgeSchedule(): void {
+    if (this.purgeTimer) {
+      clearInterval(this.purgeTimer);
+      this.purgeTimer = null;
+    }
+  }
 
   hit(key: string, now: number, windowMs: number, maxRequests: number): boolean {
-    this.purgeExpired(now, windowMs);
-
     let entry = this.windows.get(key);
     if (!entry) {
       if (this.windows.size >= this.maxSize) {
-        return false; // fail open if store is full
+        return true; // fail open — allow request when store is saturated
       }
       entry = { timestamps: [] };
       this.windows.set(key, entry);
@@ -83,9 +102,13 @@ export class RateLimitStore {
     return Math.max(0, windowMs - (now - oldest));
   }
 
-  private purgeExpired(now: number, windowMs: number): void {
+  private purgeExpired(now: number): void {
     for (const [key, entry] of this.windows) {
-      if (entry.timestamps.length === 0 || now - entry.timestamps[entry.timestamps.length - 1] >= windowMs) {
+      // Evict if all timestamps are expired (check the newest one)
+      if (
+        entry.timestamps.length === 0 ||
+        now - entry.timestamps[entry.timestamps.length - 1] >= this.windowMs
+      ) {
         this.windows.delete(key);
       }
     }
@@ -100,6 +123,7 @@ export class RateLimitStore {
 function isAuthMutationOperation(document: any): boolean {
   for (const definition of document.definitions) {
     if (definition.kind !== "OperationDefinition") continue;
+    if (definition.operation !== "mutation") continue;
     for (const sel of definition.selectionSet.selections) {
       if (sel.kind === "Field" && AUTH_MUTATIONS.has(sel.name.value)) {
         return true;
@@ -123,7 +147,8 @@ export function rateLimitPlugin(
   storeOverride?: RateLimitStore,
 ): ApolloServerPlugin<AuthenticatedContext> {
   const config = { ...loadConfig(), ...configOverride };
-  const store = storeOverride ?? new RateLimitStore();
+  const store = storeOverride ?? new RateLimitStore(config.windowMs);
+  store.startPurgeSchedule();
 
   return {
     async requestDidStart(requestContext) {
@@ -155,7 +180,7 @@ export function rateLimitPlugin(
                 http: {
                   status: 429,
                   headers: new Map([
-                    ["Retry-After", String(retryAfterSec)],
+                    ["retry-after", String(retryAfterSec)],
                   ]),
                 },
               },
