@@ -275,16 +275,13 @@ test.describe("ticket detail agent tab", () => {
 
 test.describe("ticket detail terminal", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("cadence_project_id", "e2e-test-project");
-    });
     await setupAgentMocks(page);
   });
 
   test("shows terminal when running session exists", async ({ page }) => {
     await setupSessionMock(page, [MOCK_RUNNING_SESSION]);
 
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
@@ -302,7 +299,7 @@ test.describe("ticket detail terminal", () => {
   test("shows launch control when no session exists", async ({ page }) => {
     await setupSessionMock(page, []);
 
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
@@ -319,7 +316,7 @@ test.describe("ticket detail terminal", () => {
   test("shows launch control when session is stopped", async ({ page }) => {
     await setupSessionMock(page, [{ ...MOCK_SESSION, state: "stopped" }]);
 
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
@@ -333,7 +330,7 @@ test.describe("ticket detail terminal", () => {
   test("terminal header shows session name and agent", async ({ page }) => {
     await setupSessionMock(page, [MOCK_RUNNING_SESSION]);
 
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
@@ -358,7 +355,7 @@ test.describe("ticket detail terminal", () => {
       }
     });
 
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();

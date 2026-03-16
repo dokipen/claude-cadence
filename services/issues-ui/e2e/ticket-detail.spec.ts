@@ -297,7 +297,7 @@ test.describe("markdown rendering in ticket detail", () => {
   });
 
   test("acceptance criteria renders inline code as code element", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     const markdownCard = page.getByTestId("column-BACKLOG").getByText("Markdown ticket");
@@ -310,7 +310,7 @@ test.describe("markdown rendering in ticket detail", () => {
   });
 
   test("acceptance criteria renders task list checkboxes", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     const markdownCard = page.getByTestId("column-BACKLOG").getByText("Markdown ticket");

@@ -163,24 +163,16 @@ test.describe("project selector", () => {
     ).not.toBeVisible();
   });
 
-  test("invalid project ID in localStorage redirects to valid project", async ({
+  test("invalid project ID in URL redirects to valid project", async ({
     page,
   }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("cadence_project_id", "nonexistent-id");
-    });
-    await page.goto("/");
+    await page.goto("/projects/nonexistent-id");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     // Should fall back to first valid project alphabetically ("E2E Empty Project" = e2e-test-project-2)
     const selector = page.getByTestId("project-selector");
     await expect(selector).toHaveValue("e2e-test-project-2");
-
-    // localStorage should be updated to the valid project
-    const storedId = await page.evaluate(() =>
-      localStorage.getItem("cadence_project_id"),
-    );
-    expect(storedId).toBe("e2e-test-project-2");
+    await expect(page).toHaveURL(/\/projects\/e2e-test-project-2/);
   });
 
   test("project selection persists across reload", async ({ page }) => {
