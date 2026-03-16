@@ -135,7 +135,7 @@ func (c *Client) connect(ctx context.Context) error {
 func (c *Client) register(ctx context.Context, conn *websocket.Conn) error {
 	profiles := make(map[string]profileInfo, len(c.profiles))
 	for name, p := range c.profiles {
-		profiles[name] = profileInfo{Description: p.Description}
+		profiles[name] = profileInfo{Description: p.Description, Repo: p.Repo}
 	}
 
 	params := registerParams{
@@ -317,6 +317,7 @@ type registerParams struct {
 
 type profileInfo struct {
 	Description string `json:"description"`
+	Repo        string `json:"repo"`
 }
 
 type ttydInfo struct {

@@ -36,6 +36,7 @@ type RegisterParams struct {
 // ProfileInfo describes an agent profile.
 type ProfileInfo struct {
 	Description string `json:"description"`
+	Repo        string `json:"repo"`
 }
 
 // TtydInfo describes the agentd's ttyd configuration.

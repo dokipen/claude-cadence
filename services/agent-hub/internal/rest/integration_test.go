@@ -93,7 +93,7 @@ func simulateAgent(t *testing.T, baseURL, agentToken, name string) {
 	regReq, _ := hub.NewRequest("reg-1", "register", &hub.RegisterParams{
 		Name: name,
 		Profiles: map[string]hub.ProfileInfo{
-			"default": {Description: "test profile"},
+			"default": {Description: "test profile", Repo: "https://github.com/test/repo"},
 		},
 	})
 	data, _ := json.Marshal(regReq)
@@ -193,6 +193,19 @@ func TestIntegration_AgentRegistrationAndRPC(t *testing.T) {
 	}
 	if agentInfo["status"] != "online" {
 		t.Errorf("expected status online, got %v", agentInfo["status"])
+	}
+
+	// Verify profile repo field is exposed in the REST response.
+	profiles, ok := agentInfo["profiles"].(map[string]any)
+	if !ok {
+		t.Fatal("expected profiles map in agent response")
+	}
+	defaultProfile, ok := profiles["default"].(map[string]any)
+	if !ok {
+		t.Fatal("expected default profile in profiles map")
+	}
+	if defaultProfile["repo"] != "https://github.com/test/repo" {
+		t.Errorf("expected repo https://github.com/test/repo, got %v", defaultProfile["repo"])
 	}
 }
 
