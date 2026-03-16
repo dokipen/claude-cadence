@@ -73,3 +73,58 @@ export const PROJECTS_QUERY = gql`
     }
   }
 `;
+
+export const TICKET_DETAIL_QUERY = gql`
+  query TicketDetail($id: ID!) {
+    ticket(id: $id) {
+      id
+      number
+      title
+      description
+      acceptanceCriteria
+      state
+      storyPoints
+      priority
+      assignee {
+        id
+        login
+        displayName
+        avatarUrl
+      }
+      project {
+        id
+        name
+      }
+      labels {
+        id
+        name
+        color
+      }
+      comments {
+        id
+        body
+        author {
+          id
+          login
+          displayName
+          avatarUrl
+        }
+        createdAt
+      }
+      blocks {
+        id
+        number
+        title
+        state
+      }
+      blockedBy {
+        id
+        number
+        title
+        state
+      }
+      createdAt
+      updatedAt
+    }
+  }
+`;

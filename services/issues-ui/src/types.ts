@@ -33,6 +33,30 @@ export interface Ticket {
   blockedBy: { id: string }[];
 }
 
+export interface Comment {
+  id: string;
+  body: string;
+  author: User;
+  createdAt: string;
+}
+
+export interface RelatedTicket {
+  id: string;
+  number: number;
+  title: string;
+  state: TicketState;
+}
+
+export interface TicketDetail extends Ticket {
+  number: number;
+  project: Project;
+  comments: Comment[];
+  blocks: RelatedTicket[];
+  blockedBy: RelatedTicket[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Project {
   id: string;
   name: string;
