@@ -668,23 +668,23 @@ export const ticketResolvers = {
       { id }: { id: string },
       context: Context
     ) => {
+      // Labels are global resources; no per-user ownership check needed
       requireAuth(context);
       const { prisma } = context;
 
       try {
-        const existing = await prisma.label.findUnique({ where: { id } });
-        if (!existing) {
-          throw new GraphQLError("Label not found", {
-            extensions: { code: "NOT_FOUND" },
-          });
-        }
+        return await prisma.$transaction(async (tx) => {
+          const existing = await tx.label.findUnique({ where: { id } });
+          if (!existing) {
+            throw new GraphQLError("Label not found", {
+              extensions: { code: "NOT_FOUND" },
+            });
+          }
 
-        await prisma.$transaction(async (tx) => {
           await tx.ticketLabel.deleteMany({ where: { labelId: id } });
           await tx.label.delete({ where: { id } });
+          return existing;
         });
-
-        return existing;
       } catch (error) {
         if (error instanceof GraphQLError) throw error;
         console.error("Failed to delete label:", error instanceof Error ? error.message : String(error));

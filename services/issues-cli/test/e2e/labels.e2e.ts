@@ -101,6 +101,18 @@ describe("Label Management", () => {
   it("should error when deleting a non-existent label", async () => {
     const result = await suite.cli("label", "delete", "nonexistent-id");
     expect(result.exitCode).not.toBe(0);
+    const output = result.stdout + result.stderr;
+    expect(output).toContain("Failed to delete label");
+  });
+
+  it("should delete a label by name", async () => {
+    const createResult = await suite.cli("label", "create", "--name", "delete-by-name", "--color", "#fedcba");
+    expect(createResult.exitCode).toBe(0);
+
+    const result = await suite.cli("label", "delete", "delete-by-name");
+    expect(result.exitCode).toBe(0);
+    const output = result.stdout + result.stderr;
+    expect(output).toContain("Label deleted");
   });
 
   it("should delete a label that is attached to a ticket", async () => {
