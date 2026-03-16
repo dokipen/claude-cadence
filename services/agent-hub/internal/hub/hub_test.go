@@ -16,40 +16,7 @@ import (
 // Returns the hub, server URL, and a cleanup function.
 func startTestHub(t *testing.T) (*Hub, string) {
 	t.Helper()
-	h := New(30*time.Second, 5*time.Second, 5*time.Minute)
-	h.Start()
-	t.Cleanup(h.Stop)
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-			InsecureSkipVerify: true,
-		})
-		if err != nil {
-			t.Errorf("accept ws: %v", err)
-			return
-		}
-
-		// Read register message.
-		_, data, err := conn.Read(r.Context())
-		if err != nil {
-			return
-		}
-		var req Request
-		json.Unmarshal(data, &req)
-
-		var params RegisterParams
-		json.Unmarshal(req.Params, &params)
-
-		resp, _ := NewResponse(req.ID, &RegisterResult{Accepted: true})
-		respData, _ := json.Marshal(resp)
-		conn.Write(r.Context(), websocket.MessageText, respData)
-
-		agent := h.Register(params.Name, conn, &params)
-		h.HandleAgentConnection(r.Context(), agent)
-	}))
-	t.Cleanup(srv.Close)
-
-	return h, srv.URL
+	return startTestHubWithHeartbeat(t, 30*time.Second, 5*time.Second)
 }
 
 // connectAgent dials the test server as an agentd, registers, and runs a read loop
