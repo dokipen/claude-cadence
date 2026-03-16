@@ -236,10 +236,12 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		envExports = append(envExports, fmt.Sprintf("export %s=%s;", k, shellEscapeArg(v)))
 	}
 
-	// Build full command with env exports prepended.
+	// Build full command with env exports prepended. Use exec so the shell
+	// replaces itself with the agent process, ensuring GetPanePID returns the
+	// agent PID rather than the intermediate sh PID.
 	fullCommand := cmdStr
 	if len(envExports) > 0 {
-		fullCommand = strings.Join(envExports, " ") + " " + cmdStr
+		fullCommand = strings.Join(envExports, " ") + " exec " + cmdStr
 	}
 
 	// Create tmux session with command as initial process.
