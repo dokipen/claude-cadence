@@ -130,8 +130,11 @@ ${vhost} {
 	}
 
 	# Agent Hub — REST API
+	# Inject the API token server-side so the browser never handles it.
 	handle /api/v1/* {
-		reverse_proxy localhost:4200
+		reverse_proxy localhost:4200 {
+			header_up Authorization "Bearer {env.HUB_API_TOKEN}"
+		}
 	}
 
 	# Agent Hub — agent WebSocket registration
@@ -140,8 +143,11 @@ ${vhost} {
 	}
 
 	# Agent Hub — terminal WebSocket proxy
+	# Inject the API token server-side so the browser never handles it.
 	handle /ws/terminal/* {
-		reverse_proxy localhost:4200
+		reverse_proxy localhost:4200 {
+			header_up Authorization "Bearer {env.HUB_API_TOKEN}"
+		}
 	}
 
 	# Issues UI — static SPA with client-side routing
