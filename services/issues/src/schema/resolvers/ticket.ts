@@ -488,38 +488,90 @@ export const ticketResolvers = {
 
   Comment: {
     author: async (parent: Comment, _: unknown, { loaders }: Context) => {
-      return loaders.assigneeByUserId.load(parent.authorId);
+      try {
+        return await loaders.assigneeByUserId.load(parent.authorId);
+      } catch (error) {
+        console.error("comment author query failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to load comment author", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
   },
 
   Ticket: {
     project: async (parent: Ticket, _: unknown, { loaders }: Context) => {
-      const project = await loaders.projectByProjectId.load(parent.projectId);
-      if (!project) {
-        throw new Error(`Project not found: ${parent.projectId}`);
+      try {
+        const project = await loaders.projectByProjectId.load(parent.projectId);
+        if (!project) {
+          throw new GraphQLError("Project not found for ticket", {
+            extensions: { code: "INTERNAL_SERVER_ERROR" },
+          });
+        }
+        return project;
+      } catch (error) {
+        if (error instanceof GraphQLError) throw error;
+        console.error("ticket project query failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to load project", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
       }
-      return project;
     },
 
     labels: async (parent: Ticket, _: unknown, { loaders }: Context) => {
-      return loaders.labelsByTicketId.load(parent.id);
+      try {
+        return await loaders.labelsByTicketId.load(parent.id);
+      } catch (error) {
+        console.error("ticket labels query failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to load labels", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
 
     comments: async (parent: Ticket, _: unknown, { loaders }: Context) => {
-      return loaders.commentsByTicketId.load(parent.id);
+      try {
+        return await loaders.commentsByTicketId.load(parent.id);
+      } catch (error) {
+        console.error("ticket comments query failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to load comments", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
 
     assignee: async (parent: Ticket, _: unknown, { loaders }: Context) => {
       if (!parent.assigneeId) return null;
-      return loaders.assigneeByUserId.load(parent.assigneeId);
+      try {
+        return await loaders.assigneeByUserId.load(parent.assigneeId);
+      } catch (error) {
+        console.error("ticket assignee query failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to load assignee", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
 
     blocks: async (parent: Ticket, _: unknown, { loaders }: Context) => {
-      return loaders.blocksByTicketId.load(parent.id);
+      try {
+        return await loaders.blocksByTicketId.load(parent.id);
+      } catch (error) {
+        console.error("ticket blocks query failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to load blocked tickets", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
 
     blockedBy: async (parent: Ticket, _: unknown, { loaders }: Context) => {
-      return loaders.blockedByTicketId.load(parent.id);
+      try {
+        return await loaders.blockedByTicketId.load(parent.id);
+      } catch (error) {
+        console.error("ticket blockedBy query failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to load blocking tickets", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
   },
 };

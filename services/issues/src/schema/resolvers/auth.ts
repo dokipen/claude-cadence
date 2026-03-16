@@ -95,10 +95,18 @@ export const authResolvers = {
           extensions: { code: "BAD_USER_INPUT" },
         });
       }
-      const profile = await oauthProvider.authenticate({ code });
-      const user = await upsertUser(prisma, profile);
-      const { token, refreshToken } = await issueTokens(prisma, user.id);
-      return { token, refreshToken, user };
+      try {
+        const profile = await oauthProvider.authenticate({ code });
+        const user = await upsertUser(prisma, profile);
+        const { token, refreshToken } = await issueTokens(prisma, user.id);
+        return { token, refreshToken, user };
+      } catch (error) {
+        if (error instanceof GraphQLError) throw error;
+        console.error("GitHub OAuth authentication failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Authentication failed", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
 
     authenticateWithGitHubPAT: async (
@@ -106,13 +114,21 @@ export const authResolvers = {
       { token }: { token: string },
       { prisma }: AuthenticatedContext
     ) => {
-      const profile = await patProvider.authenticate({ token });
-      const user = await upsertUser(prisma, profile);
-      const { token: jwtToken, refreshToken } = await issueTokens(
-        prisma,
-        user.id
-      );
-      return { token: jwtToken, refreshToken, user };
+      try {
+        const profile = await patProvider.authenticate({ token });
+        const user = await upsertUser(prisma, profile);
+        const { token: jwtToken, refreshToken } = await issueTokens(
+          prisma,
+          user.id
+        );
+        return { token: jwtToken, refreshToken, user };
+      } catch (error) {
+        if (error instanceof GraphQLError) throw error;
+        console.error("GitHub PAT authentication failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Authentication failed", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
 
     refreshToken: async (
