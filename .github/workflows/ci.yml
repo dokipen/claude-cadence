@@ -178,6 +178,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: services/agents/go.mod
+          cache-dependency-path: services/agents/go.sum
       - name: Run go vet
         working-directory: services/agents
         run: go vet ./...
