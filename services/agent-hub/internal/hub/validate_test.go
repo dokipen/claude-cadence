@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -88,6 +89,9 @@ func TestValidateProfileRepo(t *testing.T) {
 		{name: "ssh scheme", repo: "ssh://git@github.com/org/repo", wantErr: true},
 		{name: "git scheme", repo: "git://github.com/org/repo.git", wantErr: true},
 		{name: "file scheme", repo: "file:///tmp/repo", wantErr: true},
+
+		// Length limit.
+		{name: "exceeds max length", repo: "https://github.com/" + strings.Repeat("a", 2049), wantErr: true},
 	}
 
 	for _, tc := range tests {

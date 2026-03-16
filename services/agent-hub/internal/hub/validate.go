@@ -46,6 +46,11 @@ func ValidateProfileRepo(repo string) error {
 		return nil
 	}
 
+	const maxRepoLen = 2048
+	if len(repo) > maxRepoLen {
+		return fmt.Errorf("profile repo exceeds maximum length of %d characters", maxRepoLen)
+	}
+
 	u, err := url.Parse(repo)
 	if err != nil {
 		return fmt.Errorf("profile repo %q is not a valid URL", repo)
