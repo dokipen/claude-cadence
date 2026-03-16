@@ -3,6 +3,33 @@ import type { User } from "@prisma/client";
 
 process.env.JWT_SECRET = "test-secret-for-unit-tests";
 
+const mockOAuthAuthenticate = vi.fn();
+const mockPATAuthenticate = vi.fn();
+const mockValidate = vi.fn();
+
+vi.mock("../../auth/providers/github-oauth.js", () => ({
+  GitHubOAuthProvider: class {
+    authenticate = mockOAuthAuthenticate;
+  },
+}));
+
+vi.mock("../../auth/providers/github-pat.js", () => ({
+  GitHubPATProvider: class {
+    authenticate = mockPATAuthenticate;
+  },
+}));
+
+vi.mock("../../auth/state-store.js", () => ({
+  oauthStateStore: {
+    generate: vi.fn().mockReturnValue("mock-state"),
+    validate: mockValidate,
+  },
+}));
+
+vi.mock("../../auth/allowlist.js", () => ({
+  enforceAllowlist: vi.fn(),
+}));
+
 const { authResolvers } = await import("./auth.js");
 const { signToken, verifyToken } = await import("../../auth/jwt.js");
 
@@ -195,5 +222,121 @@ describe("logout mutation", () => {
 
     expect(result).toBe(true);
     expect(mocks.revokedTokenCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe("authenticateWithGitHubCode — error handling", () => {
+  it("wraps provider errors in GraphQLError", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockValidate.mockReturnValue(true);
+    mockOAuthAuthenticate.mockRejectedValue(new Error("GitHub API down"));
+    const { context } = makeMockContext();
+
+    await expect(
+      authResolvers.Mutation.authenticateWithGitHubCode(
+        {},
+        { code: "test-code", state: "test-state" },
+        context
+      )
+    ).rejects.toMatchObject({
+      message: "Authentication failed",
+      extensions: { code: "INTERNAL_SERVER_ERROR" },
+    });
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("GitHub OAuth authentication failed"),
+      expect.any(String)
+    );
+    consoleSpy.mockRestore();
+  });
+
+  it("re-throws GraphQLError from allowlist enforcement", async () => {
+    const { GraphQLError } = await import("graphql");
+    mockValidate.mockReturnValue(true);
+    mockOAuthAuthenticate.mockResolvedValue({
+      githubId: 1,
+      login: "blocked-user",
+      displayName: "Blocked",
+      avatarUrl: null,
+    });
+
+    const { enforceAllowlist } = await import("../../auth/allowlist.js");
+    (enforceAllowlist as any).mockImplementation(() => {
+      throw new GraphQLError("User is not authorized to access this application", {
+        extensions: { code: "FORBIDDEN" },
+      });
+    });
+
+    const { context } = makeMockContext();
+
+    await expect(
+      authResolvers.Mutation.authenticateWithGitHubCode(
+        {},
+        { code: "test-code", state: "test-state" },
+        context
+      )
+    ).rejects.toMatchObject({
+      message: "User is not authorized to access this application",
+      extensions: { code: "FORBIDDEN" },
+    });
+
+    (enforceAllowlist as any).mockImplementation(() => {});
+  });
+});
+
+describe("authenticateWithGitHubPAT — error handling", () => {
+  it("wraps provider errors in GraphQLError", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockPATAuthenticate.mockRejectedValue(new Error("Invalid PAT"));
+    const { context } = makeMockContext();
+
+    await expect(
+      authResolvers.Mutation.authenticateWithGitHubPAT(
+        {},
+        { token: "bad-token" },
+        context
+      )
+    ).rejects.toMatchObject({
+      message: "Authentication failed",
+      extensions: { code: "INTERNAL_SERVER_ERROR" },
+    });
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("GitHub PAT authentication failed"),
+      expect.any(String)
+    );
+    consoleSpy.mockRestore();
+  });
+
+  it("re-throws GraphQLError from allowlist enforcement", async () => {
+    const { GraphQLError } = await import("graphql");
+    mockPATAuthenticate.mockResolvedValue({
+      githubId: 2,
+      login: "blocked-user",
+      displayName: "Blocked",
+      avatarUrl: null,
+    });
+
+    const { enforceAllowlist } = await import("../../auth/allowlist.js");
+    (enforceAllowlist as any).mockImplementation(() => {
+      throw new GraphQLError("User is not authorized to access this application", {
+        extensions: { code: "FORBIDDEN" },
+      });
+    });
+
+    const { context } = makeMockContext();
+
+    await expect(
+      authResolvers.Mutation.authenticateWithGitHubPAT(
+        {},
+        { token: "some-token" },
+        context
+      )
+    ).rejects.toMatchObject({
+      message: "User is not authorized to access this application",
+      extensions: { code: "FORBIDDEN" },
+    });
+
+    (enforceAllowlist as any).mockImplementation(() => {});
   });
 });
