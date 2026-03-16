@@ -130,6 +130,13 @@ export function registerAuthCommand(program: Command): void {
         let result: AuthPayload;
 
         if (options.pat) {
+          if (options.pat !== "-") {
+            console.error(chalk.yellow(
+              "Warning: passing a token directly via --pat <token> is deprecated (exposes token in shell history and process list).\n" +
+              "  Use instead: echo $TOKEN | issues auth login --pat -\n" +
+              "  Or run without arguments for an interactive prompt."
+            ));
+          }
           const token = options.pat === "-" ? await readStdin() : options.pat;
           if (!token) {
             console.error(chalk.red("Error: no token received from stdin"));
