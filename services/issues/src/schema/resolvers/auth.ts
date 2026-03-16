@@ -4,7 +4,6 @@ import type { GitHubUserProfile } from "../../auth/types.js";
 import { GitHubOAuthProvider } from "../../auth/providers/github-oauth.js";
 import { GitHubPATProvider } from "../../auth/providers/github-pat.js";
 import { DevPATProvider } from "../../auth/providers/dev-pat.js";
-import { isProduction } from "../../env.js";
 import {
   signToken,
   verifyToken,
@@ -25,7 +24,7 @@ export interface AuthenticatedContext {
 }
 
 const oauthProvider = new GitHubOAuthProvider();
-const patProvider = isProduction ? new GitHubPATProvider() : new DevPATProvider();
+const patProvider = process.env.DEV_AUTH === "1" ? new DevPATProvider() : new GitHubPATProvider();
 
 async function upsertUser(
   prisma: PrismaClient,

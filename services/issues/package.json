@@ -7,7 +7,7 @@
   },
   "type": "module",
   "scripts": {
-    "dev": "NODE_ENV=development tsx watch --env-file=.env src/index.ts",
+    "dev": "NODE_ENV=development DEV_AUTH=1 tsx watch --env-file=.env src/index.ts",
     "dev:setup": "cp -n .env.example .env; npx prisma migrate deploy && npx tsx --env-file=.env prisma/seed-e2e.ts",
     "build": "tsc",
     "start": "node dist/src/index.js",
