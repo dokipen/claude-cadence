@@ -32,18 +32,13 @@ test.describe("dark mode (authenticated)", () => {
     await page.goto("/");
     await expect(page.getByTestId("user-info")).toBeVisible();
 
-    const cardSelector = '[data-testid="ticket-card"], .card';
-    await page.waitForSelector(cardSelector, { timeout: 5000 }).catch(() => null);
+    const card = page.getByTestId("ticket-card").first();
+    await expect(card).toBeVisible();
 
-    const cardBg = await page.evaluate((sel) => {
-      const el = document.querySelector(sel);
-      return el ? window.getComputedStyle(el).backgroundColor : null;
-    }, cardSelector);
-
-    // Only assert if cards are present on the board
-    if (cardBg !== null) {
-      expect(cardBg).toBe(DARK_SURFACE);
-    }
+    const cardBg = await card.evaluate((el) =>
+      window.getComputedStyle(el).backgroundColor
+    );
+    expect(cardBg).toBe(DARK_SURFACE);
   });
 
   test("dark mode live switch: switching from light to dark updates body background without reload", async ({ page }) => {
@@ -57,10 +52,9 @@ test.describe("dark mode (authenticated)", () => {
 
     await page.emulateMedia({ colorScheme: "dark" });
 
-    const darkBg = await page.evaluate(() =>
-      window.getComputedStyle(document.body).backgroundColor
-    );
-    expect(darkBg).toBe(DARK_BG);
+    await expect.poll(() =>
+      page.evaluate(() => window.getComputedStyle(document.body).backgroundColor)
+    ).toBe(DARK_BG);
   });
 });
 

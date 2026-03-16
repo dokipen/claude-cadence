@@ -73,12 +73,18 @@
   padding: 0.65rem 1rem;
   background: #24292f;
   color: #fff;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 6px;
   font-size: 0.95rem;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
+}
+
+@media (prefers-color-scheme: dark) {
+  .oauthButton {
+    border-color: var(--border);
+  }
 }
 
 .divider {
