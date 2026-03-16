@@ -248,6 +248,119 @@ fetch_registration_token() {
     fi
 }
 
+# --- Removal token ---
+
+fetch_removal_token() {
+    info "Fetching removal token for $REPO..."
+    if [[ "$DRY_RUN" == "true" ]]; then
+        REMOVE_TOKEN="DRY_RUN_TOKEN_PLACEHOLDER"
+        info "Using placeholder token for dry-run."
+    else
+        REMOVE_TOKEN=$(gh api "repos/$REPO/actions/runners/remove-token" --method POST --jq '.token')
+        if [[ -z "$REMOVE_TOKEN" ]]; then error "Failed to fetch removal token. Is 'gh' authenticated with admin access?"; fi
+    fi
+}
+
+# --- Runner teardown ---
+
+teardown_runner() {
+    local runner_dir="$1"
+    local dir_name
+    dir_name="$(basename "$runner_dir")"
+
+    info "Tearing down runner at $runner_dir..."
+
+    # Stop and uninstall service (svc.sh handles both systemd and launchd)
+    if [[ -f "$runner_dir/svc.sh" ]]; then
+        info "  Stopping service..."
+        if [[ "$OS" == "darwin" ]]; then
+            (cd "$runner_dir" && ./svc.sh stop) || true
+        else
+            (cd "$runner_dir" && sudo ./svc.sh stop) || true
+        fi
+
+        info "  Uninstalling service..."
+        if [[ "$OS" == "darwin" ]]; then
+            (cd "$runner_dir" && ./svc.sh uninstall) || true
+        else
+            (cd "$runner_dir" && sudo ./svc.sh uninstall) || true
+        fi
+    elif [[ "$DRY_RUN" == "true" ]]; then
+        info "  Stopping service..."
+        if [[ "$OS" == "darwin" ]]; then
+            dry_run_print "" sh -c "cd $runner_dir && ./svc.sh stop"
+        else
+            dry_run_print "sudo" sh -c "cd $runner_dir && ./svc.sh stop"
+        fi
+        info "  Uninstalling service..."
+        if [[ "$OS" == "darwin" ]]; then
+            dry_run_print "" sh -c "cd $runner_dir && ./svc.sh uninstall"
+        else
+            dry_run_print "sudo" sh -c "cd $runner_dir && ./svc.sh uninstall"
+        fi
+    fi
+
+    # Unconfigure runner — pass token via environment variable
+    if [[ -f "$runner_dir/config.sh" ]] || [[ "$DRY_RUN" == "true" ]]; then
+        info "  Removing runner registration..."
+        if [[ "$DRY_RUN" == "true" ]]; then
+            dry_run_print "ACTIONS_RUNNER_INPUT_TOKEN=<token>" \
+                "$runner_dir/config.sh" remove
+        elif [[ "$OS" == "darwin" ]]; then
+            ACTIONS_RUNNER_INPUT_TOKEN="$REMOVE_TOKEN" "$runner_dir/config.sh" remove || {
+                warn "  Could not unconfigure runner (may already be removed from GitHub)."
+            }
+        else
+            export ACTIONS_RUNNER_INPUT_TOKEN="$REMOVE_TOKEN"
+            sudo -u "$RUNNER_USER" --preserve-env=ACTIONS_RUNNER_INPUT_TOKEN \
+                "$runner_dir/config.sh" remove || {
+                warn "  Could not unconfigure runner (may already be removed from GitHub)."
+            }
+            unset ACTIONS_RUNNER_INPUT_TOKEN
+        fi
+    fi
+
+    # Remove directory
+    info "  Removing directory $runner_dir..."
+    if [[ "$OS" == "darwin" ]]; then
+        run_cmd rm -rf "$runner_dir"
+    else
+        sudo_cmd rm -rf "$runner_dir"
+    fi
+
+    info "  Runner at $dir_name removed."
+}
+
+# --- Excess runner teardown ---
+
+teardown_excess_runners() {
+    local excess_dirs=()
+
+    if [[ -d "$BASE_DIR" ]]; then
+        while IFS= read -r dir; do
+            local index="${dir##*actions-runner-${REPO_NAME}-}"
+            if [[ "$index" =~ ^[0-9]+$ ]] && [[ "$index" -gt "$COUNT" ]]; then
+                excess_dirs+=("$dir")
+            fi
+        done < <(find "$BASE_DIR" -maxdepth 1 -type d -name "actions-runner-${REPO_NAME}-*" | sort)
+    fi
+
+    if [[ ${#excess_dirs[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    info "Found ${#excess_dirs[@]} excess runner(s) to tear down."
+    fetch_removal_token
+
+    # Tear down in reverse order (highest index first)
+    for (( i=${#excess_dirs[@]}-1; i>=0; i-- )); do
+        teardown_runner "${excess_dirs[$i]}"
+        TORN_DOWN_COUNT=$((TORN_DOWN_COUNT + 1))
+    done
+
+    info "Excess runner teardown complete."
+}
+
 # --- Service status check ---
 
 is_service_running() {
@@ -437,12 +550,22 @@ main() {
     resolve_runner_version
     fetch_registration_token
 
+    TORN_DOWN_COUNT=0
+    teardown_excess_runners
+
     for i in $(seq 1 "$COUNT"); do
         setup_runner "$i"
     done
 
     echo
     info "Setup complete! $COUNT runner(s) registered for $REPO."
+    if [[ "$TORN_DOWN_COUNT" -gt 0 ]]; then
+        if [[ "$DRY_RUN" == "true" ]]; then
+            info "Would tear down $TORN_DOWN_COUNT excess runner(s)."
+        else
+            info "Torn down $TORN_DOWN_COUNT excess runner(s)."
+        fi
+    fi
     info ""
     info "Summary:"
     for i in $(seq 1 "$COUNT"); do
