@@ -39,6 +39,18 @@
   line-height: 1;
 }
 
+.navLink {
+  margin-left: 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  text-decoration: none;
+}
+
+.navLink:hover {
+  color: #fff;
+}
+
 .headerCenter {
   display: flex;
   align-items: center;
