@@ -1,0 +1,19 @@
+host: "127.0.0.1"
+port: 4200
+
+auth:
+  mode: "token"
+  token_env_var: "HUB_API_TOKEN"
+
+hub_auth:
+  token_env_var: "HUB_AGENT_TOKEN"
+
+heartbeat:
+  interval: "30s"
+  timeout: "10s"
+
+agent_ttl: "5m"
+
+log:
+  level: "info"
+  format: "json"

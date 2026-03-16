@@ -9,6 +9,7 @@ import (
 
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
 	"github.com/dokipen/claude-cadence/services/agents/internal/git"
+	"github.com/dokipen/claude-cadence/services/agents/internal/hub"
 	"github.com/dokipen/claude-cadence/services/agents/internal/server"
 	"github.com/dokipen/claude-cadence/services/agents/internal/service"
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
@@ -97,6 +98,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Start hub client if configured.
+	var hubClient *hub.Client
+	if cfg.Hub != nil {
+		hubClient = hub.NewClient(*cfg.Hub, cfg.Profiles, cfg.Ttyd)
+		hubClient.Start()
+		slog.Info("hub client started", "url", cfg.Hub.URL, "name", cfg.Hub.Name)
+	}
+
 	// Start server in goroutine.
 	errCh := make(chan error, 1)
 	go func() {
@@ -114,6 +123,9 @@ func main() {
 		slog.Error("server error, shutting down", "error", err)
 	}
 
+	if hubClient != nil {
+		hubClient.Stop()
+	}
 	cleaner.Stop()
 	srv.Stop()
 	slog.Info("agentd stopped")
