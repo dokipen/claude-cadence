@@ -77,6 +77,11 @@ func (m *Monitor) run() {
 }
 
 func (m *Monitor) check() {
+	// Use store.List directly instead of Manager.List to avoid reconcile()
+	// calling tmux HasSession + isProcessAlive per session — the monitor
+	// already inspects tmux panes and only cares about running sessions.
+	// This method runs on a single goroutine so TOCTOU between the
+	// sess.WaitingForInput read and the subsequent store.Update is safe.
 	sessions := m.manager.store.List()
 	now := time.Now()
 
@@ -150,13 +155,18 @@ func (m *Monitor) check() {
 }
 
 // lastNonEmptyLine returns the last line with non-whitespace content.
+// Uses backward scanning to avoid allocating a []string slice.
 func lastNonEmptyLine(s string) string {
-	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
-	for i := len(lines) - 1; i >= 0; i-- {
-		line := strings.TrimRight(lines[i], " \t\r")
+	s = strings.TrimRight(s, "\n")
+	for {
+		i := strings.LastIndexByte(s, '\n')
+		line := strings.TrimRight(s[i+1:], " \t\r")
 		if line != "" {
 			return line
 		}
+		if i < 0 {
+			return ""
+		}
+		s = s[:i]
 	}
-	return ""
 }

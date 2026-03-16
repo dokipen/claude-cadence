@@ -525,9 +525,9 @@
 }
 
 .sidebarSessionWaiting {
-  color: #d29922;
+  color: var(--amber);
 }
 
 .sidebarSessionWaiting .sessionDot {
-  color: #d29922;
+  color: var(--amber);
 }

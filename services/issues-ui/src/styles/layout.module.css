@@ -133,7 +133,7 @@
   height: 18px;
   padding: 0 5px;
   border-radius: 9px;
-  background: #d29922;
+  background: var(--amber);
   color: #fff;
   font-size: 0.65rem;
   font-weight: 700;
@@ -196,7 +196,7 @@
 
 .notificationIdle {
   margin-left: auto;
-  color: #d29922;
+  color: var(--amber);
   font-size: 0.7rem;
   font-weight: 600;
 }
