@@ -140,6 +140,9 @@ This has **bold text** and \`code\` inline.
 - Item one
 - Item two
 - Item three`,
+      acceptanceCriteria: `- [ ] First criterion
+- [ ] Second with \`inline code\`
+- [x] Already done`,
       state: "BACKLOG",
       priority: "LOW",
       projectId: project.id,

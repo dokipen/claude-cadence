@@ -196,7 +196,11 @@
 .body h1,
 .body h2,
 .body h3,
-.body h4 {
+.body h4,
+.commentBody h1,
+.commentBody h2,
+.commentBody h3,
+.commentBody h4 {
   margin: 0.75em 0 0.35em;
   line-height: 1.3;
 }
@@ -204,7 +208,11 @@
 .body h1:first-child,
 .body h2:first-child,
 .body h3:first-child,
-.body h4:first-child {
+.body h4:first-child,
+.commentBody h1:first-child,
+.commentBody h2:first-child,
+.commentBody h3:first-child,
+.commentBody h4:first-child {
   margin-top: 0;
 }
 
