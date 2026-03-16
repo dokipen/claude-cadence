@@ -17,14 +17,22 @@ const (
 	rpcErrInternal           = -32000
 )
 
+// TerminalEndpointProvider returns the ttyd address for a session.
+type TerminalEndpointProvider interface {
+	Port(sessionID string) int
+}
+
 // Dispatcher implements SessionDispatcher by calling the session manager directly.
 type Dispatcher struct {
-	manager *session.Manager
+	manager          *session.Manager
+	ttyd             TerminalEndpointProvider
+	advertiseAddress string
 }
 
 // NewDispatcher creates a Dispatcher backed by the given session manager.
-func NewDispatcher(manager *session.Manager) *Dispatcher {
-	return &Dispatcher{manager: manager}
+// ttyd and advertiseAddress enable the getTerminalEndpoint RPC method.
+func NewDispatcher(manager *session.Manager, ttyd TerminalEndpointProvider, advertiseAddress string) *Dispatcher {
+	return &Dispatcher{manager: manager, ttyd: ttyd, advertiseAddress: advertiseAddress}
 }
 
 // CreateSession handles the createSession JSON-RPC method.
@@ -108,6 +116,29 @@ func (d *Dispatcher) DestroySession(params json.RawMessage) (json.RawMessage, *r
 	return marshalResult(map[string]bool{"ok": true})
 }
 
+// GetTerminalEndpoint handles the getTerminalEndpoint JSON-RPC method.
+func (d *Dispatcher) GetTerminalEndpoint(params json.RawMessage) (json.RawMessage, *rpcError) {
+	var p getTerminalEndpointParams
+	if err := json.Unmarshal(params, &p); err != nil {
+		return nil, &rpcError{Code: rpcErrInvalidArgument, Message: "invalid params: " + err.Error()}
+	}
+
+	// Verify session exists.
+	if _, err := d.manager.Get(p.SessionID); err != nil {
+		return nil, mapSessionError(err)
+	}
+
+	port := d.ttyd.Port(p.SessionID)
+	if port == 0 {
+		return nil, &rpcError{Code: rpcErrNotFound, Message: "no ttyd process for session"}
+	}
+
+	return marshalResult(terminalEndpointResult{
+		Address: d.advertiseAddress,
+		Port:    port,
+	})
+}
+
 // JSON param types for each RPC method.
 
 type createSessionParams struct {
@@ -130,6 +161,15 @@ type listSessionsParams struct {
 type destroySessionParams struct {
 	SessionID string `json:"session_id"`
 	Force     bool   `json:"force"`
+}
+
+type getTerminalEndpointParams struct {
+	SessionID string `json:"session_id"`
+}
+
+type terminalEndpointResult struct {
+	Address string `json:"address"`
+	Port    int    `json:"port"`
 }
 
 // JSON response types.

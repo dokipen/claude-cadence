@@ -116,6 +116,7 @@ type TtydConfig struct {
 	Enabled          bool   `yaml:"enabled"`
 	BasePort         int    `yaml:"base_port"`
 	MaxPorts         int    `yaml:"max_ports"`
+	BindAddress      string `yaml:"bind_address"`
 	AdvertiseAddress string `yaml:"advertise_address"`
 }
 
@@ -173,6 +174,12 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Ttyd.MaxPorts == 0 {
 		cfg.Ttyd.MaxPorts = 100
+	}
+	if cfg.Ttyd.BindAddress == "" {
+		cfg.Ttyd.BindAddress = "127.0.0.1"
+	}
+	if cfg.Ttyd.AdvertiseAddress == "" {
+		cfg.Ttyd.AdvertiseAddress = cfg.Ttyd.BindAddress
 	}
 	if cfg.Log.Level == "" {
 		cfg.Log.Level = "info"
