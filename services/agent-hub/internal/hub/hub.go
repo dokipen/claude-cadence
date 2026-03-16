@@ -20,6 +20,10 @@ type Hub struct {
 	mu     sync.RWMutex
 	agents map[string]*ConnectedAgent
 
+	// termSessions tracks active terminal proxy cancel functions for graceful drain.
+	termMu       sync.Mutex
+	termSessions map[string]context.CancelFunc
+
 	heartbeatInterval time.Duration
 	heartbeatTimeout  time.Duration
 	agentTTL          time.Duration
@@ -32,6 +36,7 @@ type Hub struct {
 func New(heartbeatInterval, heartbeatTimeout, agentTTL time.Duration) *Hub {
 	return &Hub{
 		agents:            make(map[string]*ConnectedAgent),
+		termSessions:      make(map[string]context.CancelFunc),
 		heartbeatInterval: heartbeatInterval,
 		heartbeatTimeout:  heartbeatTimeout,
 		agentTTL:          agentTTL,
@@ -46,19 +51,71 @@ func (h *Hub) Start() {
 	go h.reaper(ctx)
 }
 
-// Stop shuts down the hub, closing all agent connections.
+// Stop shuts down the hub, draining terminal proxy sessions and closing agent connections.
 func (h *Hub) Stop() {
+	// Cancel the reaper goroutine.
 	if h.cancel != nil {
 		h.cancel()
 	}
 	<-h.done
 
+	// Cancel all active terminal proxy sessions so they drain cleanly.
+	h.termMu.Lock()
+	for id, cancel := range h.termSessions {
+		cancel()
+		delete(h.termSessions, id)
+	}
+	h.termMu.Unlock()
+
+	// Close all agent WebSocket connections.
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for name, agent := range h.agents {
 		agent.Conn().Close(websocket.StatusGoingAway, "hub shutting down")
 		delete(h.agents, name)
 	}
+}
+
+// TrackTerminalSession registers an active terminal proxy session for graceful shutdown.
+// Returns a session ID that must be passed to UntrackTerminalSession on completion.
+func (h *Hub) TrackTerminalSession(id string, cancel context.CancelFunc) {
+	h.termMu.Lock()
+	h.termSessions[id] = cancel
+	h.termMu.Unlock()
+}
+
+// UntrackTerminalSession removes a terminal proxy session from the tracker.
+func (h *Hub) UntrackTerminalSession(id string) {
+	h.termMu.Lock()
+	delete(h.termSessions, id)
+	h.termMu.Unlock()
+}
+
+// TerminalSessionCount returns the number of active terminal proxy sessions.
+func (h *Hub) TerminalSessionCount() int {
+	h.termMu.Lock()
+	defer h.termMu.Unlock()
+	return len(h.termSessions)
+}
+
+// AgentCount returns the number of registered agents.
+func (h *Hub) AgentCount() int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return len(h.agents)
+}
+
+// OnlineAgentCount returns the number of online agents.
+func (h *Hub) OnlineAgentCount() int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	count := 0
+	for _, a := range h.agents {
+		if a.Status() == StatusOnline {
+			count++
+		}
+	}
+	return count
 }
 
 // Register adds or re-registers an agent. If an agent with the same name

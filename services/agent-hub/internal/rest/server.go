@@ -2,6 +2,7 @@ package rest
 
 import (
 	"context"
+	"expvar"
 	"fmt"
 	"log/slog"
 	"net"
@@ -42,8 +43,18 @@ func New(h *hub.Hub, cfg *config.Config) *Server {
 		apiToken := cfg.Auth.ResolveToken()
 		apiHandler = tokenAuth(apiToken)(apiMux)
 	}
+	apiHandler = rateLimiter(cfg.RateLimit)(apiHandler)
+	apiHandler = metricsMiddleware(apiHandler)
 	mux.Handle("/api/v1/", apiHandler)
 	mux.Handle("/ws/terminal/", apiHandler)
+
+	// Metrics endpoint — protected by API token auth when auth is enabled.
+	var metricsHandler http.Handler = expvar.Handler()
+	if cfg.Auth.Mode == "token" {
+		apiToken := cfg.Auth.ResolveToken()
+		metricsHandler = tokenAuth(apiToken)(metricsHandler)
+	}
+	mux.Handle("GET /debug/vars", metricsHandler)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 

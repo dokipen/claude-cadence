@@ -11,6 +11,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/dokipen/claude-cadence/services/agent-hub/internal/hub"
+	"github.com/google/uuid"
 )
 
 const (
@@ -90,6 +91,11 @@ func HandleTerminalProxy(h *hub.Hub) http.HandlerFunc {
 		// Relay bidirectionally.
 		ctx, ctxCancel := context.WithCancel(r.Context())
 		defer ctxCancel()
+
+		// Track this terminal session for graceful shutdown.
+		sessionTrackID := uuid.NewString()
+		h.TrackTerminalSession(sessionTrackID, ctxCancel)
+		defer h.UntrackTerminalSession(sessionTrackID)
 
 		errc := make(chan error, 2)
 		go func() { errc <- relay(ctx, browserConn, ttydConn) }()
