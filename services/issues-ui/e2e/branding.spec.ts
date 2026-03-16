@@ -63,6 +63,18 @@ test.describe("app header lockup (authenticated)", () => {
     // line-height: 1 means lineHeight === fontSize (both in px)
     expect(lineHeight).toBe(fontSize);
   });
+
+  test("header lockup container (headerLeft) has gap of 0px between icon and wordmark", async ({ page }) => {
+    // Brand spec: icon and wordmark should sit flush together with no gap.
+    // Bug: .headerLeft currently has gap: 0.5rem (8px), which violates the spec.
+    const gap = await page
+      .locator("header [class*='headerLeft']")
+      .first()
+      .evaluate((el) => {
+        return window.getComputedStyle(el).gap;
+      });
+    expect(gap).toBe("0px");
+  });
 });
 
 unauthTest.describe("login page lockup (unauthenticated)", () => {
