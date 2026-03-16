@@ -1,19 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import type { User } from "@prisma/client";
 
 process.env.JWT_SECRET = "test-secret-for-unit-tests";
 
 const { ticketResolvers } = await import("./ticket.js");
-
-const mockUser: User = {
-  id: "user-1",
-  githubId: 1001,
-  login: "alice",
-  displayName: "Alice",
-  avatarUrl: null,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-};
 
 function makeMockContext(currentUser: User | null) {
   return {

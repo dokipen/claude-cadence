@@ -297,6 +297,8 @@ export const ticketResolvers = {
     ) => {
       requireAuth(context);
       const { prisma } = context;
+      const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+      if (!ticket) throw new Error(`Ticket not found: ${ticketId}`);
       return prisma.ticket.update({
         where: { id: ticketId },
         data: { assigneeId: userId },
@@ -310,6 +312,8 @@ export const ticketResolvers = {
     ) => {
       requireAuth(context);
       const { prisma } = context;
+      const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+      if (!ticket) throw new Error(`Ticket not found: ${ticketId}`);
       return prisma.ticket.update({
         where: { id: ticketId },
         data: { assigneeId: null },
