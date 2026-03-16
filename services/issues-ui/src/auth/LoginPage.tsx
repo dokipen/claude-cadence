@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "./AuthContext";
 import { createRawClient } from "../api/client";
 import { GENERATE_OAUTH_STATE } from "../api/queries";
@@ -8,6 +8,7 @@ const GITHUB_CLIENT_ID = import.meta.env.VITE_GITHUB_CLIENT_ID;
 
 export function LoginPage() {
   const { login } = useAuth();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [pat, setPat] = useState("");
   const [error, setError] = useState<string | null>(() => {
@@ -26,6 +27,7 @@ export function LoginPage() {
 
     try {
       await login(pat.trim());
+      navigate("/", { replace: true });
     } catch {
       setError("Authentication failed. Please check your token and try again.");
     } finally {
