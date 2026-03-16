@@ -1,6 +1,7 @@
 import { useCallback } from "react";
-import { useParams, useSearchParams, Link } from "react-router";
+import { useParams, useSearchParams, Link, Navigate } from "react-router";
 import { useTicket } from "../hooks/useTicket";
+import { useProjects } from "../hooks/useProjects";
 import { PriorityBadge } from "./PriorityBadge";
 import { LabelBadge } from "./LabelBadge";
 import { Markdown } from "./Markdown";
@@ -101,6 +102,7 @@ export function TicketDetail() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab: TabId = searchParams.get("tab") === "agent" ? "agent" : "details";
   const { ticket, loading, error } = useTicket(id);
+  const { projects, loading: projectsLoading } = useProjects();
 
   const handleTabChange = useCallback(
     (tab: TabId) => {
@@ -129,6 +131,15 @@ export function TicketDetail() {
         </div>
       </div>
     );
+  }
+
+  // Defense-in-depth: validate ticket's project against known projects list
+  const projectValid =
+    projectsLoading ||
+    projects.length === 0 ||
+    projects.some((p) => p.id === ticket.project.id);
+  if (!projectValid) {
+    return <Navigate to="/" replace />;
   }
 
   const stateConfig = STATE_LABELS[ticket.state];
