@@ -16,16 +16,17 @@ const (
 )
 
 // ConnectedAgent represents a registered agentd instance.
+// All mutable fields (Status, LastSeen, conn, pending) are protected by mu.
 type ConnectedAgent struct {
 	Name       string                 `json:"name"`
 	Profiles   map[string]ProfileInfo `json:"profiles"`
-	Status     AgentStatus            `json:"status"`
 	TtydConfig TtydInfo               `json:"ttyd"`
-	LastSeen   time.Time              `json:"last_seen"`
 
-	mu      sync.Mutex
-	conn    *websocket.Conn
-	pending map[string]chan *Response
+	mu       sync.Mutex
+	status   AgentStatus
+	lastSeen time.Time
+	conn     *websocket.Conn
+	pending  map[string]chan *Response
 }
 
 // NewConnectedAgent creates a new agent entry.
@@ -33,9 +34,9 @@ func NewConnectedAgent(name string, conn *websocket.Conn, params *RegisterParams
 	return &ConnectedAgent{
 		Name:       name,
 		Profiles:   params.Profiles,
-		Status:     StatusOnline,
+		status:     StatusOnline,
 		TtydConfig: params.Ttyd,
-		LastSeen:   time.Now(),
+		lastSeen:   time.Now(),
 		conn:       conn,
 		pending:    make(map[string]chan *Response),
 	}
@@ -48,9 +49,30 @@ func (a *ConnectedAgent) Conn() *websocket.Conn {
 	return a.conn
 }
 
+// Status returns the agent's current status.
+func (a *ConnectedAgent) Status() AgentStatus {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.status
+}
+
+// LastSeen returns the agent's last-seen timestamp.
+func (a *ConnectedAgent) LastSeen() time.Time {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.lastSeen
+}
+
+// SetStatus sets the agent's status.
+func (a *ConnectedAgent) SetStatus(s AgentStatus) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.status = s
+}
+
 // Touch updates the agent's last-seen timestamp.
 func (a *ConnectedAgent) Touch() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.LastSeen = time.Now()
+	a.lastSeen = time.Now()
 }

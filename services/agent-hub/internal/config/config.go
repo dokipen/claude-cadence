@@ -142,9 +142,16 @@ func parseDurations(cfg *Config) error {
 }
 
 func validate(cfg *Config) error {
+	// Require authentication for non-loopback bindings.
+	if cfg.Host != "127.0.0.1" && cfg.Host != "localhost" && cfg.Host != "::1" {
+		if cfg.Auth.Mode == "none" {
+			return fmt.Errorf("authentication required for non-localhost bindings")
+		}
+	}
+
 	switch cfg.Auth.Mode {
 	case "none":
-		// ok
+		// ok — only allowed on localhost
 	case "token":
 		if cfg.Auth.Token == "" && cfg.Auth.TokenEnvVar == "" {
 			return fmt.Errorf("auth.token or auth.token_env_var required for token authentication")

@@ -8,6 +8,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -70,11 +71,14 @@ func (c *Client) connectLoop(ctx context.Context) {
 				return
 			}
 			slog.Warn("hub connection failed", "error", err, "attempt", attempt)
+			attempt++
+		} else {
+			// Reset backoff after a successful connection that later disconnected.
+			attempt = 0
 		}
 
 		// Exponential backoff with jitter: 1s → 30s max.
 		delay := backoff(attempt, c.cfg.ReconnectInterval)
-		attempt++
 		slog.Info("reconnecting to hub", "delay", delay)
 
 		select {
@@ -91,12 +95,9 @@ func (c *Client) connect(ctx context.Context) error {
 	headers := http.Header{}
 	headers.Set("Authorization", "Bearer "+token)
 
-	url := c.cfg.URL
-	if q := "?name=" + c.cfg.Name; true {
-		url += q
-	}
+	dialURL := c.cfg.URL + "?" + url.Values{"name": {c.cfg.Name}}.Encode()
 
-	conn, _, err := websocket.Dial(ctx, url, &websocket.DialOptions{
+	conn, _, err := websocket.Dial(ctx, dialURL, &websocket.DialOptions{
 		HTTPHeader: headers,
 	})
 	if err != nil {

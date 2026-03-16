@@ -41,11 +41,16 @@ func handleAgentWebSocket(h *hub.Hub, agentToken string) http.HandlerFunc {
 			return
 		}
 
-		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{})
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+			// Agent connections come from agentd (not browsers), so skip origin check.
+			InsecureSkipVerify: true,
+		})
 		if err != nil {
 			slog.Error("failed to accept websocket", "error", err)
 			return
 		}
+
+		conn.SetReadLimit(hub.MaxMessageSize)
 
 		// Read the first message, which must be a register request.
 		_, data, err := conn.Read(r.Context())

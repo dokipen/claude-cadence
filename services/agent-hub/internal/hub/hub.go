@@ -11,6 +11,9 @@ import (
 	"github.com/coder/websocket"
 )
 
+// MaxMessageSize is the maximum allowed WebSocket message size (64 KiB).
+const MaxMessageSize = 64 * 1024
+
 // Hub manages registered agentd connections.
 type Hub struct {
 	mu     sync.RWMutex
@@ -52,7 +55,7 @@ func (h *Hub) Stop() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for name, agent := range h.agents {
-		agent.conn.Close(websocket.StatusGoingAway, "hub shutting down")
+		agent.Conn().Close(websocket.StatusGoingAway, "hub shutting down")
 		delete(h.agents, name)
 	}
 }
@@ -64,8 +67,8 @@ func (h *Hub) Register(name string, conn *websocket.Conn, params *RegisterParams
 	defer h.mu.Unlock()
 
 	if existing, ok := h.agents[name]; ok {
-		slog.Info("replacing existing agent connection", "agent", name)
-		existing.conn.Close(websocket.StatusGoingAway, "replaced by new connection")
+		slog.Warn("replacing existing agent connection", "agent", name)
+		existing.Conn().Close(websocket.StatusGoingAway, "replaced by new connection")
 	}
 
 	agent := NewConnectedAgent(name, conn, params)
@@ -74,25 +77,15 @@ func (h *Hub) Register(name string, conn *websocket.Conn, params *RegisterParams
 	return agent
 }
 
-// Unregister removes an agent from the registry.
-func (h *Hub) Unregister(name string) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	if agent, ok := h.agents[name]; ok {
-		agent.Status = StatusOffline
-		slog.Info("agent unregistered", "agent", name)
-	}
-}
-
 // MarkOffline sets an agent's status to offline without removing it.
 // The reaper will clean it up after the TTL expires.
 func (h *Hub) MarkOffline(name string) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	h.mu.RLock()
+	agent, ok := h.agents[name]
+	h.mu.RUnlock()
 
-	if agent, ok := h.agents[name]; ok {
-		agent.Status = StatusOffline
+	if ok {
+		agent.SetStatus(StatusOffline)
 		slog.Info("agent marked offline", "agent", name)
 	}
 }
@@ -123,8 +116,8 @@ func (h *Hub) List() []AgentInfo {
 		list = append(list, AgentInfo{
 			Name:     agent.Name,
 			Profiles: agent.Profiles,
-			Status:   agent.Status,
-			LastSeen: agent.LastSeen,
+			Status:   agent.Status(),
+			LastSeen: agent.LastSeen(),
 		})
 	}
 	return list
@@ -133,10 +126,12 @@ func (h *Hub) List() []AgentInfo {
 // HandleAgentConnection processes messages from a connected agent.
 // It blocks until the connection is closed or an error occurs.
 func (h *Hub) HandleAgentConnection(ctx context.Context, agent *ConnectedAgent) {
+	agent.Conn().SetReadLimit(MaxMessageSize)
+
 	go h.heartbeatLoop(ctx, agent)
 
 	for {
-		_, data, err := agent.conn.Read(ctx)
+		_, data, err := agent.Conn().Read(ctx)
 		if err != nil {
 			slog.Info("agent connection closed", "agent", agent.Name, "error", err)
 			h.MarkOffline(agent.Name)
@@ -195,7 +190,7 @@ func (h *Hub) heartbeatLoop(ctx context.Context, agent *ConnectedAgent) {
 			agent.mu.Unlock()
 
 			writeCtx, writeCancel := context.WithTimeout(ctx, h.heartbeatTimeout)
-			err = agent.conn.Write(writeCtx, websocket.MessageText, data)
+			err = agent.Conn().Write(writeCtx, websocket.MessageText, data)
 			writeCancel()
 			if err != nil {
 				slog.Warn("failed to send ping", "agent", agent.Name, "error", err)
@@ -209,6 +204,9 @@ func (h *Hub) heartbeatLoop(ctx context.Context, agent *ConnectedAgent) {
 			// Wait for pong response.
 			select {
 			case <-ctx.Done():
+				agent.mu.Lock()
+				delete(agent.pending, id)
+				agent.mu.Unlock()
 				return
 			case <-time.After(h.heartbeatTimeout):
 				slog.Warn("heartbeat timeout", "agent", agent.Name)
@@ -239,8 +237,8 @@ func (h *Hub) reaper(ctx context.Context) {
 			h.mu.Lock()
 			now := time.Now()
 			for name, agent := range h.agents {
-				if agent.Status == StatusOffline && now.Sub(agent.LastSeen) > h.agentTTL {
-					slog.Info("reaping stale agent", "agent", name, "last_seen", agent.LastSeen)
+				if agent.Status() == StatusOffline && now.Sub(agent.LastSeen()) > h.agentTTL {
+					slog.Info("reaping stale agent", "agent", name, "last_seen", agent.LastSeen())
 					delete(h.agents, name)
 				}
 			}
