@@ -51,6 +51,22 @@ config="$(cat <<EOF
 ${vhost} {
 	tls internal
 
+	# Strip server identity headers
+	header {
+		-Server
+	}
+
+	# Rate limiting — per client IP, 60 requests per minute.
+	# Allows short bursts while preventing sustained abuse.
+	# Requires the caddy-ratelimit module (github.com/mholt/caddy-ratelimit).
+	rate_limit {
+		zone api_zone {
+			key    {http.request.remote.host}
+			events 60
+			window 1m
+		}
+	}
+
 	# Issues service — GraphQL API
 	handle /graphql {
 		reverse_proxy localhost:4000
@@ -66,8 +82,24 @@ ${vhost} {
 		}
 	}
 
+	# Agent Hub — REST API
+	handle /api/v1/* {
+		reverse_proxy localhost:4200
+	}
+
+	# Agent Hub — agent WebSocket registration
+	handle /ws/agent {
+		reverse_proxy localhost:4200
+	}
+
+	# Agent Hub — terminal WebSocket proxy
+	handle /ws/terminal/* {
+		reverse_proxy localhost:4200
+	}
+
+	# Fallback — generic 404, no service identity
 	handle {
-		respond "Claude Cadence API Gateway" 200
+		respond "Not Found" 404
 	}
 }
 
@@ -95,3 +127,4 @@ sudo systemctl reload caddy
 log "Done! Services available at:"
 log "  https://${vhost}/graphql  — Issues GraphQL API"
 log "  https://${vhost}/agents.v1.AgentService/<Method>  — Agents gRPC endpoint"
+log "  https://${vhost}/api/v1/  — Agent Hub REST API"
