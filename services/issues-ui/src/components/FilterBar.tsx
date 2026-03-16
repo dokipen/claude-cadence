@@ -71,12 +71,15 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
         <select
           className={styles.filterSelect}
           value={filters.priority ?? ""}
-          onChange={(e) =>
+          onChange={(e) => {
+            const val = e.target.value;
             onChange({
               ...filters,
-              priority: (e.target.value as Priority) || undefined,
-            })
-          }
+              priority: PRIORITIES.includes(val as Priority)
+                ? (val as Priority)
+                : undefined,
+            });
+          }}
           data-testid="filter-priority"
         >
           <option value="">All</option>
