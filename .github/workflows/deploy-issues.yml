@@ -40,7 +40,7 @@ jobs:
             exit 1
           fi
           echo "==> Building Docker image..."
-          docker compose build --no-cache
+          docker compose build --pull
           echo "==> Recreating container..."
           docker compose up -d --force-recreate --wait
           echo "==> Deploy complete"
