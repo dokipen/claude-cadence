@@ -1,23 +1,29 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "./AuthContext";
+
+const KNOWN_ERRORS: Record<string, string> = {
+  access_denied: "GitHub authorization was denied.",
+  redirect_uri_mismatch: "OAuth configuration error. Please contact support.",
+};
 
 export function AuthCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { loginWithCode } = useAuth();
   const [error, setError] = useState<string | null>(null);
+  const exchangeStarted = useRef(false);
 
   useEffect(() => {
+    if (exchangeStarted.current) return;
+
     const code = searchParams.get("code");
     const state = searchParams.get("state");
     const errorParam = searchParams.get("error");
 
     if (errorParam) {
       setError(
-        errorParam === "access_denied"
-          ? "GitHub authorization was denied."
-          : `GitHub authorization failed: ${errorParam}`,
+        KNOWN_ERRORS[errorParam] ?? "GitHub authorization failed.",
       );
       return;
     }
@@ -33,13 +39,15 @@ export function AuthCallback() {
       return;
     }
 
+    exchangeStarted.current = true;
     sessionStorage.removeItem("oauth_state");
 
     loginWithCode(code, state)
       .then(() => {
         navigate("/", { replace: true });
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error("OAuth code exchange failed:", err);
         setError("Authentication failed. Please try again.");
       });
   }, [searchParams, loginWithCode, navigate]);

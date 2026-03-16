@@ -10,9 +10,13 @@ export function LoginPage() {
   const { login } = useAuth();
   const [searchParams] = useSearchParams();
   const [pat, setPat] = useState("");
-  const [error, setError] = useState<string | null>(
-    () => searchParams.get("error"),
-  );
+  const [error, setError] = useState<string | null>(() => {
+    const errorParam = searchParams.get("error");
+    if (!errorParam) return null;
+    return errorParam === "auth_failed"
+      ? "Authentication failed. Please try again."
+      : "An error occurred. Please try again.";
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
@@ -42,7 +46,7 @@ export function LoginPage() {
       sessionStorage.setItem("oauth_state", state);
 
       const params = new URLSearchParams({
-        client_id: GITHUB_CLIENT_ID,
+        client_id: GITHUB_CLIENT_ID!,
         state,
         redirect_uri: `${window.location.origin}/auth/callback`,
       });

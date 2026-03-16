@@ -7,12 +7,6 @@ const E2E_REFRESH_TOKEN = "e2e-refresh-token-hex-placeholder";
 
 test.describe("OAuth", () => {
   test("shows 'Sign in with GitHub' button on login page", async ({ page }) => {
-    // Set the env var so the OAuth button renders
-    await page.addInitScript(() => {
-      // Vite injects VITE_ env vars at build time, but in e2e the dev server
-      // reads them from process.env. We test that the button renders when
-      // VITE_GITHUB_CLIENT_ID is set (handled by playwright.config.ts env).
-    });
     await page.goto("/login");
     await expect(
       page.getByRole("button", { name: "Sign in with GitHub" }),
