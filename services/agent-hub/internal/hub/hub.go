@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/google/uuid"
 )
 
 // MaxMessageSize is the maximum allowed WebSocket message size (64 KiB).
@@ -121,6 +122,64 @@ func (h *Hub) List() []AgentInfo {
 		})
 	}
 	return list
+}
+
+// CallError is returned by Call when the agent returns a JSON-RPC error.
+type CallError struct {
+	RPCError *RPCError
+}
+
+func (e *CallError) Error() string {
+	return e.RPCError.Message
+}
+
+// Call sends a JSON-RPC request to the agent and waits for the response.
+// It returns the raw result JSON on success, or a *CallError on RPC error.
+func (h *Hub) Call(ctx context.Context, agent *ConnectedAgent, method string, params any) (json.RawMessage, error) {
+	if agent.Status() != StatusOnline {
+		return nil, fmt.Errorf("agent offline")
+	}
+
+	id := "req-" + uuid.NewString()
+	req, err := NewRequest(id, method, params)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	data, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	// Register pending response channel.
+	respCh := make(chan *Response, 1)
+	agent.mu.Lock()
+	agent.pending[id] = respCh
+	agent.mu.Unlock()
+
+	// Clean up on exit.
+	defer func() {
+		agent.mu.Lock()
+		delete(agent.pending, id)
+		agent.mu.Unlock()
+	}()
+
+	writeCtx, writeCancel := context.WithTimeout(ctx, h.heartbeatTimeout)
+	err = agent.Conn().Write(writeCtx, websocket.MessageText, data)
+	writeCancel()
+	if err != nil {
+		return nil, fmt.Errorf("write request: %w", err)
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case resp := <-respCh:
+		if resp.Error != nil {
+			return nil, &CallError{RPCError: resp.Error}
+		}
+		return resp.Result, nil
+	}
 }
 
 // HandleAgentConnection processes messages from a connected agent.

@@ -1,11 +1,15 @@
 package rest
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/coder/websocket"
 	"github.com/dokipen/claude-cadence/services/agent-hub/internal/hub"
@@ -23,6 +27,192 @@ func handleListAgents(h *hub.Hub) http.HandlerFunc {
 			slog.Error("failed to encode agents response", "error", err)
 		}
 	}
+}
+
+// handleGetAgent returns info for a single agent by name.
+func handleGetAgent(h *hub.Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("name")
+		agent, ok := h.Get(name)
+		if !ok {
+			writeJSONError(w, http.StatusNotFound, "agent not found")
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"name":      agent.Name,
+			"profiles":  agent.Profiles,
+			"status":    agent.Status(),
+			"last_seen": agent.LastSeen(),
+		})
+	}
+}
+
+// rpcCallTimeout is the maximum time to wait for an agentd response.
+const rpcCallTimeout = 30 * time.Second
+
+// handleCreateSession forwards a CreateSession request to the target agentd.
+func handleCreateSession(h *hub.Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		agent, ok := resolveAgent(h, w, r)
+		if !ok {
+			return
+		}
+
+		var params json.RawMessage
+		if body, err := io.ReadAll(io.LimitReader(r.Body, hub.MaxMessageSize)); err == nil && len(body) > 0 {
+			params = body
+		}
+
+		result, err := callAgent(r.Context(), h, agent, "createSession", params, w)
+		if err != nil {
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		w.Write(result)
+	}
+}
+
+// handleListSessions forwards a ListSessions request to the target agentd.
+func handleListSessions(h *hub.Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		agent, ok := resolveAgent(h, w, r)
+		if !ok {
+			return
+		}
+
+		params := map[string]any{}
+		if profile := r.URL.Query().Get("profile"); profile != "" {
+			params["agent_profile"] = profile
+		}
+		if state := r.URL.Query().Get("state"); state != "" {
+			params["state"] = state
+		}
+
+		result, err := callAgent(r.Context(), h, agent, "listSessions", params, w)
+		if err != nil {
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(result)
+	}
+}
+
+// handleGetSession forwards a GetSession request to the target agentd.
+func handleGetSession(h *hub.Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		agent, ok := resolveAgent(h, w, r)
+		if !ok {
+			return
+		}
+
+		sessionID := r.PathValue("id")
+		params := map[string]string{"session_id": sessionID}
+
+		result, err := callAgent(r.Context(), h, agent, "getSession", params, w)
+		if err != nil {
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(result)
+	}
+}
+
+// handleDestroySession forwards a DestroySession request to the target agentd.
+func handleDestroySession(h *hub.Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		agent, ok := resolveAgent(h, w, r)
+		if !ok {
+			return
+		}
+
+		sessionID := r.PathValue("id")
+		params := map[string]any{"session_id": sessionID}
+		if r.URL.Query().Get("force") == "true" {
+			params["force"] = true
+		}
+
+		result, err := callAgent(r.Context(), h, agent, "destroySession", params, w)
+		if err != nil {
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(result)
+	}
+}
+
+// resolveAgent looks up the agent by the "name" path parameter.
+// Returns false if the agent was not found or is offline (writes the HTTP error).
+func resolveAgent(h *hub.Hub, w http.ResponseWriter, r *http.Request) (*hub.ConnectedAgent, bool) {
+	name := r.PathValue("name")
+	agent, ok := h.Get(name)
+	if !ok {
+		writeJSONError(w, http.StatusNotFound, "agent not found")
+		return nil, false
+	}
+	if agent.Status() != hub.StatusOnline {
+		writeJSONError(w, http.StatusBadGateway, "agent offline")
+		return nil, false
+	}
+	return agent, true
+}
+
+// callAgent performs an RPC call to the agent and maps errors to HTTP responses.
+// Returns nil result and non-nil error if an HTTP error was already written.
+func callAgent(ctx context.Context, h *hub.Hub, agent *hub.ConnectedAgent, method string, params any, w http.ResponseWriter) (json.RawMessage, error) {
+	callCtx, cancel := context.WithTimeout(ctx, rpcCallTimeout)
+	defer cancel()
+
+	result, err := h.Call(callCtx, agent, method, params)
+	if err != nil {
+		writeRPCError(w, err)
+		return nil, err
+	}
+	return result, nil
+}
+
+// writeRPCError maps an RPC error to an HTTP status code and writes the response.
+func writeRPCError(w http.ResponseWriter, err error) {
+	var callErr *hub.CallError
+	if errors.As(err, &callErr) {
+		status := rpcCodeToHTTPStatus(callErr.RPCError.Code)
+		writeJSONError(w, status, callErr.RPCError.Message)
+		return
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		writeJSONError(w, http.StatusGatewayTimeout, "agent timeout")
+		return
+	}
+	writeJSONError(w, http.StatusBadGateway, "agent communication error")
+}
+
+// rpcCodeToHTTPStatus maps JSON-RPC error codes to HTTP status codes.
+func rpcCodeToHTTPStatus(code int) int {
+	switch code {
+	case hub.RPCErrNotFound:
+		return http.StatusNotFound
+	case hub.RPCErrAlreadyExists:
+		return http.StatusConflict
+	case hub.RPCErrInvalidArgument:
+		return http.StatusBadRequest
+	case hub.RPCErrFailedPrecondition:
+		return http.StatusConflict
+	default:
+		return http.StatusInternalServerError
+	}
+}
+
+// writeJSONError writes a JSON error response.
+func writeJSONError(w http.ResponseWriter, statusCode int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(map[string]string{"error": message})
 }
 
 // handleAgentWebSocket accepts WebSocket connections from agentd instances.
