@@ -4,8 +4,10 @@ import { isProduction } from "../env.js";
 import type { AuthenticatedContext } from "../schema/resolvers/auth.js";
 
 // Root fields that don't require authentication.
+// __typename is always public (used by health checks and Apollo client).
 // Introspection fields are only public outside production.
 const PUBLIC_FIELDS = new Set([
+  "__typename",
   "generateOAuthState",
   "authenticateWithGitHubCode",
   "authenticateWithGitHubPAT",

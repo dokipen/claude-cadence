@@ -87,6 +87,15 @@ describe("authGuardPlugin", () => {
     });
   });
 
+  it("always allows unauthenticated __typename queries (health check)", async () => {
+    const authGuardPlugin = await loadGuard(true);
+    const plugin = authGuardPlugin();
+    const hooks = await (plugin as any).requestDidStart!({} as any);
+    await expect(
+      hooks.didResolveOperation(makeRequestContext("{ __typename }")),
+    ).resolves.toBeUndefined();
+  });
+
   it("always allows unauthenticated auth mutations", async () => {
     const authGuardPlugin = await loadGuard(true);
     const plugin = authGuardPlugin();
