@@ -134,7 +134,7 @@ describe("refreshToken mutation", () => {
         { refreshToken: "valid-token" },
         context
       )
-    ).rejects.toThrow("Refresh token expired");
+    ).rejects.toThrow("Invalid or expired refresh token");
   });
 
   it("should issue new tokens for a valid refresh token", async () => {
@@ -222,6 +222,79 @@ describe("logout mutation", () => {
 
     expect(result).toBe(true);
     expect(mocks.revokedTokenCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe("refreshToken — error handling", () => {
+  it("wraps DB errors in GraphQLError with INTERNAL_SERVER_ERROR", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { context } = makeMockContext();
+    context.prisma.$transaction.mockRejectedValue(new Error("DB connection lost"));
+
+    await expect(
+      authResolvers.Mutation.refreshToken(
+        {},
+        { refreshToken: "some-token" },
+        context
+      )
+    ).rejects.toMatchObject({
+      message: "Token refresh failed",
+      extensions: { code: "INTERNAL_SERVER_ERROR" },
+    });
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Token refresh failed"),
+      expect.any(String)
+    );
+    consoleSpy.mockRestore();
+  });
+
+  it("re-throws GraphQLError caught at handler level", async () => {
+    const { GraphQLError } = await import("graphql");
+    const { context } = makeMockContext();
+    context.prisma.$transaction.mockRejectedValue(
+      new GraphQLError("Invalid or revoked refresh token", {
+        extensions: { code: "UNAUTHENTICATED" },
+      })
+    );
+
+    await expect(
+      authResolvers.Mutation.refreshToken(
+        {},
+        { refreshToken: "some-token" },
+        context
+      )
+    ).rejects.toMatchObject({
+      message: "Invalid or revoked refresh token",
+      extensions: { code: "UNAUTHENTICATED" },
+    });
+  });
+});
+
+describe("logout — error handling", () => {
+  it("wraps DB errors in GraphQLError with INTERNAL_SERVER_ERROR", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { context } = makeMockContext();
+    context.prisma.refreshToken.updateMany.mockRejectedValue(
+      new Error("DB connection lost")
+    );
+
+    await expect(
+      authResolvers.Mutation.logout(
+        {},
+        { refreshToken: "some-token" },
+        context
+      )
+    ).rejects.toMatchObject({
+      message: "Logout failed",
+      extensions: { code: "INTERNAL_SERVER_ERROR" },
+    });
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Logout failed"),
+      expect.any(String)
+    );
+    consoleSpy.mockRestore();
   });
 });
 
