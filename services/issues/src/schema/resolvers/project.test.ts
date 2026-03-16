@@ -2,6 +2,13 @@ import { describe, it, expect, vi, beforeAll } from "vitest";
 
 process.env.JWT_SECRET = "test-secret-for-unit-tests";
 
+/** Create an error that looks like a Prisma client error (has a P-code). */
+function prismaError(message: string, code = "P2010"): Error {
+  const err = new Error(message);
+  (err as any).code = code;
+  return err;
+}
+
 let project: any;
 let projectByName: any;
 let projects: any;
@@ -23,7 +30,7 @@ describe("project — error handling", () => {
     const ctx = {
       prisma: {
         project: {
-          findUnique: vi.fn().mockRejectedValue(new Error("DB connection failed")),
+          findUnique: vi.fn().mockRejectedValue(prismaError("DB connection failed")),
         },
       } as any,
       loaders: {} as any,
@@ -51,7 +58,7 @@ describe("projectByName — error handling", () => {
     const ctx = {
       prisma: {
         project: {
-          findUnique: vi.fn().mockRejectedValue(new Error("DB connection failed")),
+          findUnique: vi.fn().mockRejectedValue(prismaError("DB connection failed")),
         },
       } as any,
       loaders: {} as any,
@@ -79,7 +86,7 @@ describe("projects — error handling", () => {
     const ctx = {
       prisma: {
         project: {
-          findMany: vi.fn().mockRejectedValue(new Error("DB connection failed")),
+          findMany: vi.fn().mockRejectedValue(prismaError("DB connection failed")),
         },
       } as any,
       loaders: {} as any,
@@ -107,7 +114,7 @@ describe("createProject — error handling", () => {
     const ctx = {
       prisma: {
         project: {
-          create: vi.fn().mockRejectedValue(new Error("DB connection failed")),
+          create: vi.fn().mockRejectedValue(prismaError("DB connection failed")),
         },
       } as any,
       loaders: {} as any,
@@ -135,7 +142,7 @@ describe("updateProject — error handling", () => {
     const ctx = {
       prisma: {
         project: {
-          findUnique: vi.fn().mockRejectedValue(new Error("DB connection failed")),
+          findUnique: vi.fn().mockRejectedValue(prismaError("DB connection failed")),
         },
       } as any,
       loaders: {} as any,

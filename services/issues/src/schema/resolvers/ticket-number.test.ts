@@ -128,7 +128,7 @@ describe("createTicket — number assignment", () => {
         { input: { title: "Orphan ticket", projectId: "nonexistent" } },
         context
       )
-    ).rejects.toThrow("Failed to create ticket");
+    ).rejects.toThrow("Project not found: nonexistent");
   });
 
   it("retries on P2002 unique constraint violation", async () => {

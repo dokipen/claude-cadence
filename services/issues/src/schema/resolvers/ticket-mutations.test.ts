@@ -213,7 +213,7 @@ describe("removeLabel", () => {
 
     await expect(
       removeLabel(undefined, { ticketId: "t1", labelId: "l1" }, ctx)
-    ).rejects.toThrow("Failed to remove label");
+    ).rejects.toThrow(/Label .* is not on ticket/);
   });
 });
 
@@ -382,6 +382,6 @@ describe("removeBlockRelation", () => {
 
     await expect(
       removeBlockRelation(undefined, { blockerId: "t1", blockedId: "t2" }, ctx)
-    ).rejects.toThrow("Failed to remove block relation");
+    ).rejects.toThrow("Block relation not found");
   });
 });

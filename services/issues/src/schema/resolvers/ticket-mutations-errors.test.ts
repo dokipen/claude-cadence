@@ -2,6 +2,13 @@ import { describe, it, expect, vi, beforeAll } from "vitest";
 
 process.env.JWT_SECRET = "test-secret-for-unit-tests";
 
+/** Create an error that looks like a Prisma client error (has a P-code). */
+function prismaError(message: string, code = "P2010"): Error {
+  const err = new Error(message);
+  (err as any).code = code;
+  return err;
+}
+
 let resolvers: any;
 
 const mockUser = {
@@ -24,7 +31,7 @@ describe("labels query — error handling", () => {
     const ctx = {
       prisma: {
         label: {
-          findMany: vi.fn().mockRejectedValue(new Error("DB connection failed")),
+          findMany: vi.fn().mockRejectedValue(prismaError("DB connection failed")),
         },
       } as any,
       loaders: {} as any,
@@ -51,7 +58,7 @@ describe("createTicket mutation — error handling", () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const ctx = {
       prisma: {
-        $transaction: vi.fn().mockRejectedValue(new Error("DB connection failed")),
+        $transaction: vi.fn().mockRejectedValue(prismaError("DB connection failed")),
       } as any,
       loaders: {} as any,
       currentUser: mockUser,
@@ -80,7 +87,7 @@ describe("updateTicket mutation — error handling", () => {
     const ctx = {
       prisma: {
         ticket: {
-          findUnique: vi.fn().mockRejectedValue(new Error("DB connection failed")),
+          findUnique: vi.fn().mockRejectedValue(prismaError("DB connection failed")),
         },
       } as any,
       loaders: {} as any,
@@ -111,7 +118,7 @@ describe("createLabel mutation — error handling", () => {
     const ctx = {
       prisma: {
         label: {
-          create: vi.fn().mockRejectedValue(new Error("DB connection failed")),
+          create: vi.fn().mockRejectedValue(prismaError("DB connection failed")),
         },
       } as any,
       loaders: {} as any,
@@ -142,7 +149,7 @@ describe("addLabel mutation — error handling", () => {
     const ctx = {
       prisma: {
         ticket: {
-          findUnique: vi.fn().mockRejectedValue(new Error("DB connection failed")),
+          findUnique: vi.fn().mockRejectedValue(prismaError("DB connection failed")),
         },
       } as any,
       loaders: {} as any,
@@ -173,7 +180,7 @@ describe("removeLabel mutation — error handling", () => {
     const ctx = {
       prisma: {
         ticket: {
-          findUnique: vi.fn().mockRejectedValue(new Error("DB connection failed")),
+          findUnique: vi.fn().mockRejectedValue(prismaError("DB connection failed")),
         },
       } as any,
       loaders: {} as any,
@@ -204,7 +211,7 @@ describe("assignTicket mutation — error handling", () => {
     const ctx = {
       prisma: {
         ticket: {
-          findUnique: vi.fn().mockRejectedValue(new Error("DB connection failed")),
+          findUnique: vi.fn().mockRejectedValue(prismaError("DB connection failed")),
         },
       } as any,
       loaders: {} as any,
@@ -235,7 +242,7 @@ describe("unassignTicket mutation — error handling", () => {
     const ctx = {
       prisma: {
         ticket: {
-          findUnique: vi.fn().mockRejectedValue(new Error("DB connection failed")),
+          findUnique: vi.fn().mockRejectedValue(prismaError("DB connection failed")),
         },
       } as any,
       loaders: {} as any,
@@ -264,7 +271,7 @@ describe("transitionTicket mutation — error handling", () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const ctx = {
       prisma: {
-        $transaction: vi.fn().mockRejectedValue(new Error("DB connection failed")),
+        $transaction: vi.fn().mockRejectedValue(prismaError("DB connection failed")),
       } as any,
       loaders: {} as any,
       currentUser: mockUser,
@@ -294,7 +301,7 @@ describe("addBlockRelation mutation — error handling", () => {
     const ctx = {
       prisma: {
         ticket: {
-          findUnique: vi.fn().mockRejectedValue(new Error("DB connection failed")),
+          findUnique: vi.fn().mockRejectedValue(prismaError("DB connection failed")),
         },
       } as any,
       loaders: {} as any,
@@ -325,7 +332,7 @@ describe("removeBlockRelation mutation — error handling", () => {
     const ctx = {
       prisma: {
         blockRelation: {
-          findUnique: vi.fn().mockRejectedValue(new Error("DB connection failed")),
+          findUnique: vi.fn().mockRejectedValue(prismaError("DB connection failed")),
         },
       } as any,
       loaders: {} as any,
@@ -356,7 +363,7 @@ describe("addComment mutation — error handling", () => {
     const ctx = {
       prisma: {
         ticket: {
-          findUnique: vi.fn().mockRejectedValue(new Error("DB connection failed")),
+          findUnique: vi.fn().mockRejectedValue(prismaError("DB connection failed")),
         },
       } as any,
       loaders: {} as any,
@@ -387,7 +394,7 @@ describe("updateComment mutation — error handling", () => {
     const ctx = {
       prisma: {
         comment: {
-          findUnique: vi.fn().mockRejectedValue(new Error("DB connection failed")),
+          findUnique: vi.fn().mockRejectedValue(prismaError("DB connection failed")),
         },
       } as any,
       loaders: {} as any,
@@ -418,7 +425,7 @@ describe("deleteComment mutation — error handling", () => {
     const ctx = {
       prisma: {
         comment: {
-          findUnique: vi.fn().mockRejectedValue(new Error("DB connection failed")),
+          findUnique: vi.fn().mockRejectedValue(prismaError("DB connection failed")),
         },
       } as any,
       loaders: {} as any,

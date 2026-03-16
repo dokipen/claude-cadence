@@ -4,6 +4,19 @@ import { validateTransition, checkBlockerGuard } from "../../fsm/ticket-machine.
 import { GraphQLError } from "graphql";
 import { requireAuth } from "./auth.js";
 
+/** Re-throw application errors with their original message; wrap unknown/database errors generically. */
+function rethrowOrWrap(error: unknown, fallbackMessage: string, logPrefix: string): never {
+  if (error instanceof GraphQLError) throw error;
+  const msg = error instanceof Error ? error.message : String(error);
+  console.error(`${logPrefix}:`, msg);
+  // Prisma errors carry a `code` property (e.g. P2002); plain validation errors don't.
+  const code = (error as { code?: string }).code;
+  if (code && /^P\d{4}$/.test(code)) {
+    throw new GraphQLError(fallbackMessage, { extensions: { code: "INTERNAL_SERVER_ERROR" } });
+  }
+  throw new GraphQLError(msg, { extensions: { code: "BAD_REQUEST" } });
+}
+
 export interface Context {
   prisma: PrismaClient;
   loaders: Loaders;
@@ -20,10 +33,7 @@ export const ticketResolvers = {
       try {
         return await prisma.ticket.findUnique({ where: { id } });
       } catch (error) {
-        console.error("ticket query failed:", error instanceof Error ? error.message : String(error));
-        throw new GraphQLError("Failed to fetch ticket", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
-        });
+        rethrowOrWrap(error, "Failed to fetch ticket", "ticket query failed");
       }
     },
 
@@ -37,10 +47,7 @@ export const ticketResolvers = {
           where: { projectId_number: { projectId, number } },
         });
       } catch (error) {
-        console.error("ticketByNumber query failed:", error instanceof Error ? error.message : String(error));
-        throw new GraphQLError("Failed to fetch ticket by number", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
-        });
+        rethrowOrWrap(error, "Failed to fetch ticket by number", "ticketByNumber query failed");
       }
     },
 
@@ -119,10 +126,7 @@ export const ticketResolvers = {
       try {
         tickets = await prisma.ticket.findMany(queryArgs);
       } catch (error) {
-        console.error("tickets query failed:", error instanceof Error ? error.message : String(error));
-        throw new GraphQLError("Failed to query tickets", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
-        });
+        rethrowOrWrap(error, "Failed to query tickets", "tickets query failed");
       }
 
       const hasNextPage = tickets.length > first;
@@ -144,10 +148,7 @@ export const ticketResolvers = {
       try {
         return await prisma.label.findMany({ orderBy: { name: "asc" } });
       } catch (error) {
-        console.error("labels query failed:", error instanceof Error ? error.message : String(error));
-        throw new GraphQLError("Failed to fetch labels", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
-        });
+        rethrowOrWrap(error, "Failed to fetch labels", "labels query failed");
       }
     },
   },
@@ -231,11 +232,7 @@ export const ticketResolvers = {
         // Unreachable, but satisfies TypeScript
         throw new Error("Failed to create ticket after retries");
       } catch (error) {
-        if (error instanceof GraphQLError) throw error;
-        console.error("createTicket mutation failed:", error instanceof Error ? error.message : String(error));
-        throw new GraphQLError("Failed to create ticket", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
-        });
+        rethrowOrWrap(error, "Failed to create ticket", "createTicket mutation failed");
       }
     },
 
@@ -278,11 +275,7 @@ export const ticketResolvers = {
           data,
         });
       } catch (error) {
-        if (error instanceof GraphQLError) throw error;
-        console.error("updateTicket mutation failed:", error instanceof Error ? error.message : String(error));
-        throw new GraphQLError("Failed to update ticket", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
-        });
+        rethrowOrWrap(error, "Failed to update ticket", "updateTicket mutation failed");
       }
     },
 
@@ -299,11 +292,7 @@ export const ticketResolvers = {
       try {
         return await prisma.label.create({ data: { name, color } });
       } catch (error) {
-        if (error instanceof GraphQLError) throw error;
-        console.error("createLabel mutation failed:", error instanceof Error ? error.message : String(error));
-        throw new GraphQLError("Failed to create label", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
-        });
+        rethrowOrWrap(error, "Failed to create label", "createLabel mutation failed");
       }
     },
 
@@ -326,11 +315,7 @@ export const ticketResolvers = {
         });
         return ticket;
       } catch (error) {
-        if (error instanceof GraphQLError) throw error;
-        console.error("addLabel mutation failed:", error instanceof Error ? error.message : String(error));
-        throw new GraphQLError("Failed to add label", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
-        });
+        rethrowOrWrap(error, "Failed to add label", "addLabel mutation failed");
       }
     },
 
@@ -355,11 +340,7 @@ export const ticketResolvers = {
         });
         return ticket;
       } catch (error) {
-        if (error instanceof GraphQLError) throw error;
-        console.error("removeLabel mutation failed:", error instanceof Error ? error.message : String(error));
-        throw new GraphQLError("Failed to remove label", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
-        });
+        rethrowOrWrap(error, "Failed to remove label", "removeLabel mutation failed");
       }
     },
 
@@ -378,11 +359,7 @@ export const ticketResolvers = {
           data: { assigneeId: userId },
         });
       } catch (error) {
-        if (error instanceof GraphQLError) throw error;
-        console.error("assignTicket mutation failed:", error instanceof Error ? error.message : String(error));
-        throw new GraphQLError("Failed to assign ticket", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
-        });
+        rethrowOrWrap(error, "Failed to assign ticket", "assignTicket mutation failed");
       }
     },
 
@@ -401,11 +378,7 @@ export const ticketResolvers = {
           data: { assigneeId: null },
         });
       } catch (error) {
-        if (error instanceof GraphQLError) throw error;
-        console.error("unassignTicket mutation failed:", error instanceof Error ? error.message : String(error));
-        throw new GraphQLError("Failed to unassign ticket", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
-        });
+        rethrowOrWrap(error, "Failed to unassign ticket", "unassignTicket mutation failed");
       }
     },
 
@@ -439,11 +412,7 @@ export const ticketResolvers = {
           });
         });
       } catch (error) {
-        if (error instanceof GraphQLError) throw error;
-        console.error("transitionTicket mutation failed:", error instanceof Error ? error.message : String(error));
-        throw new GraphQLError("Failed to transition ticket", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
-        });
+        rethrowOrWrap(error, "Failed to transition ticket", "transitionTicket mutation failed");
       }
     },
 
@@ -473,11 +442,7 @@ export const ticketResolvers = {
 
         return blocked;
       } catch (error) {
-        if (error instanceof GraphQLError) throw error;
-        console.error("addBlockRelation mutation failed:", error instanceof Error ? error.message : String(error));
-        throw new GraphQLError("Failed to add block relation", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
-        });
+        rethrowOrWrap(error, "Failed to add block relation", "addBlockRelation mutation failed");
       }
     },
 
@@ -500,11 +465,7 @@ export const ticketResolvers = {
 
         return await prisma.ticket.findUniqueOrThrow({ where: { id: blockedId } });
       } catch (error) {
-        if (error instanceof GraphQLError) throw error;
-        console.error("removeBlockRelation mutation failed:", error instanceof Error ? error.message : String(error));
-        throw new GraphQLError("Failed to remove block relation", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
-        });
+        rethrowOrWrap(error, "Failed to remove block relation", "removeBlockRelation mutation failed");
       }
     },
 
@@ -525,11 +486,7 @@ export const ticketResolvers = {
           include: { author: true },
         });
       } catch (error) {
-        if (error instanceof GraphQLError) throw error;
-        console.error("addComment mutation failed:", error instanceof Error ? error.message : String(error));
-        throw new GraphQLError("Failed to add comment", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
-        });
+        rethrowOrWrap(error, "Failed to add comment", "addComment mutation failed");
       }
     },
 
@@ -557,11 +514,7 @@ export const ticketResolvers = {
           include: { author: true },
         });
       } catch (error) {
-        if (error instanceof GraphQLError) throw error;
-        console.error("updateComment mutation failed:", error instanceof Error ? error.message : String(error));
-        throw new GraphQLError("Failed to update comment", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
-        });
+        rethrowOrWrap(error, "Failed to update comment", "updateComment mutation failed");
       }
     },
 
@@ -588,11 +541,7 @@ export const ticketResolvers = {
         await context.prisma.comment.delete({ where: { id } });
         return existing;
       } catch (error) {
-        if (error instanceof GraphQLError) throw error;
-        console.error("deleteComment mutation failed:", error instanceof Error ? error.message : String(error));
-        throw new GraphQLError("Failed to delete comment", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
-        });
+        rethrowOrWrap(error, "Failed to delete comment", "deleteComment mutation failed");
       }
     },
   },

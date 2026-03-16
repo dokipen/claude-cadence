@@ -3,6 +3,18 @@ import type { Loaders } from "../../loaders.js";
 import { GraphQLError } from "graphql";
 import { requireAuth } from "./auth.js";
 
+/** Re-throw application errors with their original message; wrap unknown/database errors generically. */
+function rethrowOrWrap(error: unknown, fallbackMessage: string, logPrefix: string): never {
+  if (error instanceof GraphQLError) throw error;
+  const msg = error instanceof Error ? error.message : String(error);
+  console.error(`${logPrefix}:`, msg);
+  const code = (error as { code?: string }).code;
+  if (code && /^P\d{4}$/.test(code)) {
+    throw new GraphQLError(fallbackMessage, { extensions: { code: "INTERNAL_SERVER_ERROR" } });
+  }
+  throw new GraphQLError(msg, { extensions: { code: "BAD_REQUEST" } });
+}
+
 export interface Context {
   prisma: PrismaClient;
   loaders: Loaders;
@@ -15,10 +27,7 @@ export const projectResolvers = {
       try {
         return await prisma.project.findUnique({ where: { id } });
       } catch (error) {
-        console.error("project query failed:", error instanceof Error ? error.message : String(error));
-        throw new GraphQLError("Failed to fetch project", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
-        });
+        rethrowOrWrap(error, "Failed to fetch project", "project query failed");
       }
     },
 
@@ -26,10 +35,7 @@ export const projectResolvers = {
       try {
         return await prisma.project.findUnique({ where: { name } });
       } catch (error) {
-        console.error("projectByName query failed:", error instanceof Error ? error.message : String(error));
-        throw new GraphQLError("Failed to fetch project by name", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
-        });
+        rethrowOrWrap(error, "Failed to fetch project by name", "projectByName query failed");
       }
     },
 
@@ -37,10 +43,7 @@ export const projectResolvers = {
       try {
         return await prisma.project.findMany({ orderBy: { name: "asc" } });
       } catch (error) {
-        console.error("projects query failed:", error instanceof Error ? error.message : String(error));
-        throw new GraphQLError("Failed to fetch projects", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
-        });
+        rethrowOrWrap(error, "Failed to fetch projects", "projects query failed");
       }
     },
   },
@@ -61,11 +64,7 @@ export const projectResolvers = {
           },
         });
       } catch (error) {
-        if (error instanceof GraphQLError) throw error;
-        console.error("createProject mutation failed:", error instanceof Error ? error.message : String(error));
-        throw new GraphQLError("Failed to create project", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
-        });
+        rethrowOrWrap(error, "Failed to create project", "createProject mutation failed");
       }
     },
 
@@ -95,11 +94,7 @@ export const projectResolvers = {
           data,
         });
       } catch (error) {
-        if (error instanceof GraphQLError) throw error;
-        console.error("updateProject mutation failed:", error instanceof Error ? error.message : String(error));
-        throw new GraphQLError("Failed to update project", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
-        });
+        rethrowOrWrap(error, "Failed to update project", "updateProject mutation failed");
       }
     },
   },

@@ -194,7 +194,7 @@ describe("tickets — error handling", () => {
     const ctx = {
       prisma: {
         ticket: {
-          findMany: vi.fn().mockRejectedValue(new Error("DB connection failed")),
+          findMany: vi.fn().mockRejectedValue(Object.assign(new Error("DB connection failed"), { code: "P2010" })),
         },
       } as any,
       loaders: {} as any,

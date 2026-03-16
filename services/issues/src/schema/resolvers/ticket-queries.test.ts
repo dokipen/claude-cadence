@@ -17,7 +17,7 @@ describe("ticket — error handling", () => {
     const ctx = {
       prisma: {
         ticket: {
-          findUnique: vi.fn().mockRejectedValue(new Error("DB connection failed")),
+          findUnique: vi.fn().mockRejectedValue(Object.assign(new Error("DB connection failed"), { code: "P2010" })),
         },
       } as any,
       loaders: {} as any,
@@ -45,7 +45,7 @@ describe("ticketByNumber — error handling", () => {
     const ctx = {
       prisma: {
         ticket: {
-          findUnique: vi.fn().mockRejectedValue(new Error("DB connection failed")),
+          findUnique: vi.fn().mockRejectedValue(Object.assign(new Error("DB connection failed"), { code: "P2010" })),
         },
       } as any,
       loaders: {} as any,
