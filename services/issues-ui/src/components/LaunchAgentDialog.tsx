@@ -31,6 +31,10 @@ export function LaunchAgentDialog({
     } else if (!open && el.open) {
       el.close();
     }
+
+    return () => {
+      if (el.open) el.close();
+    };
   }, [open]);
 
   const handleClose = useCallback(() => {

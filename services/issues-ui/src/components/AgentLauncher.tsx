@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { hubFetch } from "../api/agentHubClient";
 import { useAgents, useAgentProfiles } from "../hooks/useAgents";
 import type { Session } from "../types";
@@ -24,6 +24,11 @@ export function AgentLauncher({
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [launching, setLaunching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Reset selection when profiles change (agents go online/offline)
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [profiles]);
 
   const selected = profiles[selectedIndex] ?? profiles[0];
 

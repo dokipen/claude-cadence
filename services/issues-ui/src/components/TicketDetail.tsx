@@ -99,13 +99,12 @@ type TabId = "details" | "agent";
 export function TicketDetail() {
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialTab = searchParams.get("tab") === "agent" ? "agent" : "details";
-  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
+  const activeTab: TabId = searchParams.get("tab") === "agent" ? "agent" : "details";
+  const [launched, setLaunched] = useState(false);
   const { ticket, loading, error } = useTicket(id);
 
   const handleTabChange = useCallback(
     (tab: TabId) => {
-      setActiveTab(tab);
       if (tab === "agent") {
         setSearchParams({ tab: "agent" });
       } else {
@@ -117,7 +116,7 @@ export function TicketDetail() {
 
   const handleAgentLaunched = useCallback(
     (_session: Session) => {
-      // Session created — stay on agent tab
+      setLaunched(true);
       // Phase 4 will add terminal display here
     },
     [],
@@ -260,18 +259,29 @@ export function TicketDetail() {
 
       {activeTab === "agent" && (
         <div className={agentStyles.agentTabContent} data-testid="agent-tab-content">
-          <div className={agentStyles.agentTabEmpty}>
-            <h3 className={agentStyles.agentTabEmptyTitle}>No active agent session</h3>
-            <p className={agentStyles.agentTabEmptyDesc}>
-              Launch an agent to work on this ticket.
-            </p>
-          </div>
-          <AgentLauncher
-            ticketNumber={ticket.number}
-            repoUrl={ticket.project.repository}
-            onLaunched={handleAgentLaunched}
-            inline
-          />
+          {launched ? (
+            <div className={agentStyles.agentTabEmpty}>
+              <h3 className={agentStyles.agentTabEmptyTitle}>Agent session launched</h3>
+              <p className={agentStyles.agentTabEmptyDesc}>
+                The terminal will appear here once Phase 4 is implemented.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className={agentStyles.agentTabEmpty}>
+                <h3 className={agentStyles.agentTabEmptyTitle}>No active agent session</h3>
+                <p className={agentStyles.agentTabEmptyDesc}>
+                  Launch an agent to work on this ticket.
+                </p>
+              </div>
+              <AgentLauncher
+                ticketNumber={ticket.number}
+                repoUrl={ticket.project.repository}
+                onLaunched={handleAgentLaunched}
+                inline
+              />
+            </>
+          )}
         </div>
       )}
     </div>
