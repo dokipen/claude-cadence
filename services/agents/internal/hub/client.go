@@ -16,25 +16,36 @@ import (
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
 )
 
+// SessionDispatcher handles session CRUD operations dispatched from the hub.
+type SessionDispatcher interface {
+	CreateSession(params json.RawMessage) (json.RawMessage, *rpcError)
+	GetSession(params json.RawMessage) (json.RawMessage, *rpcError)
+	ListSessions(params json.RawMessage) (json.RawMessage, *rpcError)
+	DestroySession(params json.RawMessage) (json.RawMessage, *rpcError)
+}
+
 // Client manages the WebSocket connection from agentd to the hub.
 type Client struct {
-	cfg      config.HubConfig
-	profiles map[string]config.Profile
-	ttyd     config.TtydConfig
+	cfg        config.HubConfig
+	profiles   map[string]config.Profile
+	ttyd       config.TtydConfig
+	dispatcher SessionDispatcher
 
 	mu      sync.Mutex
 	conn    *websocket.Conn
+	writeMu sync.Mutex // protects concurrent WebSocket writes
 	cancel  context.CancelFunc
 	done    chan struct{}
 }
 
 // NewClient creates a new hub client.
-func NewClient(cfg config.HubConfig, profiles map[string]config.Profile, ttyd config.TtydConfig) *Client {
+func NewClient(cfg config.HubConfig, profiles map[string]config.Profile, ttyd config.TtydConfig, dispatcher SessionDispatcher) *Client {
 	return &Client{
-		cfg:      cfg,
-		profiles: profiles,
-		ttyd:     ttyd,
-		done:     make(chan struct{}),
+		cfg:        cfg,
+		profiles:   profiles,
+		ttyd:       ttyd,
+		dispatcher: dispatcher,
+		done:       make(chan struct{}),
 	}
 }
 
@@ -183,13 +194,66 @@ func (c *Client) readLoop(ctx context.Context, conn *websocket.Conn) error {
 		switch req.Method {
 		case "ping":
 			resp, _ := newResponse(req.ID, pongResult{Pong: true})
-			respData, _ := json.Marshal(resp)
-			if err := conn.Write(ctx, websocket.MessageText, respData); err != nil {
-				return fmt.Errorf("write pong: %w", err)
+			if err := c.writeResponse(ctx, conn, resp); err != nil {
+				return err
 			}
+
+		case "createSession", "getSession", "listSessions", "destroySession":
+			// Dispatch asynchronously so long-running operations (e.g., git clone)
+			// don't block the read loop from responding to heartbeat pings.
+			go c.dispatchSessionAsync(ctx, conn, req)
+
 		default:
 			slog.Debug("unhandled hub method", "method", req.Method)
 		}
+	}
+}
+
+// dispatchSessionAsync dispatches a session method and writes the response.
+func (c *Client) dispatchSessionAsync(ctx context.Context, conn *websocket.Conn, req request) {
+	var fn func(json.RawMessage) (json.RawMessage, *rpcError)
+	switch req.Method {
+	case "createSession":
+		fn = c.dispatcher.CreateSession
+	case "getSession":
+		fn = c.dispatcher.GetSession
+	case "listSessions":
+		fn = c.dispatcher.ListSessions
+	case "destroySession":
+		fn = c.dispatcher.DestroySession
+	}
+
+	resp := c.dispatchSession(req.ID, req.Params, fn)
+	if err := c.writeResponse(ctx, conn, resp); err != nil {
+		slog.Warn("failed to write dispatch response", "method", req.Method, "error", err)
+	}
+}
+
+// writeResponse serializes and writes a response, protected by the write mutex.
+func (c *Client) writeResponse(ctx context.Context, conn *websocket.Conn, resp *response) error {
+	respData, _ := json.Marshal(resp)
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	if err := conn.Write(ctx, websocket.MessageText, respData); err != nil {
+		return fmt.Errorf("write response: %w", err)
+	}
+	return nil
+}
+
+// dispatchSession calls a SessionDispatcher method and wraps the result in a response.
+func (c *Client) dispatchSession(id string, params json.RawMessage, fn func(json.RawMessage) (json.RawMessage, *rpcError)) *response {
+	result, rpcErr := fn(params)
+	if rpcErr != nil {
+		return &response{
+			JSONRPC: "2.0",
+			ID:      id,
+			Error:   rpcErr,
+		}
+	}
+	return &response{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result:  result,
 	}
 }
 

@@ -85,6 +85,15 @@ func NewResponse(id string, result any) (*Response, error) {
 	}, nil
 }
 
+// JSON-RPC error codes used across the hub ↔ agentd protocol.
+const (
+	RPCErrNotFound           = -32001
+	RPCErrAlreadyExists      = -32002
+	RPCErrInvalidArgument    = -32003
+	RPCErrFailedPrecondition = -32004
+	RPCErrInternal           = -32000
+)
+
 // NewErrorResponse creates a JSON-RPC 2.0 error response.
 func NewErrorResponse(id string, code int, message string) *Response {
 	return &Response{

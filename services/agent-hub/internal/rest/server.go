@@ -29,6 +29,11 @@ func New(h *hub.Hub, cfg *config.Config) *Server {
 	// REST API endpoints — protected by API token auth.
 	apiMux := http.NewServeMux()
 	apiMux.HandleFunc("GET /api/v1/agents", handleListAgents(h))
+	apiMux.HandleFunc("GET /api/v1/agents/{name}", handleGetAgent(h))
+	apiMux.HandleFunc("POST /api/v1/agents/{name}/sessions", handleCreateSession(h))
+	apiMux.HandleFunc("GET /api/v1/agents/{name}/sessions", handleListSessions(h))
+	apiMux.HandleFunc("GET /api/v1/agents/{name}/sessions/{id}", handleGetSession(h))
+	apiMux.HandleFunc("DELETE /api/v1/agents/{name}/sessions/{id}", handleDestroySession(h))
 
 	var apiHandler http.Handler = apiMux
 	if cfg.Auth.Mode == "token" {
@@ -44,7 +49,7 @@ func New(h *hub.Hub, cfg *config.Config) *Server {
 			Addr:         addr,
 			Handler:      mux,
 			ReadTimeout:  10 * time.Second,
-			WriteTimeout: 10 * time.Second,
+			WriteTimeout: 35 * time.Second, // Must exceed rpcCallTimeout (30s)
 		},
 		addr: addr,
 	}
