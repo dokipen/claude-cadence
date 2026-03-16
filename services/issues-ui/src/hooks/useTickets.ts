@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { Ticket, TicketState } from "../types";
+import type { Ticket, TicketState, Priority } from "../types";
 import { getClient } from "../api/client";
 import { BOARD_TICKETS_QUERY } from "../api/queries";
 import { useAuth } from "../auth/AuthContext";
@@ -24,10 +24,19 @@ interface UseTicketsResult {
   error: string | null;
 }
 
+const MAX_CONSECUTIVE_FAILURES = 3;
+
+export interface TicketFilters {
+  labelName?: string;
+  isBlocked?: boolean;
+  priority?: Priority;
+}
+
 export function useTickets(
   state: TicketState,
   projectId: string | null,
   first: number,
+  filters?: TicketFilters,
 ): UseTicketsResult {
   const { logout } = useAuth();
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -38,6 +47,11 @@ export function useTickets(
     logout();
   }, [logout]);
 
+  // Stabilize filter values for the dependency array
+  const labelName = filters?.labelName;
+  const isBlocked = filters?.isBlocked;
+  const priority = filters?.priority;
+
   useEffect(() => {
     if (!projectId) {
       setLoading(false);
@@ -45,31 +59,48 @@ export function useTickets(
     }
 
     let cancelled = false;
+    let isInitialFetch = true;
+    let consecutiveFailures = 0;
 
     const fetchTickets = () => {
+      if (isInitialFetch) {
+        setLoading(true);
+        setError(null);
+      }
+
       const client = getClient(handleAuthFailure);
       client
         .request<TicketsResponse>(BOARD_TICKETS_QUERY, {
           state,
           projectId,
           first,
+          labelName: labelName || undefined,
+          isBlocked,
+          priority: priority || undefined,
         })
         .then((result) => {
-          if (!cancelled) setTickets(result.tickets.edges.map((e) => e.node));
+          if (!cancelled) {
+            setTickets(result.tickets.edges.map((e) => e.node));
+            consecutiveFailures = 0;
+            setError(null);
+          }
         })
-        .catch((err) => {
-          if (!cancelled)
-            setError(
-              err instanceof Error ? err.message : "Failed to load tickets",
-            );
+        .catch(() => {
+          if (!cancelled) {
+            consecutiveFailures++;
+            if (isInitialFetch || consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+              setError("Failed to load tickets");
+            }
+          }
         })
         .finally(() => {
-          if (!cancelled) setLoading(false);
+          if (!cancelled) {
+            setLoading(false);
+            isInitialFetch = false;
+          }
         });
     };
 
-    setLoading(true);
-    setError(null);
     fetchTickets();
 
     const interval = setInterval(fetchTickets, 60_000);
@@ -77,7 +108,7 @@ export function useTickets(
       cancelled = true;
       clearInterval(interval);
     };
-  }, [state, projectId, first, handleAuthFailure]);
+  }, [state, projectId, first, labelName, isBlocked, priority, handleAuthFailure]);
 
   return { tickets, loading, error };
 }

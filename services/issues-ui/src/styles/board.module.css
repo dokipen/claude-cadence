@@ -83,7 +83,7 @@
 }
 
 .error {
-  color: #d73a4a;
+  color: var(--error);
   font-size: 0.8rem;
   text-align: center;
   padding: 1rem 0.5rem;

@@ -79,5 +79,5 @@ Bump the `version` field in `.claude-plugin/plugin.json` only when preparing a r
 
 ## Ticket Provider
 provider: issues-api
-api_url: http://localhost:4000
+api_url: https://cadence.bootsy.internal
 project_id: claude-cadence
