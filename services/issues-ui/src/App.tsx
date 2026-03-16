@@ -7,6 +7,7 @@ import { KanbanBoard } from "./components/KanbanBoard";
 import { FilterBar } from "./components/FilterBar";
 import { TicketDetail } from "./components/TicketDetail";
 import { ProjectSelector, STORAGE_KEY } from "./components/ProjectSelector";
+import { useProjects } from "./hooks/useProjects";
 import type { TicketFilters } from "./hooks/useTickets";
 import type { ReactNode } from "react";
 import layoutStyles from "./styles/layout.module.css";
@@ -44,12 +45,16 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 
 function AppShell() {
   const { user, logout } = useAuth();
+  const { projects } = useProjects();
   const location = useLocation();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     () => localStorage.getItem(STORAGE_KEY),
   );
   const [filters, setFilters] = useState<TicketFilters>({});
   const showFilters = !location.pathname.startsWith("/ticket/");
+
+  const selectedProject = projects.find((p) => p.id === selectedProjectId);
+  const repoUrl = selectedProject?.repository;
 
   const handleProjectChange = useCallback((id: string) => {
     setSelectedProjectId(id);
@@ -92,7 +97,7 @@ function AppShell() {
           <Route path="/ticket/:id" element={<TicketDetail />} />
           <Route
             path="/*"
-            element={<KanbanBoard projectId={selectedProjectId} filters={filters} />}
+            element={<KanbanBoard projectId={selectedProjectId} filters={filters} repoUrl={repoUrl} />}
           />
         </Routes>
       </main>

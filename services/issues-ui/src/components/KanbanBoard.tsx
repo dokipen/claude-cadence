@@ -15,22 +15,36 @@ function ColumnFetcher({
   projectId,
   first,
   filters,
+  repoUrl,
 }: {
   state: TicketState;
   projectId: string;
   first: number;
   filters?: TicketFilters;
+  repoUrl?: string;
 }) {
   const { tickets, totalCount, hasNextPage, loading, error } = useTickets(state, projectId, first, filters);
-  return <KanbanColumn state={state} tickets={tickets} totalCount={totalCount} hasNextPage={hasNextPage} loading={loading} error={error} />;
+  return (
+    <KanbanColumn
+      state={state}
+      tickets={tickets}
+      totalCount={totalCount}
+      hasNextPage={hasNextPage}
+      loading={loading}
+      error={error}
+      repoUrl={repoUrl}
+    />
+  );
 }
 
 export function KanbanBoard({
   projectId,
   filters,
+  repoUrl,
 }: {
   projectId: string | null;
   filters?: TicketFilters;
+  repoUrl?: string;
 }) {
   if (!projectId) {
     return (
@@ -43,7 +57,14 @@ export function KanbanBoard({
   return (
     <div className={styles.board} data-testid="kanban-board">
       {COLUMNS.map(({ state, first }) => (
-        <ColumnFetcher key={state} state={state} projectId={projectId} first={first} filters={filters} />
+        <ColumnFetcher
+          key={state}
+          state={state}
+          projectId={projectId}
+          first={first}
+          filters={filters}
+          repoUrl={repoUrl}
+        />
       ))}
     </div>
   );

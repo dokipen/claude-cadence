@@ -16,9 +16,10 @@ interface KanbanColumnProps {
   hasNextPage: boolean;
   loading: boolean;
   error: string | null;
+  repoUrl?: string;
 }
 
-export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading, error }: KanbanColumnProps) {
+export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading, error, repoUrl }: KanbanColumnProps) {
   const displayCount = loading
     ? "…"
     : hasNextPage
@@ -49,7 +50,9 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
         )}
         {!loading &&
           !error &&
-          tickets.map((ticket) => <TicketCard key={ticket.id} ticket={ticket} />)}
+          tickets.map((ticket) => (
+            <TicketCard key={ticket.id} ticket={ticket} repoUrl={repoUrl} />
+          ))}
       </div>
     </div>
   );

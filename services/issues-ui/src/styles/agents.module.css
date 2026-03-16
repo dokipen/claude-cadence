@@ -1,0 +1,159 @@
+.launcher {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.launcherInline {
+  composes: launcher;
+  padding: 1.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.launcherMessage {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  padding: 0.5rem 0;
+}
+
+.launcherError {
+  font-size: 0.85rem;
+  color: var(--error);
+  padding: 0.25rem 0;
+}
+
+.profileSingle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.profileSelect {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.profileLabel {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.profileValue {
+  font-size: 0.9rem;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.select {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.select:focus {
+  outline: 2px solid var(--primary-light);
+  outline-offset: 1px;
+}
+
+.launchButton {
+  padding: 0.5rem 1rem;
+  background: var(--primary);
+  color: var(--on-primary);
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.launchButton:hover:not(:disabled) {
+  background: var(--primary-light);
+}
+
+.launchButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Card launch button */
+.cardLaunchButton {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cardLaunchButton:hover {
+  background: var(--primary);
+  color: var(--on-primary);
+  border-color: var(--primary);
+}
+
+/* Tab navigation */
+.tabBar {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 1.5rem;
+}
+
+.tab {
+  padding: 0.5rem 1rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tabActive {
+  composes: tab;
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  font-weight: 600;
+}
+
+/* Agent tab content */
+.agentTabContent {
+  padding: 0.5rem 0;
+}
+
+.agentTabEmpty {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.agentTabEmptyTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 0.5rem;
+}
+
+.agentTabEmptyDesc {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0 0 1.5rem;
+}
