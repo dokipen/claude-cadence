@@ -186,7 +186,7 @@ test.describe("ticket detail unauthenticated", () => {
     const context = await browser.newContext();
     const page = await context.newPage();
     await page.goto("/ticket/some-id");
-    await expect(page).toHaveURL(/\/login/);
+    await expect(page).toHaveURL("/login?redirect=%2Fticket%2Fsome-id");
     await context.close();
   });
 });

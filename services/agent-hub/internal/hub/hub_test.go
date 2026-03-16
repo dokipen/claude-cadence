@@ -17,7 +17,57 @@ import (
 // Returns the hub, server URL, and a cleanup function.
 func startTestHub(t *testing.T) (*Hub, string) {
 	t.Helper()
-	h := New(30*time.Second, 5*time.Second, 5*time.Minute)
+	return startTestHubWithHeartbeat(t, 30*time.Second, 5*time.Second)
+}
+
+// connectAgent dials the test server as an agentd, registers, and runs a read loop
+// that echoes back results for any method.
+func connectAgent(t *testing.T, url, name string) {
+	t.Helper()
+
+	wsURL := "ws" + strings.TrimPrefix(url, "http")
+	conn, _, err := websocket.Dial(context.Background(), wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+
+	// Send register.
+	regReq, _ := NewRequest("reg-1", "register", &RegisterParams{
+		Name:     name,
+		Profiles: map[string]ProfileInfo{"default": {Description: "test"}},
+	})
+	data, _ := json.Marshal(regReq)
+	conn.Write(context.Background(), websocket.MessageText, data)
+
+	// Read register ack.
+	conn.Read(context.Background())
+
+	// Echo loop: for any request, respond with {"echo": method}.
+	go func() {
+		for {
+			_, data, err := conn.Read(context.Background())
+			if err != nil {
+				return
+			}
+			var req Request
+			json.Unmarshal(data, &req)
+
+			result, _ := json.Marshal(map[string]string{"echo": req.Method})
+			resp := &Response{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Result:  result,
+			}
+			respData, _ := json.Marshal(resp)
+			conn.Write(context.Background(), websocket.MessageText, respData)
+		}
+	}()
+}
+
+// startTestHubWithHeartbeat creates a Hub and HTTP server with custom heartbeat settings.
+func startTestHubWithHeartbeat(t *testing.T, interval, timeout time.Duration) (*Hub, string) {
+	t.Helper()
+	h := New(interval, timeout, 5*time.Minute)
 	h.Start()
 	t.Cleanup(h.Stop)
 
@@ -64,9 +114,9 @@ func startTestHub(t *testing.T) (*Hub, string) {
 	return h, srv.URL
 }
 
-// connectAgent dials the test server as an agentd, registers, and runs a read loop
-// that echoes back results for any method.
-func connectAgent(t *testing.T, url, name string) {
+// connectSilentAgent dials the test server, registers, then reads messages
+// without ever responding. This causes heartbeat pings to time out.
+func connectSilentAgent(t *testing.T, url, name string) {
 	t.Helper()
 
 	wsURL := "ws" + strings.TrimPrefix(url, "http")
@@ -86,26 +136,52 @@ func connectAgent(t *testing.T, url, name string) {
 	// Read register ack.
 	conn.Read(context.Background())
 
-	// Echo loop: for any request, respond with {"echo": method}.
+	// Read loop: consume messages but never reply.
 	go func() {
 		for {
-			_, data, err := conn.Read(context.Background())
+			_, _, err := conn.Read(context.Background())
 			if err != nil {
 				return
 			}
-			var req Request
-			json.Unmarshal(data, &req)
-
-			result, _ := json.Marshal(map[string]string{"echo": req.Method})
-			resp := &Response{
-				JSONRPC: "2.0",
-				ID:      req.ID,
-				Result:  result,
-			}
-			respData, _ := json.Marshal(resp)
-			conn.Write(context.Background(), websocket.MessageText, respData)
 		}
 	}()
+}
+
+func waitForAgent(t *testing.T, h *Hub, name string) *ConnectedAgent {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if agent, ok := h.Get(name); ok {
+			return agent
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("agent %q did not register in time", name)
+	return nil
+}
+
+func TestHeartbeatTimeout(t *testing.T) {
+	h, url := startTestHubWithHeartbeat(t, 50*time.Millisecond, 50*time.Millisecond)
+
+	connectSilentAgent(t, url, "silent-agent")
+	agent := waitForAgent(t, h, "silent-agent")
+
+	if agent.Status() != StatusOnline {
+		t.Fatalf("expected agent to start online, got %s", agent.Status())
+	}
+
+	// Poll until the agent is marked offline by the heartbeat timeout.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if agent.Status() == StatusOffline {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if agent.Status() != StatusOffline {
+		t.Errorf("expected agent to be marked offline after heartbeat timeout, got %s", agent.Status())
+	}
 }
 
 func TestHub_Call_Success(t *testing.T) {
