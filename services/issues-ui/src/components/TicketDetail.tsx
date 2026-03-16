@@ -133,7 +133,9 @@ export function TicketDetail() {
     );
   }
 
-  // Defense-in-depth: validate ticket's project against known projects list
+  // Defense-in-depth: validate ticket's project against known projects list.
+  // Allow rendering while projects are loading or empty to avoid flash redirects —
+  // the project ID comes from the API so the risk during this window is minimal.
   const projectValid =
     projectsLoading ||
     projects.length === 0 ||

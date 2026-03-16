@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, fireEvent, cleanup } from "@testing-library/react";
-import { ProjectSelector, STORAGE_KEY } from "./ProjectSelector";
+import { ProjectSelector } from "./ProjectSelector";
 import type { Project } from "../types";
 
 // Mock the useProjects hook
@@ -21,21 +21,8 @@ const PROJECTS: Project[] = [
   { id: "proj-b", name: "Project B" },
 ];
 
-// Stub localStorage since jsdom's implementation may vary across environments
-const localStorageMock = (() => {
-  let store: Record<string, string> = {};
-  return {
-    getItem: (key: string) => store[key] ?? null,
-    setItem: (key: string, value: string) => { store[key] = value; },
-    removeItem: (key: string) => { delete store[key]; },
-    clear: () => { store = {}; },
-  };
-})();
-
 beforeEach(() => {
   vi.restoreAllMocks();
-  vi.stubGlobal("localStorage", localStorageMock);
-  localStorageMock.clear();
   mockUseProjects.mockReturnValue({
     projects: PROJECTS,
     loading: false,
@@ -48,21 +35,7 @@ afterEach(() => {
 });
 
 describe("ProjectSelector handleChange validation", () => {
-  it("does NOT update localStorage when selected value is not in projects list", () => {
-    const onProjectChange = vi.fn();
-    const { getByTestId } = render(
-      <ProjectSelector selectedProjectId="proj-a" onProjectChange={onProjectChange} />,
-    );
-
-    // Simulate a change event with a value not in the projects list
-    fireEvent.change(getByTestId("project-selector"), {
-      target: { value: "proj-evil" },
-    });
-
-    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
-  });
-
-  it("does NOT call onProjectChange with an invalid id when selected value is not in projects list", () => {
+  it("does NOT call onProjectChange with an invalid id", () => {
     const onProjectChange = vi.fn();
     const { getByTestId } = render(
       <ProjectSelector selectedProjectId="proj-a" onProjectChange={onProjectChange} />,
@@ -72,32 +45,33 @@ describe("ProjectSelector handleChange validation", () => {
     onProjectChange.mockClear();
 
     fireEvent.change(getByTestId("project-selector"), {
-      target: { value: "injected-id" },
+      target: { value: "proj-evil" },
     });
 
     expect(onProjectChange).not.toHaveBeenCalled();
   });
 
-  it("updates localStorage when selected value IS in projects list", () => {
+  it("does NOT call onProjectChange with a path-traversal id", () => {
     const onProjectChange = vi.fn();
     const { getByTestId } = render(
       <ProjectSelector selectedProjectId="proj-a" onProjectChange={onProjectChange} />,
     );
+
+    onProjectChange.mockClear();
 
     fireEvent.change(getByTestId("project-selector"), {
-      target: { value: "proj-b" },
+      target: { value: "../../../etc/passwd" },
     });
 
-    expect(localStorage.getItem(STORAGE_KEY)).toBe("proj-b");
+    expect(onProjectChange).not.toHaveBeenCalled();
   });
 
-  it("calls onProjectChange with the new id when selected value IS in projects list", () => {
+  it("calls onProjectChange when selected value IS in projects list", () => {
     const onProjectChange = vi.fn();
     const { getByTestId } = render(
       <ProjectSelector selectedProjectId="proj-a" onProjectChange={onProjectChange} />,
     );
 
-    // Clear any calls from the auto-select useEffect
     onProjectChange.mockClear();
 
     fireEvent.change(getByTestId("project-selector"), {
@@ -106,5 +80,14 @@ describe("ProjectSelector handleChange validation", () => {
 
     expect(onProjectChange).toHaveBeenCalledWith("proj-b");
     expect(onProjectChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("auto-redirects to first project when selectedProjectId is invalid", () => {
+    const onProjectChange = vi.fn();
+    render(
+      <ProjectSelector selectedProjectId="nonexistent" onProjectChange={onProjectChange} />,
+    );
+
+    expect(onProjectChange).toHaveBeenCalledWith("proj-a");
   });
 });
