@@ -51,6 +51,22 @@ config="$(cat <<EOF
 ${vhost} {
 	tls internal
 
+	# Strip server identity headers
+	header {
+		-Server
+	}
+
+	# Rate limiting — per client IP, 60 requests per minute.
+	# Allows short bursts while preventing sustained abuse.
+	# Requires the caddy-ratelimit module (github.com/mholt/caddy-ratelimit).
+	rate_limit {
+		zone api_zone {
+			key    {client_ip}
+			events 60
+			window 1m
+		}
+	}
+
 	# Issues service — GraphQL API
 	handle /graphql {
 		reverse_proxy localhost:4000
@@ -66,8 +82,9 @@ ${vhost} {
 		}
 	}
 
+	# Fallback — generic 404, no service identity
 	handle {
-		respond "Claude Cadence API Gateway" 200
+		respond 404
 	}
 }
 
