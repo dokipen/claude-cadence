@@ -1,14 +1,17 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/dokipen/claude-cadence/services/agent-hub/internal/config"
 	"github.com/dokipen/claude-cadence/services/agent-hub/internal/hub"
+	"github.com/dokipen/claude-cadence/services/agent-hub/internal/metrics"
 	"github.com/dokipen/claude-cadence/services/agent-hub/internal/rest"
 )
 
@@ -59,6 +62,21 @@ func main() {
 	// Create and start REST server.
 	srv := rest.New(h, cfg)
 
+	// Background goroutine to snapshot gauge metrics periodically.
+	metricsCtx, metricsCancel := context.WithCancel(context.Background())
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-metricsCtx.Done():
+				return
+			case <-ticker.C:
+				metrics.Snapshot(h.AgentCount(), h.OnlineAgentCount(), h.TerminalSessionCount())
+			}
+		}
+	}()
+
 	errCh := make(chan error, 1)
 	go func() {
 		slog.Info("starting agent-hub", "addr", srv.Addr())
@@ -75,7 +93,9 @@ func main() {
 		slog.Error("server error, shutting down", "error", err)
 	}
 
-	h.Stop()
+	// Stop accepting new connections first, then drain the hub.
+	metricsCancel()
 	srv.Stop()
+	h.Stop()
 	slog.Info("agent-hub stopped")
 }

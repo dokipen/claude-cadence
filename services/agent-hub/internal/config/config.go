@@ -10,14 +10,21 @@ import (
 
 // Config is the top-level agent-hub configuration.
 type Config struct {
-	Host      string        `yaml:"host"`
-	Port      int           `yaml:"port"`
-	Auth      AuthConfig    `yaml:"auth"`
-	HubAuth   HubAuthConfig `yaml:"hub_auth"`
+	Host      string          `yaml:"host"`
+	Port      int             `yaml:"port"`
+	Auth      AuthConfig      `yaml:"auth"`
+	HubAuth   HubAuthConfig   `yaml:"hub_auth"`
 	Heartbeat HeartbeatConfig `yaml:"heartbeat"`
-	AgentTTL  time.Duration `yaml:"-"`
-	RawTTL    string        `yaml:"agent_ttl"`
-	Log       LogConfig     `yaml:"log"`
+	AgentTTL  time.Duration   `yaml:"-"`
+	RawTTL    string          `yaml:"agent_ttl"`
+	RateLimit RateLimitConfig `yaml:"rate_limit"`
+	Log       LogConfig       `yaml:"log"`
+}
+
+// RateLimitConfig holds rate limiting settings for the REST API.
+type RateLimitConfig struct {
+	RequestsPerSecond float64 `yaml:"requests_per_second"`
+	Burst             int     `yaml:"burst"`
 }
 
 // AuthConfig holds REST API authentication settings.
@@ -110,6 +117,12 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.RawTTL == "" {
 		cfg.RawTTL = "5m"
+	}
+	if cfg.RateLimit.RequestsPerSecond == 0 {
+		cfg.RateLimit.RequestsPerSecond = 100
+	}
+	if cfg.RateLimit.Burst == 0 {
+		cfg.RateLimit.Burst = 200
 	}
 	if cfg.Log.Level == "" {
 		cfg.Log.Level = "info"
