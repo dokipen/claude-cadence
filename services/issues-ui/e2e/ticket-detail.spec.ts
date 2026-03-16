@@ -108,6 +108,17 @@ test.describe("ticket detail page", () => {
     await expect(page.getByTestId("detail-title")).toHaveText("In-progress ticket");
   });
 
+  test("filter bar is not visible on detail page", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+    await expect(page.getByTestId("filter-bar")).toBeVisible();
+
+    await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
+    await expect(page.getByTestId("ticket-detail")).toBeVisible();
+
+    await expect(page.getByTestId("filter-bar")).not.toBeVisible();
+  });
+
   test("back link returns to board", async ({ page }) => {
     await page.goto("/");
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
