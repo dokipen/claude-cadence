@@ -61,7 +61,7 @@ EOF
 **Notes:**
 - The PR body should follow the structure in `.github/PULL_REQUEST_TEMPLATE.md` if it exists.
 - Apply a type label: `bug`, `enhancement`, `documentation`, `testing`, or `performance`.
-- Copy estimate and other relevant labels from the linked issue.
+- Copy relevant labels from the linked issue. For GitHub Issues, this includes estimate labels. For issues-api, estimates are native story points on the ticket and do not need to be copied.
 
 ## After PR Creation
 
