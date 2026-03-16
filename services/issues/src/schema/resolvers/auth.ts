@@ -11,6 +11,7 @@ import {
   ACCESS_TOKEN_EXPIRY_MS,
 } from "../../auth/jwt.js";
 import { oauthStateStore } from "../../auth/state-store.js";
+import { enforceAllowlist } from "../../auth/allowlist.js";
 import { GraphQLError } from "graphql";
 
 export interface AuthenticatedContext {
@@ -28,6 +29,7 @@ async function upsertUser(
   prisma: PrismaClient,
   profile: GitHubUserProfile
 ): Promise<User> {
+  enforceAllowlist(profile.login);
   return prisma.user.upsert({
     where: { githubId: profile.githubId },
     create: {
@@ -141,6 +143,8 @@ export const authResolvers = {
             extensions: { code: "UNAUTHENTICATED" },
           });
         }
+
+        enforceAllowlist(storedToken.user.login);
 
         const { token: newAccessToken, refreshToken: newRefreshToken } =
           await issueTokens(tx as unknown as PrismaClient, storedToken.userId);
