@@ -137,7 +137,17 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 
 1. Check current branch: `git branch --show-current`
 2. If on default branch, use `/new-work` to create a worktree first.
-3. Post setup to issue.
+3. Post setup to issue:
+
+   **GitHub (default):**
+   ```bash
+   gh issue comment [N] --body "Starting work on issue #[N]. Branch: \`[BRANCH]\`"
+   ```
+
+   **Issues API:**
+   ```bash
+   issues comment add TICKET_ID --body "Starting work on issue #[N]. Branch: \`[BRANCH]\`" --json
+   ```
 
 ### Phase 1: Planning
 
@@ -152,6 +162,21 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
    - Bug fix → Phase 1b (Reproduction)
    - Other → Delegate to appropriate specialist
 4. **Task breakdown**: Create 3-6 discrete units with clear owners
+5. **Post plan to issue**:
+
+   **GitHub (default):**
+   ```bash
+   gh issue comment [N] --body "## Plan
+
+   [Task breakdown summary with approach and key decisions]"
+   ```
+
+   **Issues API:**
+   ```bash
+   issues comment add TICKET_ID --body "## Plan
+
+   [Task breakdown summary with approach and key decisions]" --json
+   ```
 
 ### Phase 1a: Design Review (for visual changes, if designer agent available)
 
@@ -185,6 +210,25 @@ For each task from the Phase 1 breakdown, delegate to an agent:
 5. **Use the Delegation Template** (see Coordination Protocol below) for every delegation — include worktree path, issue context, scope, constraints, expected output, and completion signal
 6. **Verify incrementally** after each completed task using the project's verification command (from CLAUDE.md). This catches issues early; Phase 3 runs the full verification as the final gate before PR creation.
 7. For bug fixes: the fix should make the reproduction test pass
+8. **Post implementation summary to issue**:
+
+   **GitHub (default):**
+   ```bash
+   gh issue comment [N] --body "## Implementation complete
+
+   [Summary of changes made and files modified]
+
+   Moving to verification."
+   ```
+
+   **Issues API:**
+   ```bash
+   issues comment add TICKET_ID --body "## Implementation complete
+
+   [Summary of changes made and files modified]
+
+   Moving to verification." --json
+   ```
 
 ### Phase 3: Pre-PR Verification
 
@@ -194,7 +238,18 @@ For each task from the Phase 1 breakdown, delegate to an agent:
 
 ### Phase 4: PR Creation
 
-Use `/create-pr` to create the pull request. Link to the issue with `Fixes #[NUMBER]`.
+1. Use `/create-pr` to create the pull request. Link to the issue with `Fixes #[NUMBER]`.
+2. **Post PR link to issue**:
+
+   **GitHub (default):**
+   ```bash
+   gh issue comment [N] --body "PR created: #[PR-NUMBER] ([PR-URL])"
+   ```
+
+   **Issues API:**
+   ```bash
+   issues comment add TICKET_ID --body "PR created: #[PR-NUMBER] ([PR-URL])" --json
+   ```
 
 ### Phase 5: Code Review Gate
 
@@ -254,7 +309,18 @@ In both cases:
 3. Sync blocked labels using the `update-blocked-labels.sh` script in this command's `scripts/` directory
 4. Return to default branch and pull latest
 5. Clean up worktree using the `project-ops` skill's `cleanup-worktree.sh` script
-6. Report completion
+6. **Post completion to issue**:
+
+   **GitHub (default):**
+   ```bash
+   gh issue comment [N] --body "Issue completed. Merged via PR #[PR-NUMBER]."
+   ```
+
+   **Issues API:**
+   ```bash
+   issues comment add TICKET_ID --body "Issue completed. Merged via PR #[PR-NUMBER]." --json
+   ```
+7. Report completion
 
 > **Note:** If this phase is skipped (e.g., conversation ends early), cleanup happens automatically the next time `/new-work` creates a worktree — the `cleanup-merged-worktrees.sh` pre-flight detects merged PRs and cleans up their worktrees, branches, and labels.
 
