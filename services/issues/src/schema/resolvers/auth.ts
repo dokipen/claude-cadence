@@ -136,41 +136,49 @@ export const authResolvers = {
       { refreshToken }: { refreshToken: string },
       { prisma }: AuthenticatedContext
     ) => {
-      // Atomic rotation: revoke old token and verify it wasn't already revoked
-      return prisma.$transaction(async (tx) => {
-        const result = await tx.refreshToken.updateMany({
-          where: { token: refreshToken, revoked: false },
-          data: { revoked: true },
-        });
-
-        if (result.count === 0) {
-          throw new GraphQLError("Invalid or revoked refresh token", {
-            extensions: { code: "UNAUTHENTICATED" },
+      try {
+        // Atomic rotation: revoke old token and verify it wasn't already revoked
+        return await prisma.$transaction(async (tx) => {
+          const result = await tx.refreshToken.updateMany({
+            where: { token: refreshToken, revoked: false },
+            data: { revoked: true },
           });
-        }
 
-        const storedToken = await tx.refreshToken.findUnique({
-          where: { token: refreshToken },
-          include: { user: true },
-        });
+          if (result.count === 0) {
+            throw new GraphQLError("Invalid or revoked refresh token", {
+              extensions: { code: "UNAUTHENTICATED" },
+            });
+          }
 
-        if (!storedToken || storedToken.expiresAt < new Date()) {
-          throw new GraphQLError("Refresh token expired", {
-            extensions: { code: "UNAUTHENTICATED" },
+          const storedToken = await tx.refreshToken.findUnique({
+            where: { token: refreshToken },
+            include: { user: true },
           });
-        }
 
-        enforceAllowlist(storedToken.user.login);
+          if (!storedToken || storedToken.expiresAt < new Date()) {
+            throw new GraphQLError("Refresh token expired", {
+              extensions: { code: "UNAUTHENTICATED" },
+            });
+          }
 
-        const { token: newAccessToken, refreshToken: newRefreshToken } =
-          await issueTokens(tx as unknown as PrismaClient, storedToken.userId);
+          enforceAllowlist(storedToken.user.login);
 
-        return {
-          token: newAccessToken,
-          refreshToken: newRefreshToken,
-          user: storedToken.user,
-        };
-      });
+          const { token: newAccessToken, refreshToken: newRefreshToken } =
+            await issueTokens(tx as unknown as PrismaClient, storedToken.userId);
+
+          return {
+            token: newAccessToken,
+            refreshToken: newRefreshToken,
+            user: storedToken.user,
+          };
+        });
+      } catch (error) {
+        if (error instanceof GraphQLError) throw error;
+        console.error("Token refresh failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Token refresh failed", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
 
     logout: async (
@@ -178,28 +186,36 @@ export const authResolvers = {
       { refreshToken }: { refreshToken: string },
       context: AuthenticatedContext
     ) => {
-      const { prisma, accessToken } = context;
+      try {
+        const { prisma, accessToken } = context;
 
-      // Revoke the refresh token
-      await prisma.refreshToken.updateMany({
-        where: { token: refreshToken, revoked: false },
-        data: { revoked: true },
-      });
+        // Revoke the refresh token
+        await prisma.refreshToken.updateMany({
+          where: { token: refreshToken, revoked: false },
+          data: { revoked: true },
+        });
 
-      // Blocklist the current access token so it cannot be reused
-      if (accessToken) {
-        try {
-          const { jti } = verifyToken(accessToken);
-          const expiresAt = new Date(Date.now() + ACCESS_TOKEN_EXPIRY_MS);
-          await prisma.revokedToken.create({
-            data: { jti, expiresAt },
-          });
-        } catch {
-          // Token may already be expired/invalid — that's fine
+        // Blocklist the current access token so it cannot be reused
+        if (accessToken) {
+          try {
+            const { jti } = verifyToken(accessToken);
+            const expiresAt = new Date(Date.now() + ACCESS_TOKEN_EXPIRY_MS);
+            await prisma.revokedToken.create({
+              data: { jti, expiresAt },
+            });
+          } catch {
+            // Token may already be expired/invalid — that's fine
+          }
         }
-      }
 
-      return true;
+        return true;
+      } catch (error) {
+        if (error instanceof GraphQLError) throw error;
+        console.error("Logout failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Logout failed", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
   },
 };
