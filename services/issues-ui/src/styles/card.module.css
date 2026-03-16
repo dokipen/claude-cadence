@@ -58,28 +58,28 @@
 }
 
 .priorityHighest {
-  background: #fde2e2;
-  color: #b91c1c;
+  background: var(--priority-highest-bg);
+  color: var(--priority-highest-text);
 }
 
 .priorityHigh {
-  background: #fed7aa;
-  color: #c2410c;
+  background: var(--priority-high-bg);
+  color: var(--priority-high-text);
 }
 
 .priorityMedium {
-  background: #fef3c7;
-  color: #a16207;
+  background: var(--priority-medium-bg);
+  color: var(--priority-medium-text);
 }
 
 .priorityLow {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--priority-low-bg);
+  color: var(--priority-low-text);
 }
 
 .priorityLowest {
-  background: #e5e7eb;
-  color: #6b7280;
+  background: var(--priority-lowest-bg);
+  color: var(--priority-lowest-text);
 }
 
 .labelBadge {
@@ -107,7 +107,7 @@
   height: 18px;
   border-radius: 50%;
   background: var(--primary-light);
-  color: #fff;
+  color: var(--on-primary);
   font-size: 0.6rem;
   font-weight: 600;
   display: flex;
@@ -122,7 +122,7 @@
 
 .storyPoints {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   font-size: 0.6rem;
   font-weight: 700;
   width: 20px;
