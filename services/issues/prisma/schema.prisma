@@ -112,6 +112,8 @@ model RefreshToken {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id])
+
+  @@index([expiresAt])
 }
 
 model RevokedToken {
@@ -119,4 +121,6 @@ model RevokedToken {
   jti       String   @unique
   expiresAt DateTime
   createdAt DateTime @default(now())
+
+  @@index([expiresAt])
 }

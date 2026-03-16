@@ -7,6 +7,7 @@ import { createLoaders } from "./loaders.js";
 import { buildAuthContext } from "./auth/context.js";
 import { authGuardPlugin } from "./auth/guard.js";
 import { isProduction } from "./env.js";
+import { startCleanupSchedule } from "./auth/cleanup.js";
 
 const prisma = new PrismaClient();
 
@@ -38,3 +39,5 @@ const { url } = await startStandaloneServer(server, {
 });
 
 console.log(`Server ready at ${url}`);
+
+startCleanupSchedule(prisma);
