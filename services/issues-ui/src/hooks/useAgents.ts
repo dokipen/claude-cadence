@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { hubFetch } from "../api/agentHubClient";
+import { fetchAgents } from "../api/agentHubClient";
 import { usePageVisibility } from "./usePageVisibility";
 import type { Agent, AgentProfile } from "../types";
 
@@ -24,13 +24,13 @@ export function useAgents(): UseAgentsResult {
     const isInitialFetch = !hasFetchedRef.current;
     let consecutiveFailures = 0;
 
-    const fetchAgents = () => {
+    const pollAgents = () => {
       if (isInitialFetch) {
         setLoading(true);
         setError(null);
       }
 
-      hubFetch<{ agents: Agent[] }>("/agents")
+      fetchAgents()
         .then((result) => {
           if (!cancelled) {
             setAgents(result.agents);
@@ -60,10 +60,10 @@ export function useAgents(): UseAgentsResult {
     if (hidden) {
       if (isInitialFetch) setLoading(false);
     } else {
-      fetchAgents();
+      pollAgents();
     }
 
-    const interval = hidden ? null : setInterval(fetchAgents, POLL_INTERVAL_MS);
+    const interval = hidden ? null : setInterval(pollAgents, POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
       if (interval) clearInterval(interval);
