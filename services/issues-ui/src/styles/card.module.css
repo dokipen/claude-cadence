@@ -90,6 +90,16 @@
   border: 1px solid;
 }
 
+.blockedBadge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  background: var(--blocked-bg);
+  color: var(--blocked-text);
+  border: 1px solid var(--blocked-text);
+}
+
 .assignee {
   display: flex;
   align-items: center;

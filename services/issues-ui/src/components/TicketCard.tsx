@@ -14,6 +14,11 @@ export function TicketCard({ ticket }: { ticket: Ticket }) {
         {ticket.labels.map((label) => (
           <LabelBadge key={label.id} label={label} />
         ))}
+        {ticket.blockedBy.length > 0 && (
+          <span className={styles.blockedBadge} data-testid="blocked-badge">
+            Blocked by {ticket.blockedBy.length}
+          </span>
+        )}
       </div>
       <div className={styles.cardFooter}>
         {ticket.assignee && (

@@ -24,6 +24,8 @@
   --priority-low-text: #1d4ed8;
   --priority-lowest-bg: #e5e7eb;
   --priority-lowest-text: #6b7280;
+  --blocked-bg: #fce4ec;
+  --blocked-text: #c62828;
   --state-backlog-bg: #e5e7eb;
   --state-backlog-text: #6b7280;
   --state-refined-bg: #dbeafe;
@@ -61,6 +63,8 @@
     --priority-low-text: #60a5fa;
     --priority-lowest-bg: rgba(107, 114, 128, 0.2);
     --priority-lowest-text: #9ca3af;
+    --blocked-bg: rgba(198, 40, 40, 0.2);
+    --blocked-text: #ef5350;
     --state-backlog-bg: rgba(107, 114, 128, 0.2);
     --state-backlog-text: #9ca3af;
     --state-refined-bg: rgba(29, 78, 216, 0.2);
