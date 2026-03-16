@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "./AuthContext";
+import { validateRedirect } from "./validateRedirect";
 
 const KNOWN_ERRORS: Record<string, string> = {
   access_denied: "GitHub authorization was denied.",
@@ -42,9 +43,12 @@ export function AuthCallback() {
     exchangeStarted.current = true;
     sessionStorage.removeItem("oauth_state");
 
+    const savedRedirect = sessionStorage.getItem("oauth_redirect");
+    sessionStorage.removeItem("oauth_redirect");
+
     loginWithCode(code, state)
       .then(() => {
-        navigate("/", { replace: true });
+        navigate(validateRedirect(savedRedirect), { replace: true });
       })
       .catch((err) => {
         console.error("OAuth code exchange failed:", err);

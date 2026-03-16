@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { LoginPage } from "./auth/LoginPage";
 import { AuthCallback } from "./auth/AuthCallback";
@@ -21,6 +21,7 @@ const loadingStyle: React.CSSProperties = {
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
     return (
@@ -31,7 +32,11 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    const redirect = location.pathname + location.search + location.hash;
+    const loginUrl = redirect && redirect !== "/"
+      ? `/login?redirect=${encodeURIComponent(redirect)}`
+      : "/login";
+    return <Navigate to={loginUrl} replace />;
   }
 
   return children;
