@@ -174,7 +174,7 @@ test.describe("ticket detail page", () => {
     // Navigate to backlog ticket (use first() since markdown ticket is also in BACKLOG)
     await page.getByTestId("column-BACKLOG").getByTestId("ticket-card").first().click();
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
-    await expect(page.getByTestId("detail-blocked-by")).not.toBeVisible();
+    await expect(page.getByTestId("detail-blocked-by")).not.toBeAttached();
   });
 
   test("detail page shows blocks relationships", async ({ page }) => {

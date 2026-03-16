@@ -195,7 +195,7 @@ This has **bold text** and \`code\` inline.
   console.log(`  Project 1: ${project.name} (${project.id})`);
   console.log(`  Project 2: ${project2.name} (${project2.id})`);
   console.log(`  Tickets: 6 (5 in project 1, 1 in project 2)`);
-  console.log(`  Labels: 2, Comments: 3, Block relations: 2`);
+  console.log(`  Labels: 2, Comments: 2, Block relations: 2`);
 }
 
 main()
