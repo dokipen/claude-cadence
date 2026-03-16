@@ -144,6 +144,8 @@ export const authResolvers = {
           });
         }
 
+        enforceAllowlist(storedToken.user.login);
+
         const { token: newAccessToken, refreshToken: newRefreshToken } =
           await issueTokens(tx as unknown as PrismaClient, storedToken.userId);
 

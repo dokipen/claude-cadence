@@ -8,12 +8,13 @@ export function parseAllowedUsers(
   envValue: string | undefined
 ): Set<string> | null {
   if (!envValue || envValue.trim() === "") return null;
-  return new Set(
+  const users = new Set(
     envValue
       .split(",")
       .map((s) => s.trim().toLowerCase())
       .filter((s) => s.length > 0)
   );
+  return users.size > 0 ? users : null;
 }
 
 const allowedUsers = parseAllowedUsers(process.env.ALLOWED_USERS);

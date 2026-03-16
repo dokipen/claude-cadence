@@ -45,6 +45,11 @@ describe("parseAllowedUsers", () => {
     const result = parseAllowedUsers("alice,,bob,");
     expect(result).toEqual(new Set(["alice", "bob"]));
   });
+
+  it("returns null when all entries are empty after filtering", () => {
+    expect(parseAllowedUsers(",")).toBeNull();
+    expect(parseAllowedUsers(",,")).toBeNull();
+  });
 });
 
 describe("enforceAllowlist", () => {
@@ -55,19 +60,12 @@ describe("enforceAllowlist", () => {
   async function loadWithEnv(
     value: string | undefined
   ): Promise<typeof import("./allowlist.js").enforceAllowlist> {
-    const original = process.env.ALLOWED_USERS;
     if (value === undefined) {
       delete process.env.ALLOWED_USERS;
     } else {
       process.env.ALLOWED_USERS = value;
     }
     const mod = await import("./allowlist.js");
-    // Restore env
-    if (original === undefined) {
-      delete process.env.ALLOWED_USERS;
-    } else {
-      process.env.ALLOWED_USERS = original;
-    }
     return mod.enforceAllowlist;
   }
 
