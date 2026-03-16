@@ -9,6 +9,8 @@ services:
       - DATABASE_URL=file:/app/data/issues.db
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set. Run ./install.sh or create a .env file.}
       - ALLOWED_USERS=${ALLOWED_USERS:-}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:?GITHUB_CLIENT_SECRET must be set. Run ./install.sh or create a .env file.}
       - PORT=4000
 
 volumes:

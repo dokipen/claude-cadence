@@ -21,12 +21,16 @@ jobs:
     # Prerequisites:
     #   1. ISSUES_JWT_SECRET repo secret set (matches the running service's JWT_SECRET)
     #   2. ISSUES_ALLOWED_USERS repo secret set (comma-separated GitHub logins)
-    #   3. github-runner user is in the docker group
+    #   3. OAUTH_CLIENT_ID repo secret set (GitHub OAuth app client ID)
+    #   4. OAUTH_SECRET repo secret set (GitHub OAuth app client secret)
+    #   5. github-runner user is in the docker group
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 15
     env:
       JWT_SECRET: ${{ secrets.ISSUES_JWT_SECRET }}
       ALLOWED_USERS: ${{ secrets.ISSUES_ALLOWED_USERS }}
+      GITHUB_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
+      GITHUB_CLIENT_SECRET: ${{ secrets.OAUTH_SECRET }}
     defaults:
       run:
         working-directory: services/issues
