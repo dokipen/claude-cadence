@@ -35,9 +35,9 @@ export function TicketCard({
           {ticket.labels.map((label) => (
             <LabelBadge key={label.id} label={label} />
           ))}
-          {ticket.blockedBy.length > 0 && (
+          {ticket.blockedBy.some((b) => b.state !== "CLOSED") && (
             <span className={styles.blockedBadge} data-testid="blocked-badge">
-              Blocked by {ticket.blockedBy.length}
+              Blocked
             </span>
           )}
         </div>

@@ -78,6 +78,7 @@ export const BOARD_TICKETS_QUERY = gql`
           }
           blockedBy {
             id
+            state
           }
         }
       }

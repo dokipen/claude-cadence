@@ -31,7 +31,7 @@ export interface Ticket {
   priority: Priority;
   assignee?: User;
   labels: Label[];
-  blockedBy: { id: string }[];
+  blockedBy: { id: string; state: TicketState }[];
 }
 
 export interface Comment {
