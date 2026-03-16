@@ -43,7 +43,7 @@ export function LaunchAgentDialog({
   }, [onClose]);
 
   const handleLaunched = useCallback(
-    (_session: Session) => {
+    (_session: Session, _agentName: string) => {
       handleClose();
       navigate(`/ticket/${ticketId}?tab=agent`);
     },

@@ -65,13 +65,27 @@ function setupAgentMocks(page: import("@playwright/test").Page) {
   });
 }
 
-function setupSessionMock(page: import("@playwright/test").Page) {
+const MOCK_RUNNING_SESSION = {
+  ...MOCK_SESSION,
+  state: "running",
+};
+
+function setupSessionMock(
+  page: import("@playwright/test").Page,
+  existingSessions: unknown[] = [],
+) {
   return page.route("**/api/v1/agents/*/sessions", (route) => {
     if (route.request().method() === "POST") {
       route.fulfill({
         status: 201,
         contentType: "application/json",
         body: JSON.stringify(MOCK_SESSION),
+      });
+    } else if (route.request().method() === "GET") {
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(existingSessions),
       });
     } else {
       route.continue();
@@ -262,5 +276,120 @@ test.describe("ticket detail agent tab", () => {
     await page.goto(url + "?tab=agent");
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
     await expect(page.getByTestId("agent-tab-content")).toBeVisible();
+  });
+});
+
+test.describe("ticket detail terminal", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("cadence_project_id", "e2e-test-project");
+    });
+    await setupAgentMocks(page);
+  });
+
+  test("shows terminal when running session exists", async ({ page }) => {
+    await setupSessionMock(page, [MOCK_RUNNING_SESSION]);
+
+    await page.goto("/");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+
+    await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
+    await expect(page.getByTestId("ticket-detail")).toBeVisible();
+
+    await page.getByTestId("tab-agent").click();
+    await expect(page.getByTestId("agent-tab-content")).toBeVisible();
+
+    // Terminal should be rendered (xterm.js container)
+    await expect(page.getByTestId("terminal-wrapper")).toBeVisible();
+    await expect(page.getByTestId("terminal-header")).toBeVisible();
+    await expect(page.getByTestId("destroy-session")).toBeVisible();
+  });
+
+  test("shows launch control when no session exists", async ({ page }) => {
+    await setupSessionMock(page, []);
+
+    await page.goto("/");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+
+    await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
+    await expect(page.getByTestId("ticket-detail")).toBeVisible();
+
+    await page.getByTestId("tab-agent").click();
+    await expect(page.getByTestId("agent-tab-content")).toBeVisible();
+
+    // Should show launcher, not terminal
+    await expect(page.getByTestId("agent-launcher")).toBeVisible();
+    await expect(page.getByTestId("terminal-wrapper")).not.toBeVisible();
+  });
+
+  test("shows launch control when session is stopped", async ({ page }) => {
+    await setupSessionMock(page, [{ ...MOCK_SESSION, state: "stopped" }]);
+
+    await page.goto("/");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+
+    await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
+    await expect(page.getByTestId("ticket-detail")).toBeVisible();
+
+    await page.getByTestId("tab-agent").click();
+    await expect(page.getByTestId("agent-tab-content")).toBeVisible();
+    await expect(page.getByTestId("agent-launcher")).toBeVisible();
+  });
+
+  test("terminal header shows session name and agent", async ({ page }) => {
+    await setupSessionMock(page, [MOCK_RUNNING_SESSION]);
+
+    await page.goto("/");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+
+    await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
+    await expect(page.getByTestId("ticket-detail")).toBeVisible();
+
+    await page.getByTestId("tab-agent").click();
+    await expect(page.getByTestId("terminal-header")).toBeVisible();
+    await expect(page.getByTestId("terminal-header")).toContainText("lead-2");
+    await expect(page.getByTestId("terminal-header")).toContainText("mac-mini-1");
+  });
+
+  test("destroy session returns to launch control", async ({ page }) => {
+    // Mock sessions list with a running session
+    await setupSessionMock(page, [MOCK_RUNNING_SESSION]);
+
+    // Also mock DELETE for session destroy
+    await page.route("**/api/v1/agents/*/sessions/*", (route) => {
+      if (route.request().method() === "DELETE") {
+        route.fulfill({ status: 204 });
+      } else {
+        route.continue();
+      }
+    });
+
+    await page.goto("/");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+
+    await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
+    await expect(page.getByTestId("ticket-detail")).toBeVisible();
+
+    await page.getByTestId("tab-agent").click();
+    await expect(page.getByTestId("terminal-wrapper")).toBeVisible();
+
+    // Now override session list to return empty (session destroyed)
+    await page.route("**/api/v1/agents/*/sessions", (route) => {
+      if (route.request().method() === "GET") {
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([]),
+        });
+      } else {
+        route.continue();
+      }
+    });
+
+    await page.getByTestId("destroy-session").click();
+
+    // Should return to the launch control
+    await expect(page.getByTestId("agent-launcher")).toBeVisible();
+    await expect(page.getByTestId("terminal-wrapper")).not.toBeVisible();
   });
 });

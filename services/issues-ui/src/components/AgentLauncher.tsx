@@ -7,7 +7,7 @@ import styles from "../styles/agents.module.css";
 interface AgentLauncherProps {
   ticketNumber: number;
   repoUrl: string | undefined;
-  onLaunched: (session: Session) => void;
+  onLaunched: (session: Session, agentName: string) => void;
   inline?: boolean;
 }
 
@@ -49,7 +49,7 @@ export function AgentLauncher({
           }),
         },
       );
-      onLaunched(session);
+      onLaunched(session, selected.agent);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to launch agent");
     } finally {
