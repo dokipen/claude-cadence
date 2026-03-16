@@ -145,6 +145,12 @@ export function registerAuthCommand(program: Command): void {
           setAuthTokens(result.token, result.refreshToken);
           spinner.succeed(`Authenticated as ${chalk.bold(result.user.login)} (${result.user.displayName})`);
         } else if (options.code) {
+          const code = options.code === "-" ? await readStdin() : options.code;
+          if (!code) {
+            console.error(chalk.red("Error: no code received from stdin"));
+            process.exit(1);
+            return;
+          }
           const spinner = ora("Authenticating...").start();
           const stateData = await client.request<{ generateOAuthState: string }>(
             GENERATE_OAUTH_STATE
@@ -152,7 +158,7 @@ export function registerAuthCommand(program: Command): void {
           const state = stateData.generateOAuthState;
           const data = await client.request<{ authenticateWithGitHubCode: AuthPayload }>(
             AUTHENTICATE_WITH_CODE,
-            { code: options.code, state }
+            { code, state }
           );
           result = data.authenticateWithGitHubCode;
           setAuthTokens(result.token, result.refreshToken);
@@ -173,7 +179,7 @@ export function registerAuthCommand(program: Command): void {
           setAuthTokens(result.token, result.refreshToken);
           spinner.succeed(`Authenticated as ${chalk.bold(result.user.login)} (${result.user.displayName})`);
         } else {
-          console.error(chalk.red("Error: please provide --pat <token>, --pat - (stdin), or --code <code>"));
+          console.error(chalk.red("Error: please provide --pat <token>, --pat - (stdin), --code <code>, or --code - (stdin)"));
           process.exit(1);
           return;
         }
