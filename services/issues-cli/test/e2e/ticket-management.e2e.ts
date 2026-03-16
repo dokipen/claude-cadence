@@ -57,6 +57,26 @@ describe("Ticket Management", () => {
     fullTicketId = idMatch![1];
   });
 
+  it("should create a ticket using --body alias for --description", async () => {
+    const result = await suite.cli(
+      "ticket", "create",
+      "--project", "default-project",
+      "--title", "Body alias ticket",
+      "--body", "Description via body flag"
+    );
+    expect(result.exitCode).toBe(0);
+
+    const output = result.stdout + result.stderr;
+    expect(output).toContain("Ticket created");
+    expect(result.stdout).toContain("Body alias ticket");
+
+    // Verify the description was set by viewing the ticket
+    const idMatch = result.stdout.match(/#(\S+)\s+Body alias ticket/);
+    expect(idMatch).toBeTruthy();
+    const viewResult = await suite.cli("ticket", "view", idMatch![1]);
+    expect(viewResult.stdout).toContain("Description via body flag");
+  });
+
   it("should create a ticket with labels", async () => {
     // The `labels` query is not yet in the GraphQL schema (Phase 2), so we cannot
     // look up seeded label IDs. For now, verify the CLI can create a ticket that

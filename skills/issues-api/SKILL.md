@@ -68,6 +68,8 @@ issues ticket create \
   --json
 ```
 
+`--body` is accepted as an alias for `--description` on both `create` and `update`.
+
 Note: `--project` is optional if you're in a git repo whose origin matches a known project.
 
 ### View a ticket
