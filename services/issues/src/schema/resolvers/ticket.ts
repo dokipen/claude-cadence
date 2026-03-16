@@ -134,8 +134,10 @@ export const ticketResolvers = {
           priority?: string;
         };
       },
-      { prisma }: Context
+      context: Context
     ) => {
+      requireAuth(context);
+      const { prisma } = context;
       const { title, description, acceptanceCriteria, labelIds, assigneeId, projectId, storyPoints, priority } = input;
 
       if (priority && !VALID_PRIORITIES.has(priority)) {
@@ -208,8 +210,10 @@ export const ticketResolvers = {
           priority?: string;
         };
       },
-      { prisma }: Context
+      context: Context
     ) => {
+      requireAuth(context);
+      const { prisma } = context;
       if (input.priority && !VALID_PRIORITIES.has(input.priority)) {
         throw new Error(`Invalid priority: ${input.priority}. Must be one of: ${[...VALID_PRIORITIES].join(", ")}`);
       }
@@ -236,8 +240,10 @@ export const ticketResolvers = {
     createLabel: async (
       _: unknown,
       { name, color }: { name: string; color: string },
-      { prisma }: Context
+      context: Context
     ) => {
+      requireAuth(context);
+      const { prisma } = context;
       if (!/^#[0-9a-fA-F]{6}$/.test(color)) {
         throw new Error(`Invalid color: ${color}. Must be a hex color (e.g. #ff0000)`);
       }
@@ -247,8 +253,10 @@ export const ticketResolvers = {
     addLabel: async (
       _: unknown,
       { ticketId, labelId }: { ticketId: string; labelId: string },
-      { prisma }: Context
+      context: Context
     ) => {
+      requireAuth(context);
+      const { prisma } = context;
       const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
       if (!ticket) throw new Error(`Ticket not found: ${ticketId}`);
 
@@ -264,8 +272,10 @@ export const ticketResolvers = {
     removeLabel: async (
       _: unknown,
       { ticketId, labelId }: { ticketId: string; labelId: string },
-      { prisma }: Context
+      context: Context
     ) => {
+      requireAuth(context);
+      const { prisma } = context;
       const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
       if (!ticket) throw new Error(`Ticket not found: ${ticketId}`);
 
@@ -283,8 +293,10 @@ export const ticketResolvers = {
     assignTicket: async (
       _: unknown,
       { ticketId, userId }: { ticketId: string; userId: string },
-      { prisma }: Context
+      context: Context
     ) => {
+      requireAuth(context);
+      const { prisma } = context;
       return prisma.ticket.update({
         where: { id: ticketId },
         data: { assigneeId: userId },
@@ -294,8 +306,10 @@ export const ticketResolvers = {
     unassignTicket: async (
       _: unknown,
       { ticketId }: { ticketId: string },
-      { prisma }: Context
+      context: Context
     ) => {
+      requireAuth(context);
+      const { prisma } = context;
       return prisma.ticket.update({
         where: { id: ticketId },
         data: { assigneeId: null },
@@ -305,8 +319,10 @@ export const ticketResolvers = {
     transitionTicket: async (
       _: unknown,
       { id, to }: { id: string; to: string },
-      { prisma }: Context
+      context: Context
     ) => {
+      requireAuth(context);
+      const { prisma } = context;
       return prisma.$transaction(async (tx) => {
         const ticket = await tx.ticket.findUnique({ where: { id } });
         if (!ticket) throw new Error("Ticket not found");
@@ -333,8 +349,10 @@ export const ticketResolvers = {
     addBlockRelation: async (
       _: unknown,
       { blockerId, blockedId }: { blockerId: string; blockedId: string },
-      { prisma }: Context
+      context: Context
     ) => {
+      requireAuth(context);
+      const { prisma } = context;
       if (blockerId === blockedId) {
         throw new Error("A ticket cannot block itself");
       }
@@ -357,8 +375,10 @@ export const ticketResolvers = {
     removeBlockRelation: async (
       _: unknown,
       { blockerId, blockedId }: { blockerId: string; blockedId: string },
-      { prisma }: Context
+      context: Context
     ) => {
+      requireAuth(context);
+      const { prisma } = context;
       const existing = await prisma.blockRelation.findUnique({
         where: { blockerId_blockedId: { blockerId, blockedId } },
       });
