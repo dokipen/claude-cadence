@@ -8,7 +8,7 @@ import { test as unauthTest, expect as unauthExpect } from "@playwright/test";
 //   wordmark line-height: 1
 //
 // Brand spec for the vertical lockup (used on login page):
-//   icon:                48×48px (login page uses this size)
+//   icon:                64×64px
 //   wordmark margin-top: -2px  (optical baseline correction)
 //   wordmark margin-left: -6px (optical indent correction)
 
@@ -31,8 +31,6 @@ test.describe("app header lockup (authenticated)", () => {
   });
 
   test("header wordmark font-size is 1rem (16px)", async ({ page }) => {
-    // Brand spec: lockup-h-sm wordmark font-size is 1rem.
-    // Current code has 1.1rem — this test should FAIL.
     const fontSize = await page
       .locator("header .logoText, header [class*='logoText']")
       .first()
@@ -44,8 +42,6 @@ test.describe("app header lockup (authenticated)", () => {
   });
 
   test("header wordmark has margin-top of 3px", async ({ page }) => {
-    // Brand spec: lockup-h-sm wordmark margin-top is 3px for optical baseline correction.
-    // Current code has no margin-top set — this test should FAIL.
     const marginTop = await page
       .locator("header .logoText, header [class*='logoText']")
       .first()
@@ -75,22 +71,18 @@ unauthTest.describe("login page lockup (unauthenticated)", () => {
     await unauthExpect(page.locator("h1")).toHaveText("Cadence");
   });
 
-  unauthTest("login page icon renders at 48×48px", async ({ page }) => {
-    // The LoginPage uses width={48} height={48} on the img — verify the
-    // rendered dimensions match (sanity check / regression guard).
+  unauthTest("login page icon renders at 64×64px", async ({ page }) => {
     const { width, height } = await page
       .locator('img[src="/cadence-icon.svg"]')
       .evaluate((el) => {
         const rect = el.getBoundingClientRect();
         return { width: rect.width, height: rect.height };
       });
-    unauthExpect(width).toBe(48);
-    unauthExpect(height).toBe(48);
+    unauthExpect(width).toBe(64);
+    unauthExpect(height).toBe(64);
   });
 
   unauthTest("login page wordmark (h1) has margin-top of -2px for optical correction", async ({ page }) => {
-    // Brand spec for vertical lockup: wordmark margin-top: -2px.
-    // Current LoginPage has margin: 0 on the title — this test should FAIL.
     const marginTop = await page.locator("h1").evaluate((el) => {
       return window.getComputedStyle(el).marginTop;
     });
@@ -98,8 +90,6 @@ unauthTest.describe("login page lockup (unauthenticated)", () => {
   });
 
   unauthTest("login page wordmark (h1) has margin-left of -6px for optical correction", async ({ page }) => {
-    // Brand spec for vertical lockup: wordmark margin-left: -6px.
-    // Current LoginPage has no margin-left — this test should FAIL.
     const marginLeft = await page.locator("h1").evaluate((el) => {
       return window.getComputedStyle(el).marginLeft;
     });
