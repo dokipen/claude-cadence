@@ -219,7 +219,11 @@ Before deferring a finding, ask: **is this quick to fix right now?** If a findin
 When a finding genuinely needs to be deferred (not blocking the current PR and not trivial to fix), decide where to track it:
 
 - **Add to an existing issue** when the finding naturally fits within a planned phase's scope (e.g., a missing validation that belongs in the API hardening ticket). Add it as a new acceptance criterion on that issue.
-- **Create a new issue** when the finding is independent work that doesn't fit any existing ticket. Label it `agent-discovered` and assign a priority label (`priority:high`, `priority:medium`, or `priority:low`). Deferred findings default to `priority:low` unless the reviewer indicates higher severity.
+- **Create a new issue** when the finding is independent work that doesn't fit any existing ticket. Label it `agent-discovered` and assign a priority using the project's ticket provider:
+  - **GitHub:** Add a priority label (`priority:high`, `priority:medium`, or `priority:low`)
+  - **Issues API:** Set the native priority field (`--priority HIGH`, `MEDIUM`, or `LOW`)
+
+  Deferred findings default to low priority unless the reviewer indicates higher severity.
 
 In both cases:
 - Link back to the originating review: include "Discovered in #[PR-NUMBER] review" in the finding description
@@ -280,5 +284,8 @@ When delegating to any agent, include all of the following:
 When agents discover out-of-scope issues:
 - Create a NEW issue (not scope creep)
 - Label with `agent-discovered`
-- Assign a priority label (`priority:high`, `priority:medium`, or `priority:low`) — default to `priority:low` unless the finding warrants higher
+- Assign a priority using the project's ticket provider:
+  - **GitHub:** Add a priority label (`priority:high`, `priority:medium`, or `priority:low`)
+  - **Issues API:** Set the native priority field (`--priority HIGH`, `MEDIUM`, or `LOW`)
+- Default to low priority unless the finding warrants higher
 - Continue with original work

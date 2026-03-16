@@ -94,7 +94,7 @@ After refinement with `issues-api`, transition the ticket state from `BACKLOG` t
 
 GitHub uses labels (`priority:medium`). Issues API uses the priority field (`--priority N`).
 
-When assessing priority, consider: Does this block other work? Is there a security or data-integrity risk? Is this user-facing? Issues created from deferred PR review findings should default to `priority:low` unless the finding indicates a higher severity.
+When assessing priority, consider: Does this block other work? Is there a security or data-integrity risk? Is this user-facing? Issues created from deferred PR review findings should default to low priority unless the finding indicates a higher severity.
 
 ## Review Process
 
