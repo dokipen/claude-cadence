@@ -32,9 +32,33 @@ export const ME_QUERY = gql`
   }
 `;
 
+export const LABELS_QUERY = gql`
+  query Labels {
+    labels {
+      id
+      name
+      color
+    }
+  }
+`;
+
 export const BOARD_TICKETS_QUERY = gql`
-  query BoardTickets($state: TicketState!, $projectId: ID!, $first: Int) {
-    tickets(state: $state, projectId: $projectId, first: $first) {
+  query BoardTickets(
+    $state: TicketState!
+    $projectId: ID!
+    $first: Int
+    $labelName: String
+    $isBlocked: Boolean
+    $priority: Priority
+  ) {
+    tickets(
+      state: $state
+      projectId: $projectId
+      first: $first
+      labelName: $labelName
+      isBlocked: $isBlocked
+      priority: $priority
+    ) {
       edges {
         node {
           id
