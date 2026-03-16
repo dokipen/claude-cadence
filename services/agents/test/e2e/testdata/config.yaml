@@ -16,8 +16,8 @@ profiles:
     command: "sleep 3600"
     description: "Long-running sleep process"
   fast-exit:
-    command: "exit"
-    description: "Exits the shell immediately, destroying the tmux session"
+    command: "true"
+    description: "Exits immediately with status 0"
   echo-and-exit:
     command: "bash -c 'echo hello && sleep 1'"
     description: "Echoes and exits after 1s"
