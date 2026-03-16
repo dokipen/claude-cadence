@@ -106,7 +106,7 @@ export const ticketTypeDefs = `
       isBlocked: Boolean
       priority: Priority
       projectId: ID
-      "Maximum number of tickets to return. Capped at 100 (MAX_PAGE_SIZE)."
+      "Maximum number of tickets to return. Server-side cap: 100."
       first: Int
       "Cursor for forward pagination. Use the endCursor from a previous query's pageInfo."
       after: String
