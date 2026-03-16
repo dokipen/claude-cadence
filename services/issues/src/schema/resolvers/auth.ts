@@ -137,7 +137,9 @@ export const authResolvers = {
       { prisma }: AuthenticatedContext
     ) => {
       try {
-        // Atomic rotation: revoke old token and verify it wasn't already revoked
+        // Atomic rotation: revoke old token and verify it wasn't already revoked.
+        // Note: Prisma propagates thrown errors from transaction callbacks unwrapped,
+        // so GraphQLError instances (UNAUTHENTICATED) pass through to the catch guard.
         return await prisma.$transaction(async (tx) => {
           const result = await tx.refreshToken.updateMany({
             where: { token: refreshToken, revoked: false },
@@ -156,7 +158,7 @@ export const authResolvers = {
           });
 
           if (!storedToken || storedToken.expiresAt < new Date()) {
-            throw new GraphQLError("Refresh token expired", {
+            throw new GraphQLError("Invalid or expired refresh token", {
               extensions: { code: "UNAUTHENTICATED" },
             });
           }

@@ -134,7 +134,7 @@ describe("refreshToken mutation", () => {
         { refreshToken: "valid-token" },
         context
       )
-    ).rejects.toThrow("Refresh token expired");
+    ).rejects.toThrow("Invalid or expired refresh token");
   });
 
   it("should issue new tokens for a valid refresh token", async () => {
@@ -249,7 +249,7 @@ describe("refreshToken — error handling", () => {
     consoleSpy.mockRestore();
   });
 
-  it("re-throws GraphQLError from within the transaction", async () => {
+  it("re-throws GraphQLError caught at handler level", async () => {
     const { GraphQLError } = await import("graphql");
     const { context } = makeMockContext();
     context.prisma.$transaction.mockRejectedValue(
