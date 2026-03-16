@@ -8,6 +8,7 @@ services:
     environment:
       - DATABASE_URL=file:/app/data/issues.db
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set. Run ./install.sh or create a .env file.}
+      - ALLOWED_USERS=${ALLOWED_USERS:-}
       - PORT=4000
 
 volumes:
