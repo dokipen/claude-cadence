@@ -148,6 +148,8 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: "-0.02em",
     color: "var(--primary)",
     margin: 0,
+    marginTop: "-2px",
+    marginLeft: "-6px",
   },
   subtitle: {
     color: "var(--text-secondary)",
