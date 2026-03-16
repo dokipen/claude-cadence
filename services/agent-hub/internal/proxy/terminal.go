@@ -57,6 +57,16 @@ func HandleTerminalProxy(h *hub.Hub) http.HandlerFunc {
 			return
 		}
 
+		if endpoint.Address == "" || endpoint.Address != agent.TtydConfig.AdvertiseAddress {
+			slog.Warn("terminal address mismatch",
+				"agent", agentName,
+				"expected", agent.TtydConfig.AdvertiseAddress,
+				"received", endpoint.Address,
+			)
+			writeJSONError(w, http.StatusBadGateway, "terminal address mismatch")
+			return
+		}
+
 		// Dial agentd's ttyd WebSocket.
 		ttydURL := fmt.Sprintf("ws://%s:%d/ws", endpoint.Address, endpoint.Port)
 		ttydConn, _, err := websocket.Dial(r.Context(), ttydURL, nil)
