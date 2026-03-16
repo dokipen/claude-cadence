@@ -66,6 +66,14 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - name: Upload issues service build
+        uses: actions/upload-artifact@v4
+        with:
+          name: issues-service-build
+          path: |
+            services/issues/node_modules/
+            services/issues/dist/
+          retention-days: 1
       - name: Cleanup workspace
         if: always()
         run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
@@ -83,11 +91,12 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
-          cache-dependency-path: |
-            services/issues/package-lock.json
-            services/issues-cli/package-lock.json
-      - name: Build issues service
-        run: cd services/issues && npm ci && npx prisma generate && npm run build
+          cache-dependency-path: services/issues-cli/package-lock.json
+      - name: Download issues service build
+        uses: actions/download-artifact@v4
+        with:
+          name: issues-service-build
+          path: services/issues/
       - name: Test CLI
         run: cd services/issues-cli && npm ci && npm run typecheck && npm test
       - name: Cleanup workspace
