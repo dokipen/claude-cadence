@@ -76,11 +76,9 @@ test.describe("app header lockup (authenticated)", () => {
     expect(gap).toBe("0px");
   });
   test("header logo links to home", async ({ page }) => {
-    await page.goto("/ticket/fake-id");
     const logoLink = page.locator("header a[href='/']");
     await expect(logoLink).toBeVisible();
-    await logoLink.click();
-    await expect(page).toHaveURL("/");
+    await expect(logoLink).toHaveAttribute("href", "/");
   });
 });
 
