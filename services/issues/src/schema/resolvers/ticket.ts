@@ -505,7 +505,7 @@ export const ticketResolvers = {
         const project = await loaders.projectByProjectId.load(parent.projectId);
         if (!project) {
           throw new GraphQLError("Project not found for ticket", {
-            extensions: { code: "INTERNAL_SERVER_ERROR" },
+            extensions: { code: "NOT_FOUND" },
           });
         }
         return project;

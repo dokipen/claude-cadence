@@ -307,4 +307,36 @@ describe("authenticateWithGitHubPAT — error handling", () => {
     );
     consoleSpy.mockRestore();
   });
+
+  it("re-throws GraphQLError from allowlist enforcement", async () => {
+    const { GraphQLError } = await import("graphql");
+    mockPATAuthenticate.mockResolvedValue({
+      githubId: 2,
+      login: "blocked-user",
+      displayName: "Blocked",
+      avatarUrl: null,
+    });
+
+    const { enforceAllowlist } = await import("../../auth/allowlist.js");
+    (enforceAllowlist as any).mockImplementation(() => {
+      throw new GraphQLError("User is not authorized to access this application", {
+        extensions: { code: "FORBIDDEN" },
+      });
+    });
+
+    const { context } = makeMockContext();
+
+    await expect(
+      authResolvers.Mutation.authenticateWithGitHubPAT(
+        {},
+        { token: "some-token" },
+        context
+      )
+    ).rejects.toMatchObject({
+      message: "User is not authorized to access this application",
+      extensions: { code: "FORBIDDEN" },
+    });
+
+    (enforceAllowlist as any).mockImplementation(() => {});
+  });
 });

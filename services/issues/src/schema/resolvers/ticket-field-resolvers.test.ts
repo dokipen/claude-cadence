@@ -68,7 +68,7 @@ describe("Ticket.project — error handling", () => {
       )
     ).rejects.toMatchObject({
       message: "Project not found for ticket",
-      extensions: { code: "INTERNAL_SERVER_ERROR" },
+      extensions: { code: "NOT_FOUND" },
     });
 
     expect(consoleSpy).not.toHaveBeenCalled();
