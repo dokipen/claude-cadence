@@ -99,9 +99,15 @@ Frontend foundation: API client for agent-hub and TypeScript types.
 
 ### Vite Proxy
 
-Add to `vite.config.ts`:
+Add to `vite.config.ts` (env var `VITE_AGENT_HUB_PORT`, default `4200`):
 ```ts
+const agentHubPort = process.env.VITE_AGENT_HUB_PORT || "4200";
+
 "/api/v1": `http://localhost:${agentHubPort}`,
+"/ws/terminal": {
+  target: `http://localhost:${agentHubPort}`,
+  ws: true,
+},
 ```
 
 ### REST Client
@@ -148,11 +154,12 @@ interface Session {
   stopped_at?: string;
   error_message?: string;
   agent_pid: number;
-  websocket_url?: string;
   worktree_path: string;
   repo_url: string;
   base_ref: string;
 }
+// Note: websocket_url from the Go Session struct is an internal ttyd address,
+// not browser-usable. The browser constructs the path as /ws/terminal/{agent}/{session}.
 ```
 
 ### GraphQL Change
