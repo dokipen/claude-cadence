@@ -208,6 +208,21 @@
   margin-top: 0;
 }
 
+.commentBody h1,
+.commentBody h2,
+.commentBody h3,
+.commentBody h4 {
+  margin: 0.75em 0 0.35em;
+  line-height: 1.3;
+}
+
+.commentBody h1:first-child,
+.commentBody h2:first-child,
+.commentBody h3:first-child,
+.commentBody h4:first-child {
+  margin-top: 0;
+}
+
 .commentList {
   display: flex;
   flex-direction: column;

@@ -298,6 +298,32 @@ test.describe("markdown rendering in ticket detail", () => {
     await expect(boldElements.first()).toBeVisible();
     await expect(boldElements.first()).toHaveText("Important:");
   });
+
+  test("acceptance criteria renders inline code as code element", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+
+    const markdownCard = page.getByTestId("column-BACKLOG").getByText("Markdown ticket");
+    await markdownCard.click();
+    await expect(page.getByTestId("ticket-detail")).toBeVisible();
+
+    const ac = page.getByTestId("detail-acceptance-criteria");
+    const code = ac.locator("code");
+    await expect(code).toHaveText("inline code");
+  });
+
+  test("acceptance criteria renders task list checkboxes", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+
+    const markdownCard = page.getByTestId("column-BACKLOG").getByText("Markdown ticket");
+    await markdownCard.click();
+    await expect(page.getByTestId("ticket-detail")).toBeVisible();
+
+    const ac = page.getByTestId("detail-acceptance-criteria");
+    const checkboxes = ac.locator("input[type='checkbox']");
+    await expect(checkboxes).toHaveCount(3);
+  });
 });
 
 test.describe("ticket detail unauthenticated", () => {
