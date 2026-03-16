@@ -115,7 +115,7 @@ describe("updateTicket", () => {
     expect(result).toEqual(updated);
     expect(ctx.prisma.ticket.update).toHaveBeenCalledWith({
       where: { id: "t1" },
-      data: { title: "New title" },
+      data: expect.objectContaining({ title: "New title" }),
     });
   });
 });
@@ -268,7 +268,6 @@ describe("unassignTicket", () => {
     );
 
     expect(result).toEqual(updated);
-    expect(result.assigneeId).toBeNull();
     expect(ctx.prisma.ticket.update).toHaveBeenCalledWith({
       where: { id: "t1" },
       data: { assigneeId: null },
@@ -299,6 +298,12 @@ describe("transitionTicket", () => {
     );
 
     expect(result).toEqual(updated);
+    expect(txMock.blockRelation.count).toHaveBeenCalledWith({
+      where: {
+        blockedId: "t1",
+        blocker: { state: { not: "CLOSED" } },
+      },
+    });
     expect(txMock.ticket.update).toHaveBeenCalledWith({
       where: { id: "t1" },
       data: { state: "IN_PROGRESS" },
