@@ -177,15 +177,12 @@ describe("createTicket — number assignment", () => {
         { input: { title: "Always fails", projectId: "proj-1" } },
         context
       )
-    ).rejects.toThrow(GraphQLError);
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("Failed to create ticket"),
+      extensions: { code: "INTERNAL_SERVER_ERROR" },
+    });
 
-    await expect(
-      createTicket(
-        {},
-        { input: { title: "Always fails", projectId: "proj-1" } },
-        context
-      )
-    ).rejects.toMatchObject({ extensions: { code: "INTERNAL_SERVER_ERROR" } });
+    expect(context.prisma.$transaction).toHaveBeenCalledTimes(3);
   });
 });
 
