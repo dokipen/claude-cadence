@@ -16,11 +16,11 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
-    "@apollo/server": "^4.11.3",
+    "@apollo/server": "^5.0.0",
     "@octokit/rest": "^22.0.1",
     "@prisma/client": "^6.5.0",
     "dataloader": "^2.2.3",
-    "graphql": "^16.10.0",
+    "graphql": "^16.11.0",
     "graphql-scalars": "^1.24.0",
     "jsonwebtoken": "^9.0.3",
     "prisma": "^6.5.0"
