@@ -56,10 +56,10 @@
   color: var(--text-secondary);
 }
 
-.stateBacklog { background: #e5e7eb; color: #6b7280; }
-.stateRefined { background: #dbeafe; color: #1d4ed8; }
-.stateInProgress { background: #fef3c7; color: #a16207; }
-.stateClosed { background: #d1fae5; color: #059669; }
+.stateBacklog { background: var(--state-backlog-bg); color: var(--state-backlog-text); }
+.stateRefined { background: var(--state-refined-bg); color: var(--state-refined-text); }
+.stateInProgress { background: var(--state-in-progress-bg); color: var(--state-in-progress-text); }
+.stateClosed { background: var(--state-closed-bg); color: var(--state-closed-text); }
 
 .sidebar {
   display: grid;
@@ -158,7 +158,7 @@
   height: 22px;
   border-radius: 50%;
   background: var(--primary-light);
-  color: #fff;
+  color: var(--on-primary);
   font-size: 0.6rem;
   font-weight: 600;
   display: flex;
@@ -234,7 +234,7 @@
 .error {
   text-align: center;
   padding: 4rem;
-  color: #d73a4a;
+  color: var(--error);
 }
 
 .assigneeDisplay {
@@ -254,7 +254,7 @@
   height: 20px;
   border-radius: 50%;
   background: var(--primary-light);
-  color: #fff;
+  color: var(--on-primary);
   font-size: 0.6rem;
   font-weight: 600;
   display: flex;
