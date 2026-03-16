@@ -67,6 +67,7 @@ test.describe("kanban board", () => {
   test("story points are right-aligned regardless of assignee", async ({ page }) => {
     // Ticket with assignee (REFINED column, ticket #2)
     const withAssignee = page.getByTestId("column-REFINED").getByTestId("ticket-card").first();
+    await expect(withAssignee.getByTestId("assignee")).toBeVisible();
     const actionsWithAssignee = withAssignee.locator('[class*="cardActions"]');
     const footerWithAssignee = withAssignee.locator('[class*="cardFooter"]');
     const actionsBoxWith = await actionsWithAssignee.boundingBox();
@@ -80,6 +81,7 @@ test.describe("kanban board", () => {
 
     // Ticket without assignee (CLOSED column, ticket #4 has story points but no assignee)
     const withoutAssignee = page.getByTestId("column-CLOSED").getByTestId("ticket-card").first();
+    await expect(withoutAssignee.getByTestId("assignee")).not.toBeVisible();
     const actionsWithout = withoutAssignee.locator('[class*="cardActions"]');
     const footerWithout = withoutAssignee.locator('[class*="cardFooter"]');
     const actionsBoxWithout = await actionsWithout.boundingBox();
