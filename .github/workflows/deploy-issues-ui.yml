@@ -49,16 +49,16 @@ jobs:
 
           echo "==> Deploying to ${RELEASE_DIR}..."
           mkdir -p "$RELEASE_DIR"
-          cp -r dist/* "$RELEASE_DIR/"
+          cp -r dist/. "$RELEASE_DIR/"
 
-          # Atomic symlink swap — ln -sfn is atomic on the same filesystem
-          ln -sfn "$RELEASE_DIR" "${DEPLOY_DIR}/current"
+          # Atomic symlink swap via rename(2) — mv -T is atomic on the same filesystem
+          ln -sfn "$RELEASE_DIR" "${DEPLOY_DIR}/next"
+          mv -T "${DEPLOY_DIR}/next" "${DEPLOY_DIR}/current"
 
           echo "==> Deploy complete"
 
           # Prune old releases, keep last 5
-          cd "${DEPLOY_DIR}/releases"
-          ls -1dt */ | tail -n +6 | xargs rm -rf || true
+          ls -1dt "${DEPLOY_DIR}/releases"/*/ | tail -n +6 | xargs -r rm -rf
 
       - name: Verify deployment
         run: |

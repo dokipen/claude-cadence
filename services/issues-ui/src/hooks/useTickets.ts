@@ -44,6 +44,8 @@ export function useTickets(
       return;
     }
 
+    let cancelled = false;
+
     const fetchTickets = () => {
       const client = getClient(handleAuthFailure);
       client
@@ -53,15 +55,16 @@ export function useTickets(
           first,
         })
         .then((result) => {
-          setTickets(result.tickets.edges.map((e) => e.node));
+          if (!cancelled) setTickets(result.tickets.edges.map((e) => e.node));
         })
         .catch((err) => {
-          setError(
-            err instanceof Error ? err.message : "Failed to load tickets",
-          );
+          if (!cancelled)
+            setError(
+              err instanceof Error ? err.message : "Failed to load tickets",
+            );
         })
         .finally(() => {
-          setLoading(false);
+          if (!cancelled) setLoading(false);
         });
     };
 
@@ -70,7 +73,10 @@ export function useTickets(
     fetchTickets();
 
     const interval = setInterval(fetchTickets, 60_000);
-    return () => clearInterval(interval);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [state, projectId, first, handleAuthFailure]);
 
   return { tickets, loading, error };
