@@ -148,6 +148,20 @@ func (h *Hub) MarkOffline(name string) {
 	}
 }
 
+// markOfflineIfCurrent sets the agent offline only if the given pointer still
+// owns the name slot. This prevents a stale connection goroutine from marking
+// a replacement agent offline after re-registration.
+func (h *Hub) markOfflineIfCurrent(name string, expected *ConnectedAgent) {
+	h.mu.RLock()
+	current, ok := h.agents[name]
+	h.mu.RUnlock()
+
+	if ok && current == expected {
+		expected.SetStatus(StatusOffline)
+		slog.Info("agent marked offline", "agent", name)
+	}
+}
+
 // Get returns an agent by name.
 func (h *Hub) Get(name string) (*ConnectedAgent, bool) {
 	h.mu.RLock()
@@ -250,7 +264,7 @@ func (h *Hub) HandleAgentConnection(ctx context.Context, agent *ConnectedAgent) 
 		_, data, err := agent.Conn().Read(ctx)
 		if err != nil {
 			slog.Info("agent connection closed", "agent", agent.Name, "error", err)
-			h.MarkOffline(agent.Name)
+			h.markOfflineIfCurrent(agent.Name, agent)
 			return
 		}
 
@@ -313,7 +327,7 @@ func (h *Hub) heartbeatLoop(ctx context.Context, agent *ConnectedAgent) {
 				agent.mu.Lock()
 				delete(agent.pending, id)
 				agent.mu.Unlock()
-				h.MarkOffline(agent.Name)
+				h.markOfflineIfCurrent(agent.Name, agent)
 				return
 			}
 
@@ -329,7 +343,7 @@ func (h *Hub) heartbeatLoop(ctx context.Context, agent *ConnectedAgent) {
 				agent.mu.Lock()
 				delete(agent.pending, id)
 				agent.mu.Unlock()
-				h.MarkOffline(agent.Name)
+				h.markOfflineIfCurrent(agent.Name, agent)
 				return
 			case <-respCh:
 				// Pong received, agent is alive.
