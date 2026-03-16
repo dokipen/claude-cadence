@@ -62,7 +62,6 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
         brightCyan: "#56d364",
         brightWhite: "#f0f6fc",
       },
-      allowProposedApi: true,
     });
 
     const fit = new FitAddon();
@@ -97,8 +96,8 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
     connect();
 
     return () => {
-      wsRef.current?.close();
       termRef.current?.dispose();
+      wsRef.current?.close();
       termRef.current = null;
       wsRef.current = null;
       fitRef.current = null;

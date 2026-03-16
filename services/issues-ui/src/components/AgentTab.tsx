@@ -22,11 +22,14 @@ export function AgentTab({ ticketNumber, repoUrl }: AgentTabProps) {
   const [active, setActive] = useState<ActiveSession | null>(null);
   const [discovering, setDiscovering] = useState(true);
   const [destroying, setDestroying] = useState(false);
-  const { agents } = useAgents();
+  const { agents, loading: agentsLoading } = useAgents();
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Discover existing sessions for this ticket on mount
   useEffect(() => {
+    // Wait for agents to finish loading before discovering sessions
+    if (agentsLoading) return;
+
     let cancelled = false;
     const sessionName = `lead-${ticketNumber}`;
 
@@ -52,20 +55,20 @@ export function AgentTab({ ticketNumber, repoUrl }: AgentTabProps) {
       if (!cancelled) setDiscovering(false);
     }
 
-    if (agents.length > 0) {
-      discover();
-    } else {
-      setDiscovering(false);
-    }
+    discover();
 
     return () => {
       cancelled = true;
     };
-  }, [agents, ticketNumber]);
+  }, [agents, agentsLoading, ticketNumber]);
 
   // Poll for session state transition (creating -> running)
+  const activeSessionId = active?.session.id;
+  const activeSessionState = active?.session.state;
+  const activeAgentName = active?.agentName;
+
   useEffect(() => {
-    if (!active || active.session.state !== "creating") {
+    if (!activeSessionId || !activeAgentName || activeSessionState !== "creating") {
       if (pollingRef.current) {
         clearInterval(pollingRef.current);
         pollingRef.current = null;
@@ -76,11 +79,11 @@ export function AgentTab({ ticketNumber, repoUrl }: AgentTabProps) {
     pollingRef.current = setInterval(async () => {
       try {
         const sessions = await hubFetch<Session[]>(
-          `/agents/${encodeURIComponent(active.agentName)}/sessions`,
+          `/agents/${encodeURIComponent(activeAgentName)}/sessions`,
         );
-        const updated = sessions.find((s) => s.id === active.session.id);
-        if (updated && updated.state !== active.session.state) {
-          setActive({ session: updated, agentName: active.agentName });
+        const updated = sessions.find((s) => s.id === activeSessionId);
+        if (updated && updated.state !== activeSessionState) {
+          setActive({ session: updated, agentName: activeAgentName });
         }
       } catch {
         // Ignore transient errors
@@ -93,7 +96,7 @@ export function AgentTab({ ticketNumber, repoUrl }: AgentTabProps) {
         pollingRef.current = null;
       }
     };
-  }, [active]);
+  }, [activeSessionId, activeSessionState, activeAgentName]);
 
   const handleLaunched = useCallback((session: Session, agentName: string) => {
     setActive({ session, agentName });
