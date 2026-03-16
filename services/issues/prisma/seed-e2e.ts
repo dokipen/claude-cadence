@@ -1,8 +1,9 @@
 import { PrismaClient } from "@prisma/client";
 
 const dbUrl = process.env.DATABASE_URL ?? "";
-if (!dbUrl.includes("test")) {
-  throw new Error(`Refusing to seed non-test database: ${dbUrl}`);
+const isLocalDb = dbUrl.includes("test") || dbUrl.includes("dev");
+if (!isLocalDb) {
+  throw new Error(`Refusing to seed non-local database: ${dbUrl}`);
 }
 
 const prisma = new PrismaClient();
