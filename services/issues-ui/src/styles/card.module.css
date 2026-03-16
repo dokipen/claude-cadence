@@ -97,6 +97,7 @@
   border-radius: 3px;
   background: var(--blocked-bg);
   color: var(--blocked-text);
+  border: 1px solid var(--blocked-text);
 }
 
 .assignee {
