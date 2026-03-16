@@ -34,7 +34,7 @@ func connectAgent(t *testing.T, url, name string) {
 	// Send register.
 	regReq, _ := NewRequest("reg-1", "register", &RegisterParams{
 		Name:     name,
-		Profiles: map[string]ProfileInfo{"default": {Description: "test"}},
+		Profiles: map[string]ProfileInfo{"default": {Description: "test", Repo: "https://github.com/test/repo"}},
 	})
 	data, _ := json.Marshal(regReq)
 	conn.Write(context.Background(), websocket.MessageText, data)
@@ -128,7 +128,7 @@ func connectSilentAgent(t *testing.T, url, name string) {
 	// Send register.
 	regReq, _ := NewRequest("reg-1", "register", &RegisterParams{
 		Name:     name,
-		Profiles: map[string]ProfileInfo{"default": {Description: "test"}},
+		Profiles: map[string]ProfileInfo{"default": {Description: "test", Repo: "https://github.com/test/repo"}},
 	})
 	data, _ := json.Marshal(regReq)
 	conn.Write(context.Background(), websocket.MessageText, data)
@@ -447,6 +447,66 @@ func TestList(t *testing.T) {
 	}
 	if len(found["beta"].Profiles) != 2 {
 		t.Errorf("expected 2 profiles for beta, got %d", len(found["beta"].Profiles))
+	}
+}
+
+func TestRegister_ProfileRepoRoundtrip(t *testing.T) {
+	h := newTestHubNoReaper(t)
+
+	repo := "https://github.com/org/myrepo"
+	if _, err := h.Register("repo-agent", nil, &RegisterParams{
+		Name: "repo-agent",
+		Profiles: map[string]ProfileInfo{
+			"default": {Description: "test profile", Repo: repo},
+		},
+	}); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	// Verify via Get.
+	agent, ok := h.Get("repo-agent")
+	if !ok {
+		t.Fatal("agent not found")
+	}
+	if agent.Profiles["default"].Repo != repo {
+		t.Errorf("Get: expected repo %q, got %q", repo, agent.Profiles["default"].Repo)
+	}
+
+	// Verify via List.
+	list := h.List()
+	found := false
+	for _, info := range list {
+		if info.Name == "repo-agent" {
+			if info.Profiles["default"].Repo != repo {
+				t.Errorf("List: expected repo %q, got %q", repo, info.Profiles["default"].Repo)
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Error("repo-agent not found in List")
+	}
+}
+
+func TestRegister_ProfileRepoEmpty(t *testing.T) {
+	h := newTestHubNoReaper(t)
+
+	// Register without repo — should succeed with empty string (backward compatible).
+	if _, err := h.Register("no-repo-agent", nil, &RegisterParams{
+		Name: "no-repo-agent",
+		Profiles: map[string]ProfileInfo{
+			"default": {Description: "no repo"},
+		},
+	}); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	agent, ok := h.Get("no-repo-agent")
+	if !ok {
+		t.Fatal("agent not found")
+	}
+	if agent.Profiles["default"].Repo != "" {
+		t.Errorf("expected empty repo, got %q", agent.Profiles["default"].Repo)
 	}
 }
 
