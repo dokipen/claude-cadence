@@ -57,13 +57,14 @@ func HandleTerminalProxy(h *hub.Hub) http.HandlerFunc {
 			return
 		}
 
-		if endpoint.Address == "" || endpoint.Address != agent.TtydConfig.AdvertiseAddress {
-			slog.Warn("terminal address mismatch",
+		if endpoint.Address != agent.TtydConfig.AdvertiseAddress ||
+			endpoint.Port != agent.TtydConfig.BasePort {
+			slog.Warn("terminal endpoint mismatch",
 				"agent", agentName,
-				"expected", agent.TtydConfig.AdvertiseAddress,
-				"received", endpoint.Address,
+				"expected_address", agent.TtydConfig.AdvertiseAddress,
+				"expected_port", agent.TtydConfig.BasePort,
 			)
-			writeJSONError(w, http.StatusBadGateway, "terminal address mismatch")
+			writeJSONError(w, http.StatusBadGateway, "terminal endpoint mismatch")
 			return
 		}
 

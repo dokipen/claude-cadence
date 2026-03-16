@@ -54,60 +54,11 @@ func startTestHub(t *testing.T, mockTtydAddr string) (*hub.Hub, string) {
 	return h, srv.URL
 }
 
-// connectAgent registers an agent that responds to getTerminalEndpoint.
+// connectAgent registers an agent that responds to getTerminalEndpoint with
+// the same address and port it advertised at registration.
 func connectAgent(t *testing.T, url, name, ttydHost string, ttydPort int) {
 	t.Helper()
-	wsURL := "ws" + strings.TrimPrefix(url, "http")
-	conn, _, err := websocket.Dial(context.Background(), wsURL, nil)
-	if err != nil {
-		t.Fatalf("dial: %v", err)
-	}
-
-	regReq, _ := hub.NewRequest("reg-1", "register", &hub.RegisterParams{
-		Name:     name,
-		Profiles: map[string]hub.ProfileInfo{"default": {Description: "test"}},
-		Ttyd:     hub.TtydInfo{AdvertiseAddress: ttydHost, BasePort: ttydPort},
-	})
-	data, _ := json.Marshal(regReq)
-	conn.Write(context.Background(), websocket.MessageText, data)
-	conn.Read(context.Background()) // ack
-
-	go func() {
-		for {
-			_, data, err := conn.Read(context.Background())
-			if err != nil {
-				return
-			}
-			var req hub.Request
-			json.Unmarshal(data, &req)
-
-			var resp *hub.Response
-			switch req.Method {
-			case "getTerminalEndpoint":
-				result, _ := json.Marshal(hub.GetTerminalEndpointResult{
-					Address: ttydHost,
-					Port:    ttydPort,
-				})
-				resp = &hub.Response{
-					JSONRPC: "2.0",
-					ID:      req.ID,
-					Result:  result,
-				}
-			case "ping":
-				result, _ := json.Marshal(hub.PongResult{Pong: true})
-				resp = &hub.Response{
-					JSONRPC: "2.0",
-					ID:      req.ID,
-					Result:  result,
-				}
-			default:
-				resp = hub.NewErrorResponse(req.ID, hub.RPCErrNotFound, "unknown method")
-			}
-
-			respData, _ := json.Marshal(resp)
-			conn.Write(context.Background(), websocket.MessageText, respData)
-		}
-	}()
+	connectAgentWithMismatch(t, url, name, ttydHost, ttydPort, ttydHost, ttydPort)
 }
 
 // waitForAgent polls until the agent appears in the hub.
@@ -322,6 +273,27 @@ func TestHandleTerminalProxy_EmptyAddress(t *testing.T) {
 	defer proxySrv.Close()
 
 	resp, err := http.Get(proxySrv.URL + "/ws/terminal/empty-addr-agent/sess-1")
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadGateway {
+		t.Errorf("expected 502, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandleTerminalProxy_PortMismatch(t *testing.T) {
+	h, hubURL := startTestHub(t, "")
+	connectAgentWithMismatch(t, hubURL, "port-mismatch-agent", "10.0.0.1", 7681, "10.0.0.1", 22)
+	waitForAgent(t, h, "port-mismatch-agent")
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h))
+	proxySrv := httptest.NewServer(mux)
+	defer proxySrv.Close()
+
+	resp, err := http.Get(proxySrv.URL + "/ws/terminal/port-mismatch-agent/sess-1")
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
