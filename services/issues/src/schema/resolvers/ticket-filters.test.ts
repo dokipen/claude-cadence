@@ -155,6 +155,37 @@ describe("tickets filter — combined filters", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Sort order — CLOSED tickets should be sorted newest-first (issue #95)
+// ---------------------------------------------------------------------------
+describe("tickets — sort order by state", () => {
+  it("uses updatedAt desc for CLOSED state", async () => {
+    const ctx = makeMockContext([]);
+    await tickets(undefined, { state: "CLOSED" }, ctx);
+
+    const call = ctx.prisma.ticket.findMany.mock.calls[0][0];
+    expect(call.orderBy).toEqual({ updatedAt: "desc" });
+  });
+
+  it("uses createdAt asc for non-CLOSED states", async () => {
+    for (const state of ["BACKLOG", "REFINED", "IN_PROGRESS"]) {
+      const ctx = makeMockContext([]);
+      await tickets(undefined, { state }, ctx);
+
+      const call = ctx.prisma.ticket.findMany.mock.calls[0][0];
+      expect(call.orderBy).toEqual({ createdAt: "asc" });
+    }
+  });
+
+  it("uses createdAt asc when no state is specified", async () => {
+    const ctx = makeMockContext([]);
+    await tickets(undefined, {}, ctx);
+
+    const call = ctx.prisma.ticket.findMany.mock.calls[0][0];
+    expect(call.orderBy).toEqual({ createdAt: "asc" });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Error handling
 // ---------------------------------------------------------------------------
 describe("tickets — error handling", () => {

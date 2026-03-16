@@ -89,7 +89,7 @@ export const ticketResolvers = {
       const queryArgs: Prisma.TicketFindManyArgs = {
         where,
         take: first + 1,
-        orderBy: { createdAt: "asc" },
+        orderBy: state === "CLOSED" ? { updatedAt: "desc" } : { createdAt: "asc" },
       };
 
       if (after) {
