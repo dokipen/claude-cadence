@@ -103,19 +103,18 @@ ${vhost} {
 		-Server
 	}
 
-	# Rate limiting — per client IP, 60 requests per minute.
-	# Allows short bursts while preventing sustained abuse.
-	# Requires the caddy-ratelimit module (github.com/mholt/caddy-ratelimit).
-	rate_limit {
-		zone api_zone {
-			key    {http.request.remote.host}
-			events 60
-			window 1m
-		}
-	}
-
 	# Issues service — GraphQL API
 	handle /graphql {
+		# Rate limiting — per client IP, 300 requests per minute.
+		# Scoped to API routes only; static assets and WebSockets are exempt.
+		# Requires the caddy-ratelimit module (github.com/mholt/caddy-ratelimit).
+		rate_limit {
+			zone api_zone {
+				key    {http.request.remote.host}
+				events 300
+				window 1m
+			}
+		}
 		reverse_proxy localhost:4000
 	}
 
@@ -131,6 +130,13 @@ ${vhost} {
 
 	# Agent Hub — REST API
 	handle /api/v1/* {
+		rate_limit {
+			zone hub_zone {
+				key    {http.request.remote.host}
+				events 300
+				window 1m
+			}
+		}
 		reverse_proxy localhost:4200
 	}
 
