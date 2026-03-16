@@ -158,7 +158,8 @@ describe("tickets filter — combined filters", () => {
 // Error handling
 // ---------------------------------------------------------------------------
 describe("tickets — error handling", () => {
-  it("wraps Prisma errors in a GraphQLError", async () => {
+  it("wraps Prisma errors in a GraphQLError without leaking details", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const ctx = {
       prisma: {
         ticket: {
@@ -172,6 +173,17 @@ describe("tickets — error handling", () => {
     await expect(
       tickets(undefined, { state: "BACKLOG", labelName: "bug" }, ctx)
     ).rejects.toThrow("Failed to query tickets");
+
+    // Verify the raw error is not leaked in the thrown message
+    try {
+      await tickets(undefined, { state: "BACKLOG", labelName: "bug" }, ctx);
+    } catch (e: any) {
+      expect(e.message).not.toContain("DB connection failed");
+    }
+
+    // Verify the error is logged for observability
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
   });
 });
 

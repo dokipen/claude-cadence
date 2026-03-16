@@ -101,6 +101,7 @@ export const ticketResolvers = {
       try {
         tickets = await prisma.ticket.findMany(queryArgs);
       } catch (error) {
+        console.error("tickets query failed:", error);
         throw new GraphQLError("Failed to query tickets", {
           extensions: { code: "INTERNAL_SERVER_ERROR" },
         });
