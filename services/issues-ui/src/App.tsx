@@ -44,10 +44,12 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 
 function AppShell() {
   const { user, logout } = useAuth();
+  const location = useLocation();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     () => localStorage.getItem(STORAGE_KEY),
   );
   const [filters, setFilters] = useState<TicketFilters>({});
+  const showFilters = !location.pathname.startsWith("/ticket/");
 
   const handleProjectChange = useCallback((id: string) => {
     setSelectedProjectId(id);
@@ -80,7 +82,7 @@ function AppShell() {
           )}
         </div>
       </header>
-      {selectedProjectId && (
+      {selectedProjectId && showFilters && (
         <FilterBar filters={filters} onChange={setFilters} />
       )}
       <main className={layoutStyles.main}>
