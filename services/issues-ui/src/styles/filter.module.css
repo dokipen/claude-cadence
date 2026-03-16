@@ -1,0 +1,80 @@
+.filterBar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.filterGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.filterLabel {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.filterSelect {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+  min-width: 100px;
+}
+
+.filterSelect:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.toggleButton {
+  background: var(--bg);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.toggleButton:hover {
+  background: var(--border);
+}
+
+.toggleActive {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.toggleActive:hover {
+  opacity: 0.9;
+  background: var(--primary);
+}
+
+.clearButton {
+  background: none;
+  color: var(--text-muted);
+  border: none;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.75rem;
+  font-family: inherit;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.clearButton:hover {
+  color: var(--text);
+}

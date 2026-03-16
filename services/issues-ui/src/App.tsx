@@ -4,8 +4,10 @@ import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { LoginPage } from "./auth/LoginPage";
 import { AuthCallback } from "./auth/AuthCallback";
 import { KanbanBoard } from "./components/KanbanBoard";
+import { FilterBar } from "./components/FilterBar";
 import { TicketDetail } from "./components/TicketDetail";
 import { ProjectSelector, STORAGE_KEY } from "./components/ProjectSelector";
+import type { TicketFilters } from "./hooks/useTickets";
 import type { ReactNode } from "react";
 import layoutStyles from "./styles/layout.module.css";
 
@@ -40,6 +42,7 @@ function AppShell() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     () => localStorage.getItem(STORAGE_KEY),
   );
+  const [filters, setFilters] = useState<TicketFilters>({});
 
   const handleProjectChange = useCallback((id: string) => {
     setSelectedProjectId(id);
@@ -71,10 +74,16 @@ function AppShell() {
           )}
         </div>
       </header>
+      {selectedProjectId && (
+        <FilterBar filters={filters} onChange={setFilters} />
+      )}
       <main className={layoutStyles.main}>
         <Routes>
           <Route path="/ticket/:id" element={<TicketDetail />} />
-          <Route path="/*" element={<KanbanBoard projectId={selectedProjectId} />} />
+          <Route
+            path="/*"
+            element={<KanbanBoard projectId={selectedProjectId} filters={filters} />}
+          />
         </Routes>
       </main>
     </div>
