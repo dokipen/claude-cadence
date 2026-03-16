@@ -197,8 +197,53 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		})
 	}
 
-	// Create tmux session with the worktree as workdir.
-	if err := m.tmux.NewSession(sessionName, workdir); err != nil {
+	// Render command template.
+	cmdStr, err := m.renderCommand(profile.Command, sess, req.ExtraArgs)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to render command: %v", err)
+		m.store.Update(sessionID, func(s *Session) {
+			s.State = StateError
+			s.ErrorMessage = errMsg
+		})
+		return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
+	}
+
+	// Build env var exports to prepend to the command.
+	var envExports []string
+
+	// Vault secrets as env vars.
+	if vaultSecrets != nil {
+		for k, v := range vaultSecrets {
+			envKey := strings.ToUpper(k)
+			if !envKeyRe.MatchString(envKey) {
+				slog.Warn("skipping vault secret with invalid env key", "key", k)
+				continue
+			}
+			strVal := fmt.Sprintf("%v", v)
+			envExports = append(envExports, fmt.Sprintf("export %s=%s;", envKey, shellEscapeArg(strVal)))
+		}
+	}
+
+	// Request env vars (validate keys before creating session).
+	for k, v := range req.Env {
+		if !envKeyRe.MatchString(k) {
+			m.store.Update(sessionID, func(s *Session) {
+				s.State = StateError
+				s.ErrorMessage = fmt.Sprintf("invalid env var key: %q", k)
+			})
+			return m.mustGet(sessionID), &Error{Code: ErrInvalidArgument, Message: fmt.Sprintf("invalid env var key: %q", k)}
+		}
+		envExports = append(envExports, fmt.Sprintf("export %s=%s;", k, shellEscapeArg(v)))
+	}
+
+	// Build full command with env exports prepended.
+	fullCommand := cmdStr
+	if len(envExports) > 0 {
+		fullCommand = strings.Join(envExports, " ") + " " + cmdStr
+	}
+
+	// Create tmux session with command as initial process.
+	if err := m.tmux.NewSession(sessionName, workdir, fullCommand); err != nil {
 		errMsg := fmt.Sprintf("failed to create tmux session: %v", err)
 		// Clean up worktree if we created one.
 		if profile.Repo != "" && m.git != nil {
@@ -213,48 +258,28 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
 	}
 
-	// Inject Vault secrets as env vars into tmux session.
+	// Mirror env vars into tmux session environment for tooling visibility
+	// (e.g., tmux show-environment). The process itself gets them via the
+	// command-line export prefix above.
 	if vaultSecrets != nil {
 		for k, v := range vaultSecrets {
 			envKey := strings.ToUpper(k)
 			if !envKeyRe.MatchString(envKey) {
-				slog.Warn("skipping vault secret with invalid env key", "key", k)
 				continue
 			}
 			strVal := fmt.Sprintf("%v", v)
 			if err := m.tmux.SetEnv(sessionName, envKey, strVal); err != nil {
-				slog.Warn("failed to set vault env var", "key", envKey, "error", err)
+				slog.Warn("failed to set vault env var in tmux", "key", envKey, "error", err)
 			}
 		}
 	}
-
-	// Set env vars (validate keys to prevent injection via tmux set-environment).
 	for k, v := range req.Env {
-		if !envKeyRe.MatchString(k) {
-			m.cleanup(sessionID, sessionName, fmt.Sprintf("invalid env var key: %q", k))
-			return m.mustGet(sessionID), &Error{Code: ErrInvalidArgument, Message: fmt.Sprintf("invalid env var key: %q", k)}
-		}
 		if err := m.tmux.SetEnv(sessionName, k, v); err != nil {
-			slog.Warn("failed to set env var", "key", k, "error", err)
+			slog.Warn("failed to set env var in tmux", "key", k, "error", err)
 		}
 	}
 
-	// Render command template.
-	cmdStr, err := m.renderCommand(profile.Command, sess, req.ExtraArgs)
-	if err != nil {
-		errMsg := fmt.Sprintf("failed to render command: %v", err)
-		m.cleanup(sessionID, sessionName, errMsg)
-		return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
-	}
-
-	// Send command to tmux.
-	if err := m.tmux.SendKeys(sessionName, cmdStr); err != nil {
-		errMsg := fmt.Sprintf("failed to send keys: %v", err)
-		m.cleanup(sessionID, sessionName, errMsg)
-		return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
-	}
-
-	// Get PID.
+	// Get PID (now returns agent process PID directly).
 	pid, err := m.tmux.GetPanePID(sessionName)
 	if err != nil {
 		slog.Warn("failed to get pane PID", "error", err)

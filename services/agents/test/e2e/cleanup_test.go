@@ -19,7 +19,7 @@ func newTestManager(t *testing.T) (*session.Manager, *session.Store) {
 	t.Helper()
 	profiles := map[string]config.Profile{
 		"sleeper":   {Command: "sleep 3600"},
-		"fast-exit": {Command: "exit"},
+		"fast-exit": {Command: "true"},
 	}
 	store := session.NewStore()
 	tmuxClient := tmux.NewClient(testSocket)

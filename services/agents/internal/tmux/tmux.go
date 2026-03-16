@@ -22,9 +22,15 @@ func (c *Client) SocketName() string {
 	return c.socketName
 }
 
-// NewSession creates a new tmux session. Returns error if it already exists.
-func (c *Client) NewSession(name string, workdir string) error {
-	cmd := exec.Command("tmux", "-L", c.socketName, "new-session", "-d", "-s", name, "-c", workdir)
+// NewSession creates a new tmux session. If command is non-empty, it is used as
+// the initial command for the session (the session exits when the command exits).
+// Returns error if the session already exists.
+func (c *Client) NewSession(name string, workdir string, command string) error {
+	args := []string{"-L", c.socketName, "new-session", "-d", "-s", name, "-c", workdir}
+	if command != "" {
+		args = append(args, command)
+	}
+	cmd := exec.Command("tmux", args...)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("tmux new-session: %w: %s", err, string(output))
 	}
