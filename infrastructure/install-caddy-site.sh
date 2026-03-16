@@ -61,7 +61,7 @@ ${vhost} {
 	# Requires the caddy-ratelimit module (github.com/mholt/caddy-ratelimit).
 	rate_limit {
 		zone api_zone {
-			key    {client_ip}
+			key    {http.request.remote.host}
 			events 60
 			window 1m
 		}
@@ -84,7 +84,7 @@ ${vhost} {
 
 	# Fallback — generic 404, no service identity
 	handle {
-		respond 404
+		respond "Not Found" 404
 	}
 }
 
