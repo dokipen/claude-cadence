@@ -82,6 +82,21 @@ ${vhost} {
 		}
 	}
 
+	# Agent Hub — REST API
+	handle /api/v1/* {
+		reverse_proxy localhost:4200
+	}
+
+	# Agent Hub — agent WebSocket registration
+	handle /ws/agent {
+		reverse_proxy localhost:4200
+	}
+
+	# Agent Hub — terminal WebSocket proxy
+	handle /ws/terminal/* {
+		reverse_proxy localhost:4200
+	}
+
 	# Fallback — generic 404, no service identity
 	handle {
 		respond "Not Found" 404
@@ -112,3 +127,4 @@ sudo systemctl reload caddy
 log "Done! Services available at:"
 log "  https://${vhost}/graphql  — Issues GraphQL API"
 log "  https://${vhost}/agents.v1.AgentService/<Method>  — Agents gRPC endpoint"
+log "  https://${vhost}/api/v1/  — Agent Hub REST API"

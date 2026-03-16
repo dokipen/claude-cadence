@@ -41,6 +41,21 @@
 		}
 	}
 
+	# Agent Hub — REST API
+	handle /api/v1/* {
+		reverse_proxy localhost:4200
+	}
+
+	# Agent Hub — agent WebSocket registration
+	handle /ws/agent {
+		reverse_proxy localhost:4200
+	}
+
+	# Agent Hub — terminal WebSocket proxy
+	handle /ws/terminal/* {
+		reverse_proxy localhost:4200
+	}
+
 	# Fallback — generic 404, no service identity
 	handle {
 		respond "Not Found" 404
