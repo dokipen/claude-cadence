@@ -19,6 +19,7 @@ func defaultVars() map[string]string {
 	return map[string]string{
 		"__BINARY_PATH__": "/usr/local/bin/agentd",
 		"__CONFIG_PATH__": "/etc/agentd/config.yaml",
+		"__ENV_PATH__":    "/etc/agentd/env",
 		"__USER__":        "agentd",
 		"__GROUP__":       "agentd",
 		"__ROOT_DIR__":    "/var/lib/agentd",
@@ -95,6 +96,7 @@ func TestInstall_SystemdGeneration(t *testing.T) {
 		{"user", "User=agentd"},
 		{"group", "Group=agentd"},
 		{"exec start", `ExecStart="/usr/local/bin/agentd" --config "/etc/agentd/config.yaml"`},
+		{"env file", "EnvironmentFile=-/etc/agentd/env"},
 		{"working dir", "WorkingDirectory=/var/lib/agentd"},
 		{"restart", "Restart=on-failure"},
 		{"restart sec", "RestartSec=5"},
@@ -156,6 +158,7 @@ func TestInstall_SystemdCustomValues(t *testing.T) {
 	vars := map[string]string{
 		"__BINARY_PATH__": "/opt/agentd/bin/agentd",
 		"__CONFIG_PATH__": "/etc/agentd/custom.yaml",
+		"__ENV_PATH__":    "/etc/agentd/custom.env",
 		"__USER__":        "svcuser",
 		"__GROUP__":       "svcgroup",
 		"__ROOT_DIR__":    "/data/agentd",
