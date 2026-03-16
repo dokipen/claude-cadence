@@ -1,0 +1,94 @@
+name: Deploy Issues UI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/issues-ui/**'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-issues-ui
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    # Runs directly on Bootsy via self-hosted runner — no SSH needed.
+    # Prerequisites:
+    #   1. Node.js 20+ available on the runner
+    #   2. /srv/issues-ui/ directory exists with correct permissions
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: services/issues-ui
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: services/issues-ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Atomic deploy
+        run: |
+          DEPLOY_DIR="/srv/issues-ui"
+          RELEASE_DIR="${DEPLOY_DIR}/releases/$(date +%Y%m%d-%H%M%S)-${GITHUB_SHA:0:7}"
+
+          echo "==> Deploying to ${RELEASE_DIR}..."
+          mkdir -p "$RELEASE_DIR"
+          cp -r dist/. "$RELEASE_DIR/"
+
+          # Atomic symlink swap via rename(2) — mv -T is atomic on the same filesystem
+          ln -sfn "$RELEASE_DIR" "${DEPLOY_DIR}/next"
+          mv -T "${DEPLOY_DIR}/next" "${DEPLOY_DIR}/current"
+
+          echo "==> Deploy complete"
+
+          # Prune old releases, keep last 5
+          ls -1dt "${DEPLOY_DIR}/releases"/*/ | tail -n +6 | xargs -r rm -rf
+
+      - name: Verify deployment
+        run: |
+          # Verify the symlink points to a directory with index.html
+          if [ ! -f /srv/issues-ui/current/index.html ]; then
+            echo "::error::Deployment verification failed — index.html not found"
+            exit 1
+          fi
+          echo "==> Deployment verified: index.html present"
+
+      - name: Post success summary
+        if: success()
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          echo "### Issues UI deployed successfully" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Commit:** \`${COMMIT_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **URL:** https://cadence.bootsy.internal/" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post failure summary
+        if: failure()
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          echo "### Issues UI deployment failed" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Commit:** \`${COMMIT_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Check the logs above for details." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Cleanup workspace
+        if: always()
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete

@@ -6,6 +6,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const issuesDir = path.resolve(__dirname, "../issues");
 const testDbUrl = `file:${path.resolve(issuesDir, "test.db")}`;
 
+// Use a non-default port in CI to avoid conflicting with the production service
+const apiPort = process.env.CI ? 4444 : 4000;
+const devPort = process.env.CI ? 5174 : 5173;
+
 export default defineConfig({
   testDir: "./e2e",
   globalSetup: "./e2e/global-setup.ts",
@@ -15,7 +19,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: "html",
   use: {
-    baseURL: "http://localhost:5173",
+    baseURL: `http://localhost:${devPort}`,
     trace: "on-first-retry",
   },
   projects: [
@@ -26,15 +30,18 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: `cd ${issuesDir} && DATABASE_URL=${testDbUrl} JWT_SECRET=e2e-test-secret npm start`,
-      port: 4000,
+      command: `cd ${issuesDir} && DATABASE_URL=${testDbUrl} JWT_SECRET=e2e-test-secret RATE_LIMIT_GENERAL_MAX=10000 PORT=${apiPort} npm start`,
+      port: apiPort,
       reuseExistingServer: !process.env.CI,
     },
     {
-      command: "npm run dev",
-      port: 5173,
+      command: `npm run dev -- --port ${devPort}`,
+      port: devPort,
       reuseExistingServer: !process.env.CI,
-      env: { VITE_GITHUB_CLIENT_ID: "e2e-test-client-id" },
+      env: {
+        VITE_GITHUB_CLIENT_ID: "e2e-test-client-id",
+        VITE_API_PORT: String(apiPort),
+      },
     },
   ],
 });

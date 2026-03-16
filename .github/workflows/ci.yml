@@ -26,6 +26,7 @@ jobs:
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
     outputs:
       issues-service: ${{ steps.filter.outputs.issues-service }}
+      issues-ui: ${{ steps.filter.outputs.issues-ui }}
       agent-service: ${{ steps.filter.outputs.agent-service }}
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +39,8 @@ jobs:
             issues-service:
               - 'services/issues/**'
               - 'services/issues-cli/**'
+            issues-ui:
+              - 'services/issues-ui/**'
             agent-service:
               - 'services/agents/**'
       - name: Cleanup workspace
@@ -125,6 +128,38 @@ jobs:
         if: always()
         run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
 
+  issues-ui-ci:
+    needs: changes
+    if: needs.changes.outputs.issues-ui == 'true'
+    # fork → ubuntu-latest; internal → self-hosted (see SECURITY comment above)
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: |
+            services/issues/package-lock.json
+            services/issues-ui/package-lock.json
+      - name: Build issues service (needed for e2e)
+        run: cd services/issues && npm ci && npx prisma generate && npm run build
+      - name: Install issues-ui dependencies
+        run: cd services/issues-ui && npm ci
+      - name: Typecheck
+        run: cd services/issues-ui && npm run typecheck
+      - name: Install Playwright browsers
+        run: cd services/issues-ui && npx playwright install chromium
+      - name: Run e2e tests
+        run: cd services/issues-ui && npm run test:e2e
+        env:
+          CI: true
+      - name: Cleanup workspace
+        if: always()
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
+
   agent-service-test:
     needs: changes
     if: needs.changes.outputs.agent-service == 'true'
@@ -160,6 +195,7 @@ jobs:
       - issues-service-test
       - issues-cli-test
       - issues-service-docker
+      - issues-ui-ci
       - agent-service-test
     runs-on: ubuntu-latest
     steps:
@@ -169,16 +205,18 @@ jobs:
           ISSUES_TEST: ${{ needs.issues-service-test.result }}
           ISSUES_CLI: ${{ needs.issues-cli-test.result }}
           ISSUES_DOCKER: ${{ needs.issues-service-docker.result }}
+          ISSUES_UI: ${{ needs.issues-ui-ci.result }}
           AGENT_TEST: ${{ needs.agent-service-test.result }}
         run: |
           echo "Changes:        $CHANGES"
           echo "Issues service: $ISSUES_TEST"
           echo "Issues CLI:     $ISSUES_CLI"
           echo "Issues Docker:  $ISSUES_DOCKER"
+          echo "Issues UI:      $ISSUES_UI"
           echo "Agent service:  $AGENT_TEST"
 
           # Fail if any job failed or was cancelled (skipped is OK — means path filter excluded it)
-          for result in "$CHANGES" "$ISSUES_TEST" "$ISSUES_CLI" "$ISSUES_DOCKER" "$AGENT_TEST"; do
+          for result in "$CHANGES" "$ISSUES_TEST" "$ISSUES_CLI" "$ISSUES_DOCKER" "$ISSUES_UI" "$AGENT_TEST"; do
             if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
               echo "::error::One or more CI jobs failed or were cancelled"
               exit 1

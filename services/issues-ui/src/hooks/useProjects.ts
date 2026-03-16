@@ -21,18 +21,33 @@ export function useProjects(): UseProjectsResult {
   }, [logout]);
 
   useEffect(() => {
-    const client = getClient(handleAuthFailure);
-    client
-      .request<{ projects: Project[] }>(PROJECTS_QUERY)
-      .then((result) => {
-        setProjects(result.projects);
-      })
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : "Failed to load projects");
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+    let cancelled = false;
+
+    const fetchProjects = () => {
+      const client = getClient(handleAuthFailure);
+      client
+        .request<{ projects: Project[] }>(PROJECTS_QUERY)
+        .then((result) => {
+          if (!cancelled) setProjects(result.projects);
+        })
+        .catch((err) => {
+          if (!cancelled)
+            setError(
+              err instanceof Error ? err.message : "Failed to load projects",
+            );
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    };
+
+    fetchProjects();
+
+    const interval = setInterval(fetchProjects, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [handleAuthFailure]);
 
   return { projects, loading, error };
