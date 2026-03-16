@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router";
+import { BrowserRouter, Routes, Route, Navigate, Link, useLocation } from "react-router";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { LoginPage } from "./auth/LoginPage";
 import { AuthCallback } from "./auth/AuthCallback";
@@ -60,8 +60,10 @@ function AppShell() {
     <div className={layoutStyles.shell}>
       <header className={layoutStyles.header}>
         <div className={layoutStyles.headerLeft}>
-          <img src="/cadence-icon-light.svg" alt="" width={24} height={24} />
-          <span className={layoutStyles.logoText}>Cadence</span>
+          <Link to="/" className={layoutStyles.logoLink}>
+            <img src="/cadence-icon-light.svg" alt="" width={24} height={24} />
+            <span className={layoutStyles.logoText}>Cadence</span>
+          </Link>
         </div>
         <div className={layoutStyles.headerCenter}>
           <ProjectSelector
