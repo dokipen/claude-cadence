@@ -30,7 +30,7 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   }
 
   if (!isAuthenticated) {
-    const redirect = location.pathname + location.search;
+    const redirect = location.pathname + location.search + location.hash;
     const loginUrl = redirect && redirect !== "/"
       ? `/login?redirect=${encodeURIComponent(redirect)}`
       : "/login";

@@ -48,9 +48,9 @@ export function LoginPage() {
       const state = result.generateOAuthState;
       sessionStorage.setItem("oauth_state", state);
 
-      const redirectParam = searchParams.get("redirect");
-      if (redirectParam) {
-        sessionStorage.setItem("oauth_redirect", redirectParam);
+      const redirectTarget = validateRedirect(searchParams.get("redirect"));
+      if (redirectTarget !== "/") {
+        sessionStorage.setItem("oauth_redirect", redirectTarget);
       }
 
       const params = new URLSearchParams({
