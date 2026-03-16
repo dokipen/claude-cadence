@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures/auth";
+import { test, expect } from "@playwright/test";
 
 test.describe("agent-hub proxy", () => {
   test("Vite proxy forwards /api/v1/agents and returns agent data", async ({

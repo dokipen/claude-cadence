@@ -79,9 +79,10 @@ export interface AgentProfileEntry {
   profile: AgentProfile;
 }
 
-export function useAgentProfiles(repoUrl: string | undefined): AgentProfileEntry[] {
-  const { agents } = useAgents();
-
+export function useAgentProfiles(
+  repoUrl: string | undefined,
+  agents: Agent[],
+): AgentProfileEntry[] {
   return useMemo(() => {
     if (!repoUrl) return [];
 

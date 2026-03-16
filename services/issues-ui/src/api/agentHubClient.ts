@@ -15,13 +15,11 @@ export async function hubFetch<T>(
   options?: RequestInit,
 ): Promise<T> {
   const url = `${BASE_PATH}${path}`;
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options?.headers,
-    },
-  });
+  const headers: Record<string, string> = { ...options?.headers as Record<string, string> };
+  if (options?.body != null) {
+    headers["Content-Type"] = "application/json";
+  }
+  const res = await fetch(url, { ...options, headers });
 
   if (!res.ok) {
     let message = res.statusText;
