@@ -15,14 +15,15 @@ export function ProjectSelector({
 }: ProjectSelectorProps) {
   const { projects, loading } = useProjects();
 
-  // Auto-select first project if nothing stored
+  // Auto-select first project if none selected or selected ID is invalid
   useEffect(() => {
     if (projects.length === 0) return;
 
-    if (!selectedProjectId) {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      const valid = stored && projects.some((p) => p.id === stored);
-      const id = valid ? stored! : projects[0].id;
+    const isValid =
+      selectedProjectId && projects.some((p) => p.id === selectedProjectId);
+
+    if (!isValid) {
+      const id = projects[0].id;
       localStorage.setItem(STORAGE_KEY, id);
       onProjectChange(id);
     }
