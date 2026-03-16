@@ -38,6 +38,7 @@ export const BOARD_TICKETS_QUERY = gql`
       edges {
         node {
           id
+          number
           title
           state
           priority

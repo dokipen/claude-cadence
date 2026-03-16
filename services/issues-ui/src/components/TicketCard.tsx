@@ -7,6 +7,7 @@ import styles from "../styles/card.module.css";
 export function TicketCard({ ticket }: { ticket: Ticket }) {
   return (
     <Link to={`/ticket/${ticket.id}`} className={styles.cardLink} data-testid="ticket-card">
+      <div className={styles.cardNumber} data-testid="card-number">#{ticket.number}</div>
       <div className={styles.cardTitle} data-testid="card-title">{ticket.title}</div>
       <div className={styles.cardMeta}>
         <PriorityBadge priority={ticket.priority} />

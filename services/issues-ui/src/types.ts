@@ -22,6 +22,7 @@ export interface Label {
 
 export interface Ticket {
   id: string;
+  number: number;
   title: string;
   description?: string;
   acceptanceCriteria?: string;
@@ -48,7 +49,6 @@ export interface RelatedTicket {
 }
 
 export interface TicketDetail extends Ticket {
-  number: number;
   project: Project;
   comments: Comment[];
   blocks: RelatedTicket[];

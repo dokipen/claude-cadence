@@ -21,6 +21,12 @@
   box-shadow: 0 1px 4px rgba(45, 58, 140, 0.08);
 }
 
+.cardNumber {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
 .cardTitle {
   font-size: 0.8rem;
   font-weight: 500;
