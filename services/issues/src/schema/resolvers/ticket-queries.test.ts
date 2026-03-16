@@ -26,18 +26,15 @@ describe("ticket — error handling", () => {
 
     await expect(
       ticket(undefined, { id: "some-id" }, ctx)
-    ).rejects.toThrow("Failed to fetch ticket");
+    ).rejects.toMatchObject({
+      message: "Failed to fetch ticket",
+      extensions: { code: "INTERNAL_SERVER_ERROR" },
+    });
 
-    // Verify the raw error is not leaked in the thrown message
-    try {
-      await ticket(undefined, { id: "some-id" }, ctx);
-    } catch (e: any) {
-      expect(e.message).not.toContain("DB connection failed");
-      expect(e.extensions?.code).toBe("INTERNAL_SERVER_ERROR");
-    }
-
-    // Verify the error is logged for observability
-    expect(consoleSpy).toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("ticket query failed"),
+      expect.any(String)
+    );
     consoleSpy.mockRestore();
   });
 });
@@ -57,18 +54,15 @@ describe("ticketByNumber — error handling", () => {
 
     await expect(
       ticketByNumber(undefined, { projectId: "proj-1", number: 1 }, ctx)
-    ).rejects.toThrow("Failed to fetch ticket by number");
+    ).rejects.toMatchObject({
+      message: "Failed to fetch ticket by number",
+      extensions: { code: "INTERNAL_SERVER_ERROR" },
+    });
 
-    // Verify the raw error is not leaked in the thrown message
-    try {
-      await ticketByNumber(undefined, { projectId: "proj-1", number: 1 }, ctx);
-    } catch (e: any) {
-      expect(e.message).not.toContain("DB connection failed");
-      expect(e.extensions?.code).toBe("INTERNAL_SERVER_ERROR");
-    }
-
-    // Verify the error is logged for observability
-    expect(consoleSpy).toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("ticketByNumber query failed"),
+      expect.any(String)
+    );
     consoleSpy.mockRestore();
   });
 });

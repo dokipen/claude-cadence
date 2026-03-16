@@ -20,7 +20,7 @@ export const ticketResolvers = {
       try {
         return await prisma.ticket.findUnique({ where: { id } });
       } catch (error) {
-        console.error("ticket query failed:", error);
+        console.error("ticket query failed:", error instanceof Error ? error.message : String(error));
         throw new GraphQLError("Failed to fetch ticket", {
           extensions: { code: "INTERNAL_SERVER_ERROR" },
         });
@@ -37,7 +37,7 @@ export const ticketResolvers = {
           where: { projectId_number: { projectId, number } },
         });
       } catch (error) {
-        console.error("ticketByNumber query failed:", error);
+        console.error("ticketByNumber query failed:", error instanceof Error ? error.message : String(error));
         throw new GraphQLError("Failed to fetch ticket by number", {
           extensions: { code: "INTERNAL_SERVER_ERROR" },
         });
