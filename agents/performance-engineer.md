@@ -100,14 +100,14 @@ Not every finding needs to block the current PR. For non-blocking findings (typi
 - **Defer** — Findings that are genuinely out of scope or would require significant rework. For each deferred finding:
   1. Recommend whether it fits an existing issue/phase or needs a new issue
   2. Reference the current PR: "Discovered in #[PR-NUMBER] review"
-  3. Assign a priority: `priority:high`, `priority:medium`, or `priority:low`
+  3. Recommend a priority level (high, medium, or low) — the lead will apply it via the project's ticket provider (native priority field or label, depending on provider)
   4. Clearly label it as deferred in your review output so the lead can triage
 
-Deferred findings that result in new issues should default to `priority:low` unless the finding warrants higher priority.
+Deferred findings that result in new issues should default to low priority unless the finding warrants higher.
 
 Example in review output:
 ```
 **Deferred**:
-- N+1 query in `fetchUsers()` → fits #10 (query optimization phase), priority:medium, discovered in #14 review
-- Bundle includes unused locale data → new issue recommended, priority:low, discovered in #14 review
+- N+1 query in `fetchUsers()` → fits #10 (query optimization phase), priority: medium, discovered in #14 review
+- Bundle includes unused locale data → new issue recommended, priority: low, discovered in #14 review
 ```
