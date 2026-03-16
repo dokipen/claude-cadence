@@ -40,6 +40,8 @@ jobs:
         run: npm ci
 
       - name: Build
+        env:
+          VITE_GITHUB_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
         run: npm run build
 
       - name: Atomic deploy
