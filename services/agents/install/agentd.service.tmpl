@@ -16,5 +16,14 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=agentd
 
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=__ROOT_DIR__ __LOG_DIR__
+
 [Install]
 WantedBy=multi-user.target

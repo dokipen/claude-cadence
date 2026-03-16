@@ -15,5 +15,14 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=agent-hub
 
+NoNewPrivileges=true
+ProtectSystem=strict
+PrivateTmp=true
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
 [Install]
 WantedBy=multi-user.target
