@@ -23,10 +23,11 @@ unauthTest.describe("unauthenticated", () => {
   unauthTest(
     "PAT login redirects to home page after successful auth",
     async ({ page }) => {
-      // Mock the authenticateWithGitHubPAT GraphQL mutation
+      // Mock all GraphQL so the fake JWT token works through the full flow
       await page.route("**/graphql", async (route) => {
         const body = route.request().postDataJSON();
-        if (body?.query?.includes("authenticateWithGitHubPAT")) {
+        const query = body?.query ?? "";
+        if (query.includes("authenticateWithGitHubPAT")) {
           await route.fulfill({
             contentType: "application/json",
             body: JSON.stringify({
@@ -44,6 +45,31 @@ unauthTest.describe("unauthenticated", () => {
               },
             }),
           });
+        } else if (query.includes("{ me")) {
+          await route.fulfill({
+            contentType: "application/json",
+            body: JSON.stringify({
+              data: {
+                me: {
+                  id: "e2e-test-user",
+                  login: "e2e-tester",
+                  displayName: "E2E Tester",
+                  avatarUrl: null,
+                },
+              },
+            }),
+          });
+        } else if (query.includes("projects")) {
+          await route.fulfill({
+            contentType: "application/json",
+            body: JSON.stringify({
+              data: {
+                projects: [
+                  { id: "fake-project", name: "Fake Project", repository: null },
+                ],
+              },
+            }),
+          });
         } else {
           await route.continue();
         }
@@ -53,18 +79,19 @@ unauthTest.describe("unauthenticated", () => {
       await page.locator('input[type="password"]').fill("ghp_validtokenvalue");
       await page.getByRole("button", { name: "Sign in with PAT" }).click();
 
-      // Should redirect to home page after successful PAT auth
-      await unauthExpect(page).toHaveURL("/");
+      // After successful auth, should navigate away from login to a project board
+      await unauthExpect(page).not.toHaveURL(/\/login/);
     },
   );
 
   unauthTest(
     "PAT login with redirect param navigates to intended page after auth",
     async ({ page }) => {
-      // Mock the authenticateWithGitHubPAT GraphQL mutation
+      // Mock all GraphQL so the fake JWT token works through the full flow
       await page.route("**/graphql", async (route) => {
         const body = route.request().postDataJSON();
-        if (body?.query?.includes("authenticateWithGitHubPAT")) {
+        const query = body?.query ?? "";
+        if (query.includes("authenticateWithGitHubPAT")) {
           await route.fulfill({
             contentType: "application/json",
             body: JSON.stringify({
@@ -78,6 +105,20 @@ unauthTest.describe("unauthenticated", () => {
                     displayName: "E2E Tester",
                     avatarUrl: null,
                   },
+                },
+              },
+            }),
+          });
+        } else if (query.includes("{ me")) {
+          await route.fulfill({
+            contentType: "application/json",
+            body: JSON.stringify({
+              data: {
+                me: {
+                  id: "e2e-test-user",
+                  login: "e2e-tester",
+                  displayName: "E2E Tester",
+                  avatarUrl: null,
                 },
               },
             }),
@@ -99,10 +140,11 @@ unauthTest.describe("unauthenticated", () => {
   unauthTest(
     "PAT login without redirect param navigates to home after auth",
     async ({ page }) => {
-      // Mock the authenticateWithGitHubPAT GraphQL mutation
+      // Mock all GraphQL so the fake JWT token works through the full flow
       await page.route("**/graphql", async (route) => {
         const body = route.request().postDataJSON();
-        if (body?.query?.includes("authenticateWithGitHubPAT")) {
+        const query = body?.query ?? "";
+        if (query.includes("authenticateWithGitHubPAT")) {
           await route.fulfill({
             contentType: "application/json",
             body: JSON.stringify({
@@ -120,6 +162,31 @@ unauthTest.describe("unauthenticated", () => {
               },
             }),
           });
+        } else if (query.includes("{ me")) {
+          await route.fulfill({
+            contentType: "application/json",
+            body: JSON.stringify({
+              data: {
+                me: {
+                  id: "e2e-test-user",
+                  login: "e2e-tester",
+                  displayName: "E2E Tester",
+                  avatarUrl: null,
+                },
+              },
+            }),
+          });
+        } else if (query.includes("projects")) {
+          await route.fulfill({
+            contentType: "application/json",
+            body: JSON.stringify({
+              data: {
+                projects: [
+                  { id: "fake-project", name: "Fake Project", repository: null },
+                ],
+              },
+            }),
+          });
         } else {
           await route.continue();
         }
@@ -129,18 +196,19 @@ unauthTest.describe("unauthenticated", () => {
       await page.locator('input[type="password"]').fill("ghp_validtokenvalue");
       await page.getByRole("button", { name: "Sign in with PAT" }).click();
 
-      // Should redirect to home when no redirect param is present
-      await unauthExpect(page).toHaveURL("/");
+      // After successful auth, should navigate away from login to a project board
+      await unauthExpect(page).not.toHaveURL(/\/login/);
     },
   );
 
   unauthTest(
     "PAT login with malicious redirect navigates to home after auth",
     async ({ page }) => {
-      // Mock the authenticateWithGitHubPAT GraphQL mutation
+      // Mock all GraphQL so the fake JWT token works through the full flow
       await page.route("**/graphql", async (route) => {
         const body = route.request().postDataJSON();
-        if (body?.query?.includes("authenticateWithGitHubPAT")) {
+        const query = body?.query ?? "";
+        if (query.includes("authenticateWithGitHubPAT")) {
           await route.fulfill({
             contentType: "application/json",
             body: JSON.stringify({
@@ -155,6 +223,31 @@ unauthTest.describe("unauthenticated", () => {
                     avatarUrl: null,
                   },
                 },
+              },
+            }),
+          });
+        } else if (query.includes("{ me")) {
+          await route.fulfill({
+            contentType: "application/json",
+            body: JSON.stringify({
+              data: {
+                me: {
+                  id: "e2e-test-user",
+                  login: "e2e-tester",
+                  displayName: "E2E Tester",
+                  avatarUrl: null,
+                },
+              },
+            }),
+          });
+        } else if (query.includes("projects")) {
+          await route.fulfill({
+            contentType: "application/json",
+            body: JSON.stringify({
+              data: {
+                projects: [
+                  { id: "fake-project", name: "Fake Project", repository: null },
+                ],
               },
             }),
           });
@@ -168,8 +261,9 @@ unauthTest.describe("unauthenticated", () => {
       await page.locator('input[type="password"]').fill("ghp_validtokenvalue");
       await page.getByRole("button", { name: "Sign in with PAT" }).click();
 
-      // Malicious redirect should be blocked; fall back to home
-      await unauthExpect(page).toHaveURL("/");
+      // Malicious redirect should be blocked; should not navigate to evil.com
+      await unauthExpect(page).not.toHaveURL(/\/login/);
+      await unauthExpect(page).toHaveURL(/localhost/);
     },
   );
 });
@@ -194,7 +288,7 @@ test.describe("authenticated", () => {
 
     await page.getByRole("button", { name: "Sign out" }).click();
 
-    await expect(page).toHaveURL("/login");
+    await expect(page).toHaveURL(/\/login/);
     await expect(page.locator("h1")).toHaveText("Cadence");
   });
 });

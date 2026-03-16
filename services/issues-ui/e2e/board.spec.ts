@@ -2,11 +2,7 @@ import { test, expect } from "./fixtures/auth";
 
 test.describe("kanban board", () => {
   test.beforeEach(async ({ page }) => {
-    // Pre-select the main test project so board tests are deterministic
-    await page.addInitScript(() => {
-      localStorage.setItem("cadence_project_id", "e2e-test-project");
-    });
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
   });
 
@@ -130,24 +126,23 @@ test.describe("kanban board", () => {
 
 test.describe("project selector", () => {
   test("project selector is visible", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("project-selector")).toBeVisible();
   });
 
   test("default project is auto-selected on first visit", async ({ page }) => {
-    // No cadence_project_id in localStorage — first project alphabetically is selected
+    // Navigating to / should redirect to /projects/:firstProjectId
     await page.goto("/");
+    await page.waitForURL(/\/projects\//);
     const selector = page.getByTestId("project-selector");
     await expect(selector).toBeVisible();
     // "E2E Empty Project" sorts first alphabetically
     await expect(selector).toContainText("E2E Empty Project");
+    await expect(page).toHaveURL(/\/projects\/e2e-test-project-2/);
   });
 
   test("switching projects updates board", async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("cadence_project_id", "e2e-test-project");
-    });
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     // Verify first project tickets are visible
@@ -168,28 +163,20 @@ test.describe("project selector", () => {
     ).not.toBeVisible();
   });
 
-  test("invalid project ID in localStorage redirects to valid project", async ({
+  test("invalid project ID in URL redirects to valid project", async ({
     page,
   }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("cadence_project_id", "nonexistent-id");
-    });
-    await page.goto("/");
+    await page.goto("/projects/nonexistent-id");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     // Should fall back to first valid project alphabetically ("E2E Empty Project" = e2e-test-project-2)
     const selector = page.getByTestId("project-selector");
     await expect(selector).toHaveValue("e2e-test-project-2");
-
-    // localStorage should be updated to the valid project
-    const storedId = await page.evaluate(() =>
-      localStorage.getItem("cadence_project_id"),
-    );
-    expect(storedId).toBe("e2e-test-project-2");
+    await expect(page).toHaveURL(/\/projects\/e2e-test-project-2/);
   });
 
   test("project selection persists across reload", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     // Switch to second project
@@ -199,12 +186,13 @@ test.describe("project selector", () => {
       page.getByTestId("column-BACKLOG").getByText("Other project ticket"),
     ).toBeVisible();
 
-    // Reload and verify second project is still selected
+    // URL should now point to the second project
+    await expect(page).toHaveURL(/\/projects\/e2e-test-project-2/);
+
+    // Reload and verify second project is still selected via URL
     await page.reload();
     await expect(page.getByTestId("kanban-board")).toBeVisible();
-    await expect(page.getByTestId("project-selector")).toHaveValue(
-      "e2e-test-project-2",
-    );
+    await expect(page).toHaveURL(/\/projects\/e2e-test-project-2/);
     await expect(
       page.getByTestId("column-BACKLOG").getByText("Other project ticket"),
     ).toBeVisible();

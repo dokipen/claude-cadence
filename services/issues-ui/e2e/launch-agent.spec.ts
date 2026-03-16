@@ -100,15 +100,12 @@ function openDialog(page: import("@playwright/test").Page) {
 
 test.describe("launch agent dialog", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("cadence_project_id", "e2e-test-project");
-    });
     await setupAgentMocks(page);
     await setupSessionMock(page);
   });
 
   test("ticket card shows launch button", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     const card = page.getByTestId("column-REFINED").getByTestId("ticket-card");
@@ -117,7 +114,7 @@ test.describe("launch agent dialog", () => {
   });
 
   test("launch button opens dialog without navigating", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     const card = page.getByTestId("column-REFINED").getByTestId("ticket-card");
@@ -127,11 +124,11 @@ test.describe("launch agent dialog", () => {
     await expect(openDialog(page)).toBeVisible();
     await expect(openDialog(page)).toContainText("Launch Agent on #2");
     // Should still be on the board, not navigated to detail
-    await expect(page).toHaveURL("/");
+    await expect(page).toHaveURL("/projects/e2e-test-project");
   });
 
   test("dialog shows profiles filtered by repo", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     const card = page.getByTestId("column-REFINED").getByTestId("ticket-card");
@@ -163,7 +160,7 @@ test.describe("launch agent dialog", () => {
       });
     });
 
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     const card = page.getByTestId("column-REFINED").getByTestId("ticket-card");
@@ -179,7 +176,7 @@ test.describe("launch agent dialog", () => {
   });
 
   test("session is created and navigates to agent tab", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     const card = page.getByTestId("column-REFINED").getByTestId("ticket-card");
@@ -196,7 +193,7 @@ test.describe("launch agent dialog", () => {
   });
 
   test("dialog closes on close button click", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     const card = page.getByTestId("column-REFINED").getByTestId("ticket-card");
@@ -211,15 +208,12 @@ test.describe("launch agent dialog", () => {
 
 test.describe("ticket detail agent tab", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("cadence_project_id", "e2e-test-project");
-    });
     await setupAgentMocks(page);
     await setupSessionMock(page);
   });
 
   test("detail page shows Details and Agent tabs", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
@@ -230,7 +224,7 @@ test.describe("ticket detail agent tab", () => {
   });
 
   test("Agent tab shows inline launch control", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
@@ -243,7 +237,7 @@ test.describe("ticket detail agent tab", () => {
   });
 
   test("switching tabs preserves content", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
@@ -264,7 +258,7 @@ test.describe("ticket detail agent tab", () => {
   });
 
   test("navigating to detail with ?tab=agent opens agent tab", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     // First navigate to detail to get a valid ticket ID
@@ -281,16 +275,13 @@ test.describe("ticket detail agent tab", () => {
 
 test.describe("ticket detail terminal", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("cadence_project_id", "e2e-test-project");
-    });
     await setupAgentMocks(page);
   });
 
   test("shows terminal when running session exists", async ({ page }) => {
     await setupSessionMock(page, [MOCK_RUNNING_SESSION]);
 
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
@@ -308,7 +299,7 @@ test.describe("ticket detail terminal", () => {
   test("shows launch control when no session exists", async ({ page }) => {
     await setupSessionMock(page, []);
 
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
@@ -325,7 +316,7 @@ test.describe("ticket detail terminal", () => {
   test("shows launch control when session is stopped", async ({ page }) => {
     await setupSessionMock(page, [{ ...MOCK_SESSION, state: "stopped" }]);
 
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
@@ -339,7 +330,7 @@ test.describe("ticket detail terminal", () => {
   test("terminal header shows session name and agent", async ({ page }) => {
     await setupSessionMock(page, [MOCK_RUNNING_SESSION]);
 
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
@@ -364,7 +355,7 @@ test.describe("ticket detail terminal", () => {
       }
     });
 
-    await page.goto("/");
+    await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
