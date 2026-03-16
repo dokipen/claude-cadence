@@ -41,7 +41,10 @@ while [ $# -gt 0 ]; do
     --force) force=true ;;
     -h|--help) usage; exit 0 ;;
     -*) err "Unknown option: $1" ;;
-    *) vhost="$1" ;;
+    *)
+      [ -n "$vhost" ] && err "Unexpected argument: $1"
+      vhost="$1"
+      ;;
   esac
   shift
 done
