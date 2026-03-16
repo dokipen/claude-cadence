@@ -6,7 +6,7 @@ import (
 )
 
 func TestPortReuse(t *testing.T) {
-	c := NewClient(true, 10000, 5)
+	c := NewClient(true, 10000, 5, "", "")
 
 	// Simulate allocating a port without actually launching a process.
 	// We test the allocation logic directly via the unexported fields.
@@ -27,7 +27,7 @@ func TestPortReuse(t *testing.T) {
 }
 
 func TestPortExhaustion(t *testing.T) {
-	c := NewClient(true, 10000, 2)
+	c := NewClient(true, 10000, 2, "", "")
 
 	// Manually allocate both ports.
 	c.mu.Lock()
@@ -44,7 +44,7 @@ func TestPortExhaustion(t *testing.T) {
 }
 
 func TestPortReusedAfterExhaustion(t *testing.T) {
-	c := NewClient(true, 10000, 1)
+	c := NewClient(true, 10000, 1, "", "")
 
 	// Exhaust the single port.
 	c.mu.Lock()
@@ -70,7 +70,7 @@ func TestPortReusedAfterExhaustion(t *testing.T) {
 }
 
 func TestPortReturnedOnStartFailure(t *testing.T) {
-	c := NewClient(true, 10000, 2)
+	c := NewClient(true, 10000, 2, "", "")
 
 	// Start will fail because "ttyd" binary likely doesn't exist in test env,
 	// or we use a non-existent binary name. Either way, the port should be
@@ -96,7 +96,7 @@ func TestPortReturnedOnStartFailure(t *testing.T) {
 }
 
 func TestDisabledClientNoOps(t *testing.T) {
-	c := NewClient(false, 10000, 5)
+	c := NewClient(false, 10000, 5, "", "")
 
 	url, err := c.Start("s1", "sock", "sess")
 	if err != nil {
@@ -111,7 +111,7 @@ func TestDisabledClientNoOps(t *testing.T) {
 }
 
 func TestConcurrentStartStop(t *testing.T) {
-	c := NewClient(true, 20000, 100)
+	c := NewClient(true, 20000, 100, "", "")
 
 	// We can't actually start ttyd processes in unit tests, so we test
 	// the allocation/free logic directly under concurrent access.

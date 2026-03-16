@@ -87,6 +87,22 @@ describe("Auth", () => {
     });
   });
 
+  describe("login --pat direct (deprecated)", () => {
+    it("should print deprecation warning when a literal token is passed", async () => {
+      const result = await suite.cli("auth", "login", "--pat", "ghp_fake_token");
+      const output = result.stdout + result.stderr;
+      expect(output).toContain("deprecated");
+      expect(output).toContain("--pat -");
+      expect(result.exitCode).not.toBe(0); // fake token fails auth, but warning was printed
+    });
+
+    it("should not print deprecation warning when --pat - is used", async () => {
+      const result = await suite.cliWithStdin("fake-token", "auth", "login", "--pat", "-");
+      const output = result.stdout + result.stderr;
+      expect(output).not.toContain("deprecated");
+    });
+  });
+
   describe("login --code stdin", () => {
     it("should read OAuth code from stdin when --code - is used", async () => {
       const result = await suite.cliWithStdin("fake-oauth-code", "auth", "login", "--code", "-");

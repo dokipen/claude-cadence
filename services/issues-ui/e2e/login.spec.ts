@@ -7,14 +7,14 @@ unauthTest.describe("unauthenticated", () => {
     await unauthExpect(page.locator("h1")).toHaveText("Cadence");
     await unauthExpect(page.locator('input[type="password"]')).toBeVisible();
     await unauthExpect(
-      page.getByRole("button", { name: "Sign in" }),
+      page.getByRole("button", { name: "Sign in with PAT" }),
     ).toBeVisible();
   });
 
   unauthTest("shows error on invalid PAT", async ({ page }) => {
     await page.goto("/login");
     await page.locator('input[type="password"]').fill("invalid-token");
-    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.getByRole("button", { name: "Sign in with PAT" }).click();
     await unauthExpect(page.getByRole("alert")).toHaveText(
       /Authentication failed/,
     );

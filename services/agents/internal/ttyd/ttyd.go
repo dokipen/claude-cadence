@@ -12,12 +12,14 @@ import (
 
 // Client manages ttyd processes for tmux sessions.
 type Client struct {
-	mu        sync.Mutex
-	enabled   bool
-	basePort  int
-	maxPorts  int
-	nextPort  int
-	freePorts []int
+	mu               sync.Mutex
+	enabled          bool
+	basePort         int
+	maxPorts         int
+	bindAddress      string
+	advertiseAddress string
+	nextPort         int
+	freePorts        []int
 	// sessionID -> process info
 	procs map[string]*procInfo
 }
@@ -30,13 +32,23 @@ type procInfo struct {
 // NewClient creates a new ttyd Client.
 // If enabled is false, all operations are no-ops.
 // maxPorts limits the port range to [basePort, basePort+maxPorts).
-func NewClient(enabled bool, basePort, maxPorts int) *Client {
+// bindAddress is the interface ttyd listens on; advertiseAddress is the
+// address reported to external consumers (defaults to bindAddress if empty).
+func NewClient(enabled bool, basePort, maxPorts int, bindAddress, advertiseAddress string) *Client {
+	if bindAddress == "" {
+		bindAddress = "127.0.0.1"
+	}
+	if advertiseAddress == "" {
+		advertiseAddress = bindAddress
+	}
 	return &Client{
-		enabled:  enabled,
-		basePort: basePort,
-		maxPorts: maxPorts,
-		nextPort: basePort,
-		procs:    make(map[string]*procInfo),
+		enabled:          enabled,
+		basePort:         basePort,
+		maxPorts:         maxPorts,
+		bindAddress:      bindAddress,
+		advertiseAddress: advertiseAddress,
+		nextPort:         basePort,
+		procs:            make(map[string]*procInfo),
 	}
 }
 
@@ -64,9 +76,9 @@ func (c *Client) Start(sessionID, tmuxSocketName, tmuxSessionName string) (strin
 	}
 	c.mu.Unlock()
 
-	// ttyd -i 127.0.0.1 -p <port> -W tmux -L <socket> attach-session -t <session>
+	// ttyd -i <bind> -p <port> -W tmux -L <socket> attach-session -t <session>
 	cmd := exec.Command("ttyd",
-		"-i", "127.0.0.1",
+		"-i", c.bindAddress,
 		"-p", fmt.Sprintf("%d", port),
 		"-W",
 		"tmux", "-L", tmuxSocketName, "attach-session", "-t", tmuxSessionName,
@@ -90,7 +102,7 @@ func (c *Client) Start(sessionID, tmuxSocketName, tmuxSessionName string) (strin
 
 	slog.Info("ttyd started", "session", sessionID, "port", port, "pid", cmd.Process.Pid)
 
-	url := fmt.Sprintf("ws://127.0.0.1:%d", port)
+	url := fmt.Sprintf("ws://%s:%d", c.advertiseAddress, port)
 	return url, nil
 }
 
