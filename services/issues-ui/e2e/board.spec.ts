@@ -96,16 +96,16 @@ test.describe("kanban board", () => {
 
   test("card shows blocked badge when blocker is open", async ({ page }) => {
     const refinedColumn = page.getByTestId("column-REFINED");
-    await expect(refinedColumn.getByTestId("blocked-badge")).toBeVisible();
-    await expect(refinedColumn.getByTestId("blocked-badge")).toHaveText("Blocked");
+    const refinedCard = refinedColumn.getByTestId("ticket-card").filter({ hasText: "Refined ticket" });
+    await expect(refinedCard.getByTestId("blocked-badge")).toBeVisible();
+    await expect(refinedCard.getByTestId("blocked-badge")).toHaveText("Blocked");
   });
 
   test("card hides blocked badge when all blockers are closed", async ({ page }) => {
     const backlogColumn = page.getByTestId("column-BACKLOG");
     // Backlog ticket is blocked only by a closed ticket — no badge should appear
-    const backlogCards = backlogColumn.getByTestId("ticket-card");
-    const backlogCard = backlogCards.filter({ hasText: "Backlog ticket" });
-    await expect(backlogCard.getByTestId("blocked-badge")).not.toBeVisible();
+    const backlogCard = backlogColumn.getByTestId("ticket-card").filter({ hasText: "Backlog ticket" });
+    await expect(backlogCard.getByTestId("blocked-badge")).not.toBeAttached();
   });
 
   test("column header shows ticket count", async ({ page }) => {
