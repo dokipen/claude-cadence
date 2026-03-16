@@ -62,6 +62,26 @@ func (v *VaultConfig) ResolveSecretID() string {
 	return v.SecretID
 }
 
+// HubConfig holds optional hub connection settings.
+type HubConfig struct {
+	URL                string        `yaml:"url"`
+	Name               string        `yaml:"name"`
+	Token              string        `yaml:"token"`
+	TokenEnvVar        string        `yaml:"token_env_var"`
+	ReconnectInterval  time.Duration `yaml:"-"`
+	RawReconnect       string        `yaml:"reconnect_interval"`
+}
+
+// ResolveToken returns the hub token, preferring the env var if set.
+func (h *HubConfig) ResolveToken() string {
+	if h.TokenEnvVar != "" {
+		if v := os.Getenv(h.TokenEnvVar); v != "" {
+			return v
+		}
+	}
+	return h.Token
+}
+
 // Config is the top-level agentd configuration.
 type Config struct {
 	Host       string             `yaml:"host"`
@@ -75,6 +95,7 @@ type Config struct {
 	Vault      *VaultConfig       `yaml:"vault"`
 	Reflection bool               `yaml:"reflection"`
 	Cleanup    CleanupConfig      `yaml:"cleanup"`
+	Hub        *HubConfig         `yaml:"hub"`
 }
 
 // CleanupConfig holds stale session cleanup settings.
@@ -92,9 +113,10 @@ type TmuxConfig struct {
 
 // TtydConfig holds ttyd websocket terminal settings.
 type TtydConfig struct {
-	Enabled  bool `yaml:"enabled"`
-	BasePort int  `yaml:"base_port"`
-	MaxPorts int  `yaml:"max_ports"`
+	Enabled          bool   `yaml:"enabled"`
+	BasePort         int    `yaml:"base_port"`
+	MaxPorts         int    `yaml:"max_ports"`
+	AdvertiseAddress string `yaml:"advertise_address"`
 }
 
 // LogConfig holds logging settings.
@@ -167,6 +189,11 @@ func applyDefaults(cfg *Config) {
 	if cfg.Cleanup.RawInterval == "" {
 		cfg.Cleanup.RawInterval = "5m"
 	}
+	if cfg.Hub != nil {
+		if cfg.Hub.RawReconnect == "" {
+			cfg.Hub.RawReconnect = "5s"
+		}
+	}
 }
 
 func parseDurations(cfg *Config) error {
@@ -181,6 +208,15 @@ func parseDurations(cfg *Config) error {
 		return fmt.Errorf("cleanup.check_interval: %w", err)
 	}
 	cfg.Cleanup.CheckInterval = interval
+
+	if cfg.Hub != nil {
+		reconnect, err := time.ParseDuration(cfg.Hub.RawReconnect)
+		if err != nil {
+			return fmt.Errorf("hub.reconnect_interval: %w", err)
+		}
+		cfg.Hub.ReconnectInterval = reconnect
+	}
+
 	return nil
 }
 
@@ -251,6 +287,19 @@ func validate(cfg *Config) error {
 	for name, p := range cfg.Profiles {
 		if p.VaultSecret != "" && cfg.Vault == nil {
 			return fmt.Errorf("profile %q has vault_secret but no vault config", name)
+		}
+	}
+
+	// Validate hub config.
+	if cfg.Hub != nil {
+		if cfg.Hub.URL == "" {
+			return fmt.Errorf("hub.url is required when hub is configured")
+		}
+		if cfg.Hub.Name == "" {
+			return fmt.Errorf("hub.name is required when hub is configured")
+		}
+		if cfg.Hub.Token == "" && cfg.Hub.TokenEnvVar == "" {
+			return fmt.Errorf("hub.token or hub.token_env_var required when hub is configured")
 		}
 	}
 
