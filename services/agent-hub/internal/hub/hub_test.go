@@ -216,3 +216,261 @@ func TestHub_Call_RPCError(t *testing.T) {
 		t.Errorf("expected code %d, got %d", RPCErrNotFound, callErr.RPCError.Code)
 	}
 }
+
+func TestRegister(t *testing.T) {
+	h, url := startTestHub(t)
+
+	// Register a new agent via WebSocket.
+	connectAgent(t, url, "agent-a")
+
+	deadline := time.Now().Add(2 * time.Second)
+	var a1 *ConnectedAgent
+	for time.Now().Before(deadline) {
+		var ok bool
+		a1, ok = h.Get("agent-a")
+		if ok {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if a1 == nil {
+		t.Fatal("expected agent-a to be registered")
+	}
+	if a1.Status() != StatusOnline {
+		t.Errorf("expected status online, got %s", a1.Status())
+	}
+
+	// Get returns the same pointer.
+	got, ok := h.Get("agent-a")
+	if !ok || got != a1 {
+		t.Error("Get returned different pointer than expected")
+	}
+
+	// Re-register with the same name — old connection should be replaced.
+	connectAgent(t, url, "agent-a")
+
+	deadline = time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		second, _ := h.Get("agent-a")
+		if second != nil && second != a1 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	second, _ := h.Get("agent-a")
+	if second == a1 {
+		t.Error("expected re-register to replace the agent")
+	}
+	if second.Status() != StatusOnline {
+		t.Errorf("replacement agent should be online, got %s", second.Status())
+	}
+}
+
+// newTestHubNoReaper creates a Hub for unit tests that do not need the
+// background reaper or real WebSocket connections. Agents registered with
+// nil conns are removed before Stop so that Stop does not panic.
+func newTestHubNoReaper(t *testing.T) *Hub {
+	t.Helper()
+	h := New(30*time.Second, 5*time.Second, 5*time.Minute)
+	h.Start()
+	t.Cleanup(func() {
+		// Remove nil-conn agents to prevent panic in Stop.
+		h.mu.Lock()
+		for name, agent := range h.agents {
+			if agent.Conn() == nil {
+				delete(h.agents, name)
+			}
+		}
+		h.mu.Unlock()
+		h.Stop()
+	})
+	return h
+}
+
+func TestMarkOffline(t *testing.T) {
+	h := newTestHubNoReaper(t)
+
+	params := &RegisterParams{
+		Name:     "agent-b",
+		Profiles: map[string]ProfileInfo{},
+	}
+	h.Register("agent-b", nil, params)
+
+	agent, ok := h.Get("agent-b")
+	if !ok {
+		t.Fatal("agent not found")
+	}
+	if agent.Status() != StatusOnline {
+		t.Fatalf("expected online, got %s", agent.Status())
+	}
+
+	h.MarkOffline("agent-b")
+
+	if agent.Status() != StatusOffline {
+		t.Errorf("expected offline after MarkOffline, got %s", agent.Status())
+	}
+
+	// MarkOffline on unknown agent should not panic.
+	h.MarkOffline("no-such-agent")
+}
+
+func TestList(t *testing.T) {
+	h := newTestHubNoReaper(t)
+
+	// Empty hub returns empty list.
+	if got := h.List(); len(got) != 0 {
+		t.Errorf("expected empty list, got %d items", len(got))
+	}
+
+	h.Register("alpha", nil, &RegisterParams{
+		Name:     "alpha",
+		Profiles: map[string]ProfileInfo{"p1": {Description: "one"}},
+	})
+	h.Register("beta", nil, &RegisterParams{
+		Name:     "beta",
+		Profiles: map[string]ProfileInfo{"p2": {Description: "two"}, "p3": {Description: "three"}},
+	})
+
+	list := h.List()
+	if len(list) != 2 {
+		t.Fatalf("expected 2 agents, got %d", len(list))
+	}
+
+	found := map[string]AgentInfo{}
+	for _, info := range list {
+		found[info.Name] = info
+	}
+
+	if _, ok := found["alpha"]; !ok {
+		t.Error("expected alpha in list")
+	}
+	if _, ok := found["beta"]; !ok {
+		t.Error("expected beta in list")
+	}
+	if found["alpha"].Status != StatusOnline {
+		t.Errorf("expected alpha online, got %s", found["alpha"].Status)
+	}
+	if len(found["beta"].Profiles) != 2 {
+		t.Errorf("expected 2 profiles for beta, got %d", len(found["beta"].Profiles))
+	}
+}
+
+func TestReaper(t *testing.T) {
+	ttl := 50 * time.Millisecond
+	h := New(30*time.Second, 5*time.Second, ttl)
+	h.Start()
+	t.Cleanup(func() {
+		h.mu.Lock()
+		for name, agent := range h.agents {
+			if agent.Conn() == nil {
+				delete(h.agents, name)
+			}
+		}
+		h.mu.Unlock()
+		h.Stop()
+	})
+
+	h.Register("online-agent", nil, &RegisterParams{
+		Name:     "online-agent",
+		Profiles: map[string]ProfileInfo{},
+	})
+	h.Register("offline-agent", nil, &RegisterParams{
+		Name:     "offline-agent",
+		Profiles: map[string]ProfileInfo{},
+	})
+
+	// Mark one agent offline so the reaper targets it.
+	h.MarkOffline("offline-agent")
+
+	// Poll until the offline agent is reaped.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, ok := h.Get("offline-agent"); !ok {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if _, ok := h.Get("offline-agent"); ok {
+		t.Error("expected offline agent to be reaped")
+	}
+	if _, ok := h.Get("online-agent"); !ok {
+		t.Error("expected online agent to survive reaper")
+	}
+}
+
+func TestTerminalSessions(t *testing.T) {
+	h := newTestHubNoReaper(t)
+
+	if got := h.TerminalSessionCount(); got != 0 {
+		t.Fatalf("expected 0 sessions, got %d", got)
+	}
+
+	// Track two sessions.
+	_, cancel1 := context.WithCancel(context.Background())
+	_, cancel2 := context.WithCancel(context.Background())
+	h.TrackTerminalSession("sess-1", cancel1)
+	h.TrackTerminalSession("sess-2", cancel2)
+
+	if got := h.TerminalSessionCount(); got != 2 {
+		t.Errorf("expected 2 sessions, got %d", got)
+	}
+
+	// Untrack one.
+	h.UntrackTerminalSession("sess-1")
+	if got := h.TerminalSessionCount(); got != 1 {
+		t.Errorf("expected 1 session after untrack, got %d", got)
+	}
+
+	// Untrack the other.
+	h.UntrackTerminalSession("sess-2")
+	if got := h.TerminalSessionCount(); got != 0 {
+		t.Errorf("expected 0 sessions after untrack, got %d", got)
+	}
+
+	// Untrack non-existent session should not panic.
+	h.UntrackTerminalSession("no-such-session")
+}
+
+func TestAgentCount(t *testing.T) {
+	h := newTestHubNoReaper(t)
+
+	if got := h.AgentCount(); got != 0 {
+		t.Fatalf("expected 0 agents, got %d", got)
+	}
+	if got := h.OnlineAgentCount(); got != 0 {
+		t.Fatalf("expected 0 online agents, got %d", got)
+	}
+
+	h.Register("a1", nil, &RegisterParams{
+		Name:     "a1",
+		Profiles: map[string]ProfileInfo{},
+	})
+	h.Register("a2", nil, &RegisterParams{
+		Name:     "a2",
+		Profiles: map[string]ProfileInfo{},
+	})
+	h.Register("a3", nil, &RegisterParams{
+		Name:     "a3",
+		Profiles: map[string]ProfileInfo{},
+	})
+
+	if got := h.AgentCount(); got != 3 {
+		t.Errorf("expected 3 agents, got %d", got)
+	}
+	if got := h.OnlineAgentCount(); got != 3 {
+		t.Errorf("expected 3 online agents, got %d", got)
+	}
+
+	// Mark two offline.
+	h.MarkOffline("a1")
+	h.MarkOffline("a3")
+
+	if got := h.AgentCount(); got != 3 {
+		t.Errorf("expected 3 total agents after marking offline, got %d", got)
+	}
+	if got := h.OnlineAgentCount(); got != 1 {
+		t.Errorf("expected 1 online agent, got %d", got)
+	}
+}
