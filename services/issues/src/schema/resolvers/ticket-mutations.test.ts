@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import type { User } from "@prisma/client";
 
 process.env.JWT_SECRET = "test-secret-for-unit-tests";
 
