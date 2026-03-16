@@ -67,7 +67,7 @@ jobs:
       - run: npm test
       - run: npm run build
       - name: Upload issues service build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: issues-service-build
           path: |
@@ -93,7 +93,7 @@ jobs:
           cache: 'npm'
           cache-dependency-path: services/issues-cli/package-lock.json
       - name: Download issues service build
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: issues-service-build
           path: services/issues/
