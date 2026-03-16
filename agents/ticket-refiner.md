@@ -75,14 +75,16 @@ After refinement with `issues-api`, transition the ticket state from `BACKLOG` t
 
 ## Estimate Scale
 
-| Label | Description | Time |
-|-------|-------------|------|
-| estimate:1 | Very small — trivial | <1 hour |
-| estimate:2 | Small — simple | Few hours |
-| estimate:3 | Medium-small — straightforward | Half day |
-| estimate:5 | Medium — moderate complexity | 1 day |
-| estimate:8 | Large — significant work | 2-3 days |
-| estimate:13 | Very large — break down | 1 week |
+| Points | Description | Time |
+|--------|-------------|------|
+| 1 | Very small — trivial | <1 hour |
+| 2 | Small — simple | Few hours |
+| 3 | Medium-small — straightforward | Half day |
+| 5 | Medium — moderate complexity | 1 day |
+| 8 | Large — significant work | 2-3 days |
+| 13 | Very large — break down | 1 week |
+
+GitHub uses labels (`estimate:5`). Issues API uses the native story points field (`--points 5`).
 
 ## Priority Scale
 
@@ -115,12 +117,12 @@ When assessing priority, consider: Does this block other work? Is there a securi
 ### Checklist
 - [x] Clear title
 - [x] Acceptance criteria present
-- [ ] Estimate label: MISSING
+- [ ] Estimate: MISSING
 - [x] Type label: enhancement
 ...
 
 ### Issues Found
-1. **Missing estimate** - Recommend: estimate:3
+1. **Missing estimate** - GitHub: Recommend `estimate:3` label. Issues API: Recommend `--points 3`.
 
 ### Suggested Fixes
 [provider-appropriate CLI commands to apply fixes]
