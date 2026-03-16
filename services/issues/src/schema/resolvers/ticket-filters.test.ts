@@ -163,7 +163,7 @@ describe("tickets — sort order by state", () => {
     await tickets(undefined, { state: "CLOSED" }, ctx);
 
     const call = ctx.prisma.ticket.findMany.mock.calls[0][0];
-    expect(call.orderBy).toEqual({ updatedAt: "desc" });
+    expect(call.orderBy).toEqual([{ updatedAt: "desc" }, { id: "asc" }]);
   });
 
   it("uses createdAt asc for non-CLOSED states", async () => {
