@@ -176,14 +176,14 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 For each task from the Phase 1 breakdown, delegate to an agent:
 
 1. **Choose the right agent for each task:**
-   - `general-purpose` agent for implementation tasks (feature code, refactoring, configuration changes)
+   - `general-purpose` agent (a built-in Agent tool type, not a custom agent definition) for implementation tasks (feature code, refactoring, configuration changes)
    - `tester` for writing or updating tests
    - Other specialists for domain-specific work matching their expertise
 2. **Assign clear file-ownership boundaries** — no two agents modify the same file in the same phase. If overlap is needed, sequence the tasks.
-3. **Parallelize independent tasks** — launch concurrent Agent tool calls for tasks with no dependencies between them
+3. **Parallelize independent tasks** — launch concurrent Agent tool calls for tasks with no dependencies between them. Limit to 3–4 concurrent agents to avoid write contention.
 4. **Sequence dependent tasks** — wait for one agent to complete before starting the next when outputs feed into subsequent work
 5. **Use the Delegation Template** (see Coordination Protocol below) for every delegation — include worktree path, issue context, scope, constraints, expected output, and completion signal
-6. **Verify after each completed task** using the project's verification command (from CLAUDE.md)
+6. **Verify incrementally** after each completed task using the project's verification command (from CLAUDE.md). This catches issues early; Phase 3 runs the full verification as the final gate before PR creation.
 7. For bug fixes: the fix should make the reproduction test pass
 
 ### Phase 3: Pre-PR Verification
