@@ -60,3 +60,45 @@ func TestValidateAdvertiseAddress(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateProfileRepo(t *testing.T) {
+	tests := []struct {
+		name    string
+		repo    string
+		wantErr bool
+	}{
+		// Empty string: repo not specified, always valid.
+		{name: "empty string", repo: "", wantErr: false},
+
+		// Valid http/https URLs.
+		{name: "valid https URL", repo: "https://github.com/org/repo", wantErr: false},
+		{name: "valid http URL", repo: "http://github.com/org/repo", wantErr: false},
+		{name: "https with port", repo: "https://git.example.com:8443/repo", wantErr: false},
+		{name: "https with path and query", repo: "https://github.com/org/repo?tab=readme", wantErr: false},
+
+		// Plain strings (no scheme).
+		{name: "plain word", repo: "not-a-url", wantErr: true},
+		{name: "plain words with spaces", repo: "not a url", wantErr: true},
+
+		// Bare hostname without scheme.
+		{name: "bare hostname", repo: "github.com/org/repo", wantErr: true},
+
+		// Non-http schemes.
+		{name: "ftp scheme", repo: "ftp://files.example.com/repo", wantErr: true},
+		{name: "ssh scheme", repo: "ssh://git@github.com/org/repo", wantErr: true},
+		{name: "git scheme", repo: "git://github.com/org/repo.git", wantErr: true},
+		{name: "file scheme", repo: "file:///tmp/repo", wantErr: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateProfileRepo(tc.repo)
+			if tc.wantErr && err == nil {
+				t.Errorf("ValidateProfileRepo(%q) = nil, want error", tc.repo)
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("ValidateProfileRepo(%q) = %v, want nil", tc.repo, err)
+			}
+		})
+	}
+}
