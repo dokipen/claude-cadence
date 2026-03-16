@@ -479,7 +479,7 @@ type templateData struct {
 	SessionID    string // Shell-escaped in renderCommand.
 	SessionName  string // Safe without escaping: validated to [a-zA-Z0-9_-] by tmuxNameRe.
 	ExtraArgs    string // Shell-escaped via shellJoinArgs in renderCommand.
-	WorktreePath string // Shell-escaped in renderCommand.
+	WorktreePath string // Shell-escaped in renderCommand when non-empty; empty string when unset.
 }
 
 func (m *Manager) renderCommand(cmdTemplate string, sess *Session, extraArgs []string) (string, error) {
@@ -488,11 +488,19 @@ func (m *Manager) renderCommand(cmdTemplate string, sess *Session, extraArgs []s
 		return "", fmt.Errorf("parsing command template: %w", err)
 	}
 
+	// Leave WorktreePath as empty string (not shell-escaped '\'') when unset,
+	// so template conditionals like {{if .WorktreePath}} work correctly and
+	// commands don't receive a spurious empty-string argument.
+	worktreePath := ""
+	if sess.WorktreePath != "" {
+		worktreePath = shellEscapeArg(sess.WorktreePath)
+	}
+
 	data := templateData{
 		SessionID:    shellEscapeArg(sess.ID),
 		SessionName:  sess.Name,
 		ExtraArgs:    shellJoinArgs(extraArgs),
-		WorktreePath: shellEscapeArg(sess.WorktreePath),
+		WorktreePath: worktreePath,
 	}
 
 	var buf bytes.Buffer

@@ -64,13 +64,32 @@ func TestRenderCommand(t *testing.T) {
 			want: "cmd --cwd '/path/$(evil)/dir'",
 		},
 		{
-			name:     "empty WorktreePath produces empty quoted string",
+			name:     "empty WorktreePath produces empty string not quoted",
 			template: "cmd --cwd {{.WorktreePath}}",
 			sess: &Session{
 				ID:   "test-id",
 				Name: "test-name",
 			},
-			want: "cmd --cwd ''",
+			want: "cmd --cwd ",
+		},
+		{
+			name:     "empty WorktreePath with conditional template omits flag",
+			template: "cmd{{if .WorktreePath}} --cwd {{.WorktreePath}}{{end}}",
+			sess: &Session{
+				ID:   "test-id",
+				Name: "test-name",
+			},
+			want: "cmd",
+		},
+		{
+			name:     "non-empty WorktreePath with conditional template includes flag",
+			template: "cmd{{if .WorktreePath}} --cwd {{.WorktreePath}}{{end}}",
+			sess: &Session{
+				ID:           "test-id",
+				Name:         "test-name",
+				WorktreePath: "/some/path",
+			},
+			want: "cmd --cwd '/some/path'",
 		},
 		{
 			name:     "SessionID is escaped",
