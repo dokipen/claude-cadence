@@ -15,7 +15,6 @@ profiles:
   sleeper:
     command: "sleep 3600"
     description: "Long-running sleep process"
-    repo: "https://github.com/test/repo"
   fast-exit:
     command: "true"
     description: "Exits immediately with status 0"
