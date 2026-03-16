@@ -146,22 +146,6 @@ jobs:
       - name: Run e2e tests
         working-directory: services/agents
         run: go test -v -count=1 -timeout 120s ./test/e2e/
-      - name: Cleanup workspace
-        if: always()
-        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
-
-  agent-service-build:
-    needs: [changes, agent-service-test]
-    if: needs.changes.outputs.agent-service == 'true'
-    # fork → ubuntu-latest; internal → self-hosted (see SECURITY comment above)
-    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          clean: true
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: services/agents/go.mod
       - name: Build agentd
         working-directory: services/agents
         run: go build -o agentd ./cmd/agentd
@@ -177,7 +161,6 @@ jobs:
       - issues-cli-test
       - issues-service-docker
       - agent-service-test
-      - agent-service-build
     runs-on: ubuntu-latest
     steps:
       - name: Check CI status
@@ -187,17 +170,15 @@ jobs:
           ISSUES_CLI: ${{ needs.issues-cli-test.result }}
           ISSUES_DOCKER: ${{ needs.issues-service-docker.result }}
           AGENT_TEST: ${{ needs.agent-service-test.result }}
-          AGENT_BUILD: ${{ needs.agent-service-build.result }}
         run: |
           echo "Changes:        $CHANGES"
           echo "Issues service: $ISSUES_TEST"
           echo "Issues CLI:     $ISSUES_CLI"
           echo "Issues Docker:  $ISSUES_DOCKER"
           echo "Agent service:  $AGENT_TEST"
-          echo "Agent build:    $AGENT_BUILD"
 
           # Fail if any job failed or was cancelled (skipped is OK — means path filter excluded it)
-          for result in "$CHANGES" "$ISSUES_TEST" "$ISSUES_CLI" "$ISSUES_DOCKER" "$AGENT_TEST" "$AGENT_BUILD"; do
+          for result in "$CHANGES" "$ISSUES_TEST" "$ISSUES_CLI" "$ISSUES_DOCKER" "$AGENT_TEST"; do
             if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
               echo "::error::One or more CI jobs failed or were cancelled"
               exit 1
