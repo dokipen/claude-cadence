@@ -9,6 +9,7 @@ function makeMockContext(findManyResult: unknown[] = []) {
     prisma: {
       ticket: {
         findMany: vi.fn().mockResolvedValue(findManyResult),
+        count: vi.fn().mockResolvedValue(0),
       },
     } as any,
     loaders: {} as any,
