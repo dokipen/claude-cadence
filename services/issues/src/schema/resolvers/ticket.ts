@@ -17,7 +17,14 @@ const MAX_PAGE_SIZE = 100;
 export const ticketResolvers = {
   Query: {
     ticket: async (_: unknown, { id }: { id: string }, { prisma }: Context) => {
-      return prisma.ticket.findUnique({ where: { id } });
+      try {
+        return await prisma.ticket.findUnique({ where: { id } });
+      } catch (error) {
+        console.error("ticket query failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to fetch ticket", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
 
     ticketByNumber: async (
@@ -25,9 +32,16 @@ export const ticketResolvers = {
       { projectId, number }: { projectId: string; number: number },
       { prisma }: Context
     ) => {
-      return prisma.ticket.findUnique({
-        where: { projectId_number: { projectId, number } },
-      });
+      try {
+        return await prisma.ticket.findUnique({
+          where: { projectId_number: { projectId, number } },
+        });
+      } catch (error) {
+        console.error("ticketByNumber query failed:", error instanceof Error ? error.message : String(error));
+        throw new GraphQLError("Failed to fetch ticket by number", {
+          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        });
+      }
     },
 
     tickets: async (
