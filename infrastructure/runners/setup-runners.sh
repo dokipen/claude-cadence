@@ -338,7 +338,7 @@ teardown_excess_runners() {
 
     if [[ -d "$BASE_DIR" ]]; then
         while IFS= read -r dir; do
-            local index="${dir##*-}"
+            local index="${dir##*actions-runner-${REPO_NAME}-}"
             if [[ "$index" =~ ^[0-9]+$ ]] && [[ "$index" -gt "$COUNT" ]]; then
                 excess_dirs+=("$dir")
             fi
@@ -560,7 +560,11 @@ main() {
     echo
     info "Setup complete! $COUNT runner(s) registered for $REPO."
     if [[ "$TORN_DOWN_COUNT" -gt 0 ]]; then
-        info "Torn down $TORN_DOWN_COUNT excess runner(s)."
+        if [[ "$DRY_RUN" == "true" ]]; then
+            info "Would tear down $TORN_DOWN_COUNT excess runner(s)."
+        else
+            info "Torn down $TORN_DOWN_COUNT excess runner(s)."
+        fi
     fi
     info ""
     info "Summary:"
