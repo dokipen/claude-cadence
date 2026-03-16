@@ -110,10 +110,13 @@ func TestHandleListAgents(t *testing.T) {
 			t.Errorf("accept ws: %v", err)
 			return
 		}
-		h.Register("test-agent", conn, &hub.RegisterParams{
+		if _, err := h.Register("test-agent", conn, &hub.RegisterParams{
 			Name:     "test-agent",
 			Profiles: map[string]hub.ProfileInfo{"default": {Description: "test"}},
-		})
+		}); err != nil {
+			t.Errorf("Register: %v", err)
+			return
+		}
 		// Keep connection open until test ends.
 		<-r.Context().Done()
 	}))

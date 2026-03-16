@@ -46,7 +46,11 @@ func startTestHub(t *testing.T, mockTtydAddr string) (*hub.Hub, string) {
 		respData, _ := json.Marshal(resp)
 		conn.Write(r.Context(), websocket.MessageText, respData)
 
-		agent := h.Register(params.Name, conn, &params)
+		agent, err := h.Register(params.Name, conn, &params)
+		if err != nil {
+			conn.Close(websocket.StatusPolicyViolation, err.Error())
+			return
+		}
 		h.HandleAgentConnection(r.Context(), agent)
 	}))
 	t.Cleanup(srv.Close)

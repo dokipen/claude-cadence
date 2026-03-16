@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -11,6 +12,10 @@ import (
 	"github.com/coder/websocket"
 	"github.com/google/uuid"
 )
+
+// ErrAdvertiseAddressChanged is returned when a re-registering agent attempts
+// to change its AdvertiseAddress.
+var ErrAdvertiseAddressChanged = errors.New("advertise address changed on re-registration")
 
 // MaxMessageSize is the maximum allowed WebSocket message size (64 KiB).
 const MaxMessageSize = 64 * 1024
@@ -119,12 +124,22 @@ func (h *Hub) OnlineAgentCount() int {
 }
 
 // Register adds or re-registers an agent. If an agent with the same name
-// already exists, the old connection is closed and replaced.
-func (h *Hub) Register(name string, conn *websocket.Conn, params *RegisterParams) *ConnectedAgent {
+// already exists, the old connection is closed and replaced — but only if
+// the AdvertiseAddress has not changed. A changed AdvertiseAddress is
+// rejected with ErrAdvertiseAddressChanged.
+func (h *Hub) Register(name string, conn *websocket.Conn, params *RegisterParams) (*ConnectedAgent, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	if existing, ok := h.agents[name]; ok {
+		if params.Ttyd.AdvertiseAddress != existing.TtydConfig.AdvertiseAddress {
+			slog.Warn("rejecting re-registration: AdvertiseAddress changed",
+				"agent", name,
+				"existing", existing.TtydConfig.AdvertiseAddress,
+				"requested", params.Ttyd.AdvertiseAddress,
+			)
+			return nil, ErrAdvertiseAddressChanged
+		}
 		slog.Warn("replacing existing agent connection", "agent", name)
 		existing.Conn().Close(websocket.StatusGoingAway, "replaced by new connection")
 	}
@@ -132,7 +147,7 @@ func (h *Hub) Register(name string, conn *websocket.Conn, params *RegisterParams
 	agent := NewConnectedAgent(name, conn, params)
 	h.agents[name] = agent
 	slog.Info("agent registered", "agent", name, "profiles", len(params.Profiles))
-	return agent
+	return agent, nil
 }
 
 // MarkOffline sets an agent's status to offline without removing it.

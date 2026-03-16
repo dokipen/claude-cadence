@@ -276,13 +276,24 @@ func handleAgentWebSocket(h *hub.Hub, agentToken string) http.HandlerFunc {
 			return
 		}
 
-		// Send registration acknowledgment.
-		resp, err := hub.NewResponse(req.ID, &hub.RegisterResult{Accepted: true})
-		if err != nil {
-			slog.Error("failed to create register response", "error", err)
-			conn.Close(websocket.StatusInternalError, "internal error")
-			return
+		// Attempt registration before sending the acknowledgment so we can
+		// reject agents that try to change their AdvertiseAddress.
+		agent, regErr := h.Register(params.Name, conn, &params)
+
+		// Build the response based on whether registration succeeded.
+		var resp *hub.Response
+		if regErr != nil {
+			slog.Warn("agent registration rejected", "agent", params.Name, "error", regErr)
+			resp = hub.NewErrorResponse(req.ID, hub.RPCErrFailedPrecondition, "registration rejected")
+		} else {
+			resp, err = hub.NewResponse(req.ID, &hub.RegisterResult{Accepted: true})
+			if err != nil {
+				slog.Error("failed to create register response", "error", err)
+				conn.Close(websocket.StatusInternalError, "internal error")
+				return
+			}
 		}
+
 		respData, err := json.Marshal(resp)
 		if err != nil {
 			slog.Error("failed to marshal register response", "error", err)
@@ -294,7 +305,11 @@ func handleAgentWebSocket(h *hub.Hub, agentToken string) http.HandlerFunc {
 			return
 		}
 
-		agent := h.Register(params.Name, conn, &params)
+		if regErr != nil {
+			conn.Close(websocket.StatusPolicyViolation, "registration rejected")
+			return
+		}
+
 		slog.Info("agent connected via websocket", "agent", params.Name)
 
 		// Block handling messages until the connection closes.
