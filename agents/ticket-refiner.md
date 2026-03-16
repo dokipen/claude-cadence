@@ -106,6 +106,42 @@ When assessing priority, consider: Does this block other work? Is there a securi
 4. **Evaluate acceptance criteria quality** — specific, testable, checkbox format?
 5. **Evaluate title** — clear and descriptive?
 6. **Check blockers** — GitHub: linked via dependencies API? Issues API: check Blocked By section?
+7. **Ensure assignment** — if the ticket has no assignee, assign it before marking refined (see "Assignment" below)
+
+## Assignment
+
+During refinement, every ticket **must** be assigned before transitioning to the REFINED state. If the `assignee` field is empty, assign the ticket using the steps below.
+
+### Determining the assignee
+
+1. **If the ticket description or context names a developer**, assign to that person
+2. **Otherwise, assign to the current authenticated user** as the default owner:
+
+   **GitHub:**
+   ```bash
+   CURRENT_USER=$(gh api user --jq '.login')
+   ```
+
+   **Issues API:**
+   ```bash
+   CURRENT_USER_ID=$(issues auth whoami --json | jq -r '.id')
+   ```
+
+### Applying the assignment
+
+**GitHub:**
+```bash
+gh issue edit N --add-assignee "$CURRENT_USER"
+```
+
+**Issues API:**
+```bash
+issues assign TICKET_ID --user "$CURRENT_USER_ID" --json
+```
+
+### When assignment is unclear
+
+If you cannot determine the correct assignee (e.g., multiple candidates and no clear signal), **ask the user for clarification** rather than leaving the ticket unassigned. Include the list of candidates if known.
 
 ## Output Format
 
