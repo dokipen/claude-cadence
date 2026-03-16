@@ -269,6 +269,13 @@ func handleAgentWebSocket(h *hub.Hub, agentToken string) http.HandlerFunc {
 			return
 		}
 
+		if err := hub.ValidateAdvertiseAddress(params.Ttyd.AdvertiseAddress); err != nil {
+			slog.Warn("rejecting agent registration: invalid advertise address",
+				"agent", params.Name, "address", params.Ttyd.AdvertiseAddress, "error", err)
+			conn.Close(websocket.StatusPolicyViolation, err.Error())
+			return
+		}
+
 		// Send registration acknowledgment.
 		resp, err := hub.NewResponse(req.ID, &hub.RegisterResult{Accepted: true})
 		if err != nil {

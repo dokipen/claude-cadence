@@ -435,3 +435,60 @@ func TestIntegration_MultipleAgents(t *testing.T) {
 		t.Fatalf("expected 3 agents, got %d", len(body["agents"]))
 	}
 }
+
+func TestIntegration_RejectLoopbackAdvertiseAddress(t *testing.T) {
+	apiToken := "api-tok"
+	agentToken := "agent-tok"
+	cfg := testConfig(apiToken, agentToken)
+
+	_, baseURL := startIntegrationServer(t, cfg)
+
+	wsURL := "ws" + strings.TrimPrefix(baseURL, "http") + "/ws/agent"
+	ctx := context.Background()
+
+	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+		HTTPHeader: http.Header{
+			"Authorization": {"Bearer " + agentToken},
+		},
+	})
+	if err != nil {
+		t.Fatalf("dial hub: %v", err)
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "test done")
+
+	// Send a register message with a loopback advertise address.
+	regReq, _ := hub.NewRequest("reg-bad", "register", &hub.RegisterParams{
+		Name: "bad-agent",
+		Ttyd: hub.TtydInfo{AdvertiseAddress: "127.0.0.1", BasePort: 7681},
+	})
+	data, _ := json.Marshal(regReq)
+	if err := conn.Write(ctx, websocket.MessageText, data); err != nil {
+		t.Fatalf("write register: %v", err)
+	}
+
+	// The hub should close the connection — any read must return an error.
+	_, _, readErr := conn.Read(ctx)
+	if readErr == nil {
+		t.Fatal("expected connection to be closed after loopback address rejection, but read succeeded")
+	}
+
+	// Verify the agent did NOT end up in the hub's agent list.
+	req, _ := http.NewRequest("GET", baseURL+"/api/v1/agents", nil)
+	req.Header.Set("Authorization", "Bearer "+apiToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("list agents: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 from /agents, got %d", resp.StatusCode)
+	}
+
+	var body map[string][]json.RawMessage
+	json.NewDecoder(resp.Body).Decode(&body)
+	if len(body["agents"]) != 0 {
+		t.Fatalf("expected 0 agents after loopback rejection, got %d", len(body["agents"]))
+	}
+}
