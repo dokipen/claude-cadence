@@ -152,6 +152,12 @@ export function registerAuthCommand(program: Command): void {
           setAuthTokens(result.token, result.refreshToken);
           spinner.succeed(`Authenticated as ${chalk.bold(result.user.login)} (${result.user.displayName})`);
         } else if (options.code) {
+          if (options.code !== "-") {
+            console.error(chalk.yellow(
+              "Warning: passing a code directly via --code <code> is deprecated (exposes code in shell history and process list).\n" +
+              "  Use instead: issues auth login --code -  (reads from stdin)"
+            ));
+          }
           const code = options.code === "-" ? await readStdin() : options.code.trim();
           if (!code) {
             console.error(chalk.red("Error: no code received from stdin"));
