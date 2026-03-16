@@ -184,6 +184,20 @@ describe("Ticket Management", () => {
     expect(viewResult.stdout).toContain("Updated title");
   });
 
+  it("should update a ticket's description using --body alias", async () => {
+    const result = await suite.cli(
+      "ticket", "update", createdTicketId,
+      "--body", "Description via body update"
+    );
+    expect(result.exitCode).toBe(0);
+
+    const output = result.stdout + result.stderr;
+    expect(output).toContain("Ticket updated");
+
+    const viewResult = await suite.cli("ticket", "view", createdTicketId);
+    expect(viewResult.stdout).toContain("Description via body update");
+  });
+
   it("should update a ticket's description and acceptance criteria", async () => {
     const result = await suite.cli(
       "ticket", "update", createdTicketId,
