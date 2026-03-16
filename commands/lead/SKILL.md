@@ -127,6 +127,8 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 | Pre-PR (research, planning, implementation) | Ticket | `gh issue comment [N] --body "..."` | `issues comment add TICKET_ID --body "..." --json` |
 | Post-PR (code review, QA feedback) | GitHub PR | `gh pr review [N] --comment --body "..."` | `gh pr review [N] --comment --body "..."` |
 
+**Markdown formatting:** All comments (issue and PR) are rendered as markdown. Use markdown links `[text](url)` instead of bare URLs, code fences for file names and code references, and bold/lists for structure.
+
 ---
 
 ## Workflow Phases

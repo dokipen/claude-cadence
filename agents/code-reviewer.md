@@ -106,6 +106,8 @@ Example in review output:
 
 **IMPORTANT:** Do NOT use GitHub's approval system (`gh pr review --approve` or `--request-changes`). All review feedback and approval status must be posted as comments.
 
+**Markdown formatting:** Review comments are rendered as markdown. Use markdown links `[text](url)` instead of bare URLs, code fences for file names and code references, and bold/lists for structure.
+
 **Always use:**
 ```bash
 gh pr review [PR-NUMBER] --comment --body "..."
