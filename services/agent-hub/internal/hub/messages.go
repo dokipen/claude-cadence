@@ -94,6 +94,17 @@ const (
 	RPCErrInternal           = -32000
 )
 
+// GetTerminalEndpointParams is sent by the hub to request the ttyd address for a session.
+type GetTerminalEndpointParams struct {
+	SessionID string `json:"session_id"`
+}
+
+// GetTerminalEndpointResult contains the ttyd endpoint for a session.
+type GetTerminalEndpointResult struct {
+	Address string `json:"address"`
+	Port    int    `json:"port"`
+}
+
 // NewErrorResponse creates a JSON-RPC 2.0 error response.
 func NewErrorResponse(id string, code int, message string) *Response {
 	return &Response{

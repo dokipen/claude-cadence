@@ -10,6 +10,7 @@ import (
 
 	"github.com/dokipen/claude-cadence/services/agent-hub/internal/config"
 	"github.com/dokipen/claude-cadence/services/agent-hub/internal/hub"
+	"github.com/dokipen/claude-cadence/services/agent-hub/internal/proxy"
 )
 
 // Server is the HTTP server for the agent-hub REST API.
@@ -34,6 +35,7 @@ func New(h *hub.Hub, cfg *config.Config) *Server {
 	apiMux.HandleFunc("GET /api/v1/agents/{name}/sessions", handleListSessions(h))
 	apiMux.HandleFunc("GET /api/v1/agents/{name}/sessions/{id}", handleGetSession(h))
 	apiMux.HandleFunc("DELETE /api/v1/agents/{name}/sessions/{id}", handleDestroySession(h))
+	apiMux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", proxy.HandleTerminalProxy(h))
 
 	var apiHandler http.Handler = apiMux
 	if cfg.Auth.Mode == "token" {
@@ -41,6 +43,7 @@ func New(h *hub.Hub, cfg *config.Config) *Server {
 		apiHandler = tokenAuth(apiToken)(apiMux)
 	}
 	mux.Handle("/api/v1/", apiHandler)
+	mux.Handle("/ws/terminal/", apiHandler)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 
