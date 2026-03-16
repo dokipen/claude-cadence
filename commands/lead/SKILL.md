@@ -171,10 +171,20 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 
 ### Phase 2: Implementation
 
-1. Delegate to appropriate specialists in dependency order
-2. For bug fixes: the fix should make the reproduction test pass
-3. Avoid conflicts: each task works on different files
-4. Verify after each change using the project's verification command (from CLAUDE.md)
+**The lead orchestrates — it does NOT write implementation code directly.**
+
+For each task from the Phase 1 breakdown, delegate to an agent:
+
+1. **Choose the right agent for each task:**
+   - `general-purpose` agent for implementation tasks (feature code, refactoring, configuration changes)
+   - `tester` for writing or updating tests
+   - Other specialists for domain-specific work matching their expertise
+2. **Assign clear file-ownership boundaries** — no two agents modify the same file in the same phase. If overlap is needed, sequence the tasks.
+3. **Parallelize independent tasks** — launch concurrent Agent tool calls for tasks with no dependencies between them
+4. **Sequence dependent tasks** — wait for one agent to complete before starting the next when outputs feed into subsequent work
+5. **Use the Delegation Template** (see Coordination Protocol below) for every delegation — include worktree path, issue context, scope, constraints, expected output, and completion signal
+6. **Verify after each completed task** using the project's verification command (from CLAUDE.md)
+7. For bug fixes: the fix should make the reproduction test pass
 
 ### Phase 3: Pre-PR Verification
 
