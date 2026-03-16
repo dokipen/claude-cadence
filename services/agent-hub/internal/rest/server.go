@@ -49,7 +49,7 @@ func New(h *hub.Hub, cfg *config.Config) *Server {
 			Addr:         addr,
 			Handler:      mux,
 			ReadTimeout:  10 * time.Second,
-			WriteTimeout: 10 * time.Second,
+			WriteTimeout: 35 * time.Second, // Must exceed rpcCallTimeout (30s)
 		},
 		addr: addr,
 	}

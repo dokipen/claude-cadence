@@ -2,6 +2,7 @@ package hub
 
 import (
 	"encoding/json"
+	"log/slog"
 	"time"
 
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
@@ -193,7 +194,8 @@ func stateString(s session.SessionState) string {
 func mapSessionError(err error) *rpcError {
 	sessErr, ok := err.(*session.Error)
 	if !ok {
-		return &rpcError{Code: rpcErrInternal, Message: err.Error()}
+		slog.Error("unexpected session error", "error", err)
+		return &rpcError{Code: rpcErrInternal, Message: "internal error"}
 	}
 	switch sessErr.Code {
 	case session.ErrNotFound:

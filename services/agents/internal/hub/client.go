@@ -33,6 +33,7 @@ type Client struct {
 
 	mu      sync.Mutex
 	conn    *websocket.Conn
+	writeMu sync.Mutex // protects concurrent WebSocket writes
 	cancel  context.CancelFunc
 	done    chan struct{}
 }
@@ -190,32 +191,53 @@ func (c *Client) readLoop(ctx context.Context, conn *websocket.Conn) error {
 			continue
 		}
 
-		var resp *response
 		switch req.Method {
 		case "ping":
-			resp, _ = newResponse(req.ID, pongResult{Pong: true})
+			resp, _ := newResponse(req.ID, pongResult{Pong: true})
+			if err := c.writeResponse(ctx, conn, resp); err != nil {
+				return err
+			}
 
-		case "createSession":
-			resp = c.dispatchSession(req.ID, req.Params, c.dispatcher.CreateSession)
-		case "getSession":
-			resp = c.dispatchSession(req.ID, req.Params, c.dispatcher.GetSession)
-		case "listSessions":
-			resp = c.dispatchSession(req.ID, req.Params, c.dispatcher.ListSessions)
-		case "destroySession":
-			resp = c.dispatchSession(req.ID, req.Params, c.dispatcher.DestroySession)
+		case "createSession", "getSession", "listSessions", "destroySession":
+			// Dispatch asynchronously so long-running operations (e.g., git clone)
+			// don't block the read loop from responding to heartbeat pings.
+			go c.dispatchSessionAsync(ctx, conn, req)
 
 		default:
 			slog.Debug("unhandled hub method", "method", req.Method)
-			continue
-		}
-
-		if resp != nil {
-			respData, _ := json.Marshal(resp)
-			if err := conn.Write(ctx, websocket.MessageText, respData); err != nil {
-				return fmt.Errorf("write response: %w", err)
-			}
 		}
 	}
+}
+
+// dispatchSessionAsync dispatches a session method and writes the response.
+func (c *Client) dispatchSessionAsync(ctx context.Context, conn *websocket.Conn, req request) {
+	var fn func(json.RawMessage) (json.RawMessage, *rpcError)
+	switch req.Method {
+	case "createSession":
+		fn = c.dispatcher.CreateSession
+	case "getSession":
+		fn = c.dispatcher.GetSession
+	case "listSessions":
+		fn = c.dispatcher.ListSessions
+	case "destroySession":
+		fn = c.dispatcher.DestroySession
+	}
+
+	resp := c.dispatchSession(req.ID, req.Params, fn)
+	if err := c.writeResponse(ctx, conn, resp); err != nil {
+		slog.Warn("failed to write dispatch response", "method", req.Method, "error", err)
+	}
+}
+
+// writeResponse serializes and writes a response, protected by the write mutex.
+func (c *Client) writeResponse(ctx context.Context, conn *websocket.Conn, resp *response) error {
+	respData, _ := json.Marshal(resp)
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	if err := conn.Write(ctx, websocket.MessageText, respData); err != nil {
+		return fmt.Errorf("write response: %w", err)
+	}
+	return nil
 }
 
 // dispatchSession calls a SessionDispatcher method and wraps the result in a response.

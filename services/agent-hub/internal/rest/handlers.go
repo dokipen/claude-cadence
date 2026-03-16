@@ -60,8 +60,13 @@ func handleCreateSession(h *hub.Hub) http.HandlerFunc {
 			return
 		}
 
+		body, err := io.ReadAll(io.LimitReader(r.Body, hub.MaxMessageSize))
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, "failed to read request body")
+			return
+		}
 		var params json.RawMessage
-		if body, err := io.ReadAll(io.LimitReader(r.Body, hub.MaxMessageSize)); err == nil && len(body) > 0 {
+		if len(body) > 0 {
 			params = body
 		}
 
