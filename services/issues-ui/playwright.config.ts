@@ -34,6 +34,7 @@ export default defineConfig({
       command: "npm run dev",
       port: 5173,
       reuseExistingServer: !process.env.CI,
+      env: { VITE_GITHUB_CLIENT_ID: "e2e-test-client-id" },
     },
   ],
 });
