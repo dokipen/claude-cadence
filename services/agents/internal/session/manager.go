@@ -479,7 +479,7 @@ type templateData struct {
 	SessionID    string // Shell-escaped in renderCommand.
 	SessionName  string // Safe without escaping: validated to [a-zA-Z0-9_-] by tmuxNameRe.
 	ExtraArgs    string // Shell-escaped via shellJoinArgs in renderCommand.
-	WorktreePath string // Shell-escaped in renderCommand.
+	WorktreePath string // Shell-escaped in renderCommand when non-empty; empty string when unset.
 }
 
 func (m *Manager) renderCommand(cmdTemplate string, sess *Session, extraArgs []string) (string, error) {
