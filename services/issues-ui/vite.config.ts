@@ -6,6 +6,7 @@ const agentHubPort = Number(process.env.VITE_AGENT_HUB_PORT ?? "4200");
 if (!Number.isInteger(agentHubPort) || agentHubPort < 1 || agentHubPort > 65535) {
   throw new Error("VITE_AGENT_HUB_PORT must be a valid port number");
 }
+const agentHubToken = process.env.AGENT_HUB_TOKEN || "";
 
 export default defineConfig({
   plugins: [react()],
@@ -15,10 +16,29 @@ export default defineConfig({
   server: {
     proxy: {
       "/graphql": `http://localhost:${apiPort}`,
-      "/api/v1": `http://localhost:${agentHubPort}`,
+      "/api/v1": {
+        target: `http://localhost:${agentHubPort}`,
+        configure: (proxy) => {
+          if (agentHubToken) {
+            proxy.on("proxyReq", (proxyReq) => {
+              proxyReq.setHeader("Authorization", `Bearer ${agentHubToken}`);
+            });
+          }
+        },
+      },
       "/ws/terminal": {
         target: `http://localhost:${agentHubPort}`,
         ws: true,
+        configure: (proxy) => {
+          if (agentHubToken) {
+            proxy.on("proxyReq", (proxyReq) => {
+              proxyReq.setHeader("Authorization", `Bearer ${agentHubToken}`);
+            });
+            proxy.on("proxyReqWs", (proxyReq) => {
+              proxyReq.setHeader("Authorization", `Bearer ${agentHubToken}`);
+            });
+          }
+        },
       },
     },
   },

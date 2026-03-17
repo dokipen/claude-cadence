@@ -62,10 +62,8 @@ function validateAgentProfile(data: unknown, path: string): AgentProfile {
   if (!isString(data.description)) {
     throw new HubError(502, `Invalid agent profile at ${path}: missing or invalid "description"`);
   }
-  if (!isString(data.repo)) {
-    throw new HubError(502, `Invalid agent profile at ${path}: missing or invalid "repo"`);
-  }
-  return { description: data.description, repo: data.repo };
+  const repo = isString(data.repo) ? data.repo : "";
+  return { description: data.description, repo };
 }
 
 function validateAgent(data: unknown, index: number): Agent {
