@@ -268,18 +268,17 @@ describe("fetchAgents", () => {
     );
   });
 
-  it("throws HubError when profile.repo is missing", async () => {
+  it("defaults repo to empty string when missing", async () => {
     mockFetch({
       json: () =>
         Promise.resolve({
           agents: [
-            { ...validAgent, profiles: { bad: { description: "d" } } },
+            { ...validAgent, profiles: { noRepo: { description: "d" } } },
           ],
         }),
     });
-    await expect(fetchAgents()).rejects.toThrow(
-      'Invalid agent profile at agents[0].profiles.bad: missing or invalid "repo"',
-    );
+    const result = await fetchAgents();
+    expect(result.agents[0].profiles.noRepo.repo).toBe("");
   });
 
   it("validates multiple agents independently", async () => {
