@@ -80,11 +80,13 @@ export function LaunchAgentDialog({
             &times;
           </button>
         </div>
-        <AgentLauncher
-          ticketNumber={ticketNumber}
-          repoUrl={repoUrl}
-          onLaunched={handleLaunched}
-        />
+        {open && (
+          <AgentLauncher
+            ticketNumber={ticketNumber}
+            repoUrl={repoUrl}
+            onLaunched={handleLaunched}
+          />
+        )}
       </div>
     </dialog>
   );
