@@ -12,7 +12,7 @@ This skill documents the `issues` CLI client for the issues microservice. Use th
 
 - The issues microservice must be running at the configured `api_url`
 - The CLI must be authenticated: `issues auth whoami`
-- If not authenticated: `issues auth login --pat <github-pat>`
+- If not authenticated: `gh auth token | issues auth login --pat -`
 
 ## Project Name Resolution
 
@@ -211,17 +211,21 @@ issues unassign TICKET_ID --json
 
 ## Authentication
 
-### Login with GitHub PAT
+### Login / re-authentication (secure — token never in shell history)
 
 ```bash
-issues auth login --pat <github-personal-access-token>
+gh auth token | issues auth login --pat -
 ```
 
-### Login with OAuth code
+Delegates to the already-authenticated `gh` CLI to supply the PAT via stdin. Works for both initial login and re-authentication when a token expires mid-session.
+
+### Auth check with auto-recovery
 
 ```bash
-issues auth login --code <oauth-code>
+issues auth whoami || gh auth token | issues auth login --pat -
 ```
+
+Use this one-liner at the start of a session to verify auth is valid and automatically re-authenticate if it has expired.
 
 ### Check current user
 
