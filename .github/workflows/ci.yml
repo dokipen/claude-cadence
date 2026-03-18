@@ -158,10 +158,25 @@ jobs:
         run: cd services/issues-ui && npm run typecheck
       - name: Install Playwright browsers
         run: cd services/issues-ui && npx playwright install chromium
+      - name: Install Playwright system deps (best-effort)
+        run: cd services/issues-ui && npx playwright install-deps chromium || echo "::warning::Could not install system deps (sudo may require a password). Ensure deps are pre-installed on the runner."
+      - name: Kill stale processes on E2E ports
+        run: |
+          for port in 14444 5174; do
+            lsof -t -i :"$port" | xargs -r kill -9 2>/dev/null || true
+          done
       - name: Run e2e tests
         run: cd services/issues-ui && npm run test:e2e
         env:
           CI: true
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-report
+          path: services/issues-ui/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Cleanup workspace
         if: always()
         run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
