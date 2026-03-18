@@ -161,7 +161,7 @@ jobs:
       - name: Kill stale processes on E2E ports
         run: |
           for port in 14444 5174; do
-            lsof -ti:"$port" | xargs -r kill -9 2>/dev/null || true
+            lsof -t -i :"$port" | xargs -r kill -9 2>/dev/null || true
           done
       - name: Run e2e tests
         run: cd services/issues-ui && npm run test:e2e
@@ -173,6 +173,7 @@ jobs:
         with:
           name: playwright-report
           path: services/issues-ui/playwright-report/
+          if-no-files-found: ignore
           retention-days: 7
       - name: Cleanup workspace
         if: always()
