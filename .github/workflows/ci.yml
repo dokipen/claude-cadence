@@ -156,8 +156,10 @@ jobs:
         run: cd services/issues-ui && npm ci
       - name: Typecheck
         run: cd services/issues-ui && npm run typecheck
-      - name: Install Playwright browsers and system deps
-        run: cd services/issues-ui && npx playwright install --with-deps chromium
+      - name: Install Playwright browsers
+        run: cd services/issues-ui && npx playwright install chromium
+      - name: Install Playwright system deps (best-effort)
+        run: cd services/issues-ui && npx playwright install-deps chromium || echo "::warning::Could not install system deps (sudo may require a password). Ensure deps are pre-installed on the runner."
       - name: Kill stale processes on E2E ports
         run: |
           for port in 14444 5174; do
