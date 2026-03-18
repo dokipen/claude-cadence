@@ -222,7 +222,7 @@ Delegates to the already-authenticated `gh` CLI to supply the PAT via stdin. Wor
 ### Auth check with auto-recovery
 
 ```bash
-issues auth whoami || gh auth token | issues auth login --pat -
+issues auth whoami || (gh auth token | issues auth login --pat -)
 ```
 
 Use this one-liner at the start of a session to verify auth is valid and automatically re-authenticate if it has expired.
