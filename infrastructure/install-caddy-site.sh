@@ -103,13 +103,14 @@ ${vhost} {
 		-Server
 	}
 
-	# Rate limiting — per client IP, 60 requests per minute.
-	# Allows short bursts while preventing sustained abuse.
+	# Rate limiting — per client IP, 300 requests per minute on API routes only.
+	# Static assets, WebSocket connections, and SPA files are exempt.
 	# Requires the caddy-ratelimit module (github.com/mholt/caddy-ratelimit).
-	rate_limit {
+	@api path_regexp ^/(graphql|api/v1/|agents\.v1\.)
+	rate_limit @api {
 		zone api_zone {
 			key    {http.request.remote.host}
-			events 60
+			events 300
 			window 1m
 		}
 	}
