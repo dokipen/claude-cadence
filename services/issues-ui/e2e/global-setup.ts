@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,9 +26,23 @@ export default function globalSetup() {
     killPortProcess(CI_DEV_PORT);
   }
 
+  // Remove stale test database so migrations start from scratch.
+  // On self-hosted runners the workspace persists between runs, so a leftover
+  // test.db may lack tables added in newer migrations.  The webServer processes
+  // (defined in playwright.config.ts) start concurrently with globalSetup, and
+  // the API server will crash if it reads a stale schema.
+  const testDbPath = path.resolve(ISSUES_DIR, "test.db");
+  for (const f of [testDbPath, `${testDbPath}-journal`, `${testDbPath}-wal`]) {
+    try {
+      fs.unlinkSync(f);
+    } catch {
+      // File doesn't exist — that's fine.
+    }
+  }
+
   const env = {
     ...process.env,
-    DATABASE_URL: `file:${path.resolve(ISSUES_DIR, "test.db")}`,
+    DATABASE_URL: `file:${testDbPath}`,
   };
 
   console.log("Running prisma migrate deploy against test database...");
