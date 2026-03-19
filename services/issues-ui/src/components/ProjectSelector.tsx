@@ -22,7 +22,9 @@ export function ProjectSelector({
   }, [projects, selectedProjectId, onProjectChange]);
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    onProjectChange(e.target.value);
+    const id = e.target.value;
+    if (!projects.some((p) => p.id === id)) return;
+    onProjectChange(id);
   };
 
   if (loading) {

@@ -88,9 +88,10 @@ function AppShell() {
   const repoUrl = selectedProject?.repository;
 
   const handleProjectChange = useCallback((id: string) => {
+    if (!projects.some((p) => p.id === id)) return;
     navigate(`/projects/${id}`);
     setFilters({});
-  }, [navigate]);
+  }, [projects, navigate]);
 
   return (
     <div className={layoutStyles.shell}>
