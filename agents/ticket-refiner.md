@@ -1,7 +1,7 @@
 ---
 name: ticket-refiner
 description: Review and refine tickets for quality and completeness. Use for ticket refinement sessions. Supports both GitHub Issues and issues-api backends.
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, Search
 model: sonnet
 ---
 
