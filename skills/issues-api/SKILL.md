@@ -217,7 +217,7 @@ issues unassign TICKET_ID --json
 gh auth token | issues auth login --pat -
 ```
 
-Delegates to the already-authenticated `gh` CLI to supply the PAT via stdin. Works for both initial login and re-authentication when a token expires mid-session.
+Delegates to the already-authenticated `gh` CLI to supply the PAT via stdin. Works for both initial login and re-authentication when a token expires mid-session. Requires `gh` to be authenticated first — run `gh auth login` if needed.
 
 ### Auth check with auto-recovery
 
