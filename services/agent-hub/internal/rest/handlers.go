@@ -50,6 +50,7 @@ func handleListAllSessions(h *hub.Hub) http.HandlerFunc {
 			results []agentSessions
 		)
 
+		sem := make(chan struct{}, maxAgentFanOut)
 		var wg sync.WaitGroup
 		for _, info := range agents {
 			if info.Status != hub.StatusOnline {
@@ -62,7 +63,9 @@ func handleListAllSessions(h *hub.Hub) http.HandlerFunc {
 			wg.Add(1)
 			go func(agent *hub.ConnectedAgent, name string) {
 				defer wg.Done()
-				callCtx, cancel := context.WithTimeout(r.Context(), rpcCallTimeout)
+				sem <- struct{}{}
+				defer func() { <-sem }()
+				callCtx, cancel := context.WithTimeout(r.Context(), listAllSessionsTimeout)
 				defer cancel()
 
 				result, err := h.Call(callCtx, agent, "listSessions", params)
@@ -121,6 +124,14 @@ func handleGetAgent(h *hub.Hub) http.HandlerFunc {
 
 // rpcCallTimeout is the maximum time to wait for an agentd response.
 const rpcCallTimeout = 30 * time.Second
+
+// listAllSessionsTimeout is a tighter timeout for the fan-out polling endpoint,
+// where each RPC is a lightweight in-memory query on the agent side.
+const listAllSessionsTimeout = 5 * time.Second
+
+// maxAgentFanOut bounds the number of concurrent RPCs in handleListAllSessions
+// to limit goroutine pressure when many agents are online.
+const maxAgentFanOut = 16
 
 // handleCreateSession forwards a CreateSession request to the target agentd.
 func handleCreateSession(h *hub.Hub) http.HandlerFunc {
