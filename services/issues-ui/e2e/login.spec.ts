@@ -123,6 +123,17 @@ unauthTest.describe("unauthenticated", () => {
               },
             }),
           });
+        } else if (query.includes("projects")) {
+          await route.fulfill({
+            contentType: "application/json",
+            body: JSON.stringify({
+              data: {
+                projects: [
+                  { id: "fake-project", name: "Fake Project", repository: null },
+                ],
+              },
+            }),
+          });
         } else {
           await route.continue();
         }
@@ -133,7 +144,7 @@ unauthTest.describe("unauthenticated", () => {
       await page.getByRole("button", { name: "Sign in with PAT" }).click();
 
       // Should redirect to the intended page after successful PAT auth
-      await page.waitForURL("/ticket/123");
+      await page.waitForURL(/\/ticket\/123/);
       await unauthExpect(page).toHaveURL("/ticket/123");
     },
   );
@@ -265,6 +276,7 @@ unauthTest.describe("unauthenticated", () => {
       // Malicious redirect should be blocked; should not navigate to evil.com
       await page.waitForURL(/\/projects\//);
       await unauthExpect(page).toHaveURL(/\/projects\//);
+      await unauthExpect(page).not.toHaveURL(/evil\.com/);
     },
   );
 });
