@@ -186,7 +186,13 @@ export function TilingLayout({ windows, onMinimize, onTerminated }: TilingLayout
 
   return (
     <div className={styles.tilingArea} data-testid="tiling-area">
-      {renderNode(layout, "root")}
+      {layout.type === "leaf" ? (
+        <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex" }}>
+          {renderNode(layout, "root")}
+        </div>
+      ) : (
+        renderNode(layout, "root")
+      )}
     </div>
   );
 }
