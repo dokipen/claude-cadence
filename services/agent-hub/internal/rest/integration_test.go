@@ -643,13 +643,15 @@ func TestIntegration_RateLimiting_WSAgent(t *testing.T) {
 
 	_, baseURL := startIntegrationServer(t, cfg)
 
-	// Wait for startup probe requests to clear.
+	// Brief pause so token-bucket refills to its initial burst capacity after
+	// any internal server setup requests (none fire against rate-limited paths,
+	// but the pause keeps the timing consistent with other rate limit tests).
 	time.Sleep(100 * time.Millisecond)
 
 	// Send 20 rapid HTTP requests to /ws/agent with WebSocket upgrade headers.
-	// The rate limiter should fire before any WebSocket upgrade occurs.
-	// This test currently FAILS because /ws/agent is registered directly on the
-	// top-level mux, outside the rateLimiter middleware chain.
+	// With Burst=2, the token bucket allows 2 requests before returning 429;
+	// the 3rd request and beyond should be rejected. We fire 20 to be safe.
+	// The rate limiter fires before any WebSocket upgrade occurs.
 	client := &http.Client{
 		// Do not follow redirects; we want the raw status code.
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -693,13 +695,13 @@ func TestIntegration_RateLimiting_WSTerminal(t *testing.T) {
 
 	_, baseURL := startIntegrationServer(t, cfg)
 
-	// Wait for startup probe requests to clear.
+	// Brief pause for token-bucket consistency (mirrors WSAgent test above).
 	time.Sleep(100 * time.Millisecond)
 
 	// Send 20 rapid HTTP requests to /ws/terminal/<session-id> with WebSocket
-	// upgrade headers. /ws/terminal/ is inside the apiHandler chain which
-	// includes rateLimiter, so this test documents the EXPECTED behaviour and
-	// must pass once rate limiting is also applied to /ws/agent.
+	// upgrade headers. /ws/terminal/ routes through apiHandler which wraps
+	// rateLimiter, so the rate limiter fires before any WebSocket upgrade.
+	// With Burst=2, the 3rd request should return 429.
 	client := &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
