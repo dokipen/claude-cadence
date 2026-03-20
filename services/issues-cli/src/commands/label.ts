@@ -79,7 +79,8 @@ export function registerLabelCommand(program: Command): void {
     .requiredOption("--name <name>", "Label name")
     .requiredOption("--color <color>", "Label color (hex, e.g. #ff0000)")
     .option("--json", "Output raw JSON")
-    .action(async (opts: { name: string; color: string; json?: boolean }) => {
+    .option("--project <id>", "Project name or ID (ignored — labels are global)")
+    .action(async (opts: { name: string; color: string; json?: boolean; project?: string }) => {
       const spinner = ora("Creating label...").start();
       try {
         const client = getClient();
@@ -109,7 +110,8 @@ export function registerLabelCommand(program: Command): void {
     .command("list")
     .description("List all labels")
     .option("--json", "Output raw JSON")
-    .action(async (opts: { json?: boolean }) => {
+    .option("--project <id>", "Project name or ID (ignored — labels are global)")
+    .action(async (opts: { json?: boolean; project?: string }) => {
       const spinner = ora("Fetching labels...").start();
       try {
         const client = getClient();
@@ -220,7 +222,8 @@ export function registerLabelCommand(program: Command): void {
     .command("delete <name-or-id>")
     .description("Delete a label (removes it from all tickets)")
     .option("--json", "Output raw JSON")
-    .action(async (nameOrId: string, opts: { json?: boolean }) => {
+    .option("--project <id>", "Project name or ID (ignored — labels are global)")
+    .action(async (nameOrId: string, opts: { json?: boolean; project?: string }) => {
       const spinner = ora("Deleting label...").start();
       try {
         const labelId = await resolveLabelId(nameOrId);
