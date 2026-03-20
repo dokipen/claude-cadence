@@ -1,5 +1,5 @@
 .shell {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -106,6 +106,7 @@
 
 .main {
   flex: 1;
+  min-height: 0;
   display: flex;
   overflow: auto;
 }
