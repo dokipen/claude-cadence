@@ -75,6 +75,11 @@ describe("Auth", () => {
       expect(output).toContain("testuser");
       expect(output).toContain("Test User");
     });
+
+    it("should reject unauthenticated 'auth status' alias", async () => {
+      const result = await suite.unauthenticatedCli("auth", "status");
+      expect(result.exitCode).not.toBe(0);
+    });
   });
 
   describe("login stdin", () => {
