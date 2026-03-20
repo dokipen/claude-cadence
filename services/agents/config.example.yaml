@@ -32,10 +32,12 @@ cleanup:
 profiles:
   claude-reviewer:
     repo: "https://github.com/org/project.git"
-    command: "claude --model sonnet --permission-mode accept --cwd {{.WorktreePath}} {{.ExtraArgs}}"
+    command: "claude --model sonnet --permission-mode accept{{if .PluginDir}} --plugin-dir {{.PluginDir}}{{end}} --cwd {{.WorktreePath}} {{.ExtraArgs}}"
+    plugin_dir: "/opt/cadence/plugin"  # Plugin directory (available as {{.PluginDir}} in command template)
     description: "Claude Code reviewer"
 
   claude-opus:
     repo: "https://github.com/org/project.git"
-    command: "claude --model opus --permission-mode accept --cwd {{.WorktreePath}} {{.ExtraArgs}}"
+    command: "claude --model opus --permission-mode accept{{if .PluginDir}} --plugin-dir {{.PluginDir}}{{end}} --cwd {{.WorktreePath}} {{.ExtraArgs}}"
+    plugin_dir: "/opt/cadence/plugin"
     description: "Claude Opus agent"
