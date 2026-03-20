@@ -431,7 +431,7 @@ deregister_runner() {
     info "  Deregistering runner at $runner_dir..."
 
     # Stop and uninstall service (svc.sh handles both systemd and launchd)
-    if [[ -f "$runner_dir/svc.sh" ]] && [[ -f "$runner_dir/.service" ]]; then
+    if [[ -f "$runner_dir/svc.sh" ]]; then
         info "  Stopping service..."
         if [[ "$OS" == "darwin" ]]; then
             (cd "$runner_dir" && ./svc.sh stop) || true
@@ -467,11 +467,15 @@ deregister_runner() {
             dry_run_print "ACTIONS_RUNNER_INPUT_TOKEN=<token>" \
                 "$runner_dir/config.sh" remove
         elif [[ "$OS" == "darwin" ]]; then
-            ACTIONS_RUNNER_INPUT_TOKEN="$REMOVE_TOKEN" "$runner_dir/config.sh" remove || true
+            ACTIONS_RUNNER_INPUT_TOKEN="$REMOVE_TOKEN" "$runner_dir/config.sh" remove || {
+                warn "  Could not unconfigure runner (may already be removed from GitHub)."
+            }
         else
             export ACTIONS_RUNNER_INPUT_TOKEN="$REMOVE_TOKEN"
             sudo -u "$RUNNER_USER" --preserve-env=ACTIONS_RUNNER_INPUT_TOKEN \
-                "$runner_dir/config.sh" remove || true
+                "$runner_dir/config.sh" remove || {
+                warn "  Could not unconfigure runner (may already be removed from GitHub)."
+            }
             unset ACTIONS_RUNNER_INPUT_TOKEN
         fi
     fi
@@ -493,9 +497,12 @@ download_runner_tarball() {
         sudo_cmd mkdir -p "$cache_dir"
     fi
 
-    # If cache file already exists, skip download
+    # If cache file already exists, verify its integrity then skip download
     if [[ -f "$RUNNER_TARBALL_CACHE" ]]; then
         info "  Using cached tarball: $RUNNER_TARBALL_CACHE"
+        if [[ "$DRY_RUN" != "true" ]]; then
+            verify_checksum "$RUNNER_TARBALL_CACHE"
+        fi
         return 0
     fi
 
@@ -533,7 +540,6 @@ setup_runner() {
             return 0
         fi
         warn "Runner '$runner_name' configured but service not running — deregistering and re-installing."
-        fetch_removal_token
         deregister_runner "$runner_dir"
     fi
 
@@ -630,6 +636,7 @@ main() {
     echo
     resolve_runner_version
     fetch_registration_token
+    fetch_removal_token
     download_runner_tarball
 
     TORN_DOWN_COUNT=0
