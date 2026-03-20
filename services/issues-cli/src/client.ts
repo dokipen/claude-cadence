@@ -25,6 +25,7 @@ interface RefreshResult {
 
 const MAX_RETRIES = 3;
 const BASE_BACKOFF_MS = 1000;
+const MAX_RETRY_AFTER_MS = 30_000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -98,7 +99,7 @@ export function getRetryAfterMs(error: unknown): number | null {
   for (const e of errors) {
     const retryAfter = e?.extensions?.retryAfter;
     if (typeof retryAfter === "number" && retryAfter > 0) {
-      return retryAfter * 1000;
+      return Math.min(retryAfter * 1000, MAX_RETRY_AFTER_MS);
     }
   }
   return null;
@@ -115,7 +116,7 @@ export function getClient(): GraphQLClient {
   const client = createRawClient(url, token);
 
   // Wrap the request method to intercept auth errors and rate limit errors
-  const originalRequest = client.request.bind(client) as typeof client.request;
+  let originalRequest = client.request.bind(client) as typeof client.request;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (client as any).request = async (documentOrOptions: any, variables?: any, requestHeaders?: any) => {
@@ -131,7 +132,8 @@ export function getClient(): GraphQLClient {
           }
           const retryAfterMs = getRetryAfterMs(error);
           const backoffMs = retryAfterMs ?? BASE_BACKOFF_MS * Math.pow(2, attempt);
-          console.error(`Rate limited. Retrying in ${backoffMs}ms... (attempt ${attempt + 1}/${MAX_RETRIES})`);
+          const delaySec = Math.ceil(backoffMs / 1000);
+          console.error(`Rate limited. Retrying in ${delaySec}s... (attempt ${attempt + 1}/${MAX_RETRIES})`);
           await sleep(backoffMs);
           attempt++;
           continue;
@@ -146,9 +148,9 @@ export function getClient(): GraphQLClient {
           throw error;
         }
 
-        // Retry with the new token
+        // Switch to refreshed-token client and retry (stays in the loop for 429 protection)
         const retryClient = createRawClient(url, newToken);
-        return await retryClient.request(documentOrOptions, variables, requestHeaders);
+        originalRequest = retryClient.request.bind(retryClient) as typeof originalRequest;
       }
     }
   };

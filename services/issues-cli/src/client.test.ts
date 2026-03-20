@@ -125,6 +125,11 @@ describe("getRetryAfterMs", () => {
     expect(getRetryAfterMs(make429Error(0))).toBe(null);
     expect(getRetryAfterMs(make429Error(-1))).toBe(null);
   });
+
+  it("caps retryAfter at 30 seconds", () => {
+    expect(getRetryAfterMs(make429Error(60))).toBe(30000);
+    expect(getRetryAfterMs(make429Error(300))).toBe(30000);
+  });
 });
 
 describe("getClient", () => {
@@ -299,7 +304,7 @@ describe("getClient", () => {
     vi.useRealTimers();
 
     expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Rate limited")
+      expect.stringContaining("Retrying in 1s")
     );
 
     errorSpy.mockRestore();
