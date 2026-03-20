@@ -14,6 +14,8 @@ export interface Context {
 const VALID_STATES = new Set(["BACKLOG", "REFINED", "IN_PROGRESS", "CLOSED"]);
 const VALID_PRIORITIES = new Set(["HIGHEST", "HIGH", "MEDIUM", "LOW", "LOWEST"]);
 const MAX_PAGE_SIZE = 100;
+const MAX_LABEL_NAMES = 20;
+const MAX_LABEL_LENGTH = 100;
 
 export const ticketResolvers = {
   Query: {
@@ -50,6 +52,7 @@ export const ticketResolvers = {
       args: {
         state?: string;
         labelName?: string;
+        labelNames?: string[];
         assigneeLogin?: string;
         isBlocked?: boolean;
         priority?: string;
@@ -59,7 +62,7 @@ export const ticketResolvers = {
       },
       { prisma }: Context
     ) => {
-      const { state, labelName, assigneeLogin, isBlocked, priority, projectId, after } = args;
+      const { state, labelName, labelNames, assigneeLogin, isBlocked, priority, projectId, after } = args;
       const rawFirst = args.first ?? MAX_PAGE_SIZE;
       const first = Number.isFinite(rawFirst) ? Math.min(Math.max(1, rawFirst), MAX_PAGE_SIZE) : MAX_PAGE_SIZE;
 
@@ -73,7 +76,24 @@ export const ticketResolvers = {
         where.priority = priority;
       }
 
-      if (labelName) {
+      if (labelNames && labelNames.length > 0) {
+        if (labelNames.length > MAX_LABEL_NAMES) {
+          throw new GraphQLError(`labelNames exceeds maximum of ${MAX_LABEL_NAMES} entries`, { extensions: { code: "BAD_USER_INPUT" } });
+        }
+        const filtered = labelNames.map(n => n.trim()).filter(n => n.length > 0);
+        for (const n of filtered) {
+          if (n.length > MAX_LABEL_LENGTH) {
+            throw new GraphQLError(`Label name exceeds maximum length of ${MAX_LABEL_LENGTH}`, { extensions: { code: "BAD_USER_INPUT" } });
+          }
+        }
+        if (filtered.length > 0) {
+          where.labels = {
+            some: {
+              label: { name: { in: filtered } },
+            },
+          };
+        }
+      } else if (labelName) {
         where.labels = {
           some: {
             label: { name: labelName },
