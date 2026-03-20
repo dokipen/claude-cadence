@@ -29,4 +29,9 @@ USER issues
 
 EXPOSE 4000
 
+# Health check for standalone Docker runs. The compose file defines its own
+# matching healthcheck for `docker compose up --wait` support.
+HEALTHCHECK --interval=10s --timeout=3s --start-period=60s --retries=5 \
+  CMD wget -qO- http://localhost:4000/graphql --header='Content-Type: application/json' --post-data='{"query":"{ __typename }"}'
+
 CMD sh -c "npx prisma migrate deploy && node dist/prisma/seed.js && exec node dist/src/index.js"
