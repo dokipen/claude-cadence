@@ -85,7 +85,7 @@ function setupSessionMock(
       route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify(existingSessions),
+        body: JSON.stringify({ sessions: existingSessions }),
       });
     } else {
       route.continue();
@@ -370,7 +370,7 @@ test.describe("ticket detail terminal", () => {
         route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify([]),
+          body: JSON.stringify({ sessions: [] }),
         });
       } else {
         route.continue();
