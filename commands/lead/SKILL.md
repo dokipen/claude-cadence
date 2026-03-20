@@ -154,10 +154,10 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 1. Check current branch: `git branch --show-current`
 2. Detect if already inside a worktree:
    ```bash
-   GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
-   GIT_COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null)
+   _GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
+   _GIT_COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null)
    IN_WORKTREE=false
-   if [ "$GIT_DIR" != "$GIT_COMMON_DIR" ]; then
+   if [ "$_GIT_DIR" != "$_GIT_COMMON_DIR" ]; then
      IN_WORKTREE=true
    fi
    ```
