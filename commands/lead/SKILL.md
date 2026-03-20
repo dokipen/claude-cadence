@@ -108,6 +108,11 @@ If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, 
    ```
 
    **Issues API:**
+   Check the ticket's current state first with `issues ticket view`. Then transition through required intermediate states:
+   - If `BACKLOG` → transition to `REFINED` first, then `IN_PROGRESS`
+   - If `REFINED` → transition directly to `IN_PROGRESS`
+   - If already `IN_PROGRESS` → skip the transition
+   - If `CLOSED` → transition to `BACKLOG`, then `REFINED`, then `IN_PROGRESS`
    ```bash
    issues ticket transition TICKET_ID --to IN_PROGRESS --json
    ```
