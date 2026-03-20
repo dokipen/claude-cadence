@@ -160,8 +160,8 @@ jobs:
         run: cd services/issues-ui && npx playwright install chromium
       - name: Install Playwright system deps
         run: |
-          if command -v pacman &>/dev/null; then
-            echo "Arch detected — Playwright system deps must be pre-installed (see docs/runner-security.md)"
+          if grep -q '^ID=arch' /etc/os-release 2>/dev/null; then
+            echo "::notice::Arch detected — Playwright system deps must be pre-installed (see docs/runner-security.md)"
           else
             cd services/issues-ui && npx playwright install-deps chromium || echo "::warning::Could not install system deps (sudo may require a password). Ensure deps are pre-installed on the runner."
           fi
