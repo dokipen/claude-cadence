@@ -14,7 +14,26 @@ This document covers security considerations for the self-hosted GitHub Actions 
 - Docker (runner user is in the `docker` group)
 - Node.js 20 (via `actions/setup-node`)
 - Go (via `actions/setup-go`, version from `go.mod`)
-- Standard Linux build tools
+- Standard Linux build tools (see Required System Packages below for Arch-specific packages)
+
+### Required System Packages (Arch Linux)
+
+The self-hosted runner is Arch-based. The following packages must be pre-installed since workflows cannot use `sudo` or `apt`:
+
+**Playwright Chromium dependencies:**
+```
+alsa-lib at-spi2-core atk cairo libcups dbus libdrm mesa glib2 nspr nss pango wayland libx11 libxcb libxcomposite libxdamage libxext libxfixes libxkbcommon libxrandr
+```
+
+**Other CI dependencies:**
+```
+lsof
+```
+
+Install all required packages:
+```bash
+sudo pacman -S --needed alsa-lib at-spi2-core atk cairo libcups dbus libdrm mesa glib2 nspr nss pango wayland libx11 libxcb libxcomposite libxdamage libxext libxfixes libxkbcommon libxrandr lsof
+```
 
 ## Fork PR Protection
 

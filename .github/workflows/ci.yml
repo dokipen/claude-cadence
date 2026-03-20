@@ -158,8 +158,13 @@ jobs:
         run: cd services/issues-ui && npm run typecheck
       - name: Install Playwright browsers
         run: cd services/issues-ui && npx playwright install chromium
-      - name: Install Playwright system deps (best-effort)
-        run: cd services/issues-ui && npx playwright install-deps chromium || echo "::warning::Could not install system deps (sudo may require a password). Ensure deps are pre-installed on the runner."
+      - name: Install Playwright system deps
+        run: |
+          if command -v pacman &>/dev/null; then
+            echo "Arch detected — Playwright system deps must be pre-installed (see docs/runner-security.md)"
+          else
+            cd services/issues-ui && npx playwright install-deps chromium || echo "::warning::Could not install system deps (sudo may require a password). Ensure deps are pre-installed on the runner."
+          fi
       - name: Kill stale processes on E2E ports
         run: |
           for port in 14444 5174; do
