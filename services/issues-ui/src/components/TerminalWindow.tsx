@@ -21,7 +21,7 @@ export function TerminalWindow({
   const handleTerminate = async () => {
     try {
       await hubFetch(
-        `/agents/${encodeURIComponent(agentName)}/sessions/${encodeURIComponent(session.id)}`,
+        `/agents/${encodeURIComponent(agentName)}/sessions/${encodeURIComponent(session.id)}?force=true`,
         { method: "DELETE" },
       );
       onTerminated();
