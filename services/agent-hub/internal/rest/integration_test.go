@@ -587,7 +587,7 @@ func simulateAgentWithDelay(t *testing.T, baseURL, agentToken, name string, infl
 
 func TestIntegration_ListAllSessionsConcurrencyCap(t *testing.T) {
 	const numAgents = 24
-	const maxFanOut = 16 // must match rest.maxAgentFanOut
+	maxFanOut := rest.MaxAgentFanOut
 
 	apiToken := "test-api-token"
 	agentToken := "test-agent-token"
@@ -628,7 +628,7 @@ func TestIntegration_ListAllSessionsConcurrencyCap(t *testing.T) {
 	}
 
 	// Peak in-flight RPCs must never have exceeded the semaphore cap.
-	if peak > maxFanOut {
+	if peak > int64(maxFanOut) {
 		t.Errorf("peak concurrent listSessions RPCs = %d, want <= %d", peak, maxFanOut)
 	}
 }
