@@ -236,4 +236,34 @@ describe("Ticket Management", () => {
     const output = result.stdout + result.stderr;
     expect(output).toContain("not found");
   });
+
+  describe("view aliases", () => {
+    it("should support 'ticket get' as a hidden alias for 'ticket view'", async () => {
+      const result = await suite.cli("ticket", "get", fullTicketId);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("Full ticket");
+      expect(result.stdout).toContain(fullTicketId);
+    });
+
+    it("should support 'ticket show' as a hidden alias for 'ticket view'", async () => {
+      const result = await suite.cli("ticket", "show", fullTicketId);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("Full ticket");
+      expect(result.stdout).toContain(fullTicketId);
+    });
+
+    it("should pass --json flag through 'ticket get' alias", async () => {
+      const result = await suite.cli("ticket", "get", fullTicketId, "--json");
+      expect(result.exitCode).toBe(0);
+      const parsed = JSON.parse(result.stdout);
+      expect(parsed.title).toBe("Full ticket");
+    });
+
+    it("should pass --json flag through 'ticket show' alias", async () => {
+      const result = await suite.cli("ticket", "show", fullTicketId, "--json");
+      expect(result.exitCode).toBe(0);
+      const parsed = JSON.parse(result.stdout);
+      expect(parsed.title).toBe("Full ticket");
+    });
+  });
 });

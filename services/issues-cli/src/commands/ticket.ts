@@ -516,13 +516,8 @@ export function registerTicketCommand(program: Command): void {
       }
     });
 
-  // --- view ---
-  ticket
-    .command("view <id>")
-    .description("View ticket details (accepts ticket number or CUID)")
-    .option("--project <project>", "Project name or ID (inferred from git origin if omitted)")
-    .option("--json", "Output raw JSON")
-    .action(async (id: string, opts: { project?: string; json?: boolean }) => {
+  // --- view (+ hidden aliases: get, show) ---
+  const viewAction = async (id: string, opts: { project?: string; json?: boolean }) => {
       const spinner = ora("Fetching ticket...").start();
       try {
         const client = getClient();
@@ -651,7 +646,23 @@ export function registerTicketCommand(program: Command): void {
         spinner.fail("Failed to fetch ticket");
         handleError(error);
       }
-    });
+    };
+
+  ticket
+    .command("view <id>")
+    .description("View ticket details (accepts ticket number or CUID)")
+    .option("--project <project>", "Project name or ID (inferred from git origin if omitted)")
+    .option("--json", "Output raw JSON")
+    .action(viewAction);
+
+  // Hidden aliases for view (agents frequently guess these names)
+  for (const alias of ["get", "show"]) {
+    ticket
+      .command(`${alias} <id>`, { hidden: true })
+      .option("--project <project>", "Project name or ID (inferred from git origin if omitted)")
+      .option("--json", "Output raw JSON")
+      .action(viewAction);
+  }
 
   // --- list ---
   ticket

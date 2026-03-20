@@ -221,10 +221,7 @@ export function registerAuthCommand(program: Command): void {
       console.log("Logged out successfully.");
     });
 
-  auth
-    .command("whoami")
-    .description("Show current authenticated user")
-    .action(async () => {
+  const whoamiAction = async () => {
       const spinner = ora("Fetching user info...").start();
 
       try {
@@ -245,5 +242,15 @@ export function registerAuthCommand(program: Command): void {
         spinner.fail("Failed to fetch user info");
         handleError(error);
       }
-    });
+    };
+
+  auth
+    .command("whoami")
+    .description("Show current authenticated user")
+    .action(whoamiAction);
+
+  // Hidden alias for whoami (agents frequently guess "auth status")
+  auth
+    .command("status", { hidden: true })
+    .action(whoamiAction);
 }
