@@ -185,6 +185,34 @@ test.describe("agent manager page", () => {
     await expect(page.getByTestId("tile-header")).toBeVisible();
   });
 
+  test("single window fills the full tiling area", async ({ page }) => {
+    await page.goto("/agents");
+    await expect(page.getByTestId("sidebar-session")).toHaveCount(3, { timeout: 15000 });
+
+    // Open exactly one session
+    await page.getByTestId("sidebar-session").first().click();
+    await expect(page.getByTestId("terminal-window")).toHaveCount(1);
+
+    // With a single window there should be no split divider
+    await expect(page.getByTestId("tile-split")).toHaveCount(0);
+
+    // The terminal window should fill the full tiling area
+    const tilingArea = page.getByTestId("tiling-area");
+    const terminalWindow = page.getByTestId("terminal-window");
+
+    const tilingBox = await tilingArea.boundingBox();
+    const terminalBox = await terminalWindow.boundingBox();
+
+    expect(tilingBox).not.toBeNull();
+    expect(terminalBox).not.toBeNull();
+
+    const tolerance = 2;
+    expect(Math.abs(terminalBox!.x - tilingBox!.x)).toBeLessThanOrEqual(tolerance);
+    expect(Math.abs(terminalBox!.y - tilingBox!.y)).toBeLessThanOrEqual(tolerance);
+    expect(Math.abs(terminalBox!.width - tilingBox!.width)).toBeLessThanOrEqual(tolerance);
+    expect(Math.abs(terminalBox!.height - tilingBox!.height)).toBeLessThanOrEqual(tolerance);
+  });
+
   test("opening multiple sessions tiles them", async ({ page }) => {
     await page.goto("/agents");
     await expect(page.getByTestId("sidebar-session")).toHaveCount(3, { timeout: 15000 });
