@@ -1,5 +1,6 @@
 .shell {
-  height: 100vh;
+  height: 100vh;   /* fallback */
+  height: 100dvh;  /* correct on iOS Safari 15.4+: excludes retractable address bar */
   display: flex;
   flex-direction: column;
   background: var(--bg);
