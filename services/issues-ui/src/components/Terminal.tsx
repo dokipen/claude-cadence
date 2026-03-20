@@ -1,6 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
-import { AttachAddon } from "@xterm/addon-attach";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import styles from "../styles/agents.module.css";
@@ -11,6 +10,15 @@ interface TerminalProps {
   agentName: string;
   sessionId: string;
 }
+
+// ttyd protocol message types (single-byte prefix on binary messages).
+// Client → server
+const CMD_INPUT = "0"; // terminal input
+const CMD_RESIZE = "1"; // JSON {columns, rows}
+// Server → client
+const MSG_OUTPUT = "0"; // terminal output
+// const MSG_SET_TITLE = "1";
+// const MSG_SET_PREFS = "2";
 
 function buildWsUrl(agentName: string, sessionId: string): string {
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -73,13 +81,52 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
     fitRef.current = fit;
 
     const url = buildWsUrl(agentName, sessionId);
-    const ws = new WebSocket(url);
+    // Request the "tty" subprotocol required by ttyd.
+    const ws = new WebSocket(url, ["tty"]);
+    ws.binaryType = "arraybuffer";
     wsRef.current = ws;
 
     ws.onopen = () => {
-      const attach = new AttachAddon(ws);
-      term.loadAddon(attach);
       setConnState("connected");
+
+      // Send initial handshake: JSON with terminal dimensions.
+      const { cols, rows } = term;
+      const handshake = JSON.stringify({ columns: cols, rows });
+      ws.send(handshake);
+
+      // Forward terminal input to ttyd with the INPUT prefix.
+      term.onData((data) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(CMD_INPUT + data);
+        }
+      });
+
+      // Send resize events when the terminal dimensions change.
+      term.onResize(({ cols: c, rows: r }) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(CMD_RESIZE + JSON.stringify({ columns: c, rows: r }));
+        }
+      });
+    };
+
+    ws.onmessage = (ev) => {
+      if (ev.data instanceof ArrayBuffer) {
+        const view = new Uint8Array(ev.data);
+        if (view.length < 1) return;
+        const cmd = String.fromCharCode(view[0]);
+        if (cmd === MSG_OUTPUT) {
+          // Strip the type prefix and write the rest to xterm.
+          term.write(view.slice(1));
+        }
+        // SET_WINDOW_TITLE and SET_PREFERENCES are ignored for now.
+      } else if (typeof ev.data === "string") {
+        // Some ttyd versions send text frames; handle the prefix the same way.
+        if (ev.data.length < 1) return;
+        const cmd = ev.data[0];
+        if (cmd === MSG_OUTPUT) {
+          term.write(ev.data.slice(1));
+        }
+      }
     };
 
     ws.onerror = () => {
