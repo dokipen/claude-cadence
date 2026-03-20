@@ -632,3 +632,104 @@ func TestIntegration_ListAllSessionsConcurrencyCap(t *testing.T) {
 		t.Errorf("peak concurrent listSessions RPCs = %d, want <= %d", peak, maxFanOut)
 	}
 }
+
+func TestIntegration_RateLimiting_WSAgent(t *testing.T) {
+	apiToken := "test-api-token"
+	agentToken := "test-agent-token"
+	cfg := testConfig(apiToken, agentToken)
+	// Very low rate limit so burst is exhausted quickly.
+	cfg.RateLimit.RequestsPerSecond = 1
+	cfg.RateLimit.Burst = 2
+
+	_, baseURL := startIntegrationServer(t, cfg)
+
+	// Brief pause so token-bucket refills to its initial burst capacity after
+	// any internal server setup requests (none fire against rate-limited paths,
+	// but the pause keeps the timing consistent with other rate limit tests).
+	time.Sleep(100 * time.Millisecond)
+
+	// Send 20 rapid HTTP requests to /ws/agent with WebSocket upgrade headers.
+	// With Burst=2, the token bucket allows 2 requests before returning 429;
+	// the 3rd request and beyond should be rejected. We fire 20 to be safe.
+	// The rate limiter fires before any WebSocket upgrade occurs.
+	client := &http.Client{
+		// Do not follow redirects; we want the raw status code.
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	var rateLimited bool
+	for i := 0; i < 20; i++ {
+		req, _ := http.NewRequest("GET", baseURL+"/ws/agent", nil)
+		req.Header.Set("Authorization", "Bearer "+agentToken)
+		req.Header.Set("Upgrade", "websocket")
+		req.Header.Set("Connection", "Upgrade")
+		req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+		req.Header.Set("Sec-WebSocket-Version", "13")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("request %d: %v", i, err)
+		}
+		resp.Body.Close()
+
+		if resp.StatusCode == http.StatusTooManyRequests {
+			rateLimited = true
+			break
+		}
+	}
+
+	if !rateLimited {
+		t.Error("expected /ws/agent to be rate limited after burst exhausted, but no 429 was returned")
+	}
+}
+
+func TestIntegration_RateLimiting_WSTerminal(t *testing.T) {
+	apiToken := "test-api-token"
+	agentToken := "test-agent-token"
+	cfg := testConfig(apiToken, agentToken)
+	// Very low rate limit so burst is exhausted quickly.
+	cfg.RateLimit.RequestsPerSecond = 1
+	cfg.RateLimit.Burst = 2
+
+	_, baseURL := startIntegrationServer(t, cfg)
+
+	// Brief pause for token-bucket consistency (mirrors WSAgent test above).
+	time.Sleep(100 * time.Millisecond)
+
+	// Send 20 rapid HTTP requests to /ws/terminal/<session-id> with WebSocket
+	// upgrade headers. /ws/terminal/ routes through apiHandler which wraps
+	// rateLimiter, so the rate limiter fires before any WebSocket upgrade.
+	// With Burst=2, the 3rd request should return 429.
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	var rateLimited bool
+	for i := 0; i < 20; i++ {
+		req, _ := http.NewRequest("GET", baseURL+"/ws/terminal/test-agent/session-id", nil)
+		req.Header.Set("Authorization", "Bearer "+apiToken)
+		req.Header.Set("Upgrade", "websocket")
+		req.Header.Set("Connection", "Upgrade")
+		req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+		req.Header.Set("Sec-WebSocket-Version", "13")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("request %d: %v", i, err)
+		}
+		resp.Body.Close()
+
+		if resp.StatusCode == http.StatusTooManyRequests {
+			rateLimited = true
+			break
+		}
+	}
+
+	if !rateLimited {
+		t.Error("expected /ws/terminal/ to be rate limited after burst exhausted, but no 429 was returned")
+	}
+}

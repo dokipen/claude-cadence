@@ -14,6 +14,12 @@ heartbeat:
 
 agent_ttl: "5m"
 
+# Rate limiting applied to all endpoints (REST API, /ws/agent, /ws/terminal/).
+# Limits are per source IP address.
+rate_limit:
+  requests_per_second: 100  # token replenishment rate (default: 100)
+  burst: 200                 # maximum burst size (default: 200)
+
 log:
   level: "info"
   format: "json"
