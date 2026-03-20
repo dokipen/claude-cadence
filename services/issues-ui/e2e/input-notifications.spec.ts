@@ -54,12 +54,10 @@ const MOCK_SESSIONS_AGENT2 = [
   },
 ];
 
-const MOCK_WAITING_SESSIONS = {
+const MOCK_ALL_SESSIONS = {
   agents: [
-    {
-      agent_name: "mac-mini-1",
-      sessions: [MOCK_SESSIONS_AGENT1[0]],
-    },
+    { agent_name: "mac-mini-1", sessions: MOCK_SESSIONS_AGENT1 },
+    { agent_name: "mac-mini-2", sessions: MOCK_SESSIONS_AGENT2 },
   ],
 };
 
@@ -76,30 +74,12 @@ function setupMocks(page: import("@playwright/test").Page) {
         route.continue();
       }
     }),
-    page.route("**/api/v1/sessions?waiting_for_input=true", (route) => {
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(MOCK_WAITING_SESSIONS),
-      });
-    }),
-    page.route("**/api/v1/agents/mac-mini-1/sessions", (route) => {
+    page.route("**/api/v1/sessions", (route) => {
       if (route.request().method() === "GET") {
         route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify(MOCK_SESSIONS_AGENT1),
-        });
-      } else {
-        route.continue();
-      }
-    }),
-    page.route("**/api/v1/agents/mac-mini-2/sessions", (route) => {
-      if (route.request().method() === "GET") {
-        route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify(MOCK_SESSIONS_AGENT2),
+          body: JSON.stringify(MOCK_ALL_SESSIONS),
         });
       } else {
         route.continue();
@@ -153,13 +133,25 @@ test.describe("input notifications", () => {
     await expect(page.getByTestId("notification-badge")).toBeVisible();
     await expect(page.getByTestId("notification-badge")).toHaveText("1");
 
-    // Update mock to return no waiting sessions
-    await page.route("**/api/v1/sessions?waiting_for_input=true", (route) => {
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ agents: [] }),
-      });
+    // Update mock to return sessions with no waiting_for_input
+    await page.route("**/api/v1/sessions", (route) => {
+      if (route.request().method() === "GET") {
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            agents: [
+              {
+                agent_name: "mac-mini-1",
+                sessions: [{ ...MOCK_SESSIONS_AGENT1[0], waiting_for_input: false }],
+              },
+              { agent_name: "mac-mini-2", sessions: MOCK_SESSIONS_AGENT2 },
+            ],
+          }),
+        });
+      } else {
+        route.continue();
+      }
     });
 
     // Wait for polling interval to pick up the change
@@ -179,13 +171,24 @@ test.describe("input notifications", () => {
   });
 
   test("notification not visible when no sessions waiting", async ({ page }) => {
-    // Override to return no waiting sessions
-    await page.route("**/api/v1/sessions?waiting_for_input=true", (route) => {
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ agents: [] }),
-      });
+    // Override to return sessions with none waiting
+    await page.route("**/api/v1/sessions", (route) => {
+      if (route.request().method() === "GET") {
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            agents: [
+              {
+                agent_name: "mac-mini-1",
+                sessions: [{ ...MOCK_SESSIONS_AGENT1[0], waiting_for_input: false }],
+              },
+            ],
+          }),
+        });
+      } else {
+        route.continue();
+      }
     });
 
     await page.goto("/");
@@ -205,29 +208,33 @@ test.describe("input notifications", () => {
 
   test("multiple waiting sessions show correct badge count", async ({ page }) => {
     // Override with two waiting sessions
-    await page.route("**/api/v1/sessions?waiting_for_input=true", (route) => {
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          agents: [
-            {
-              agent_name: "mac-mini-1",
-              sessions: [MOCK_SESSIONS_AGENT1[0]],
-            },
-            {
-              agent_name: "mac-mini-2",
-              sessions: [
-                {
-                  ...MOCK_SESSIONS_AGENT2[0],
-                  waiting_for_input: true,
-                  idle_since: "2026-03-16T13:10:00Z",
-                },
-              ],
-            },
-          ],
-        }),
-      });
+    await page.route("**/api/v1/sessions", (route) => {
+      if (route.request().method() === "GET") {
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            agents: [
+              {
+                agent_name: "mac-mini-1",
+                sessions: [MOCK_SESSIONS_AGENT1[0]],
+              },
+              {
+                agent_name: "mac-mini-2",
+                sessions: [
+                  {
+                    ...MOCK_SESSIONS_AGENT2[0],
+                    waiting_for_input: true,
+                    idle_since: "2026-03-16T13:10:00Z",
+                  },
+                ],
+              },
+            ],
+          }),
+        });
+      } else {
+        route.continue();
+      }
     });
 
     await page.goto("/");

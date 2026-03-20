@@ -71,6 +71,13 @@ const MOCK_SESSIONS_AGENT2 = [
   },
 ];
 
+const MOCK_ALL_SESSIONS = {
+  agents: [
+    { agent_name: "mac-mini-1", sessions: MOCK_SESSIONS_AGENT1 },
+    { agent_name: "mac-mini-2", sessions: MOCK_SESSIONS_AGENT2 },
+  ],
+};
+
 function setupMocks(page: import("@playwright/test").Page) {
   return Promise.all([
     page.route("**/api/v1/agents", (route) => {
@@ -84,35 +91,28 @@ function setupMocks(page: import("@playwright/test").Page) {
         route.continue();
       }
     }),
-    page.route("**/api/v1/agents/mac-mini-1/sessions", (route) => {
+    page.route("**/api/v1/sessions", (route) => {
       if (route.request().method() === "GET") {
         route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify(MOCK_SESSIONS_AGENT1),
+          body: JSON.stringify(MOCK_ALL_SESSIONS),
         });
       } else {
         route.continue();
       }
     }),
-    page.route("**/api/v1/agents/mac-mini-2/sessions", (route) => {
-      if (route.request().method() === "GET") {
+    // Per-agent endpoints still needed for DELETE (terminate)
+    page.route("**/api/v1/agents/*/sessions/*", (route) => {
+      if (route.request().method() === "DELETE") {
         route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify(MOCK_SESSIONS_AGENT2),
+          body: JSON.stringify({}),
         });
       } else {
         route.continue();
       }
-    }),
-    // Offline agents won't be queried, but handle gracefully
-    page.route("**/api/v1/agents/offline-host/sessions", (route) => {
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([]),
-      });
     }),
   ]);
 }
@@ -217,19 +217,6 @@ test.describe("agent manager page", () => {
   });
 
   test("terminate kills session and removes window", async ({ page }) => {
-    // Mock DELETE endpoint
-    await page.route("**/api/v1/agents/*/sessions/*", (route) => {
-      if (route.request().method() === "DELETE") {
-        route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({}),
-        });
-      } else {
-        route.continue();
-      }
-    });
-
     await page.goto("/agents");
     await expect(page.getByTestId("sidebar-session")).toHaveCount(3, { timeout: 15000 });
 
@@ -280,16 +267,24 @@ test.describe("agent manager page", () => {
   });
 
   test("stopped sessions appear dimmed in sidebar", async ({ page }) => {
-    // Override mac-mini-1 sessions to include a stopped session
-    await page.route("**/api/v1/agents/mac-mini-1/sessions", (route) => {
+    // Override aggregate sessions to include a stopped session
+    await page.route("**/api/v1/sessions", (route) => {
       if (route.request().method() === "GET") {
         route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify([
-            MOCK_SESSIONS_AGENT1[0],
-            { ...MOCK_SESSIONS_AGENT1[1], state: "stopped" },
-          ]),
+          body: JSON.stringify({
+            agents: [
+              {
+                agent_name: "mac-mini-1",
+                sessions: [
+                  MOCK_SESSIONS_AGENT1[0],
+                  { ...MOCK_SESSIONS_AGENT1[1], state: "stopped" },
+                ],
+              },
+              { agent_name: "mac-mini-2", sessions: MOCK_SESSIONS_AGENT2 },
+            ],
+          }),
         });
       } else {
         route.continue();
