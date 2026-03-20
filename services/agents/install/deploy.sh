@@ -119,12 +119,18 @@ deploy_remote() {
     [[ -z "$remote_ip" ]] && error "Could not determine remote IP for ttyd advertise_address"
 
     ssh "$HOST" "sudo sed -i 's/^  enabled: false/  enabled: true/' $remote_config"
+    # Set bind_address to 0.0.0.0 so ttyd is reachable from the hub
+    if ssh "$HOST" "grep -q 'bind_address' $remote_config 2>/dev/null"; then
+        ssh "$HOST" "sudo sed -i 's/^  bind_address:.*/  bind_address: \"0.0.0.0\"/' $remote_config"
+    else
+        ssh "$HOST" "sudo sed -i '/base_port:/a\\  bind_address: \"0.0.0.0\"' $remote_config"
+    fi
     if ssh "$HOST" "grep -q 'advertise_address' $remote_config 2>/dev/null"; then
         ssh "$HOST" "sudo sed -i 's/^  advertise_address:.*/  advertise_address: \"$remote_ip\"/' $remote_config"
     else
-        ssh "$HOST" "sudo sed -i '/base_port:/a\\  advertise_address: \"$remote_ip\"' $remote_config"
+        ssh "$HOST" "sudo sed -i '/bind_address:/a\\  advertise_address: \"$remote_ip\"' $remote_config"
     fi
-    info "ttyd enabled with advertise_address=$remote_ip"
+    info "ttyd enabled: bind=0.0.0.0, advertise=$remote_ip"
 
     # Add hub section to config if missing
     if ssh "$HOST" "grep -q '^hub:' $remote_config 2>/dev/null"; then
