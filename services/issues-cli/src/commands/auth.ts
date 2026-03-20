@@ -221,29 +221,36 @@ export function registerAuthCommand(program: Command): void {
       console.log("Logged out successfully.");
     });
 
+  const whoamiAction = async () => {
+    const spinner = ora("Fetching user info...").start();
+
+    try {
+      const client = getClient();
+      const data = await client.request<{ me: UserProfile }>(ME);
+      const user = data.me;
+
+      spinner.stop();
+      console.log(chalk.bold("Authenticated as:"));
+      console.log(`  Login:        ${user.login}`);
+      console.log(`  Name:         ${user.displayName}`);
+      console.log(`  GitHub ID:    ${user.githubId}`);
+      if (user.avatarUrl) {
+        console.log(`  Avatar:       ${user.avatarUrl}`);
+      }
+      console.log(`  Member since: ${new Date(user.createdAt).toLocaleDateString()}`);
+    } catch (error) {
+      spinner.fail("Failed to fetch user info");
+      handleError(error);
+    }
+  };
+
   auth
     .command("whoami")
     .description("Show current authenticated user")
-    .action(async () => {
-      const spinner = ora("Fetching user info...").start();
+    .action(whoamiAction);
 
-      try {
-        const client = getClient();
-        const data = await client.request<{ me: UserProfile }>(ME);
-        const user = data.me;
-
-        spinner.stop();
-        console.log(chalk.bold("Authenticated as:"));
-        console.log(`  Login:        ${user.login}`);
-        console.log(`  Name:         ${user.displayName}`);
-        console.log(`  GitHub ID:    ${user.githubId}`);
-        if (user.avatarUrl) {
-          console.log(`  Avatar:       ${user.avatarUrl}`);
-        }
-        console.log(`  Member since: ${new Date(user.createdAt).toLocaleDateString()}`);
-      } catch (error) {
-        spinner.fail("Failed to fetch user info");
-        handleError(error);
-      }
-    });
+  // Hidden alias for whoami (agents frequently guess "auth status")
+  auth
+    .command("status", { hidden: true })
+    .action(whoamiAction);
 }
