@@ -66,13 +66,13 @@ check_prerequisites() {
 
     command -v git >/dev/null 2>&1 || missing+=("git")
     command -v tmux >/dev/null 2>&1 || missing+=("tmux")
+    command -v ttyd >/dev/null 2>&1 || missing+=("ttyd")
 
     if [[ ${#missing[@]} -gt 0 ]]; then
         error "Required tools not found: ${missing[*]}. Please install them and re-run."
     fi
 
     command -v vault >/dev/null 2>&1 || warn "vault CLI not found (optional, needed for private repos)"
-    command -v ttyd >/dev/null 2>&1  || warn "ttyd not found (optional, needed for web terminal access)"
 
     info "Prerequisites satisfied."
 }
@@ -162,7 +162,7 @@ tmux:
   socket_name: "agentd"
 
 ttyd:
-  enabled: false
+  enabled: true
   base_port: 7681
 
 log:
