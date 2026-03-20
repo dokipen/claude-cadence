@@ -88,6 +88,7 @@ Shows: title, state, priority, story points, assignee, labels, description, acce
 issues ticket list --json
 issues ticket list --state REFINED --json
 issues ticket list --label "bug" --json
+issues ticket list --label "bug" --label "enhancement" --json  # OR filter: matches either label
 issues ticket list --assignee "username" --json
 issues ticket list --blocked --json
 issues ticket list --priority HIGH --json

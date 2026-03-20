@@ -49,6 +49,7 @@ export const ticketResolvers = {
       args: {
         state?: string;
         labelName?: string;
+        labelNames?: string[];
         assigneeLogin?: string;
         isBlocked?: boolean;
         priority?: string;
@@ -58,7 +59,7 @@ export const ticketResolvers = {
       },
       { prisma }: Context
     ) => {
-      const { state, labelName, assigneeLogin, isBlocked, priority, projectId, after } = args;
+      const { state, labelName, labelNames, assigneeLogin, isBlocked, priority, projectId, after } = args;
       const rawFirst = args.first ?? MAX_PAGE_SIZE;
       const first = Number.isFinite(rawFirst) ? Math.min(Math.max(1, rawFirst), MAX_PAGE_SIZE) : MAX_PAGE_SIZE;
 
@@ -72,7 +73,13 @@ export const ticketResolvers = {
         where.priority = priority;
       }
 
-      if (labelName) {
+      if (labelNames && labelNames.length > 0) {
+        where.labels = {
+          some: {
+            label: { name: { in: labelNames } },
+          },
+        };
+      } else if (labelName) {
         where.labels = {
           some: {
             label: { name: labelName },

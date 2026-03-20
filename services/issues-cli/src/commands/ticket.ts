@@ -139,7 +139,7 @@ const GET_TICKET_BY_NUMBER = gql`
 const LIST_TICKETS = gql`
   query ListTickets(
     $state: TicketState
-    $labelName: String
+    $labelNames: [String!]
     $assigneeLogin: String
     $isBlocked: Boolean
     $priority: Priority
@@ -149,7 +149,7 @@ const LIST_TICKETS = gql`
   ) {
     tickets(
       state: $state
-      labelName: $labelName
+      labelNames: $labelNames
       assigneeLogin: $assigneeLogin
       isBlocked: $isBlocked
       priority: $priority
@@ -193,7 +193,7 @@ const LIST_TICKETS = gql`
 const LIST_TICKETS_VERBOSE = gql`
   query ListTicketsVerbose(
     $state: TicketState
-    $labelName: String
+    $labelNames: [String!]
     $assigneeLogin: String
     $isBlocked: Boolean
     $priority: Priority
@@ -203,7 +203,7 @@ const LIST_TICKETS_VERBOSE = gql`
   ) {
     tickets(
       state: $state
-      labelName: $labelName
+      labelNames: $labelNames
       assigneeLogin: $assigneeLogin
       isBlocked: $isBlocked
       priority: $priority
@@ -416,7 +416,7 @@ interface CreateOptions {
 
 interface ListOptions {
   state?: string;
-  label?: string;
+  label?: string[];
   assignee?: string;
   blocked?: boolean;
   priority?: string;
@@ -658,7 +658,7 @@ export function registerTicketCommand(program: Command): void {
     .command("list")
     .description("List tickets")
     .option("--state <state>", "Filter by state (BACKLOG, REFINED, IN_PROGRESS, CLOSED)")
-    .option("--label <name>", "Filter by label name")
+    .option("--label <name>", "Filter by label name (repeatable for OR filtering)", (val: string, acc: string[]) => acc.concat(val), [] as string[])
     .option("--assignee <login>", "Filter by assignee login")
     .option("--blocked", "Filter to only blocked tickets")
     .option("--priority <priority>", "Filter by priority (HIGHEST, HIGH, MEDIUM, LOW, LOWEST)")
@@ -690,7 +690,7 @@ export function registerTicketCommand(program: Command): void {
           first: limit,
         };
         if (opts.state) variables.state = opts.state;
-        if (opts.label) variables.labelName = opts.label;
+        if (opts.label && opts.label.length > 0) variables.labelNames = opts.label;
         if (opts.assignee) variables.assigneeLogin = opts.assignee;
         if (opts.blocked) variables.isBlocked = true;
         if (opts.priority) variables.priority = opts.priority;

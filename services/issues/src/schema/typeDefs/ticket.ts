@@ -103,6 +103,8 @@ export const ticketTypeDefs = `
     tickets(
       state: TicketState
       labelName: String
+      "Filter by multiple label names (OR). Takes precedence over labelName when both provided."
+      labelNames: [String!]
       assigneeLogin: String
       isBlocked: Boolean
       priority: Priority
