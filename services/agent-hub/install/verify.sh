@@ -59,7 +59,7 @@ AGENTS_JSON="$(curl -sf -H "Authorization: Bearer $HUB_API_TOKEN" "$HUB_URL/api/
     error "Failed to reach agent-hub API at $HUB_URL/api/v1/agents"
 }
 
-AGENT_COUNT="$(echo "$AGENTS_JSON" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")"
+AGENT_COUNT="$(echo "$AGENTS_JSON" | python3 -c "import sys,json; data=json.load(sys.stdin); print(len(data.get('agents', data) if isinstance(data, dict) else data))" 2>/dev/null || echo "0")"
 info "Found $AGENT_COUNT registered agent(s)."
 
 if [[ "$AGENT_COUNT" -eq 0 ]]; then
@@ -67,12 +67,16 @@ if [[ "$AGENT_COUNT" -eq 0 ]]; then
 else
     echo "$AGENTS_JSON" | python3 -c "
 import sys, json
-agents = json.load(sys.stdin)
+data = json.load(sys.stdin)
+agents = data.get('agents', data) if isinstance(data, dict) else data
 for a in agents:
     status = a.get('status', 'unknown')
     name = a.get('name', 'unnamed')
-    profiles = ', '.join(a.get('profiles', []))
-    print(f'  {name}: {status} (profiles: {profiles})')
+    profiles = a.get('profiles', {})
+    for pname, pinfo in profiles.items():
+        repo = pinfo.get('repo', '')
+        repo_str = f' repo={repo}' if repo else ' repo=MISSING'
+        print(f'  {name}: {status} (profile: {pname}{repo_str})')
 " 2>/dev/null || echo "$AGENTS_JSON"
 fi
 

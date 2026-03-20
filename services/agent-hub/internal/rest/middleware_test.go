@@ -112,7 +112,7 @@ func TestHandleListAgents(t *testing.T) {
 		}
 		if _, err := h.Register("test-agent", conn, &hub.RegisterParams{
 			Name:     "test-agent",
-			Profiles: map[string]hub.ProfileInfo{"default": {Description: "test"}},
+			Profiles: map[string]hub.ProfileInfo{"default": {Description: "test", Repo: "https://github.com/test/repo.git"}},
 		}); err != nil {
 			t.Errorf("Register: %v", err)
 			return
@@ -162,6 +162,13 @@ func TestHandleListAgents(t *testing.T) {
 		}
 		if body.Agents[0].Status != hub.StatusOnline {
 			t.Errorf("agent status = %q, want online", body.Agents[0].Status)
+		}
+		profile, ok := body.Agents[0].Profiles["default"]
+		if !ok {
+			t.Fatal("expected 'default' profile in response")
+		}
+		if profile.Repo != "https://github.com/test/repo.git" {
+			t.Errorf("profile repo = %q, want https://github.com/test/repo.git", profile.Repo)
 		}
 	})
 }
