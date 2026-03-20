@@ -124,6 +124,22 @@ func TestValidate_NonLocalhostWithoutAuth(t *testing.T) {
 	}
 }
 
+func TestApplyDefaults_AdvertiseAddressEmptyWhenTtydDisabled(t *testing.T) {
+	cfg := &Config{}
+	applyDefaults(cfg)
+	if cfg.Ttyd.AdvertiseAddress != "" {
+		t.Errorf("expected empty AdvertiseAddress when ttyd disabled, got %q", cfg.Ttyd.AdvertiseAddress)
+	}
+}
+
+func TestApplyDefaults_AdvertiseAddressSetWhenTtydEnabled(t *testing.T) {
+	cfg := &Config{Ttyd: TtydConfig{Enabled: true}}
+	applyDefaults(cfg)
+	if cfg.Ttyd.AdvertiseAddress != "127.0.0.1" {
+		t.Errorf("expected AdvertiseAddress %q when ttyd enabled, got %q", "127.0.0.1", cfg.Ttyd.AdvertiseAddress)
+	}
+}
+
 func TestResolveToken_ReturnsTokenWhenNoEnvVar(t *testing.T) {
 	a := &AuthConfig{Token: "hardcoded"}
 	if got := a.ResolveToken(); got != "hardcoded" {
