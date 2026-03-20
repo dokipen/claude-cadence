@@ -207,6 +207,8 @@ test.describe("agent manager page", () => {
     expect(terminalBox).not.toBeNull();
 
     const tolerance = 2;
+    expect(Math.abs(terminalBox!.x - tilingBox!.x)).toBeLessThanOrEqual(tolerance);
+    expect(Math.abs(terminalBox!.y - tilingBox!.y)).toBeLessThanOrEqual(tolerance);
     expect(Math.abs(terminalBox!.width - tilingBox!.width)).toBeLessThanOrEqual(tolerance);
     expect(Math.abs(terminalBox!.height - tilingBox!.height)).toBeLessThanOrEqual(tolerance);
   });
