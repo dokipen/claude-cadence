@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { hubFetch } from "../api/agentHubClient";
 import { usePageVisibility } from "./usePageVisibility";
 import type { Session } from "../types";
@@ -23,12 +23,11 @@ export function useAllSessions(): UseAllSessionsResult {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const hasFetchedRef = useRef(false);
-  const failuresRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
+    let failures = 0;
     const isInitialFetch = !hasFetchedRef.current;
-    failuresRef.current = 0;
 
     const poll = async () => {
       if (isInitialFetch) {
@@ -49,13 +48,13 @@ export function useAllSessions(): UseAllSessionsResult {
             }
           }
           setSessions(results);
-          failuresRef.current = 0;
+          failures = 0;
           setError(null);
         }
       } catch {
         if (!cancelled) {
-          failuresRef.current++;
-          if (isInitialFetch || failuresRef.current >= 3) {
+          failures++;
+          if (isInitialFetch || failures >= 3) {
             setError("Failed to fetch sessions");
           }
         }
@@ -80,7 +79,10 @@ export function useAllSessions(): UseAllSessionsResult {
     };
   }, [hidden]);
 
-  const waitingSessions = sessions.filter((s: AgentSession) => s.session.waiting_for_input);
+  const waitingSessions = useMemo(
+    () => sessions.filter((s) => s.session.waiting_for_input),
+    [sessions],
+  );
 
   return { sessions, waitingSessions, loading, error };
 }
