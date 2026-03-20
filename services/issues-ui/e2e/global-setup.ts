@@ -6,6 +6,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ISSUES_DIR = path.resolve(__dirname, "../../issues");
 
 export default function globalSetup() {
+  // In CI the "Prepare test database" workflow step handles DB setup before
+  // Playwright starts, so globalSetup only needs to run locally.
+  // webServer processes may start concurrently with globalSetup, so we must
+  // not delete the database here — only apply idempotent migrations and seed.
   const env = {
     ...process.env,
     DATABASE_URL: `file:${path.resolve(ISSUES_DIR, "test.db")}`,

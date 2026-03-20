@@ -30,7 +30,9 @@ type Session struct {
 	WebsocketURL string
 	WorktreePath string
 	RepoURL      string
-	BaseRef      string
+	BaseRef         string
+	WaitingForInput bool
+	IdleSince       *time.Time
 }
 
 // Store is a thread-safe in-memory session store.

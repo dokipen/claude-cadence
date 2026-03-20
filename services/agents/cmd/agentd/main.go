@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
 	"github.com/dokipen/claude-cadence/services/agents/internal/git"
@@ -90,6 +91,10 @@ func main() {
 	cleaner := session.NewCleaner(manager, cfg.Cleanup.StaleSessionTTL, cfg.Cleanup.CheckInterval)
 	cleaner.Start()
 
+	// Start background idle input monitor.
+	monitor := session.NewMonitor(manager, tmuxClient, 5*time.Second)
+	monitor.Start()
+
 	agentService := service.NewAgentService(manager)
 
 	srv, err := server.New(agentService, cfg)
@@ -127,6 +132,7 @@ func main() {
 	if hubClient != nil {
 		hubClient.Stop()
 	}
+	monitor.Stop()
 	cleaner.Stop()
 	srv.Stop()
 	slog.Info("agentd stopped")

@@ -165,6 +165,12 @@ jobs:
           for port in 14444 5174; do
             lsof -t -i :"$port" | xargs -r kill -9 2>/dev/null || true
           done
+      - name: Prepare test database
+        run: |
+          rm -f services/issues/test.db services/issues/test.db-journal services/issues/test.db-wal
+          cd services/issues
+          DATABASE_URL="file:$(pwd)/test.db" npx prisma migrate deploy
+          DATABASE_URL="file:$(pwd)/test.db" npx tsx prisma/seed-e2e.ts
       - name: Run e2e tests
         run: cd services/issues-ui && npm run test:e2e
         env:

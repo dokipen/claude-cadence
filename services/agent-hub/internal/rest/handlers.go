@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coder/websocket"
@@ -25,6 +26,75 @@ func handleListAgents(h *hub.Hub) http.HandlerFunc {
 			"agents": agents,
 		}); err != nil {
 			slog.Error("failed to encode agents response", "error", err)
+		}
+	}
+}
+
+// handleListAllSessions returns sessions across all online agents.
+func handleListAllSessions(h *hub.Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		agents := h.List()
+
+		params := map[string]any{}
+		if wfi := r.URL.Query().Get("waiting_for_input"); wfi == "true" {
+			params["waiting_for_input"] = true
+		}
+
+		type agentSessions struct {
+			AgentName string          `json:"agent_name"`
+			Sessions  json.RawMessage `json:"sessions"`
+		}
+
+		var (
+			mu      sync.Mutex
+			results []agentSessions
+		)
+
+		var wg sync.WaitGroup
+		for _, info := range agents {
+			if info.Status != hub.StatusOnline {
+				continue
+			}
+			agent, ok := h.Get(info.Name)
+			if !ok {
+				continue
+			}
+			wg.Add(1)
+			go func(agent *hub.ConnectedAgent, name string) {
+				defer wg.Done()
+				callCtx, cancel := context.WithTimeout(r.Context(), rpcCallTimeout)
+				defer cancel()
+
+				result, err := h.Call(callCtx, agent, "listSessions", params)
+				if err != nil {
+					slog.Debug("failed to list sessions from agent", "agent", name, "error", err)
+					return
+				}
+
+				// Parse the sessions array from the result.
+				var parsed struct {
+					Sessions json.RawMessage `json:"sessions"`
+				}
+				if err := json.Unmarshal(result, &parsed); err != nil {
+					slog.Debug("failed to parse sessions response", "agent", name, "error", err)
+					return
+				}
+
+				mu.Lock()
+				results = append(results, agentSessions{
+					AgentName: name,
+					Sessions:  parsed.Sessions,
+				})
+				mu.Unlock()
+			}(agent, info.Name)
+		}
+		wg.Wait()
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"agents": results,
+		}); err != nil {
+			slog.Error("failed to encode sessions response", "error", err)
 		}
 	}
 }

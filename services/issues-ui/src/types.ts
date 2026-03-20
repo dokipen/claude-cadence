@@ -99,4 +99,6 @@ export interface Session {
   worktree_path: string;
   repo_url: string;
   base_ref: string;
+  waiting_for_input?: boolean;
+  idle_since?: string;
 }

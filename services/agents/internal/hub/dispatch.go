@@ -94,6 +94,17 @@ func (d *Dispatcher) ListSessions(params json.RawMessage) (json.RawMessage, *rpc
 		sessions = filtered
 	}
 
+	// Apply waiting_for_input filter if provided.
+	if p.WaitingForInput != nil {
+		filtered := make([]*session.Session, 0, len(sessions))
+		for _, s := range sessions {
+			if s.WaitingForInput == *p.WaitingForInput {
+				filtered = append(filtered, s)
+			}
+		}
+		sessions = filtered
+	}
+
 	infos := make([]sessionInfo, len(sessions))
 	for i, s := range sessions {
 		infos[i] = toSessionInfo(s)
@@ -154,8 +165,9 @@ type getSessionParams struct {
 }
 
 type listSessionsParams struct {
-	AgentProfile string `json:"agent_profile"`
-	State        string `json:"state"`
+	AgentProfile    string `json:"agent_profile"`
+	State           string `json:"state"`
+	WaitingForInput *bool  `json:"waiting_for_input,omitempty"`
 }
 
 type destroySessionParams struct {
@@ -175,18 +187,20 @@ type terminalEndpointResult struct {
 // JSON response types.
 
 type sessionInfo struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	AgentProfile string `json:"agent_profile"`
-	State        string `json:"state"`
-	WorktreePath string `json:"worktree_path,omitempty"`
-	RepoURL      string `json:"repo_url,omitempty"`
-	BaseRef      string `json:"base_ref,omitempty"`
-	TmuxSession  string `json:"tmux_session,omitempty"`
-	CreatedAt    string `json:"created_at"`
-	ErrorMessage string `json:"error_message,omitempty"`
-	AgentPID     int    `json:"agent_pid,omitempty"`
-	WebsocketURL string `json:"websocket_url,omitempty"`
+	ID              string  `json:"id"`
+	Name            string  `json:"name"`
+	AgentProfile    string  `json:"agent_profile"`
+	State           string  `json:"state"`
+	WorktreePath    string  `json:"worktree_path,omitempty"`
+	RepoURL         string  `json:"repo_url,omitempty"`
+	BaseRef         string  `json:"base_ref,omitempty"`
+	TmuxSession     string  `json:"tmux_session,omitempty"`
+	CreatedAt       string  `json:"created_at"`
+	ErrorMessage    string  `json:"error_message,omitempty"`
+	AgentPID        int     `json:"agent_pid,omitempty"`
+	WebsocketURL    string  `json:"websocket_url,omitempty"`
+	WaitingForInput bool    `json:"waiting_for_input"`
+	IdleSince       *string `json:"idle_since,omitempty"`
 }
 
 type sessionJSON struct {
@@ -198,20 +212,26 @@ type sessionsJSON struct {
 }
 
 func toSessionInfo(s *session.Session) sessionInfo {
-	return sessionInfo{
-		ID:           s.ID,
-		Name:         s.Name,
-		AgentProfile: s.AgentProfile,
-		State:        stateString(s.State),
-		WorktreePath: s.WorktreePath,
-		RepoURL:      s.RepoURL,
-		BaseRef:      s.BaseRef,
-		TmuxSession:  s.TmuxSession,
-		CreatedAt:    s.CreatedAt.Format(time.RFC3339),
-		ErrorMessage: s.ErrorMessage,
-		AgentPID:     s.AgentPID,
-		WebsocketURL: s.WebsocketURL,
+	info := sessionInfo{
+		ID:              s.ID,
+		Name:            s.Name,
+		AgentProfile:    s.AgentProfile,
+		State:           stateString(s.State),
+		WorktreePath:    s.WorktreePath,
+		RepoURL:         s.RepoURL,
+		BaseRef:         s.BaseRef,
+		TmuxSession:     s.TmuxSession,
+		CreatedAt:       s.CreatedAt.Format(time.RFC3339),
+		ErrorMessage:    s.ErrorMessage,
+		AgentPID:        s.AgentPID,
+		WebsocketURL:    s.WebsocketURL,
+		WaitingForInput: s.WaitingForInput,
 	}
+	if s.IdleSince != nil {
+		t := s.IdleSince.Format(time.RFC3339)
+		info.IdleSince = &t
+	}
+	return info
 }
 
 func stateString(s session.SessionState) string {

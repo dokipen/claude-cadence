@@ -523,3 +523,11 @@
   display: flex;
   min-height: 0;
 }
+
+.sidebarSessionWaiting {
+  color: var(--amber);
+}
+
+.sidebarSessionWaiting .sessionDot {
+  color: var(--amber);
+}
