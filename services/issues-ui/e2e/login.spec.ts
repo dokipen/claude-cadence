@@ -80,7 +80,7 @@ unauthTest.describe("unauthenticated", () => {
       await page.getByRole("button", { name: "Sign in with PAT" }).click();
 
       // After successful auth, should navigate away from login to a project board
-      await unauthExpect(page).not.toHaveURL(/\/login/);
+      await page.waitForURL(/\/projects\//);
     },
   );
 
@@ -123,6 +123,17 @@ unauthTest.describe("unauthenticated", () => {
               },
             }),
           });
+        } else if (query.includes("projects")) {
+          await route.fulfill({
+            contentType: "application/json",
+            body: JSON.stringify({
+              data: {
+                projects: [
+                  { id: "fake-project", name: "Fake Project", repository: null },
+                ],
+              },
+            }),
+          });
         } else {
           await route.continue();
         }
@@ -133,6 +144,7 @@ unauthTest.describe("unauthenticated", () => {
       await page.getByRole("button", { name: "Sign in with PAT" }).click();
 
       // Should redirect to the intended page after successful PAT auth
+      await page.waitForURL(/\/ticket\/123/);
       await unauthExpect(page).toHaveURL("/ticket/123");
     },
   );
@@ -197,7 +209,7 @@ unauthTest.describe("unauthenticated", () => {
       await page.getByRole("button", { name: "Sign in with PAT" }).click();
 
       // After successful auth, should navigate away from login to a project board
-      await unauthExpect(page).not.toHaveURL(/\/login/);
+      await page.waitForURL(/\/projects\//);
     },
   );
 
@@ -262,8 +274,9 @@ unauthTest.describe("unauthenticated", () => {
       await page.getByRole("button", { name: "Sign in with PAT" }).click();
 
       // Malicious redirect should be blocked; should not navigate to evil.com
-      await unauthExpect(page).not.toHaveURL(/\/login/);
-      await unauthExpect(page).toHaveURL(/localhost/);
+      await page.waitForURL(/\/projects\//);
+      await unauthExpect(page).toHaveURL(/\/projects\//);
+      await unauthExpect(page).not.toHaveURL(/evil\.com/);
     },
   );
 });
@@ -288,6 +301,7 @@ test.describe("authenticated", () => {
 
     await page.getByRole("button", { name: "Sign out" }).click();
 
+    await page.waitForURL(/\/login/);
     await expect(page).toHaveURL(/\/login/);
     await expect(page.locator("h1")).toHaveText("Cadence");
   });
