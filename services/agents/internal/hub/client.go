@@ -144,6 +144,7 @@ func (c *Client) register(ctx context.Context, conn *websocket.Conn) error {
 		Ttyd: ttydInfo{
 			AdvertiseAddress: c.ttyd.AdvertiseAddress,
 			BasePort:         c.ttyd.BasePort,
+			MaxPorts:         c.ttyd.MaxPorts,
 		},
 	}
 
@@ -323,6 +324,7 @@ type profileInfo struct {
 type ttydInfo struct {
 	AdvertiseAddress string `json:"advertise_address"`
 	BasePort         int    `json:"base_port"`
+	MaxPorts         int    `json:"max_ports"`
 }
 
 type pongResult struct {

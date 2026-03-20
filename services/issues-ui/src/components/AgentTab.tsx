@@ -107,7 +107,7 @@ export function AgentTab({ ticketNumber, repoUrl }: AgentTabProps) {
     setDestroying(true);
     try {
       await hubFetch(
-        `/agents/${encodeURIComponent(active.agentName)}/sessions/${encodeURIComponent(active.session.id)}`,
+        `/agents/${encodeURIComponent(active.agentName)}/sessions/${encodeURIComponent(active.session.id)}?force=true`,
         { method: "DELETE" },
       );
       setActive(null);
