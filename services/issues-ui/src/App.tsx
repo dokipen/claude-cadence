@@ -10,7 +10,7 @@ import { AgentManager } from "./components/AgentManager";
 import { ProjectSelector } from "./components/ProjectSelector";
 import { useProjects } from "./hooks/useProjects";
 import type { TicketFilters } from "./hooks/useTickets";
-import { useWaitingSessions } from "./hooks/useWaitingSessions";
+import { useAllSessions } from "./hooks/useAllSessions";
 import { NotificationDropdown } from "./components/NotificationDropdown";
 import type { ReactNode } from "react";
 import layoutStyles from "./styles/layout.module.css";
@@ -79,7 +79,7 @@ function ProjectRedirect() {
 function AppShell() {
   const { user, logout } = useAuth();
   const { projects } = useProjects();
-  const { waitingSessions } = useWaitingSessions();
+  const { sessions, waitingSessions } = useAllSessions();
   const location = useLocation();
   const navigate = useNavigate();
   const boardMatch = useMatch("/projects/:projectId/*");
@@ -135,7 +135,7 @@ function AppShell() {
       )}
       <main className={layoutStyles.main}>
         <Routes>
-          <Route path="/agents" element={<AgentManager />} />
+          <Route path="/agents" element={<AgentManager sessions={sessions} />} />
           <Route
             path="/projects/:projectId/*"
             element={<KanbanBoard projectId={projectId} filters={filters} repoUrl={repoUrl} />}

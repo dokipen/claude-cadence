@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import { Link } from "react-router";
-import type { WaitingSession } from "../hooks/useWaitingSessions";
+import type { AgentSession } from "../hooks/useAllSessions";
 import layoutStyles from "../styles/layout.module.css";
 
 interface NotificationDropdownProps {
-  waitingSessions: WaitingSession[];
+  waitingSessions: AgentSession[];
 }
 
 function ticketIdFromSessionName(name: string): string | null {

@@ -1,15 +1,17 @@
 import { useState, useCallback } from "react";
 import { useAgents } from "../hooks/useAgents";
-import { useSessions } from "../hooks/useSessions";
 import { SessionList, sessionKey } from "./SessionList";
 import { TilingLayout } from "./TilingLayout";
 import type { TiledWindow } from "./TilingLayout";
-import type { AgentSession } from "../hooks/useSessions";
+import type { AgentSession } from "../hooks/useAllSessions";
 import styles from "../styles/agents.module.css";
 
-export function AgentManager() {
+interface AgentManagerProps {
+  sessions: AgentSession[];
+}
+
+export function AgentManager({ sessions }: AgentManagerProps) {
   const { agents, loading: agentsLoading } = useAgents();
-  const { sessions, loading: sessionsLoading } = useSessions(agents);
   const [openWindows, setOpenWindows] = useState<TiledWindow[]>([]);
   const [minimizedKeys, setMinimizedKeys] = useState<Set<string>>(new Set());
 
@@ -57,7 +59,7 @@ export function AgentManager() {
     });
   }, []);
 
-  const loading = agentsLoading || sessionsLoading;
+  const loading = agentsLoading;
 
   return (
     <div className={styles.agentManager} data-testid="agent-manager">

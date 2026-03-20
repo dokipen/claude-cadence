@@ -1,5 +1,5 @@
 import type { Agent } from "../types";
-import type { AgentSession } from "../hooks/useSessions";
+import type { AgentSession } from "../hooks/useAllSessions";
 import styles from "../styles/agents.module.css";
 
 interface SessionListProps {

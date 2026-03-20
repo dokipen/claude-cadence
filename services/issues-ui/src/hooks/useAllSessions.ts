@@ -5,45 +5,60 @@ import type { Session } from "../types";
 
 const POLL_INTERVAL_MS = 10_000;
 
-export interface WaitingSession {
+export interface AgentSession {
   session: Session;
   agentName: string;
 }
 
-interface UseWaitingSessionsResult {
-  waitingSessions: WaitingSession[];
+interface UseAllSessionsResult {
+  sessions: AgentSession[];
+  waitingSessions: AgentSession[];
   loading: boolean;
+  error: string | null;
 }
 
-export function useWaitingSessions(): UseWaitingSessionsResult {
+export function useAllSessions(): UseAllSessionsResult {
   const hidden = usePageVisibility();
-  const [waitingSessions, setWaitingSessions] = useState<WaitingSession[]>([]);
+  const [sessions, setSessions] = useState<AgentSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const hasFetchedRef = useRef(false);
+  const failuresRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
     const isInitialFetch = !hasFetchedRef.current;
+    failuresRef.current = 0;
 
     const poll = async () => {
-      if (isInitialFetch) setLoading(true);
+      if (isInitialFetch) {
+        setLoading(true);
+        setError(null);
+      }
 
       try {
         const data = await hubFetch<{
           agents: { agent_name: string; sessions: Session[] }[];
-        }>("/sessions?waiting_for_input=true");
+        }>("/sessions");
 
         if (!cancelled) {
-          const results: WaitingSession[] = [];
+          const results: AgentSession[] = [];
           for (const agent of data.agents || []) {
             for (const session of agent.sessions || []) {
               results.push({ session, agentName: agent.agent_name });
             }
           }
-          setWaitingSessions(results);
+          setSessions(results);
+          failuresRef.current = 0;
+          setError(null);
         }
       } catch {
-        // Silently fail — badge just won't show
+        if (!cancelled) {
+          failuresRef.current++;
+          if (isInitialFetch || failuresRef.current >= 3) {
+            setError("Failed to fetch sessions");
+          }
+        }
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -65,5 +80,7 @@ export function useWaitingSessions(): UseWaitingSessionsResult {
     };
   }, [hidden]);
 
-  return { waitingSessions, loading };
+  const waitingSessions = sessions.filter((s: AgentSession) => s.session.waiting_for_input);
+
+  return { sessions, waitingSessions, loading, error };
 }
