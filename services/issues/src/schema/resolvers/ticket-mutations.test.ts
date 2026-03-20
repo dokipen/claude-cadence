@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { GraphQLError } from "graphql";
 import type { User } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 process.env.JWT_SECRET = "test-secret-for-unit-tests";
 
@@ -253,9 +254,9 @@ describe("createLabel", () => {
 
   it("throws CONFLICT when label name already exists (P2002)", async () => {
     const { ctx } = makeMockContext(mockUser);
-    const prismaError = Object.assign(new Error("Unique constraint failed"), {
-      code: "P2002",
-    });
+    const prismaError = new Prisma.PrismaClientKnownRequestError(
+      "Unique constraint failed", { code: "P2002", clientVersion: "0.0.0" }
+    );
     ctx.prisma.label.create.mockRejectedValue(prismaError);
 
     await expect(
@@ -326,9 +327,9 @@ describe("addLabel", () => {
     const { ctx } = makeMockContext(mockUser);
     ctx.prisma.ticket.findUnique.mockResolvedValue({ id: "t1" });
     ctx.prisma.label.findUnique.mockResolvedValue({ id: "l1", name: "bug" });
-    const prismaError = Object.assign(new Error("Unique constraint failed"), {
-      code: "P2002",
-    });
+    const prismaError = new Prisma.PrismaClientKnownRequestError(
+      "Unique constraint failed", { code: "P2002", clientVersion: "0.0.0" }
+    );
     ctx.prisma.ticketLabel.create.mockRejectedValue(prismaError);
 
     await expect(
