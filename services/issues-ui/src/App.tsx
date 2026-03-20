@@ -15,6 +15,8 @@ import { NotificationDropdown } from "./components/NotificationDropdown";
 import type { ReactNode } from "react";
 import layoutStyles from "./styles/layout.module.css";
 
+export const STORAGE_KEY = "cadence_project_id";
+
 const loadingStyle: React.CSSProperties = {
   minHeight: "100vh",
   display: "flex",
@@ -66,7 +68,12 @@ function ProjectRedirect() {
   }
 
   if (projects.length > 0) {
-    return <Navigate to={`/projects/${projects[0].id}`} replace />;
+    let savedId: string | null = null;
+    try { savedId = localStorage.getItem(STORAGE_KEY); } catch { /* storage unavailable */ }
+    const target = savedId && projects.some((p) => p.id === savedId)
+      ? savedId
+      : projects[0].id;
+    return <Navigate to={`/projects/${target}`} replace />;
   }
 
   return (
@@ -93,6 +100,7 @@ function AppShell() {
   const handleProjectChange = useCallback((id: string) => {
     if (!projects.some((p) => p.id === id)) return;
     navigate(`/projects/${id}`);
+    try { localStorage.setItem(STORAGE_KEY, id); } catch { /* storage unavailable */ }
     setFilters({});
   }, [projects, navigate]);
 
