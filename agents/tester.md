@@ -1,7 +1,7 @@
 ---
 name: tester
 description: Test engineer for running tests and analyzing results. Use for bug reproduction, test coverage analysis, and integration testing.
-tools: Read, Bash, Glob, Grep
+tools: Read, Bash, Glob, Grep, Search
 model: sonnet
 ---
 

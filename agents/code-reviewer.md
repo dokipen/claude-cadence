@@ -1,7 +1,7 @@
 ---
 name: code-reviewer
 description: Review code for quality, best practices, and maintainability. Use for PR reviews and code audits.
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, Search
 model: sonnet
 ---
 

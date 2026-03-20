@@ -1,7 +1,7 @@
 ---
 name: performance-engineer
 description: Performance optimization specialist. Use for build size, response time, memory usage, startup time, and performance profiling.
-tools: Read, Bash, Glob, Grep
+tools: Read, Bash, Glob, Grep, Search
 model: sonnet
 ---
 

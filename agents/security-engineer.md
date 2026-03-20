@@ -1,7 +1,7 @@
 ---
 name: security-engineer
 description: Security review specialist. Use for input validation, data handling, dependency audits, and security best practices.
-tools: Read, Bash, Glob, Grep
+tools: Read, Bash, Glob, Grep, Search
 model: sonnet
 ---
 

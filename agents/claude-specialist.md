@@ -1,7 +1,7 @@
 ---
 name: claude-specialist
 description: Expert in Claude Code configuration, agent prompts, and skills. Use when updating agents, creating new skills, or optimizing AI workflows.
-tools: Read, Edit, Write, Glob, Grep, WebFetch, WebSearch
+tools: Read, Edit, Write, Glob, Grep, WebFetch, WebSearch, Search
 model: opus
 ---
 
