@@ -167,6 +167,9 @@ func TestHandleListAgents(t *testing.T) {
 		if !ok {
 			t.Fatal("expected 'default' profile in response")
 		}
+		if profile.Description != "test" {
+			t.Errorf("profile description = %q, want test", profile.Description)
+		}
 		if profile.Repo != "https://github.com/test/repo.git" {
 			t.Errorf("profile repo = %q, want https://github.com/test/repo.git", profile.Repo)
 		}

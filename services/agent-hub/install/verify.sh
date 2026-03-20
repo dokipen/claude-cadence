@@ -88,7 +88,8 @@ if [[ "$SMOKE_TEST" == "true" ]]; then
     # Pick the first online agent
     AGENT_NAME="$(echo "$AGENTS_JSON" | python3 -c "
 import sys, json
-agents = json.load(sys.stdin)
+data = json.load(sys.stdin)
+agents = data.get('agents', data) if isinstance(data, dict) else data
 online = [a for a in agents if a.get('status') == 'online']
 if online:
     print(online[0]['name'])
