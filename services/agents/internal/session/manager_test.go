@@ -132,6 +132,7 @@ func TestRenderCommandPluginDir(t *testing.T) {
 		name      string
 		template  string
 		sess      *Session
+		extraArgs []string
 		pluginDir string
 		want      string
 	}{
@@ -174,17 +175,14 @@ func TestRenderCommandPluginDir(t *testing.T) {
 			name:      "all fields with PluginDir",
 			template:  "cmd --id {{.SessionID}} --name {{.SessionName}} --cwd {{.WorktreePath}}{{if .PluginDir}} --plugin-dir {{.PluginDir}}{{end}} {{.ExtraArgs}}",
 			sess:      &Session{ID: "test-id", Name: "test-name", WorktreePath: "/safe/path"},
+			extraArgs: []string{"--flag", "value"},
 			pluginDir: "/my/plugin",
 			want:      "cmd --id 'test-id' --name test-name --cwd '/safe/path' --plugin-dir '/my/plugin' '--flag' 'value'",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			extraArgs := []string(nil)
-			if tt.name == "all fields with PluginDir" {
-				extraArgs = []string{"--flag", "value"}
-			}
-			got, err := m.renderCommand(tt.template, tt.sess, extraArgs, tt.pluginDir)
+			got, err := m.renderCommand(tt.template, tt.sess, tt.extraArgs, tt.pluginDir)
 			if err != nil {
 				t.Fatalf("renderCommand() error: %v", err)
 			}
