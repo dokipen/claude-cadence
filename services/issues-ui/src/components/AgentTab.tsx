@@ -37,10 +37,10 @@ export function AgentTab({ ticketNumber, repoUrl }: AgentTabProps) {
       const onlineAgents = agents.filter((a) => a.status === "online");
       for (const agent of onlineAgents) {
         try {
-          const sessions = await hubFetch<Session[]>(
+          const data = await hubFetch<{ sessions: Session[] }>(
             `/agents/${encodeURIComponent(agent.name)}/sessions`,
           );
-          const match = sessions.find(
+          const match = (data.sessions ?? []).find(
             (s) => s.name === sessionName && (s.state === "running" || s.state === "creating"),
           );
           if (match && !cancelled) {
@@ -78,10 +78,10 @@ export function AgentTab({ ticketNumber, repoUrl }: AgentTabProps) {
 
     pollingRef.current = setInterval(async () => {
       try {
-        const sessions = await hubFetch<Session[]>(
+        const data = await hubFetch<{ sessions: Session[] }>(
           `/agents/${encodeURIComponent(activeAgentName)}/sessions`,
         );
-        const updated = sessions.find((s) => s.id === activeSessionId);
+        const updated = (data.sessions ?? []).find((s) => s.id === activeSessionId);
         if (updated && updated.state !== activeSessionState) {
           setActive({ session: updated, agentName: activeAgentName });
         }
