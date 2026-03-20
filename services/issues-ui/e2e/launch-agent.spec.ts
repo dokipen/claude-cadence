@@ -192,6 +192,36 @@ test.describe("launch agent dialog", () => {
     await expect(page.getByTestId("agent-tab-content")).toBeVisible();
   });
 
+  test("POST body contains /lead command as extra_args", async ({ page }) => {
+    let capturedBody: Record<string, unknown> | null = null;
+
+    await page.route("**/api/v1/agents/*/sessions", async (route) => {
+      if (route.request().method() === "POST") {
+        capturedBody = JSON.parse(route.request().postData() ?? "{}");
+        route.fulfill({
+          status: 201,
+          contentType: "application/json",
+          body: JSON.stringify(MOCK_SESSION),
+        });
+      } else {
+        route.continue();
+      }
+    });
+
+    await page.goto("/projects/e2e-test-project");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+
+    const card = page.getByTestId("column-REFINED").getByTestId("ticket-card");
+    await card.getByTestId("card-launch-button").click();
+
+    const dialog = openDialog(page);
+    await expect(dialog).toBeVisible();
+    await dialog.getByTestId("launch-submit").click();
+
+    expect(capturedBody).not.toBeNull();
+    expect((capturedBody as Record<string, unknown>).extra_args).toEqual(["/lead 2"]);
+  });
+
   test("dialog closes on close button click", async ({ page }) => {
     await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
