@@ -26,7 +26,7 @@ vi.mock("./config.js", () => ({
   setAuthTokens: (...args: unknown[]) => mockSetAuthTokens(...args),
 }));
 
-const { getClient, isAuthError } = await import("./client.js");
+const { getClient, isAuthError, is429Error, getRetryAfterMs } = await import("./client.js");
 
 function makeAuthError() {
   return {
@@ -40,6 +40,21 @@ function makeNonAuthError() {
   return {
     response: {
       errors: [{ message: "Not found", extensions: { code: "NOT_FOUND" } }],
+    },
+  };
+}
+
+function make429Error(retryAfter?: number) {
+  return {
+    response: {
+      status: 429,
+      errors: [{
+        message: "Too many requests",
+        extensions: {
+          code: "TOO_MANY_REQUESTS",
+          ...(retryAfter !== undefined ? { retryAfter } : {}),
+        },
+      }],
     },
   };
 }
@@ -67,6 +82,53 @@ describe("isAuthError", () => {
 
   it("returns false for error with no response", () => {
     expect(isAuthError({ message: "network error" })).toBe(false);
+  });
+});
+
+describe("is429Error", () => {
+  it("returns true for error with status 429", () => {
+    expect(is429Error(make429Error())).toBe(true);
+  });
+
+  it("returns true for error with TOO_MANY_REQUESTS code (no status)", () => {
+    const err = {
+      response: {
+        errors: [{ message: "Too many requests", extensions: { code: "TOO_MANY_REQUESTS" } }],
+      },
+    };
+    expect(is429Error(err)).toBe(true);
+  });
+
+  it("returns false for non-429 errors", () => {
+    expect(is429Error(makeNonAuthError())).toBe(false);
+  });
+
+  it("returns false for null", () => {
+    expect(is429Error(null)).toBe(false);
+  });
+
+  it("returns false for plain Error", () => {
+    expect(is429Error(new Error("something"))).toBe(false);
+  });
+});
+
+describe("getRetryAfterMs", () => {
+  it("returns milliseconds from retryAfter extension", () => {
+    expect(getRetryAfterMs(make429Error(5))).toBe(5000);
+  });
+
+  it("returns null when no retryAfter present", () => {
+    expect(getRetryAfterMs(make429Error())).toBe(null);
+  });
+
+  it("returns null for non-positive retryAfter", () => {
+    expect(getRetryAfterMs(make429Error(0))).toBe(null);
+    expect(getRetryAfterMs(make429Error(-1))).toBe(null);
+  });
+
+  it("caps retryAfter at 30 seconds", () => {
+    expect(getRetryAfterMs(make429Error(60))).toBe(30000);
+    expect(getRetryAfterMs(make429Error(300))).toBe(30000);
   });
 });
 
@@ -153,5 +215,98 @@ describe("getClient", () => {
     const client = getClient();
     await expect(client.request("query { me { id } }")).rejects.toEqual(authError);
     expect(mockSetAuthTokens).not.toHaveBeenCalled();
+  });
+
+  it("retries on 429 and succeeds on second attempt", async () => {
+    mockGetAuthToken.mockReturnValue("valid-token");
+    mockRequest
+      .mockRejectedValueOnce(make429Error())
+      .mockResolvedValueOnce({ data: "success-after-retry" });
+
+    vi.useFakeTimers();
+    const client = getClient();
+    const promise = client.request("query { me { id } }");
+    await vi.runAllTimersAsync();
+    const result = await promise;
+    vi.useRealTimers();
+
+    expect(result).toEqual({ data: "success-after-retry" });
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries up to MAX_RETRIES times on 429", async () => {
+    mockGetAuthToken.mockReturnValue("valid-token");
+    mockRequest
+      .mockRejectedValueOnce(make429Error())
+      .mockRejectedValueOnce(make429Error())
+      .mockRejectedValueOnce(make429Error())
+      .mockResolvedValueOnce({ data: "success-after-3-retries" });
+
+    vi.useFakeTimers();
+    const client = getClient();
+    const promise = client.request("query { me { id } }");
+    await vi.runAllTimersAsync();
+    const result = await promise;
+    vi.useRealTimers();
+
+    expect(result).toEqual({ data: "success-after-3-retries" });
+    expect(mockRequest).toHaveBeenCalledTimes(4);
+  });
+
+  it("throws after exhausting all retries on 429", async () => {
+    mockGetAuthToken.mockReturnValue("valid-token");
+    const rateLimitError = make429Error();
+    mockRequest
+      .mockRejectedValueOnce(rateLimitError)
+      .mockRejectedValueOnce(rateLimitError)
+      .mockRejectedValueOnce(rateLimitError)
+      .mockRejectedValueOnce(rateLimitError);
+
+    vi.useFakeTimers();
+    const client = getClient();
+    const rejectAssertion = expect(client.request("query { me { id } }")).rejects.toEqual(rateLimitError);
+    await vi.runAllTimersAsync();
+    await rejectAssertion;
+    vi.useRealTimers();
+
+    expect(mockRequest).toHaveBeenCalledTimes(4);
+  });
+
+  it("does not retry non-429 errors", async () => {
+    mockGetAuthToken.mockReturnValue("valid-token");
+    mockGetRefreshToken.mockReturnValue(undefined);
+    const serverError = {
+      response: {
+        status: 500,
+        errors: [{ message: "Internal server error", extensions: { code: "INTERNAL_ERROR" } }],
+      },
+    };
+    mockRequest.mockRejectedValueOnce(serverError);
+
+    const client = getClient();
+    await expect(client.request("query { me { id } }")).rejects.toEqual(serverError);
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs retry message to stderr", async () => {
+    mockGetAuthToken.mockReturnValue("valid-token");
+    mockRequest
+      .mockRejectedValueOnce(make429Error())
+      .mockResolvedValueOnce({ data: "ok" });
+
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    vi.useFakeTimers();
+    const client = getClient();
+    const promise = client.request("query { me { id } }");
+    await vi.runAllTimersAsync();
+    await promise;
+    vi.useRealTimers();
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Retrying in 1s")
+    );
+
+    errorSpy.mockRestore();
   });
 });

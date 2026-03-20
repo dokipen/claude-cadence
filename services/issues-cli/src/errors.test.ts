@@ -8,10 +8,12 @@ vi.mock("chalk", () => ({
   },
 }));
 
-// Mock client.js isAuthError
+// Mock client.js isAuthError and is429Error
 const mockIsAuthError = vi.fn();
+const mockIs429Error = vi.fn();
 vi.mock("./client.js", () => ({
   isAuthError: (...args: unknown[]) => mockIsAuthError(...args),
+  is429Error: (...args: unknown[]) => mockIs429Error(...args),
 }));
 
 const mockExit = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
@@ -24,6 +26,7 @@ describe("handleError", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockExit.mockImplementation(() => undefined as never);
+    mockIs429Error.mockReturnValue(false);
   });
 
   afterAll(() => {
@@ -84,5 +87,30 @@ describe("handleError", () => {
 
     const output = mockConsoleError.mock.calls.map(([msg]) => msg).join("\n");
     expect(output).toContain("Network timeout");
+  });
+
+  it("shows clean rate-limit message for 429 errors", () => {
+    mockIs429Error.mockReturnValue(true);
+    mockIsAuthError.mockReturnValue(false);
+    const error = new Error("rate limited");
+    (error as any).response = { errors: [{ message: "Too Many Requests" }] };
+
+    handleError(error);
+
+    const output = mockConsoleError.mock.calls.map(([msg]) => msg).join("\n");
+    expect(output).toContain("Rate limit exceeded after retries");
+    expect(output).not.toContain("Too Many Requests");
+    expect(mockExit).toHaveBeenCalledWith(1);
+  });
+
+  it("does not show rate-limit message for non-429 errors", () => {
+    mockIs429Error.mockReturnValue(false);
+    mockIsAuthError.mockReturnValue(false);
+
+    handleError(new Error("Something else"));
+
+    const output = mockConsoleError.mock.calls.map(([msg]) => msg).join("\n");
+    expect(output).not.toContain("Rate limit");
+    expect(mockExit).toHaveBeenCalledWith(1);
   });
 });
