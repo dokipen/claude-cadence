@@ -55,7 +55,7 @@ fi
 # --- List agents ---
 
 info "Listing registered agents..."
-AGENTS_JSON="$(curl -sf -H "Authorization: Bearer $HUB_API_TOKEN" "$HUB_URL/api/v1/agents" 2>&1)" || {
+AGENTS_JSON="$(ssh "$HOST" "curl -sf -H 'Authorization: Bearer $HUB_API_TOKEN' http://127.0.0.1:4200/api/v1/agents" 2>&1)" || {
     error "Failed to reach agent-hub API at $HUB_URL/api/v1/agents"
 }
 
@@ -99,11 +99,11 @@ if online:
         warn "No online agents available for smoke test."
     else
         info "Creating test session on agent '$AGENT_NAME'..."
-        RESPONSE="$(curl -sf -X POST \
-            -H "Authorization: Bearer $HUB_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "{\"agent_profile\":\"claude-cadence\",\"session_name\":\"deploy-verify-test\",\"extra_args\":[\"-p\",\"Say 'deployment verification successful' and exit.\"]}" \
-            "$HUB_URL/api/v1/agents/$AGENT_NAME/sessions" 2>&1)" || {
+        RESPONSE="$(ssh "$HOST" "curl -sf -X POST \
+            -H 'Authorization: Bearer $HUB_API_TOKEN' \
+            -H 'Content-Type: application/json' \
+            -d '{\"agent_profile\":\"claude-cadence\",\"session_name\":\"deploy-verify-test\",\"extra_args\":[\"-p\",\"Say \\\"deployment verification successful\\\" and exit.\"]}' \
+            http://127.0.0.1:4200/api/v1/agents/$AGENT_NAME/sessions" 2>&1)" || {
             warn "Failed to create test session. Response: $RESPONSE"
         }
 
