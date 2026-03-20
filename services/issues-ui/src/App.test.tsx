@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
-
-const STORAGE_KEY = "cadence_project_id";
+import { STORAGE_KEY } from "./App";
 const PROJECTS = [
   { id: "proj-a", name: "Project A" },
   { id: "proj-b", name: "Project B" },
