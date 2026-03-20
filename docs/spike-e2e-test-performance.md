@@ -35,14 +35,14 @@ Per-file timing (CI mode, `workers: 1`):
 
 | Metric | Value |
 |--------|-------|
-| Wall time | 40s (test execution only) |
+| Wall time | ~40s measured (partial, see note) |
 | Test files | 11 (10 suites + 1 helpers) |
 | Total tests | 121 |
 | Concurrency | Fully serial (`sequence.concurrent: false`) |
 
-> Note: CLI tests currently fail due to Prisma 7 schema compatibility issue (separate bug). Timing data is from partial runs.
+> **Caveat:** CLI tests currently fail due to a Prisma 7 schema compatibility issue (the `datasource.url` property was removed in Prisma 7). The 40s figure is from a partial run where only 5 of 11 suites bootstrapped successfully. A healthy full run is estimated at **90-190s** based on 10 server bootstraps at 5-15s each plus test execution time. This Prisma 7 issue needs a separate fix.
 
-**Combined E2E baseline: ~136s (serial)**
+**Combined E2E baseline: ~186-286s estimated (serial), ~136s measured (partial)**
 
 ## Time Breakdown
 
