@@ -152,8 +152,22 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 **All work happens in worktrees, never on the default branch.**
 
 1. Check current branch: `git branch --show-current`
-2. If on default branch, use `/new-work` to create a worktree first.
-3. Post setup to issue:
+2. Detect if already inside a worktree:
+   ```bash
+   GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
+   GIT_COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null)
+   IN_WORKTREE=false
+   if [ "$GIT_DIR" != "$GIT_COMMON_DIR" ]; then
+     IN_WORKTREE=true
+   fi
+   ```
+3. **If already in a worktree** (`IN_WORKTREE=true`):
+   - If on a feature branch (not default): use the current directory and branch as-is. Set `WORKTREE_PREEXISTING=true`.
+   - If on the default branch: use `/new-work` to create a branch in-place (the script auto-detects worktrees). Set `WORKTREE_PREEXISTING=true`.
+4. **If NOT in a worktree**:
+   - If on default branch: use `/new-work` to create a worktree.
+   - If on a feature branch: use the current directory and branch as-is.
+5. Post setup to issue:
 
    **GitHub (default):**
    ```bash
@@ -323,8 +337,8 @@ In both cases:
    - **GitHub (default):** `gh issue edit [NUMBER] --remove-label "in-progress"` (the PR's `Fixes #N` auto-closes it)
    - **Issues API:** `issues ticket transition TICKET_ID --to CLOSED --json`
 3. Sync blocked labels using the `update-blocked-labels.sh` script in this command's `scripts/` directory
-4. Return to default branch and pull latest
-5. Clean up worktree using the `project-ops` skill's `cleanup-worktree.sh` script
+4. Return to default branch and pull latest (skip if `WORKTREE_PREEXISTING` — the worktree is not ours to clean up)
+5. Clean up worktree using the `project-ops` skill's `cleanup-worktree.sh` script (skip if `WORKTREE_PREEXISTING`)
 6. **Post completion to issue**:
 
    **GitHub (default):**
@@ -348,7 +362,7 @@ In both cases:
 
 When delegating to any agent, include all of the following:
 
-1. **Worktree path:** `cd /path/to/.worktrees/branch-name` (sub-agents do not inherit the lead's working directory)
+1. **Working directory:** `cd [WORKING_DIR]` where `[WORKING_DIR]` is the actual working directory (`$PWD`) — do not assume `.worktrees/` paths (sub-agents do not inherit the lead's working directory)
 2. **Issue context:** `Read issue #N for full context: gh issue view N`
 3. **Scope:** Which files, directories, or areas to focus on
 4. **Constraints:** What NOT to modify (other agents' files, out-of-scope areas)
