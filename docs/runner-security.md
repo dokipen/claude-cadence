@@ -20,7 +20,7 @@ This document covers security considerations for the self-hosted GitHub Actions 
 
 The self-hosted runner is Arch-based. The following packages must be pre-installed since workflows cannot use `sudo` or `apt`:
 
-**Playwright Chromium dependencies:**
+**Playwright Chromium dependencies** (validated against Playwright ^1.50.0)**:**
 ```
 alsa-lib at-spi2-core atk cairo libcups dbus libdrm mesa glib2 nspr nss pango wayland libx11 libxcb libxcomposite libxdamage libxext libxfixes libxkbcommon libxrandr
 ```
