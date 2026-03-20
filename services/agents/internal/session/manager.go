@@ -198,7 +198,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	}
 
 	// Render command template.
-	cmdStr, err := m.renderCommand(profile.Command, sess, req.ExtraArgs)
+	cmdStr, err := m.renderCommand(profile.Command, sess, req.ExtraArgs, profile.PluginDir)
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to render command: %v", err)
 		m.store.Update(sessionID, func(s *Session) {
@@ -507,20 +507,26 @@ type templateData struct {
 	SessionName  string // Safe without escaping: validated to [a-zA-Z0-9_-] by tmuxNameRe.
 	ExtraArgs    string // Shell-escaped via shellJoinArgs in renderCommand.
 	WorktreePath string // Shell-escaped in renderCommand when non-empty; empty string when unset.
+	PluginDir    string // Shell-escaped in renderCommand when non-empty; empty string when unset.
 }
 
-func (m *Manager) renderCommand(cmdTemplate string, sess *Session, extraArgs []string) (string, error) {
+func (m *Manager) renderCommand(cmdTemplate string, sess *Session, extraArgs []string, pluginDir string) (string, error) {
 	tmpl, err := template.New("cmd").Parse(cmdTemplate)
 	if err != nil {
 		return "", fmt.Errorf("parsing command template: %w", err)
 	}
 
-	// Leave WorktreePath as empty string (not shell-escaped '\'') when unset,
-	// so template conditionals like {{if .WorktreePath}} work correctly and
-	// commands don't receive a spurious empty-string argument.
+	// Leave WorktreePath and PluginDir as empty string (not shell-escaped '')
+	// when unset, so template conditionals like {{if .WorktreePath}} work
+	// correctly and commands don't receive a spurious empty-string argument.
 	worktreePath := ""
 	if sess.WorktreePath != "" {
 		worktreePath = shellEscapeArg(sess.WorktreePath)
+	}
+
+	escapedPluginDir := ""
+	if pluginDir != "" {
+		escapedPluginDir = shellEscapeArg(pluginDir)
 	}
 
 	data := templateData{
@@ -528,6 +534,7 @@ func (m *Manager) renderCommand(cmdTemplate string, sess *Session, extraArgs []s
 		SessionName:  sess.Name,
 		ExtraArgs:    shellJoinArgs(extraArgs),
 		WorktreePath: worktreePath,
+		PluginDir:    escapedPluginDir,
 	}
 
 	var buf bytes.Buffer

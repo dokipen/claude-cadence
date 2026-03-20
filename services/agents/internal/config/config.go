@@ -132,6 +132,7 @@ type Profile struct {
 	Command     string `yaml:"command"`
 	Description string `yaml:"description"`
 	VaultSecret string `yaml:"vault_secret"` // Vault path for credentials (e.g. "secret/data/agentd/github/repo")
+	PluginDir   string `yaml:"plugin_dir"`   // Claude Code plugin directory (available as {{.PluginDir}} in command template)
 }
 
 // Load reads and validates a YAML config file.

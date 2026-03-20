@@ -178,27 +178,32 @@ Profile `command` strings are Go templates evaluated at session start:
 | Variable | Description |
 |---|---|
 | `{{.WorktreePath}}` | Absolute path of the checked-out worktree |
+| `{{.PluginDir}}` | Plugin directory from profile config (empty if not set) |
 | `{{.ExtraArgs}}` | Additional arguments passed by the caller at session creation |
 | `{{.SessionName}}` | Human-readable tmux session name |
 | `{{.SessionID}}` | Unique session UUID |
+
+Use `{{if .PluginDir}}` conditionals to omit flags when the variable is unset.
 
 ### Examples
 
 ```yaml
 profiles:
-  # Claude Code reviewer using the sonnet model
+  # Claude Code reviewer with plugin support
   claude-reviewer:
     repo: "https://github.com/org/project.git"
-    command: "claude --model sonnet --permission-mode accept --cwd {{.WorktreePath}} {{.ExtraArgs}}"
+    command: "claude --model sonnet --permission-mode accept{{if .PluginDir}} --plugin-dir {{.PluginDir}}{{end}} --cwd {{.WorktreePath}} {{.ExtraArgs}}"
+    plugin_dir: "/opt/cadence/plugin"
     description: "Claude Code reviewer"
 
   # Claude Opus for complex tasks
   claude-opus:
     repo: "https://github.com/org/project.git"
-    command: "claude --model opus --permission-mode accept --cwd {{.WorktreePath}} {{.ExtraArgs}}"
+    command: "claude --model opus --permission-mode accept{{if .PluginDir}} --plugin-dir {{.PluginDir}}{{end}} --cwd {{.WorktreePath}} {{.ExtraArgs}}"
+    plugin_dir: "/opt/cadence/plugin"
     description: "Claude Opus agent"
 
-  # Custom agent script
+  # Custom agent script (no plugin)
   my-agent:
     repo: "https://github.com/org/project.git"
     command: "/usr/local/bin/my-agent --session {{.SessionID}} --dir {{.WorktreePath}} {{.ExtraArgs}}"
