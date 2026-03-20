@@ -81,7 +81,7 @@ func (c *Client) Start(sessionID, tmuxSocketName, tmuxSessionName string) (strin
 		"-i", c.bindAddress,
 		"-p", fmt.Sprintf("%d", port),
 		"-W",
-		"tmux", "-L", tmuxSocketName, "attach-session", "-t", tmuxSessionName,
+		"tmux", "-L", tmuxSocketName, "-f", "/dev/null", "attach-session", "-t", tmuxSessionName,
 	)
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
