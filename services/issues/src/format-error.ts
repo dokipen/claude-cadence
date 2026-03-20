@@ -4,6 +4,7 @@ import { isProduction } from "./env.js";
 const KNOWN_ERROR_CODES = new Set([
   "BAD_USER_INPUT",
   "NOT_FOUND",
+  "CONFLICT",
   "FORBIDDEN",
   "UNAUTHENTICATED",
 ]);

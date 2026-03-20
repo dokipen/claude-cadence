@@ -306,6 +306,16 @@ export const ticketResolvers = {
         return await prisma.label.create({ data: { name, color } });
       } catch (error) {
         if (error instanceof GraphQLError) throw error;
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          (error as any).code === "P2002"
+        ) {
+          throw new GraphQLError("A label with that name already exists", {
+            extensions: { code: "CONFLICT" },
+          });
+        }
         console.error("Failed to create label:", error instanceof Error ? error.message : String(error));
         throw new GraphQLError("Failed to create label", {
           extensions: { code: "INTERNAL_SERVER_ERROR" },
@@ -341,6 +351,16 @@ export const ticketResolvers = {
         return ticket;
       } catch (error) {
         if (error instanceof GraphQLError) throw error;
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          (error as any).code === "P2002"
+        ) {
+          throw new GraphQLError("Label is already on this ticket", {
+            extensions: { code: "CONFLICT" },
+          });
+        }
         console.error("Failed to add label:", error instanceof Error ? error.message : String(error));
         throw new GraphQLError("Failed to add label", {
           extensions: { code: "INTERNAL_SERVER_ERROR" },
@@ -396,6 +416,12 @@ export const ticketResolvers = {
         const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
         if (!ticket) {
           throw new GraphQLError("Ticket not found", {
+            extensions: { code: "NOT_FOUND" },
+          });
+        }
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) {
+          throw new GraphQLError("User not found", {
             extensions: { code: "NOT_FOUND" },
           });
         }
