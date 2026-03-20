@@ -14,6 +14,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/dokipen/claude-cadence/services/agent-hub/internal/hub"
+	"golang.org/x/sync/errgroup"
 )
 
 // handleListAgents returns all registered agents.
@@ -30,8 +31,13 @@ func handleListAgents(h *hub.Hub) http.HandlerFunc {
 	}
 }
 
+// listAllSessionsDeadline caps the total fan-out time for handleListAllSessions.
+// Without this, worst-case latency is ceil(N/16)*5s (e.g. 160 agents → 50s),
+// which exceeds the HTTP server's 35s WriteTimeout. Chosen to be safely under WriteTimeout.
+const listAllSessionsDeadline = 28 * time.Second
+
 // handleListAllSessions returns sessions across all online agents.
-func handleListAllSessions(h *hub.Hub) http.HandlerFunc {
+func handleListAllSessions(h *hub.Hub, overallDeadline time.Duration) http.HandlerFunc {
 	sem := make(chan struct{}, MaxAgentFanOut)
 	return func(w http.ResponseWriter, r *http.Request) {
 		agents := h.List()
@@ -51,7 +57,13 @@ func handleListAllSessions(h *hub.Hub) http.HandlerFunc {
 			results []agentSessions
 		)
 
-		var wg sync.WaitGroup
+		// Apply an overall deadline across the entire fan-out. Without this,
+		// worst-case latency is ceil(N/16)*listAllSessionsTimeout (e.g. 160
+		// agents → 50s), which would exceed the HTTP server's WriteTimeout.
+		fanOutCtx, cancel := context.WithTimeout(r.Context(), overallDeadline)
+		defer cancel()
+
+		eg, egCtx := errgroup.WithContext(fanOutCtx)
 	loop:
 		for _, info := range agents {
 			if info.Status != hub.StatusOnline {
@@ -65,40 +77,43 @@ func handleListAllSessions(h *hub.Hub) http.HandlerFunc {
 			// goroutine count and concurrent RPCs.
 			select {
 			case sem <- struct{}{}:
-			case <-r.Context().Done():
+			case <-egCtx.Done():
 				break loop
 			}
-			wg.Add(1)
-			go func(agent *hub.ConnectedAgent, name string) {
-				defer wg.Done()
+			eg.Go(func() error {
 				defer func() { <-sem }()
-				callCtx, cancel := context.WithTimeout(r.Context(), listAllSessionsTimeout)
+				callCtx, cancel := context.WithTimeout(egCtx, listAllSessionsTimeout)
 				defer cancel()
 
 				result, err := h.Call(callCtx, agent, "listSessions", params)
 				if err != nil {
-					slog.Debug("failed to list sessions from agent", "agent", name, "error", err)
-					return
+					slog.Debug("failed to list sessions from agent", "agent", info.Name, "error", err)
+					return nil
 				}
 
-				// Parse the sessions array from the result.
 				var parsed struct {
 					Sessions json.RawMessage `json:"sessions"`
 				}
 				if err := json.Unmarshal(result, &parsed); err != nil {
-					slog.Debug("failed to parse sessions response", "agent", name, "error", err)
-					return
+					slog.Debug("failed to parse sessions response", "agent", info.Name, "error", err)
+					return nil
 				}
 
 				mu.Lock()
 				results = append(results, agentSessions{
-					AgentName: name,
+					AgentName: info.Name,
 					Sessions:  parsed.Sessions,
 				})
 				mu.Unlock()
-			}(agent, info.Name)
+				return nil
+			})
 		}
-		wg.Wait()
+		eg.Wait() //nolint:errcheck // goroutines only return nil
+
+		if errors.Is(fanOutCtx.Err(), context.DeadlineExceeded) {
+			writeJSONError(w, http.StatusGatewayTimeout, "fan-out deadline exceeded")
+			return
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]any{
