@@ -165,7 +165,7 @@ The dominant cost in the CLI suite is the **10 independent server bootstraps** (
 
 The following tickets should be filed to track implementation of the recommendations:
 
-1. **Increase Playwright CI workers from 1 to 4** — Points: 1, Priority: Medium, Labels: performance
-2. **Fix flaky login E2E tests** — Points: 3, Priority: Medium, Labels: bug, performance
-3. **Consolidate CLI E2E server bootstraps into shared fixture** — Points: 5, Priority: Medium, Labels: performance
-4. **Enable file-level parallelism for CLI E2E tests** — Points: 2, Priority: Low, Labels: performance
+1. **#160 — Increase Playwright CI workers from 1 to 4** — 1 point, Medium priority
+2. **#161 — Fix flaky login E2E tests** — 3 points, Medium priority
+3. **#163 — Consolidate CLI E2E server bootstraps into shared fixture** — 5 points, Medium priority
+4. **#164 — Enable file-level parallelism for CLI E2E tests** — 2 points, Low priority
