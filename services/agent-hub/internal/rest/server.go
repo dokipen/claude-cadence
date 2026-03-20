@@ -24,9 +24,9 @@ type Server struct {
 func New(h *hub.Hub, cfg *config.Config) *Server {
 	mux := http.NewServeMux()
 
-	// Agent WebSocket endpoint — uses separate agent token auth.
+	// Agent WebSocket endpoint — uses separate agent token auth, protected by rate limiter.
 	agentToken := cfg.HubAuth.ResolveToken()
-	mux.HandleFunc("GET /ws/agent", handleAgentWebSocket(h, agentToken))
+	mux.Handle("GET /ws/agent", rateLimiter(cfg.RateLimit)(http.HandlerFunc(handleAgentWebSocket(h, agentToken))))
 
 	// REST API endpoints — protected by API token auth.
 	apiMux := http.NewServeMux()

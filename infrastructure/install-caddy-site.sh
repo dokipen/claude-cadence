@@ -115,6 +115,16 @@ ${vhost} {
 		}
 	}
 
+	# Rate limiting — per client IP on WebSocket connection establishment.
+	@ws path_regexp ^/ws/
+	rate_limit @ws {
+		zone ws_zone {
+			key    {http.request.remote.host}
+			events ${WS_RATE_LIMIT_EVENTS:-30}
+			window ${WS_RATE_LIMIT_WINDOW:-1m}
+		}
+	}
+
 	# Issues service — GraphQL API
 	handle /graphql {
 		reverse_proxy localhost:4000
