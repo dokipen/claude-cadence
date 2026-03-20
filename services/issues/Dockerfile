@@ -29,4 +29,7 @@ USER issues
 
 EXPOSE 4000
 
+HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
+  CMD wget -qO- http://localhost:4000/graphql --header='Content-Type: application/json' --post-data='{"query":"{ __typename }"}' || exit 1
+
 CMD sh -c "npx prisma migrate deploy && node dist/prisma/seed.js && exec node dist/src/index.js"
