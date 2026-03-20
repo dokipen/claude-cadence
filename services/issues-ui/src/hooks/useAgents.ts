@@ -79,6 +79,13 @@ export interface AgentProfileEntry {
   profile: AgentProfile;
 }
 
+/** Extract "owner/repo" slug from any GitHub repo reference. */
+function normalizeRepo(repo: string): string {
+  return repo
+    .replace(/^https?:\/\/github\.com\//, "")
+    .replace(/\.git$/, "");
+}
+
 export function useAgentProfiles(
   repoUrl: string | undefined,
   agents: Agent[],
@@ -86,11 +93,12 @@ export function useAgentProfiles(
   return useMemo(() => {
     if (!repoUrl) return [];
 
+    const normalizedUrl = normalizeRepo(repoUrl);
     const entries: AgentProfileEntry[] = [];
     for (const agent of agents) {
       if (agent.status !== "online") continue;
       for (const [profileName, profile] of Object.entries(agent.profiles)) {
-        if (profile.repo === repoUrl) {
+        if (normalizeRepo(profile.repo) === normalizedUrl) {
           entries.push({ agent: agent.name, profileName, profile });
         }
       }
