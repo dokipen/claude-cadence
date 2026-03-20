@@ -125,6 +125,38 @@ Valid transitions:
 
 Blocked tickets cannot transition to `IN_PROGRESS`.
 
+**State machine:**
+
+```
+           ┌────────────────────────┐
+           ↓                        │
+BACKLOG ──→ REFINED ──→ IN_PROGRESS │
+  ↑  │       │  ↑           │       │
+  │  │       │  └───────────┘       │
+  │  └───────┴──────────────────→ CLOSED
+  │                                 │
+  └─────────────────────────────────┘
+                (reopen)
+```
+
+> **IMPORTANT:** Always check the ticket's current state before transitioning.
+> Use `issues ticket view TICKET_ID --project PROJECT --json` and read the `state` field.
+> - Transitioning to the current state is an error
+> - Skipping states is an error (e.g., `BACKLOG` → `IN_PROGRESS` is invalid — must go through `REFINED`)
+
+**Common multi-step transitions:**
+
+```bash
+# Start work on a BACKLOG ticket (must pass through REFINED):
+issues ticket transition TICKET_ID --to REFINED --json
+issues ticket transition TICKET_ID --to IN_PROGRESS --json
+
+# Reopen a CLOSED ticket and start work:
+issues ticket transition TICKET_ID --to BACKLOG --json
+issues ticket transition TICKET_ID --to REFINED --json
+issues ticket transition TICKET_ID --to IN_PROGRESS --json
+```
+
 ## Labels
 
 ### List labels
