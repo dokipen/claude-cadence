@@ -13,6 +13,8 @@ export interface Context {
 const VALID_STATES = new Set(["BACKLOG", "REFINED", "IN_PROGRESS", "CLOSED"]);
 const VALID_PRIORITIES = new Set(["HIGHEST", "HIGH", "MEDIUM", "LOW", "LOWEST"]);
 const MAX_PAGE_SIZE = 100;
+const MAX_LABEL_NAMES = 20;
+const MAX_LABEL_LENGTH = 100;
 
 export const ticketResolvers = {
   Query: {
@@ -74,11 +76,22 @@ export const ticketResolvers = {
       }
 
       if (labelNames && labelNames.length > 0) {
-        where.labels = {
-          some: {
-            label: { name: { in: labelNames } },
-          },
-        };
+        if (labelNames.length > MAX_LABEL_NAMES) {
+          throw new GraphQLError(`labelNames exceeds maximum of ${MAX_LABEL_NAMES} entries`, { extensions: { code: "BAD_USER_INPUT" } });
+        }
+        const filtered = labelNames.map(n => n.trim()).filter(n => n.length > 0);
+        for (const n of filtered) {
+          if (n.length > MAX_LABEL_LENGTH) {
+            throw new GraphQLError(`Label name exceeds maximum length of ${MAX_LABEL_LENGTH}`, { extensions: { code: "BAD_USER_INPUT" } });
+          }
+        }
+        if (filtered.length > 0) {
+          where.labels = {
+            some: {
+              label: { name: { in: filtered } },
+            },
+          };
+        }
       } else if (labelName) {
         where.labels = {
           some: {

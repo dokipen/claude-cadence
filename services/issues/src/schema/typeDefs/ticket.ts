@@ -102,8 +102,8 @@ export const ticketTypeDefs = `
     ticketByNumber(projectId: ID!, number: Int!): Ticket
     tickets(
       state: TicketState
-      labelName: String
-      "Filter by multiple label names (OR). Takes precedence over labelName when both provided."
+      labelName: String @deprecated(reason: "Use labelNames instead.")
+      "Filter by multiple label names (OR). Max 20 entries."
       labelNames: [String!]
       assigneeLogin: String
       isBlocked: Boolean

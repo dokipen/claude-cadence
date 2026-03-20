@@ -262,11 +262,24 @@ describe("Ticket Management", () => {
   });
 
   it("should filter tickets by multiple labels (OR)", async () => {
-    // Using tickets created in previous test
+    // Create dedicated tickets for this test
+    const r1 = await suite.cli("ticket", "create", "--project", "default-project", "--title", "Multi-bug ticket");
+    const id1 = r1.stdout.match(/#(\S+)\s+Multi-bug ticket/)![1];
+    const r2 = await suite.cli("ticket", "create", "--project", "default-project", "--title", "Multi-feature ticket");
+    const id2 = r2.stdout.match(/#(\S+)\s+Multi-feature ticket/)![1];
+
+    const labelList = await suite.cli("label", "list", "--json");
+    const labels = JSON.parse(labelList.stdout);
+    const bugLabel = labels.find((l: { name: string }) => l.name === "bug");
+    const enhLabel = labels.find((l: { name: string }) => l.name === "enhancement");
+
+    await suite.cli("label", "add", id1, "--label", bugLabel.id);
+    await suite.cli("label", "add", id2, "--label", enhLabel.id);
+
     const result = await suite.cli("ticket", "list", "--label", "bug", "--label", "enhancement");
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Bug ticket");
-    expect(result.stdout).toContain("Feature ticket");
+    expect(result.stdout).toContain("Multi-bug ticket");
+    expect(result.stdout).toContain("Multi-feature ticket");
   });
 
   it("should return no tickets for non-existent label", async () => {
