@@ -128,11 +128,15 @@ Blocked tickets cannot transition to `IN_PROGRESS`.
 **State machine:**
 
 ```
-BACKLOG ──→ REFINED ──→ IN_PROGRESS ──→ CLOSED
-  ↑  ↓        ↑  ↓                        ↓
-  ↑  └→ CLOSED └→ BACKLOG                 ↓
-  └────────────────────────────────────────┘
-                  (reopen)
+           ┌────────────────────────┐
+           ↓                        │
+BACKLOG ──→ REFINED ──→ IN_PROGRESS │
+  ↑  │       │  ↑           │       │
+  │  │       │  └───────────┘       │
+  │  └───────┴──────────────────→ CLOSED
+  │                                 │
+  └─────────────────────────────────┘
+                (reopen)
 ```
 
 > **IMPORTANT:** Always check the ticket's current state before transitioning.
