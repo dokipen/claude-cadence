@@ -45,7 +45,7 @@ export function AgentLauncher({
           body: JSON.stringify({
             agent_profile: selected.profileName,
             session_name: `lead-${ticketNumber}`,
-            extra_args: [`${ticketNumber}`],
+            extra_args: [`/lead ${ticketNumber}`],
           }),
         },
       );
