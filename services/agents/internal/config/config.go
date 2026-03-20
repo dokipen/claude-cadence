@@ -178,7 +178,7 @@ func applyDefaults(cfg *Config) {
 	if cfg.Ttyd.BindAddress == "" {
 		cfg.Ttyd.BindAddress = "127.0.0.1"
 	}
-	if cfg.Ttyd.AdvertiseAddress == "" {
+	if cfg.Ttyd.AdvertiseAddress == "" && cfg.Ttyd.Enabled {
 		cfg.Ttyd.AdvertiseAddress = cfg.Ttyd.BindAddress
 	}
 	if cfg.Log.Level == "" {
