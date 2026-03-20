@@ -30,6 +30,7 @@ describe("formatError", () => {
     const knownCodes = [
       "BAD_USER_INPUT",
       "NOT_FOUND",
+      "CONFLICT",
       "FORBIDDEN",
       "UNAUTHENTICATED",
     ];

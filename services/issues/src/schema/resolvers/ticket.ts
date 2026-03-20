@@ -1,4 +1,5 @@
-import type { PrismaClient, Ticket, Comment, Prisma, User } from "@prisma/client";
+import type { PrismaClient, Ticket, Comment, User } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import type { Loaders } from "../../loaders.js";
 import { validateTransition, checkBlockerGuard } from "../../fsm/ticket-machine.js";
 import { GraphQLError } from "graphql";
@@ -306,6 +307,11 @@ export const ticketResolvers = {
         return await prisma.label.create({ data: { name, color } });
       } catch (error) {
         if (error instanceof GraphQLError) throw error;
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          throw new GraphQLError("A label with that name already exists", {
+            extensions: { code: "CONFLICT" },
+          });
+        }
         console.error("Failed to create label:", error instanceof Error ? error.message : String(error));
         throw new GraphQLError("Failed to create label", {
           extensions: { code: "INTERNAL_SERVER_ERROR" },
@@ -341,6 +347,11 @@ export const ticketResolvers = {
         return ticket;
       } catch (error) {
         if (error instanceof GraphQLError) throw error;
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          throw new GraphQLError("Label is already on this ticket", {
+            extensions: { code: "CONFLICT" },
+          });
+        }
         console.error("Failed to add label:", error instanceof Error ? error.message : String(error));
         throw new GraphQLError("Failed to add label", {
           extensions: { code: "INTERNAL_SERVER_ERROR" },
@@ -399,12 +410,23 @@ export const ticketResolvers = {
             extensions: { code: "NOT_FOUND" },
           });
         }
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) {
+          throw new GraphQLError("User not found", {
+            extensions: { code: "NOT_FOUND" },
+          });
+        }
         return await prisma.ticket.update({
           where: { id: ticketId },
           data: { assigneeId: userId },
         });
       } catch (error) {
         if (error instanceof GraphQLError) throw error;
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
+          throw new GraphQLError("User not found", {
+            extensions: { code: "NOT_FOUND" },
+          });
+        }
         console.error("Failed to assign ticket:", error instanceof Error ? error.message : String(error));
         throw new GraphQLError("Failed to assign ticket", {
           extensions: { code: "INTERNAL_SERVER_ERROR" },
