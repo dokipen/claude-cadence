@@ -6,8 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +20,117 @@ import (
 	"github.com/dokipen/claude-cadence/services/agent-hub/internal/hub"
 	"golang.org/x/sync/errgroup"
 )
+
+// docsDir is the path to the documentation directory, relative to CWD (repo root).
+const docsDir = "docs"
+
+// docFile represents a markdown file entry in the docs listing.
+type docFile struct {
+	Path string `json:"path"`
+	Name string `json:"name"`
+}
+
+// handleListDocs returns a JSON list of all markdown files under the docs directory.
+func handleListDocs() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var files []docFile
+
+		err := filepath.WalkDir(docsDir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				return nil
+			}
+			if !strings.HasSuffix(d.Name(), ".md") {
+				return nil
+			}
+			// path is relative to CWD; strip the leading "docs/" prefix.
+			rel, relErr := filepath.Rel(docsDir, path)
+			if relErr != nil {
+				return relErr
+			}
+			files = append(files, docFile{
+				Path: rel,
+				Name: d.Name(),
+			})
+			return nil
+		})
+		if err != nil {
+			if os.IsNotExist(err) {
+				writeJSONError(w, http.StatusNotFound, "docs directory not found")
+				return
+			}
+			slog.Error("failed to walk docs directory", "error", err)
+			writeJSONError(w, http.StatusInternalServerError, "failed to list docs")
+			return
+		}
+
+		sort.Slice(files, func(i, j int) bool {
+			return files[i].Path < files[j].Path
+		})
+
+		if files == nil {
+			files = []docFile{}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"files": files,
+		}); err != nil {
+			slog.Error("failed to encode docs list response", "error", err)
+		}
+	}
+}
+
+// handleGetDoc returns the content of a single markdown file by path.
+func handleGetDoc() http.HandlerFunc {
+	// Resolve the docs root to an absolute path once at startup so that the
+	// boundary check below is invariant to the process working directory.
+	absDocsRoot, err := filepath.Abs(docsDir)
+	if err != nil {
+		slog.Error("failed to resolve docs directory", "error", err)
+		absDocsRoot = docsDir
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		filePath := r.PathValue("path")
+
+		// Only serve markdown files.
+		if !strings.HasSuffix(filePath, ".md") {
+			writeJSONError(w, http.StatusBadRequest, "invalid path")
+			return
+		}
+
+		// Resolve to an absolute path and verify it is inside the docs root.
+		// This prevents path traversal via "..", encoded sequences, or symlink
+		// tricks — filepath.Abs cleans the path and resolves all "..".
+		absPath, err := filepath.Abs(filepath.Join(absDocsRoot, filepath.FromSlash(filePath)))
+		if err != nil || !strings.HasPrefix(absPath, absDocsRoot+string(filepath.Separator)) {
+			writeJSONError(w, http.StatusBadRequest, "invalid path")
+			return
+		}
+
+		content, err := os.ReadFile(absPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				writeJSONError(w, http.StatusNotFound, "doc not found")
+				return
+			}
+			slog.Error("failed to read doc file", "path", absPath, "error", err)
+			writeJSONError(w, http.StatusInternalServerError, "failed to read doc")
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"path":    filePath,
+			"content": string(content),
+		}); err != nil {
+			slog.Error("failed to encode doc response", "error", err)
+		}
+	}
+}
 
 // handleListAgents returns all registered agents.
 func handleListAgents(h *hub.Hub) http.HandlerFunc {

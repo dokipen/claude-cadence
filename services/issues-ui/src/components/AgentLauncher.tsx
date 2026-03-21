@@ -9,6 +9,9 @@ interface AgentLauncherProps {
   repoUrl: string | undefined;
   onLaunched: (session: Session, agentName: string) => void;
   inline?: boolean;
+  command?: string;
+  sessionName?: string;
+  buttonLabel?: string;
 }
 
 export function AgentLauncher({
@@ -16,6 +19,9 @@ export function AgentLauncher({
   repoUrl,
   onLaunched,
   inline,
+  command = `/lead ${ticketNumber}`,
+  sessionName = `lead-${ticketNumber}`,
+  buttonLabel = "Lead",
 }: AgentLauncherProps) {
   const { agents, loading: agentsLoading, error: agentsError } = useAgents();
   const profiles = useAgentProfiles(repoUrl, agents);
@@ -37,6 +43,9 @@ export function AgentLauncher({
     setLaunching(true);
     setError(null);
 
+    const cappedCommand =
+      command.length > 500 ? command.slice(0, 500) + "…" : command;
+
     try {
       const session = await hubFetch<Session>(
         `/agents/${encodeURIComponent(selected.agent)}/sessions`,
@@ -44,8 +53,8 @@ export function AgentLauncher({
           method: "POST",
           body: JSON.stringify({
             agent_profile: selected.profileName,
-            session_name: `lead-${ticketNumber}`,
-            extra_args: [`/lead ${ticketNumber}`],
+            session_name: sessionName,
+            extra_args: [cappedCommand],
           }),
         },
       );
@@ -55,7 +64,7 @@ export function AgentLauncher({
     } finally {
       setLaunching(false);
     }
-  }, [selected, ticketNumber, onLaunched]);
+  }, [selected, command, sessionName, onLaunched]);
 
   if (agentsLoading) {
     return <div className={styles.launcherMessage}>Loading agents…</div>;
@@ -122,7 +131,7 @@ export function AgentLauncher({
         disabled={launching || !selected}
         data-testid="launch-submit"
       >
-        {launching ? "Launching…" : "Launch Agent"}
+        {launching ? "Launching…" : buttonLabel}
       </button>
     </div>
   );

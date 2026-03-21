@@ -110,7 +110,7 @@ test.describe("launch agent dialog", () => {
 
     const card = page.getByTestId("column-REFINED").getByTestId("ticket-card");
     await expect(card.getByTestId("card-launch-button")).toBeVisible();
-    await expect(card.getByTestId("card-launch-button")).toHaveText("Launch");
+    await expect(card.getByTestId("card-launch-button")).toHaveText("Lead");
   });
 
   test("launch button opens dialog without navigating", async ({ page }) => {
@@ -233,6 +233,94 @@ test.describe("launch agent dialog", () => {
     await expect(dialog).toBeVisible();
     await dialog.getByTestId("dialog-close").click();
     await expect(dialog).not.toBeVisible();
+  });
+
+  test("BACKLOG column card shows Refine button label", async ({ page }) => {
+    await page.goto("/projects/e2e-test-project");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+
+    const card = page.getByTestId("column-BACKLOG").getByTestId("ticket-card").first();
+    await expect(card.getByTestId("card-launch-button")).toBeVisible();
+    await expect(card.getByTestId("card-launch-button")).toHaveText("Refine");
+  });
+
+  test("CLOSED column card shows Discuss button label", async ({ page }) => {
+    await page.goto("/projects/e2e-test-project");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+
+    const card = page.getByTestId("column-CLOSED").getByTestId("ticket-card");
+    await expect(card.getByTestId("card-launch-button")).toBeVisible();
+    await expect(card.getByTestId("card-launch-button")).toHaveText("Discuss");
+  });
+
+  test("IN_PROGRESS column card shows Lead button label", async ({ page }) => {
+    await page.goto("/projects/e2e-test-project");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+
+    const card = page.getByTestId("column-IN_PROGRESS").getByTestId("ticket-card");
+    await expect(card.getByTestId("card-launch-button")).toBeVisible();
+    await expect(card.getByTestId("card-launch-button")).toHaveText("Lead");
+  });
+
+  test("POST body contains /refine command when clicking Refine on BACKLOG card", async ({ page }) => {
+    let capturedBody: Record<string, unknown> | null = null;
+
+    await page.route("**/api/v1/agents/*/sessions", async (route) => {
+      if (route.request().method() === "POST") {
+        capturedBody = JSON.parse(route.request().postData() ?? "{}");
+        route.fulfill({
+          status: 201,
+          contentType: "application/json",
+          body: JSON.stringify(MOCK_SESSION),
+        });
+      } else {
+        route.continue();
+      }
+    });
+
+    await page.goto("/projects/e2e-test-project");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+
+    const card = page.getByTestId("column-BACKLOG").getByTestId("ticket-card").first();
+    await card.getByTestId("card-launch-button").click();
+
+    const dialog = openDialog(page);
+    await expect(dialog).toBeVisible();
+    await dialog.getByTestId("launch-submit").click();
+
+    expect(capturedBody).not.toBeNull();
+    expect((capturedBody as Record<string, unknown>).extra_args).toEqual(["/refine 1"]);
+  });
+
+  test("POST body contains discuss prompt when clicking Discuss on CLOSED card", async ({ page }) => {
+    let capturedBody: Record<string, unknown> | null = null;
+
+    await page.route("**/api/v1/agents/*/sessions", async (route) => {
+      if (route.request().method() === "POST") {
+        capturedBody = JSON.parse(route.request().postData() ?? "{}");
+        route.fulfill({
+          status: 201,
+          contentType: "application/json",
+          body: JSON.stringify(MOCK_SESSION),
+        });
+      } else {
+        route.continue();
+      }
+    });
+
+    await page.goto("/projects/e2e-test-project");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+
+    const card = page.getByTestId("column-CLOSED").getByTestId("ticket-card");
+    await card.getByTestId("card-launch-button").click();
+
+    const dialog = openDialog(page);
+    await expect(dialog).toBeVisible();
+    await dialog.getByTestId("launch-submit").click();
+
+    expect(capturedBody).not.toBeNull();
+    expect((capturedBody as Record<string, unknown>).extra_args).toHaveLength(1);
+    expect(((capturedBody as Record<string, unknown>).extra_args as string[])[0]).toMatch(/^Let's discuss ticket #4 — /);
   });
 });
 

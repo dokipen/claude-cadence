@@ -79,6 +79,83 @@
   color: var(--text);
 }
 
+.modeToggle {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.modeButton {
+  background: var(--bg);
+  color: var(--text-secondary);
+  border: none;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  font-family: inherit;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.modeButton:hover {
+  background: var(--border);
+}
+
+.modeButtonActive {
+  background: var(--primary);
+  color: #fff;
+}
+
+.modeButtonActive:hover {
+  opacity: 0.9;
+  background: var(--primary);
+}
+
+.cqlContainer {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.cqlInput {
+  flex: 1;
+  min-width: 200px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  font-family: monospace;
+  height: 2rem;
+}
+
+.cqlInput:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.cqlInput[aria-invalid="true"] {
+  border-color: var(--error, #d32f2f);
+}
+
+.cqlErrors {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  width: 100%;
+  font-size: 0.72rem;
+  color: var(--error, #d32f2f);
+}
+
 @media (max-width: 768px) {
   .filterBar {
     flex-wrap: wrap;

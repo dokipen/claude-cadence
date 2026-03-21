@@ -13,6 +13,7 @@ interface TilingLayoutProps {
   windows: TiledWindow[];
   onMinimize: (key: string) => void;
   onTerminated: (key: string) => void;
+  onReorder?: (dragKey: string, dropKey: string) => void;
 }
 
 // Recursive binary split tree
@@ -75,12 +76,14 @@ function buildVerticalSplit(keys: string[]): LayoutNode {
   };
 }
 
-export function TilingLayout({ windows, onMinimize, onTerminated }: TilingLayoutProps) {
+export function TilingLayout({ windows, onMinimize, onTerminated, onReorder }: TilingLayoutProps) {
   const windowMap = new Map(windows.map((w) => [w.key, w]));
   const keys = windows.map((w) => w.key);
   const layout = buildLayout(keys);
   const [ratios, setRatios] = useState<Map<string, number>>(new Map());
   const draggingRef = useRef<{ path: string; direction: "horizontal" | "vertical"; startPos: number; startRatio: number; containerSize: number } | null>(null);
+  const dragKeyRef = useRef<string | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
 
   // Prune stale ratio entries when layout changes
   const keysJson = JSON.stringify(keys);
@@ -157,6 +160,12 @@ export function TilingLayout({ windows, onMinimize, onTerminated }: TilingLayout
           agentName={win.agentName}
           onMinimize={() => onMinimize(win.key)}
           onTerminated={() => onTerminated(win.key)}
+          onDragStart={() => { dragKeyRef.current = win.key; }}
+          onDragEnd={() => { dragKeyRef.current = null; setDragOverKey(null); }}
+          onDragOver={(e) => { e.preventDefault(); if (dragKeyRef.current && dragKeyRef.current !== win.key) setDragOverKey(win.key); }}
+          onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOverKey(null); }}
+          onDrop={(e) => { e.preventDefault(); if (dragKeyRef.current && dragKeyRef.current !== win.key && onReorder) { onReorder(dragKeyRef.current, win.key); } dragKeyRef.current = null; setDragOverKey(null); }}
+          isDragOver={dragOverKey === win.key}
         />
       );
     }

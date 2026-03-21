@@ -4,6 +4,7 @@ import type { Ticket } from "../types";
 import { PriorityBadge } from "./PriorityBadge";
 import { LabelBadge } from "./LabelBadge";
 import { LaunchAgentDialog } from "./LaunchAgentDialog";
+import { getLaunchConfig } from "./launchConfig";
 import styles from "../styles/card.module.css";
 import agentStyles from "../styles/agents.module.css";
 
@@ -15,6 +16,8 @@ export function TicketCard({
   repoUrl?: string;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  const launchButtonLabel = getLaunchConfig(ticket.state).buttonLabel;
 
   const handleLaunchClick = useCallback(
     (e: React.MouseEvent) => {
@@ -64,7 +67,7 @@ export function TicketCard({
               onClick={handleLaunchClick}
               data-testid="card-launch-button"
             >
-              Launch
+              {launchButtonLabel}
             </button>
             {ticket.storyPoints != null && (
               <span className={styles.storyPoints} data-testid="story-points">
@@ -77,6 +80,8 @@ export function TicketCard({
       <LaunchAgentDialog
         ticketId={ticket.id}
         ticketNumber={ticket.number}
+        ticketState={ticket.state}
+        ticketTitle={ticket.title}
         repoUrl={repoUrl}
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
