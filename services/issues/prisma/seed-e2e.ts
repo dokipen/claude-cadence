@@ -193,14 +193,6 @@ This has **bold text** and \`code\` inline.
     },
   });
 
-  // Create blocking relationship: closed ticket blocks backlog (should NOT show as blocked)
-  await prisma.blockRelation.create({
-    data: {
-      blockerId: closedTicket.id,
-      blockedId: backlogTicket.id,
-    },
-  });
-
   console.log("E2E seed data created successfully");
   console.log(`  User: ${user.login} (${user.id})`);
   console.log(`  Project 1: ${project.name} (${project.id})`);
