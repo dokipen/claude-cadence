@@ -12,8 +12,21 @@ func validProfiles() map[string]Profile {
 
 func validCleanup() CleanupConfig {
 	return CleanupConfig{
-		StaleSessionTTL: 24 * time.Hour,
-		CheckInterval:   5 * time.Minute,
+		StaleSessionTTL: time.Hour,
+		ReapInterval:    30 * time.Second,
+	}
+}
+
+func TestValidate_ZeroStaleSessionTTL(t *testing.T) {
+	cfg := &Config{
+		Host:     "127.0.0.1",
+		Auth:     AuthConfig{Mode: "none"},
+		Profiles: validProfiles(),
+		Cleanup:  CleanupConfig{StaleSessionTTL: 0, ReapInterval: 30 * time.Second},
+	}
+	err := validate(cfg)
+	if err == nil {
+		t.Fatal("expected error for zero stale_session_ttl")
 	}
 }
 
