@@ -76,6 +76,7 @@ Bump the `version` field in `.claude-plugin/plugin.json` only when preparing a r
 - **Estimation**: Fibonacci scale (1, 2, 3, 5, 8, 13)
 - **Communication**: Issue comments pre-PR, PR comments post-PR
 - **GitHub access**: Always use `gh` CLI, never WebFetch for GitHub URLs
+- **Shell syntax**: Prefer `$()` over backticks for command substitution
 
 ## Verification
 shellcheck commands/**/*.sh skills/**/*.sh
