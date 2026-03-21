@@ -88,11 +88,15 @@ export interface AgentProfileEntry {
  * - SSH:    git@github.com:owner/repo[.git]
  *
  * Non-GitHub hosts are returned as-is (minus any trailing .git).
+ *
+ * @returns A plain "owner/repo" slug for GitHub URLs, or the input (minus
+ *   .git) for other inputs. Do not render the return value as HTML or use it
+ *   as a URL without further validation.
  */
 export function normalizeRepo(repo: string): string {
   return repo
-    .replace(/^git@github\.com:/, "")
-    .replace(/^https?:\/\/github\.com\//, "")
+    .replace(/^git@github\.com:/, "") // SSH: git@github.com:owner/repo
+    .replace(/^https?:\/\/github\.com\//, "") // HTTPS/HTTP: https://github.com/owner/repo
     .replace(/\.git$/, "");
 }
 

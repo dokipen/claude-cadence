@@ -38,6 +38,9 @@ describe("normalizeRepo", () => {
     expect(normalizeRepo("https://gitlab.com/owner/repo")).toBe(
       "https://gitlab.com/owner/repo",
     );
+    expect(normalizeRepo("https://gitlab.com/owner/repo.git")).toBe(
+      "https://gitlab.com/owner/repo",
+    );
   });
 
   it("passes through non-GitHub SSH remotes unchanged (minus .git)", () => {
