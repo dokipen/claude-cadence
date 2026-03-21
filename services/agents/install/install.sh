@@ -136,6 +136,27 @@ setup_directories() {
     sudo chown "$AGENTD_USER:$AGENTD_GROUP" "$AGENTD_CONFIG_DIR" "$AGENTD_LOG_DIR"
 }
 
+# --- Hub configuration ---
+
+setup_hub() {
+    echo
+    info "Hub configuration (optional — connects this agent to an agent-hub)"
+    if confirm "Connect this agent to an agent-hub?"; then
+        prompt HUB_URL "Hub WebSocket URL" "wss://cadence.bootsy.internal/ws/agent"
+        prompt HUB_NAME "Agent name (identifier for this machine)" "$(hostname -s)"
+        printf "Hub agent token (input hidden): "
+        read -rs HUB_AGENT_TOKEN
+        echo
+        if [[ -z "$HUB_AGENT_TOKEN" ]]; then
+            warn "No hub token provided. Set HUB_AGENT_TOKEN environment variable before starting the service."
+        fi
+    else
+        HUB_URL=""
+        HUB_NAME=""
+        HUB_AGENT_TOKEN=""
+    fi
+}
+
 # --- Config generation ---
 
 generate_config() {
@@ -172,6 +193,19 @@ log:
 # Add agent profiles below:
 profiles: {}
 EOF
+
+    if [[ -n "$HUB_URL" ]]; then
+        cat >> "$config_path" <<EOF
+
+# agent-hub connection
+hub:
+  url: "$HUB_URL"
+  name: "$HUB_NAME"
+  token_env_var: "HUB_AGENT_TOKEN"
+  reconnect_interval: "5s"
+EOF
+        info "Hub config written (url=$HUB_URL, name=$HUB_NAME)"
+    fi
 
     info "Config written to $config_path"
 }
@@ -215,6 +249,7 @@ render_template() {
         -e "s|__GROUP__|$(sed_escape "$AGENTD_GROUP")|g" \
         -e "s|__ROOT_DIR__|$(sed_escape "$AGENTD_ROOT_DIR")|g" \
         -e "s|__LOG_DIR__|$(sed_escape "$AGENTD_LOG_DIR")|g" \
+        -e "s|__HUB_AGENT_TOKEN__|$(sed_escape "${HUB_AGENT_TOKEN:-}")|g" \
         "$template" > "$output"
 }
 
@@ -308,6 +343,7 @@ main() {
     validate_port "$AGENTD_PORT"
 
     setup_directories "$os"
+    setup_hub
     install_binary
     generate_config
 
@@ -326,6 +362,9 @@ main() {
     echo
     info "Next steps:"
     info "  1. Edit $AGENTD_CONFIG_DIR/config.yaml to add agent profiles"
+    if [[ -n "$HUB_URL" ]]; then
+        info "  2. Ensure HUB_AGENT_TOKEN is set in the service environment before starting"
+    fi
     info "  2. Restart the service after config changes:"
     if [[ "$os" == "darwin" ]]; then
         info "     launchctl kickstart -k gui/$(id -u)/$LABEL"
