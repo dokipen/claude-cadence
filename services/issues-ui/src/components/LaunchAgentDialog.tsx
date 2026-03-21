@@ -1,7 +1,8 @@
 import { useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router";
 import { AgentLauncher } from "./AgentLauncher";
-import type { Session } from "../types";
+import { getLaunchConfig } from "./launchConfig";
+import type { Session, TicketState } from "../types";
 import styles from "../styles/dialog.module.css";
 
 interface LaunchAgentDialogProps {
@@ -10,6 +11,8 @@ interface LaunchAgentDialogProps {
   repoUrl: string | undefined;
   open: boolean;
   onClose: () => void;
+  ticketState: TicketState;
+  ticketTitle: string;
 }
 
 export function LaunchAgentDialog({
@@ -18,9 +21,16 @@ export function LaunchAgentDialog({
   repoUrl,
   open,
   onClose,
+  ticketState,
+  ticketTitle,
 }: LaunchAgentDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const navigate = useNavigate();
+
+  const config = getLaunchConfig(ticketState);
+  const command = config.command(ticketNumber, ticketTitle);
+  const sessionName = config.sessionName(ticketNumber);
+  const buttonLabel = config.buttonLabel;
 
   useEffect(() => {
     const el = dialogRef.current;
@@ -85,6 +95,9 @@ export function LaunchAgentDialog({
             ticketNumber={ticketNumber}
             repoUrl={repoUrl}
             onLaunched={handleLaunched}
+            command={command}
+            sessionName={sessionName}
+            buttonLabel={buttonLabel}
           />
         )}
       </div>
