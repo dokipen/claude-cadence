@@ -97,7 +97,10 @@ function AppShell() {
   const boardMatch = useMatch("/projects/:projectId/*");
   const projectId = boardMatch?.params.projectId ?? null;
   const [globalProjectId, setGlobalProjectId] = useState<string | null>(() => {
-    try { return sessionStorage.getItem(STORAGE_KEY); } catch { return null; }
+    try {
+      const saved = sessionStorage.getItem(STORAGE_KEY);
+      return saved !== null && PROJECT_ID_RE.test(saved) ? saved : null;
+    } catch { return null; }
   });
   const [filters, setFilters] = useState<TicketFilters>({});
   const showFilters = projectId && !location.pathname.startsWith("/ticket/") && !location.pathname.startsWith("/agents") && !location.pathname.startsWith("/docs");
@@ -107,7 +110,7 @@ function AppShell() {
       setGlobalProjectId(projectId);
       try { sessionStorage.setItem(STORAGE_KEY, projectId); } catch { /* storage unavailable */ }
     }
-  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [projectId]);
 
   // Use URL-derived projectId when on a board route (immediate), fall back to globalProjectId (e.g. agents page)
   const effectiveProjectId = projectId ?? globalProjectId;
