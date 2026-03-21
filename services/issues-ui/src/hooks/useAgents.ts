@@ -79,10 +79,24 @@ export interface AgentProfileEntry {
   profile: AgentProfile;
 }
 
-/** Extract "owner/repo" slug from any GitHub repo reference. */
-function normalizeRepo(repo: string): string {
+/**
+ * Extract "owner/repo" slug from a GitHub repo reference.
+ *
+ * Handles:
+ * - HTTPS:  https://github.com/owner/repo[.git]
+ * - HTTP:   http://github.com/owner/repo[.git]
+ * - SSH:    git@github.com:owner/repo[.git]
+ *
+ * Non-GitHub hosts are returned as-is (minus any trailing .git).
+ *
+ * @returns A plain "owner/repo" slug for GitHub URLs, or the input (minus
+ *   .git) for other inputs. Do not render the return value as HTML or use it
+ *   as a URL without further validation.
+ */
+export function normalizeRepo(repo: string): string {
   return repo
-    .replace(/^https?:\/\/github\.com\//, "")
+    .replace(/^git@github\.com:/, "") // SSH: git@github.com:owner/repo
+    .replace(/^https?:\/\/github\.com\//, "") // HTTPS/HTTP: https://github.com/owner/repo
     .replace(/\.git$/, "");
 }
 
