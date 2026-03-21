@@ -6,8 +6,11 @@ const PROJECTS = [
   { id: "proj-b", name: "Project B" },
 ];
 
+const PROJECT_ID_RE = /^[\w-]+$/;
+
 function resolveTargetProject(projects: typeof PROJECTS): string {
-  const savedId = sessionStorage.getItem(STORAGE_KEY);
+  let savedId = sessionStorage.getItem(STORAGE_KEY);
+  if (savedId !== null && !PROJECT_ID_RE.test(savedId)) savedId = null;
   return savedId && projects.some((p) => p.id === savedId)
     ? savedId
     : projects[0].id;
@@ -42,6 +45,28 @@ describe("ProjectRedirect sessionStorage resolution", () => {
   });
 
   it("falls back to first project when no ID is saved", () => {
+    expect(resolveTargetProject(PROJECTS)).toBe("proj-a");
+  });
+});
+
+describe("ProjectRedirect format validation", () => {
+  it("accepts a valid project ID with alphanumerics and hyphens", () => {
+    sessionStorage.setItem(STORAGE_KEY, "proj-a");
+    expect(resolveTargetProject(PROJECTS)).toBe("proj-a");
+  });
+
+  it("rejects an ID with path-traversal characters", () => {
+    sessionStorage.setItem(STORAGE_KEY, "../../../etc/passwd");
+    expect(resolveTargetProject(PROJECTS)).toBe("proj-a");
+  });
+
+  it("rejects an ID with angle brackets", () => {
+    sessionStorage.setItem(STORAGE_KEY, "<script>alert(1)</script>");
+    expect(resolveTargetProject(PROJECTS)).toBe("proj-a");
+  });
+
+  it("rejects an ID with spaces", () => {
+    sessionStorage.setItem(STORAGE_KEY, "proj a");
     expect(resolveTargetProject(PROJECTS)).toBe("proj-a");
   });
 });
