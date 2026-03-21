@@ -343,6 +343,74 @@ test.describe("agent manager page", () => {
     await page.getByTestId("sidebar-session").first().click();
     await expect(page.getByTestId("terminal-window")).toHaveCount(1);
   });
+
+  test("sidebar is expanded by default", async ({ page }) => {
+    await page.goto("/agents");
+
+    // Toggle button should be visible
+    await expect(page.getByTestId("sidebar-toggle")).toBeVisible();
+
+    // aria-expanded should be true (sidebar is expanded)
+    await expect(page.getByTestId("sidebar-toggle")).toHaveAttribute("aria-expanded", "true");
+
+    // Sidebar content (agents list) should be visible
+    await expect(page.getByTestId("sidebar-agent")).toHaveCount(3);
+  });
+
+  test("click toggle collapses sidebar", async ({ page }) => {
+    await page.goto("/agents");
+
+    // Confirm expanded first
+    await expect(page.getByTestId("sidebar-toggle")).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByTestId("sidebar-agent")).toHaveCount(3);
+
+    // Click the toggle to collapse
+    await page.getByTestId("sidebar-toggle").click();
+
+    // aria-expanded should now be false
+    await expect(page.getByTestId("sidebar-toggle")).toHaveAttribute("aria-expanded", "false");
+
+    // Session content should no longer be rendered
+    await expect(page.getByTestId("sidebar-agent")).toHaveCount(0);
+    await expect(page.getByTestId("sidebar-session")).toHaveCount(0);
+  });
+
+  test("click toggle again expands sidebar", async ({ page }) => {
+    await page.goto("/agents");
+
+    // Collapse
+    await page.getByTestId("sidebar-toggle").click();
+    await expect(page.getByTestId("sidebar-toggle")).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByTestId("sidebar-agent")).toHaveCount(0);
+
+    // Expand again
+    await page.getByTestId("sidebar-toggle").click();
+    await expect(page.getByTestId("sidebar-toggle")).toHaveAttribute("aria-expanded", "true");
+
+    // Session content should be visible again
+    await expect(page.getByTestId("sidebar-agent")).toHaveCount(3);
+    await expect(page.getByTestId("sidebar-session")).toHaveCount(3, { timeout: 15000 });
+  });
+
+  test("collapsed state persists after navigating away and back", async ({ page }) => {
+    await page.goto("/agents");
+
+    // Sidebar should start expanded (normal state)
+    await expect(page.getByTestId("sidebar-toggle")).toHaveAttribute("aria-expanded", "true");
+
+    // Collapse the sidebar
+    await page.getByTestId("sidebar-toggle").click();
+    await expect(page.getByTestId("sidebar-toggle")).toHaveAttribute("aria-expanded", "false");
+
+    // Navigate away to a different route
+    await page.goto("/");
+
+    // Navigate back to /agents
+    await page.goto("/agents");
+
+    // Sidebar should still be collapsed — localStorage persisted the state
+    await expect(page.getByTestId("sidebar-toggle")).toHaveAttribute("aria-expanded", "false");
+  });
 });
 
 // ---------------------------------------------------------------------------

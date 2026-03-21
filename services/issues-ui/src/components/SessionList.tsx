@@ -7,13 +7,15 @@ interface SessionListProps {
   sessions: AgentSession[];
   openKeys: Set<string>;
   onSessionClick: (session: AgentSession) => void;
+  isCollapsed: boolean;
+  onToggle: () => void;
 }
 
 function sessionKey(s: AgentSession): string {
   return `${s.agentName}:${s.session.id}`;
 }
 
-export function SessionList({ agents, sessions, openKeys, onSessionClick }: SessionListProps) {
+export function SessionList({ agents, sessions, openKeys, onSessionClick, isCollapsed, onToggle }: SessionListProps) {
   // Group sessions by agent
   const sessionsByAgent = new Map<string, AgentSession[]>();
   for (const s of sessions) {
@@ -23,51 +25,66 @@ export function SessionList({ agents, sessions, openKeys, onSessionClick }: Sess
   }
 
   return (
-    <div className={styles.sessionSidebar} data-testid="session-list">
-      <h3 className={styles.sidebarTitle}>Agents</h3>
-      {agents.length === 0 && (
-        <p className={styles.sidebarEmpty}>No agents registered.</p>
-      )}
-      {agents.map((agent) => {
-        const agentSessions = sessionsByAgent.get(agent.name) || [];
-        return (
-          <div key={agent.name} className={styles.sidebarAgent} data-testid="sidebar-agent">
-            <div className={styles.sidebarAgentHeader}>
-              <span
-                className={
-                  agent.status === "online"
-                    ? styles.statusDotOnline
-                    : styles.statusDotOffline
-                }
-                data-testid={`status-${agent.status}`}
-              />
-              <span className={styles.sidebarAgentName}>{agent.name}</span>
-            </div>
-            {agentSessions.length === 0 && (
-              <p className={styles.sidebarNoSessions}>No sessions</p>
+    <div className={styles.sidebarWrapper} data-testid="session-list">
+      <div className={`${styles.sessionSidebar}${isCollapsed ? ` ${styles.collapsed}` : ""}`}>
+        {!isCollapsed && (
+          <>
+            <h3 className={styles.sidebarTitle}>Agents</h3>
+            {agents.length === 0 && (
+              <p className={styles.sidebarEmpty}>No agents registered.</p>
             )}
-            {agentSessions.map((as) => {
-              const key = sessionKey(as);
-              const isOpen = openKeys.has(key);
-              const isRunning = as.session.state === "running";
+            {agents.map((agent) => {
+              const agentSessions = sessionsByAgent.get(agent.name) || [];
               return (
-                <button
-                  key={as.session.id}
-                  className={`${styles.sidebarSession} ${isOpen ? styles.sidebarSessionOpen : ""} ${!isRunning ? styles.sidebarSessionStopped : ""} ${as.session.waiting_for_input ? styles.sidebarSessionWaiting : ""}`}
-                  onClick={() => onSessionClick(as)}
-                  data-testid="sidebar-session"
-                  title={`${as.session.name} (${as.session.state})`}
-                >
-                  <span className={styles.sessionDot}>
-                    {as.session.waiting_for_input ? "◉" : isRunning ? "●" : "○"}
-                  </span>
-                  <span className={styles.sessionName}>{as.session.name}</span>
-                </button>
+                <div key={agent.name} className={styles.sidebarAgent} data-testid="sidebar-agent">
+                  <div className={styles.sidebarAgentHeader}>
+                    <span
+                      className={
+                        agent.status === "online"
+                          ? styles.statusDotOnline
+                          : styles.statusDotOffline
+                      }
+                      data-testid={`status-${agent.status}`}
+                    />
+                    <span className={styles.sidebarAgentName}>{agent.name}</span>
+                  </div>
+                  {agentSessions.length === 0 && (
+                    <p className={styles.sidebarNoSessions}>No sessions</p>
+                  )}
+                  {agentSessions.map((as) => {
+                    const key = sessionKey(as);
+                    const isOpen = openKeys.has(key);
+                    const isRunning = as.session.state === "running";
+                    return (
+                      <button
+                        key={as.session.id}
+                        className={`${styles.sidebarSession} ${isOpen ? styles.sidebarSessionOpen : ""} ${!isRunning ? styles.sidebarSessionStopped : ""} ${as.session.waiting_for_input ? styles.sidebarSessionWaiting : ""}`}
+                        onClick={() => onSessionClick(as)}
+                        data-testid="sidebar-session"
+                        title={`${as.session.name} (${as.session.state})`}
+                      >
+                        <span className={styles.sessionDot}>
+                          {as.session.waiting_for_input ? "◉" : isRunning ? "●" : "○"}
+                        </span>
+                        <span className={styles.sessionName}>{as.session.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               );
             })}
-          </div>
-        );
-      })}
+          </>
+        )}
+      </div>
+      <button
+        className={styles.sidebarToggle}
+        onClick={onToggle}
+        aria-expanded={!isCollapsed}
+        aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        data-testid="sidebar-toggle"
+      >
+        {isCollapsed ? "▶" : "◀"}
+      </button>
     </div>
   );
 }
