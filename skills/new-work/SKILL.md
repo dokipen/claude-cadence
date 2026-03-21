@@ -25,7 +25,6 @@ gh issue create --title "Description of the work" --label "enhancement" --body "
 
 ## What It Does
 
-0. **Detects worktree context**: If already inside a git worktree, creates a branch in-place instead of nesting
 1. **Runs pre-flight check**: Checks for orphaned worktree directories
 2. **Validates branch name**: Ensures it starts with an issue number
 3. **Creates worktree**: `.worktrees/<branch-name>` (subdirectory of main repo)
@@ -36,7 +35,6 @@ gh issue create --title "Description of the work" --label "enhancement" --body "
 Run the `create-worktree.sh` script from the `project-ops` skill.
 
 The script handles:
-- Worktree detection (branches in-place when already inside a worktree)
 - Pre-flight orphan check
 - Branch name validation (must start with issue number)
 - Creating `.worktrees/` directory if needed
@@ -62,7 +60,6 @@ Run the `cleanup-worktree.sh` script from the `project-ops` skill.
 
 ## Notes
 
-- When run inside an existing worktree (e.g., agent deployed via agentd), the script skips worktree creation and creates a branch in the current directory instead
 - Never work directly on the default branch — always use worktrees
 - Worktrees are stored in `.worktrees/` subdirectory (gitignored)
 - Branch names MUST start with the issue number, followed by a hyphen and descriptive name

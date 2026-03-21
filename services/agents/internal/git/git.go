@@ -133,48 +133,6 @@ func ValidateRef(ref string) error {
 	return nil
 }
 
-// AddWorktree creates a new worktree at worktreeDir based on baseRef.
-// If baseRef is empty, uses the default branch.
-// Returns the resolved baseRef.
-func (c *Client) AddWorktree(cloneDir, worktreeDir, baseRef string) (string, error) {
-	if baseRef == "" {
-		branch, err := c.DefaultBranch(cloneDir)
-		if err != nil {
-			return "", err
-		}
-		baseRef = branch
-	}
-
-	cmd := exec.Command("git", "-C", cloneDir, "worktree", "add", "--detach", worktreeDir, "origin/"+baseRef)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return "", fmt.Errorf("git worktree add: %w: %s", err, string(output))
-	}
-	return baseRef, nil
-}
-
-// RemoveWorktree removes a worktree directory and its git bookkeeping.
-func (c *Client) RemoveWorktree(cloneDir, worktreeDir string) error {
-	cmd := exec.Command("git", "-C", cloneDir, "worktree", "remove", "--force", worktreeDir)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("git worktree remove: %w: %s", err, string(output))
-	}
-	return nil
-}
-
-// PruneWorktrees removes stale worktree references.
-func (c *Client) PruneWorktrees(cloneDir string) error {
-	cmd := exec.Command("git", "-C", cloneDir, "worktree", "prune")
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("git worktree prune: %w: %s", err, string(output))
-	}
-	return nil
-}
-
-// WorktreeDir returns the standard worktree path for a session UUID.
-func (c *Client) WorktreeDir(sessionID string) string {
-	return filepath.Join(c.rootDir, "worktrees", sessionID)
-}
-
 // CloneDir returns the standard clone path for a repo URL.
 func (c *Client) CloneDir(repoURL string) (string, error) {
 	owner, repo, err := parseRepoURL(repoURL)
@@ -209,6 +167,17 @@ func (c *Client) pullDefaultBranch(cloneDir string, creds *Credentials) error {
 	update := exec.Command("git", "-C", cloneDir, "update-ref", "refs/heads/"+branch, "refs/remotes/origin/"+branch)
 	if output, err := update.CombinedOutput(); err != nil {
 		return fmt.Errorf("git update-ref: %w: %s", err, string(output))
+	}
+
+	// Update the working tree so sessions starting in cloneDir see the latest
+	// content. This runs under the per-clone mutex, but the mutex is released
+	// before the tmux session starts. Concurrent sessions for the same repo
+	// share this working tree; any uncommitted changes a session writes before
+	// calling /new-work could be discarded by a subsequent pull. The workflow
+	// contract (agents call /new-work immediately) keeps this window small.
+	reset := exec.Command("git", "-C", cloneDir, "reset", "--hard", "refs/remotes/origin/"+branch)
+	if output, err := reset.CombinedOutput(); err != nil {
+		return fmt.Errorf("git reset: %w: %s", err, string(output))
 	}
 
 	return nil
