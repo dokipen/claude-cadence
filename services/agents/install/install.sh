@@ -377,7 +377,11 @@ main() {
     info "  1. Edit $AGENTD_CONFIG_DIR/config.yaml to add agent profiles"
     local next_step=2
     if [[ -n "$HUB_URL" ]]; then
-        info "  $next_step. Token already written to the launchd plist. To rotate it, edit the plist and reload the service."
+        if [[ "$os" == "darwin" ]]; then
+            info "  $next_step. To rotate the hub token, edit ~/Library/LaunchAgents/$LABEL.plist and reload the service."
+        else
+            info "  $next_step. To rotate the hub token, edit /etc/agentd/env and restart the service."
+        fi
         next_step=$((next_step + 1))
     fi
     info "  $next_step. Restart the service after config changes:"
