@@ -95,10 +95,10 @@ function AppShell() {
   const showFilters = projectId && !location.pathname.startsWith("/ticket/") && !location.pathname.startsWith("/agents");
 
   useEffect(() => {
-    if (projectId) {
+    if (projectId && projects.some((p) => p.id === projectId)) {
       try { sessionStorage.setItem(STORAGE_KEY, projectId); } catch { /* storage unavailable */ }
     }
-  }, [projectId]);
+  }, [projectId, projects]);
 
   const selectedProject = projects.find((p) => p.id === projectId);
   const repoUrl = selectedProject?.repository;
@@ -106,7 +106,6 @@ function AppShell() {
   const handleProjectChange = useCallback((id: string) => {
     if (!projects.some((p) => p.id === id)) return;
     navigate(`/projects/${id}`);
-    try { sessionStorage.setItem(STORAGE_KEY, id); } catch { /* storage unavailable */ }
     setFilters({});
   }, [projects, navigate]);
 

@@ -45,16 +45,3 @@ describe("ProjectRedirect sessionStorage resolution", () => {
     expect(resolveTargetProject(PROJECTS)).toBe("proj-a");
   });
 });
-
-describe("handleProjectChange sessionStorage persistence", () => {
-  it("writes project ID to sessionStorage", () => {
-    sessionStorage.setItem(STORAGE_KEY, "proj-b");
-    expect(sessionStorage.getItem(STORAGE_KEY)).toBe("proj-b");
-  });
-
-  it("overwrites previous project ID", () => {
-    sessionStorage.setItem(STORAGE_KEY, "proj-a");
-    sessionStorage.setItem(STORAGE_KEY, "proj-b");
-    expect(sessionStorage.getItem(STORAGE_KEY)).toBe("proj-b");
-  });
-});
