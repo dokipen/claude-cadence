@@ -100,8 +100,9 @@ func tmuxSessionExists(socketName, sessionName string) bool {
 
 func tmuxMouseEnabled(t *testing.T, socketName string) bool {
 	t.Helper()
-	out, err := exec.Command("tmux", "-L", socketName, "show-options", "-g", "mouse").Output()
+	out, err := exec.Command("tmux", "-L", socketName, "-f", "/dev/null", "show-options", "-g", "mouse").CombinedOutput()
 	if err != nil {
+		t.Logf("tmuxMouseEnabled: show-options failed: %v: %s", err, string(out))
 		return false
 	}
 	return strings.Contains(string(out), "mouse on")
