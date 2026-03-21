@@ -38,7 +38,6 @@ const listAllSessionsDeadline = 28 * time.Second
 
 // handleListAllSessions returns sessions across all online agents.
 func handleListAllSessions(h *hub.Hub, overallDeadline time.Duration) http.HandlerFunc {
-	sem := make(chan struct{}, MaxAgentFanOut)
 	return func(w http.ResponseWriter, r *http.Request) {
 		agents := h.List()
 
@@ -52,9 +51,12 @@ func handleListAllSessions(h *hub.Hub, overallDeadline time.Duration) http.Handl
 			Sessions  json.RawMessage `json:"sessions"`
 		}
 
+		// sem is per-request so concurrent callers each get their own pool of 16 slots.
+		sem := make(chan struct{}, MaxAgentFanOut)
+
 		var (
 			mu      sync.Mutex
-			results []agentSessions
+			results = make([]agentSessions, 0, len(agents))
 		)
 
 		// Apply an overall deadline across the entire fan-out. Without this,
@@ -110,7 +112,9 @@ func handleListAllSessions(h *hub.Hub, overallDeadline time.Duration) http.Handl
 		}
 		eg.Wait() //nolint:errcheck // goroutines only return nil
 
-		if errors.Is(fanOutCtx.Err(), context.DeadlineExceeded) {
+		// egCtx is cancelled when fanOutCtx's deadline is exceeded, which is
+		// the only non-nil error source since goroutines always return nil.
+		if errors.Is(egCtx.Err(), context.DeadlineExceeded) {
 			writeJSONError(w, http.StatusGatewayTimeout, "fan-out deadline exceeded")
 			return
 		}
