@@ -42,6 +42,7 @@
 
 .navLink {
   margin-left: 0.75rem;
+  margin-top: 3px;
   font-size: 0.8rem;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.7);
@@ -116,6 +117,7 @@
 .notificationWrapper {
   position: relative;
   margin-left: 0.5rem;
+  margin-top: 3px;
 }
 
 .notificationTrigger {

@@ -80,6 +80,15 @@ test.describe("app header lockup (authenticated)", () => {
     await expect(logoLink).toBeVisible();
     await expect(logoLink).toHaveAttribute("href", "/");
   });
+
+  test("Agents nav link has margin-top of 3px", async ({ page }) => {
+    const marginTop = await page
+      .getByTestId("agents-nav-link")
+      .evaluate((el) => {
+        return window.getComputedStyle(el).marginTop;
+      });
+    expect(marginTop).toBe("3px");
+  });
 });
 
 unauthTest.describe("login page lockup (unauthenticated)", () => {
