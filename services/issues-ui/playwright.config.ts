@@ -8,8 +8,8 @@ const testDbUrl = `file:${path.resolve(issuesDir, "test.db")}`;
 
 // Use a non-default port in CI to avoid conflicting with the production service
 // (port 4444 is Selenium WebDriver's default — use 14444 to avoid collisions)
-const apiPort = process.env.E2E_API_PORT ? parseInt(process.env.E2E_API_PORT, 10) : (process.env.CI ? 14444 : 4000);
-const devPort = process.env.E2E_DEV_PORT ? parseInt(process.env.E2E_DEV_PORT, 10) : (process.env.CI ? 5174 : 5173);
+const apiPort = parseInt(process.env.E2E_API_PORT ?? "", 10) || (process.env.CI ? 14444 : 4000);
+const devPort = parseInt(process.env.E2E_DEV_PORT ?? "", 10) || (process.env.CI ? 5174 : 5173);
 
 export default defineConfig({
   testDir: "./e2e",

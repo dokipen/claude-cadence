@@ -172,8 +172,8 @@ jobs:
           echo "E2E_DEV_PORT=$((14001 + BASE))" >> $GITHUB_ENV
       - name: Kill stale processes on E2E ports
         run: |
-          for port in $E2E_API_PORT $E2E_DEV_PORT; do
-            lsof -t -i :"$port" | xargs -r kill -9 2>/dev/null || true
+          for port in "${E2E_API_PORT}" "${E2E_DEV_PORT}"; do
+            [ -n "$port" ] && lsof -t -i :"$port" | xargs -r kill -9 2>/dev/null || true
           done
       - name: Prepare test database
         run: |
