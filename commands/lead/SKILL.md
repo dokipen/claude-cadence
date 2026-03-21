@@ -151,23 +151,18 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 
 **All work happens in worktrees, never on the default branch.**
 
-1. Check current branch: `git branch --show-current`
-2. Detect if already inside a worktree:
+1. Detect worktree status and current branch:
    ```bash
-   _GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
-   _GIT_COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null)
-   IN_WORKTREE=false
-   if [ "$_GIT_DIR" != "$_GIT_COMMON_DIR" ]; then
-     IN_WORKTREE=true
-   fi
+   bash skills/project-ops/scripts/detect-worktree.sh
    ```
-3. **If already in a worktree** (`IN_WORKTREE=true`):
+   This outputs JSON: `{"in_worktree": true|false, "branch": "<name>"}`
+2. **If already in a worktree** (`in_worktree` is `true`):
    - If on a feature branch (not default): use the current directory and branch as-is. Set `WORKTREE_PREEXISTING=true`.
    - If on the default branch: use `/new-work` to create a branch in-place (the script auto-detects worktrees). Set `WORKTREE_PREEXISTING=true`.
-4. **If NOT in a worktree**:
+3. **If NOT in a worktree**:
    - If on default branch: use `/new-work` to create a worktree.
    - If on a feature branch: use the current directory and branch as-is.
-5. Post setup to issue:
+4. Post setup to issue:
 
    **GitHub (default):**
    ```bash
