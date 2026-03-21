@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, Link, useLocation, useMatch, useNavigate } from "react-router";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { LoginPage } from "./auth/LoginPage";
@@ -69,7 +69,7 @@ function ProjectRedirect() {
 
   if (projects.length > 0) {
     let savedId: string | null = null;
-    try { savedId = localStorage.getItem(STORAGE_KEY); } catch { /* storage unavailable */ }
+    try { savedId = sessionStorage.getItem(STORAGE_KEY); } catch { /* storage unavailable */ }
     const target = savedId && projects.some((p) => p.id === savedId)
       ? savedId
       : projects[0].id;
@@ -94,13 +94,19 @@ function AppShell() {
   const [filters, setFilters] = useState<TicketFilters>({});
   const showFilters = projectId && !location.pathname.startsWith("/ticket/") && !location.pathname.startsWith("/agents");
 
+  useEffect(() => {
+    if (projectId) {
+      try { sessionStorage.setItem(STORAGE_KEY, projectId); } catch { /* storage unavailable */ }
+    }
+  }, [projectId]);
+
   const selectedProject = projects.find((p) => p.id === projectId);
   const repoUrl = selectedProject?.repository;
 
   const handleProjectChange = useCallback((id: string) => {
     if (!projects.some((p) => p.id === id)) return;
     navigate(`/projects/${id}`);
-    try { localStorage.setItem(STORAGE_KEY, id); } catch { /* storage unavailable */ }
+    try { sessionStorage.setItem(STORAGE_KEY, id); } catch { /* storage unavailable */ }
     setFilters({});
   }, [projects, navigate]);
 
