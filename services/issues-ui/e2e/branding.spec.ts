@@ -83,8 +83,7 @@ test.describe("app header lockup (authenticated)", () => {
 
   test("Agents nav link has margin-top of 3px", async ({ page }) => {
     const marginTop = await page
-      .locator("header [data-testid='agents-nav-link'], header [class*='navLink']")
-      .first()
+      .getByTestId("agents-nav-link")
       .evaluate((el) => {
         return window.getComputedStyle(el).marginTop;
       });
