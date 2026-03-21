@@ -17,7 +17,7 @@ interface AgentManagerProps {
 export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
   const filteredSessions = selectedProject?.repository
     ? sessions.filter(
-        (s) => normalizeRepo(s.session.repo_url) === normalizeRepo(selectedProject.repository)
+        (s) => normalizeRepo(s.session.repo_url) === normalizeRepo(selectedProject.repository!)
       )
     : sessions;
   const { agents, loading: agentsLoading } = useAgents();
