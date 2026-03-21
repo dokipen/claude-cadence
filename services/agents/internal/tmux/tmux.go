@@ -35,6 +35,9 @@ func (c *Client) NewSession(name string, workdir string, command string) error {
 	if command != "" {
 		args = append(args, command)
 	}
+	// Chain set-option in the same tmux invocation so mouse mode is set before
+	// the server can exit (relevant when the session command is short-lived).
+	args = append(args, ";", "set-option", "-g", "mouse", "on")
 	cmd := exec.Command("tmux", args...)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("tmux new-session: %w: %s", err, string(output))
