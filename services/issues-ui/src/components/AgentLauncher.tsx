@@ -43,6 +43,9 @@ export function AgentLauncher({
     setLaunching(true);
     setError(null);
 
+    const cappedCommand =
+      command.length > 500 ? command.slice(0, 500) + "…" : command;
+
     try {
       const session = await hubFetch<Session>(
         `/agents/${encodeURIComponent(selected.agent)}/sessions`,
@@ -51,7 +54,7 @@ export function AgentLauncher({
           body: JSON.stringify({
             agent_profile: selected.profileName,
             session_name: sessionName,
-            extra_args: [command],
+            extra_args: [cappedCommand],
           }),
         },
       );

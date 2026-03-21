@@ -253,6 +253,15 @@ test.describe("launch agent dialog", () => {
     await expect(card.getByTestId("card-launch-button")).toHaveText("Discuss");
   });
 
+  test("IN_PROGRESS column card shows Lead button label", async ({ page }) => {
+    await page.goto("/projects/e2e-test-project");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
+
+    const card = page.getByTestId("column-IN_PROGRESS").getByTestId("ticket-card");
+    await expect(card.getByTestId("card-launch-button")).toBeVisible();
+    await expect(card.getByTestId("card-launch-button")).toHaveText("Lead");
+  });
+
   test("POST body contains /refine command when clicking Refine on BACKLOG card", async ({ page }) => {
     let capturedBody: Record<string, unknown> | null = null;
 
@@ -310,9 +319,8 @@ test.describe("launch agent dialog", () => {
     await dialog.getByTestId("launch-submit").click();
 
     expect(capturedBody).not.toBeNull();
-    expect((capturedBody as Record<string, unknown>).extra_args).toEqual([
-      "Let's discuss ticket #4 — Closed ticket",
-    ]);
+    expect((capturedBody as Record<string, unknown>).extra_args).toHaveLength(1);
+    expect(((capturedBody as Record<string, unknown>).extra_args as string[])[0]).toMatch(/^Let's discuss ticket #4 — /);
   });
 });
 

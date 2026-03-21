@@ -4,6 +4,7 @@ import type { Ticket } from "../types";
 import { PriorityBadge } from "./PriorityBadge";
 import { LabelBadge } from "./LabelBadge";
 import { LaunchAgentDialog } from "./LaunchAgentDialog";
+import { getLaunchConfig } from "./launchConfig";
 import styles from "../styles/card.module.css";
 import agentStyles from "../styles/agents.module.css";
 
@@ -16,15 +17,7 @@ export function TicketCard({
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const launchButtonLabel = (() => {
-    switch (ticket.state) {
-      case "BACKLOG": return "Refine";
-      case "REFINED": return "Lead";
-      case "IN_PROGRESS": return "Lead";
-      case "CLOSED": return "Discuss";
-      default: return "Launch";
-    }
-  })();
+  const launchButtonLabel = getLaunchConfig(ticket.state).buttonLabel;
 
   const handleLaunchClick = useCallback(
     (e: React.MouseEvent) => {
