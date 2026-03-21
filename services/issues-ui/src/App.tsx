@@ -114,15 +114,16 @@ function AppShell() {
   const selectedProject = projects.find((p) => p.id === effectiveProjectId) ?? null;
   const repoUrl = selectedProject?.repository;
 
+  const isOnBoard = !!boardMatch;
   const handleProjectChange = useCallback((id: string) => {
     if (!projects.some((p) => p.id === id)) return;
     setGlobalProjectId(id);
     try { sessionStorage.setItem(STORAGE_KEY, id); } catch { /* storage unavailable */ }
-    if (boardMatch) {
+    if (isOnBoard) {
       navigate(`/projects/${id}`);
       setFilters({});
     }
-  }, [projects, navigate, boardMatch]);
+  }, [projects, navigate, isOnBoard]);
 
   return (
     <div className={layoutStyles.shell}>
