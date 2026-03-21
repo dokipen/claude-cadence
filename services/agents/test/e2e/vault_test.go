@@ -209,9 +209,6 @@ func TestVault_TokenAuth(t *testing.T) {
 	})
 
 	sess := resp.GetSession()
-	if sess.GetWorktreePath() == "" {
-		t.Error("expected non-empty worktree_path")
-	}
 	if sess.GetState().String() != "SESSION_STATE_RUNNING" {
 		t.Errorf("expected STATE_RUNNING, got %s", sess.GetState().String())
 	}
@@ -290,9 +287,6 @@ func TestVault_NoSecret_PublicRepo(t *testing.T) {
 	})
 
 	sess := resp.GetSession()
-	if sess.GetWorktreePath() == "" {
-		t.Error("expected non-empty worktree_path")
-	}
 	if sess.GetState().String() != "SESSION_STATE_RUNNING" {
 		t.Errorf("expected STATE_RUNNING, got %s", sess.GetState().String())
 	}
@@ -329,10 +323,22 @@ func TestVault_SecretRetrieval(t *testing.T) {
 		})
 	})
 
-	// Verify the worktree was created with repo content.
-	readmePath := filepath.Join(resp.GetSession().GetWorktreePath(), "README.md")
-	if _, err := os.Stat(readmePath); err != nil {
-		t.Errorf("expected README.md in worktree: %v", err)
+	// Verify the clone directory has repo content (sessions start at clone root).
+	reposDir := filepath.Join(env.rootDir, "repos")
+	entries, _ := os.ReadDir(reposDir)
+	var readmeFound bool
+	for _, ownerEntry := range entries {
+		ownerPath := filepath.Join(reposDir, ownerEntry.Name())
+		repoEntries, _ := os.ReadDir(ownerPath)
+		for _, repoEntry := range repoEntries {
+			readmePath := filepath.Join(ownerPath, repoEntry.Name(), "README.md")
+			if _, err := os.Stat(readmePath); err == nil {
+				readmeFound = true
+			}
+		}
+	}
+	if !readmeFound {
+		t.Error("expected README.md in clone directory")
 	}
 
 	// Verify vault secrets are available as env vars.

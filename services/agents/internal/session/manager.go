@@ -156,7 +156,8 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		}
 	}
 
-	// If the profile has a repo, clone/pull and create a worktree.
+	// If the profile has a repo, clone/pull and start the session in the clone root.
+	// Agents create their own worktrees via /new-work.
 	workdir := "/"
 	if profile.Repo != "" {
 		if m.git == nil {
@@ -178,22 +179,9 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 			return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
 		}
 
-		worktreeDir := m.git.WorktreeDir(sessionID)
-		resolvedRef, err := m.git.AddWorktree(cloneDir, worktreeDir, req.BaseRef)
-		if err != nil {
-			errMsg := fmt.Sprintf("failed to create worktree: %v", err)
-			m.store.Update(sessionID, func(s *Session) {
-				s.State = StateError
-				s.ErrorMessage = errMsg
-			})
-			return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
-		}
-
-		workdir = worktreeDir
+		workdir = cloneDir
 		m.store.Update(sessionID, func(s *Session) {
-			s.WorktreePath = worktreeDir
 			s.RepoURL = profile.Repo
-			s.BaseRef = resolvedRef
 		})
 	}
 
@@ -247,12 +235,6 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	// Create tmux session with command as initial process.
 	if err := m.tmux.NewSession(sessionName, workdir, fullCommand); err != nil {
 		errMsg := fmt.Sprintf("failed to create tmux session: %v", err)
-		// Clean up worktree if we created one.
-		if profile.Repo != "" && m.git != nil {
-			cloneDir, _ := m.git.CloneDir(profile.Repo)
-			worktreeDir := m.git.WorktreeDir(sessionID)
-			_ = m.git.RemoveWorktree(cloneDir, worktreeDir)
-		}
 		m.store.Update(sessionID, func(s *Session) {
 			s.State = StateError
 			s.ErrorMessage = errMsg
@@ -358,19 +340,6 @@ func (m *Manager) Destroy(id string, force bool) error {
 	if m.tmux.HasSession(sess.TmuxSession) {
 		if err := m.tmux.KillSession(sess.TmuxSession); err != nil {
 			slog.Warn("failed to kill tmux session", "session", sess.TmuxSession, "error", err)
-		}
-	}
-
-	// Clean up worktree if one was created.
-	if sess.WorktreePath != "" && sess.RepoURL != "" && m.git != nil {
-		cloneDir, err := m.git.CloneDir(sess.RepoURL)
-		if err == nil {
-			if err := m.git.RemoveWorktree(cloneDir, sess.WorktreePath); err != nil {
-				slog.Warn("failed to remove worktree", "path", sess.WorktreePath, "error", err)
-			}
-			if err := m.git.PruneWorktrees(cloneDir); err != nil {
-				slog.Warn("failed to prune worktrees", "error", err)
-			}
 		}
 	}
 
@@ -481,14 +450,6 @@ func (m *Manager) reconcile(sess *Session) {
 func (m *Manager) cleanup(sessionID, tmuxSession, errMsg string) {
 	if m.tmux.HasSession(tmuxSession) {
 		_ = m.tmux.KillSession(tmuxSession)
-	}
-
-	// Clean up worktree if one was created.
-	sess, ok := m.store.Get(sessionID)
-	if ok && sess.WorktreePath != "" && sess.RepoURL != "" && m.git != nil {
-		if cloneDir, err := m.git.CloneDir(sess.RepoURL); err == nil {
-			_ = m.git.RemoveWorktree(cloneDir, sess.WorktreePath)
-		}
 	}
 
 	m.store.Update(sessionID, func(s *Session) {

@@ -20,41 +20,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Detect default branch
 DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
 
-# Detect if already inside a git worktree
-_GIT_DIR=$(git rev-parse --git-dir)
-_GIT_COMMON_DIR=$(git rev-parse --git-common-dir)
-if [ "$_GIT_DIR" != "$_GIT_COMMON_DIR" ]; then
-  # Already inside a worktree — branch in-place instead of nesting
-  if [ -z "$1" ]; then
-    echo "Usage: $0 <branch-name>"
-    echo "(Running inside an existing worktree — will create branch in-place)"
-    exit 1
-  fi
-  BRANCH_NAME="$1"
-  if ! echo "$BRANCH_NAME" | grep -qE '^[0-9]+-'; then
-    echo "Error: Branch name must start with an issue number followed by a hyphen"
-    exit 1
-  fi
-  # Check if branch already exists locally or remotely
-  if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME" 2>/dev/null; then
-    echo "Error: Branch '$BRANCH_NAME' already exists locally"
-    exit 1
-  fi
-  if git ls-remote --exit-code --heads origin "$BRANCH_NAME" >/dev/null 2>&1; then
-    echo "Error: Branch '$BRANCH_NAME' already exists on remote"
-    exit 1
-  fi
-  echo "Detected existing worktree at $(pwd)"
-  echo "Creating branch '$BRANCH_NAME' in-place (skipping nested worktree creation)..."
-  git checkout -b "$BRANCH_NAME" "origin/$DEFAULT_BRANCH"
-  echo ""
-  echo "Branch created successfully!"
-  echo "  Directory: $(pwd)"
-  echo "  Branch: $BRANCH_NAME"
-  echo "  Based on: origin/$DEFAULT_BRANCH"
-  exit 0
-fi
-
 # Check for required argument
 if [ -z "$1" ]; then
   echo "Usage: $0 <branch-name>"

@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	agentsv1 "github.com/dokipen/claude-cadence/services/agents/gen/agents/v1"
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
@@ -142,27 +141,15 @@ func TestGitClone_FirstSession(t *testing.T) {
 
 	sess := resp.GetSession()
 
-	// Verify session has worktree metadata.
-	if sess.GetWorktreePath() == "" {
-		t.Error("expected non-empty worktree_path")
+	// worktree_path is no longer pre-created by agentd — agents create their own via /new-work.
+	if sess.GetWorktreePath() != "" {
+		t.Errorf("expected empty worktree_path, got %q", sess.GetWorktreePath())
 	}
 	if sess.GetRepoUrl() == "" {
 		t.Error("expected non-empty repo_url")
 	}
-	if sess.GetBaseRef() != "main" {
-		t.Errorf("expected base_ref %q, got %q", "main", sess.GetBaseRef())
-	}
 
-	// Verify the worktree directory exists and contains the repo files.
-	readmePath := filepath.Join(sess.GetWorktreePath(), "README.md")
-	if _, err := os.Stat(readmePath); err != nil {
-		t.Errorf("expected README.md in worktree, got error: %v", err)
-	}
-
-	// Verify the clone directory was created.
-	cloneDir := filepath.Join(env.rootDir, "repos", filepath.Base(env.bareRepo))
-	// For bare repo paths, the "owner" won't parse as expected from a URL.
-	// Instead, just check that repos/ directory has content.
+	// Verify the clone directory was created and contains the repo files.
 	reposDir := filepath.Join(env.rootDir, "repos")
 	entries, err := os.ReadDir(reposDir)
 	if err != nil {
@@ -171,7 +158,22 @@ func TestGitClone_FirstSession(t *testing.T) {
 	if len(entries) == 0 {
 		t.Error("expected repos/ to contain at least one entry after clone")
 	}
-	_ = cloneDir // Used for documentation; parseRepoURL handles path-based repos too.
+
+	// Find the clone dir and verify README.md is present.
+	var readmeFound bool
+	for _, ownerEntry := range entries {
+		ownerPath := filepath.Join(reposDir, ownerEntry.Name())
+		repoEntries, _ := os.ReadDir(ownerPath)
+		for _, repoEntry := range repoEntries {
+			readmePath := filepath.Join(ownerPath, repoEntry.Name(), "README.md")
+			if _, err := os.Stat(readmePath); err == nil {
+				readmeFound = true
+			}
+		}
+	}
+	if !readmeFound {
+		t.Error("expected README.md in clone directory")
+	}
 }
 
 func TestGitClone_SecondSession_ReusesClone(t *testing.T) {
@@ -215,104 +217,10 @@ func TestGitClone_SecondSession_ReusesClone(t *testing.T) {
 		})
 	})
 
-	// Verify both sessions got different worktree paths.
-	wt1 := resp1.GetSession().GetWorktreePath()
-	wt2 := resp2.GetSession().GetWorktreePath()
-	if wt1 == wt2 {
-		t.Errorf("expected different worktree paths, both got %q", wt1)
-	}
-
 	// Verify no additional clone directories were created.
 	entries2, _ := os.ReadDir(reposDir)
 	if len(entries2) != len(entries1) {
 		t.Errorf("expected same number of repo entries (%d), got %d — second session should reuse clone", len(entries1), len(entries2))
-	}
-}
-
-func TestGitWorktree_Isolation(t *testing.T) {
-	env := setupGitTestEnv(t)
-	client := env.newClient(t)
-	ctx := context.Background()
-
-	// Create a session with a worktree.
-	name := uniqueSessionName(t)
-	resp, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
-		AgentProfile: "git-sleeper",
-		SessionName:  name,
-	})
-	if err != nil {
-		t.Fatalf("CreateSession: %v", err)
-	}
-	t.Cleanup(func() {
-		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-			SessionId: resp.GetSession().GetId(),
-			Force:     true,
-		})
-	})
-
-	worktreePath := resp.GetSession().GetWorktreePath()
-
-	// Create a new file in the worktree.
-	testFile := filepath.Join(worktreePath, "worktree-only.txt")
-	if err := os.WriteFile(testFile, []byte("isolated change\n"), 0o644); err != nil {
-		t.Fatalf("writing test file: %v", err)
-	}
-
-	// Verify the file does NOT exist in the main clone.
-	reposDir := filepath.Join(env.rootDir, "repos")
-	entries, _ := os.ReadDir(reposDir)
-	for _, ownerEntry := range entries {
-		ownerPath := filepath.Join(reposDir, ownerEntry.Name())
-		repoEntries, _ := os.ReadDir(ownerPath)
-		for _, repoEntry := range repoEntries {
-			clonePath := filepath.Join(ownerPath, repoEntry.Name())
-			cloneFile := filepath.Join(clonePath, "worktree-only.txt")
-			if _, err := os.Stat(cloneFile); err == nil {
-				t.Errorf("worktree-only.txt should NOT exist in clone at %s", clonePath)
-			}
-		}
-	}
-}
-
-func TestGitWorktree_CleanupOnDestroy(t *testing.T) {
-	env := setupGitTestEnv(t)
-	client := env.newClient(t)
-	ctx := context.Background()
-
-	name := uniqueSessionName(t)
-	resp, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
-		AgentProfile: "git-sleeper",
-		SessionName:  name,
-	})
-	if err != nil {
-		t.Fatalf("CreateSession: %v", err)
-	}
-
-	worktreePath := resp.GetSession().GetWorktreePath()
-	sessionID := resp.GetSession().GetId()
-
-	// Verify worktree exists.
-	if _, err := os.Stat(worktreePath); err != nil {
-		t.Fatalf("worktree should exist before destroy: %v", err)
-	}
-
-	// Destroy the session.
-	_, err = client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-		SessionId: sessionID,
-		Force:     true,
-	})
-	if err != nil {
-		t.Fatalf("DestroySession: %v", err)
-	}
-
-	// Verify worktree directory is removed.
-	if _, err := os.Stat(worktreePath); !os.IsNotExist(err) {
-		t.Errorf("worktree directory should be removed after destroy, got err: %v", err)
-	}
-
-	// Verify tmux session is gone.
-	if tmuxSessionExists(env.socketName, name) {
-		t.Errorf("tmux session %q should be gone after destroy", name)
 	}
 }
 
@@ -362,16 +270,23 @@ func TestGitRepoUpdate_PullsLatest(t *testing.T) {
 		})
 	})
 
-	// Verify the new file exists in the second session's worktree.
-	newFilePath := filepath.Join(resp2.GetSession().GetWorktreePath(), "new-file.txt")
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(newFilePath); err == nil {
-			return // success
+	// Verify the new file exists in the clone directory (sessions start at clone root).
+	reposDir := filepath.Join(env.rootDir, "repos")
+	entries, _ := os.ReadDir(reposDir)
+	var newFileFound bool
+	for _, ownerEntry := range entries {
+		ownerPath := filepath.Join(reposDir, ownerEntry.Name())
+		repoEntries, _ := os.ReadDir(ownerPath)
+		for _, repoEntry := range repoEntries {
+			newFilePath := filepath.Join(ownerPath, repoEntry.Name(), "new-file.txt")
+			if _, err := os.Stat(newFilePath); err == nil {
+				newFileFound = true
+			}
 		}
-		time.Sleep(100 * time.Millisecond)
 	}
-	t.Errorf("expected new-file.txt in second worktree at %s", newFilePath)
+	if !newFileFound {
+		t.Errorf("expected new-file.txt in clone directory after pull")
+	}
 }
 
 // run executes a command and fails the test on error.
