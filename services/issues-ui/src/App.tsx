@@ -17,6 +17,9 @@ import layoutStyles from "./styles/layout.module.css";
 
 export const STORAGE_KEY = "cadence_project_id";
 
+// Exported for use in tests — \w is ASCII-only (no `u` flag), so unicode characters are rejected
+export const PROJECT_ID_RE = /^[\w-]+$/;
+
 const loadingStyle: React.CSSProperties = {
   minHeight: "100vh",
   display: "flex",
@@ -70,6 +73,7 @@ function ProjectRedirect() {
   if (projects.length > 0) {
     let savedId: string | null = null;
     try { savedId = sessionStorage.getItem(STORAGE_KEY); } catch { /* storage unavailable */ }
+    if (savedId !== null && !PROJECT_ID_RE.test(savedId)) savedId = null;
     const target = savedId && projects.some((p) => p.id === savedId)
       ? savedId
       : projects[0].id;
