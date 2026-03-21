@@ -16,6 +16,16 @@ export function TicketCard({
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
 
+  const launchButtonLabel = (() => {
+    switch (ticket.state) {
+      case "BACKLOG": return "Refine";
+      case "REFINED": return "Lead";
+      case "IN_PROGRESS": return "Lead";
+      case "CLOSED": return "Discuss";
+      default: return "Launch";
+    }
+  })();
+
   const handleLaunchClick = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
@@ -64,7 +74,7 @@ export function TicketCard({
               onClick={handleLaunchClick}
               data-testid="card-launch-button"
             >
-              Launch
+              {launchButtonLabel}
             </button>
             {ticket.storyPoints != null && (
               <span className={styles.storyPoints} data-testid="story-points">
@@ -77,6 +87,8 @@ export function TicketCard({
       <LaunchAgentDialog
         ticketId={ticket.id}
         ticketNumber={ticket.number}
+        ticketState={ticket.state}
+        ticketTitle={ticket.title}
         repoUrl={repoUrl}
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
