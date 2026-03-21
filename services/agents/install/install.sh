@@ -138,17 +138,29 @@ setup_directories() {
 
 # --- Hub configuration ---
 
+validate_yaml_string() {
+    local value="$1" field="$2"
+    if [[ "$value" == *'"'* || "$value" == *$'\n'* ]]; then
+        error "$field must not contain double-quotes or newlines"
+    fi
+}
+
 setup_hub() {
     echo
     info "Hub configuration (optional — connects this agent to an agent-hub)"
     if confirm "Connect this agent to an agent-hub?"; then
         prompt HUB_URL "Hub WebSocket URL" "wss://cadence.bootsy.internal/ws/agent"
+        validate_yaml_string "$HUB_URL" "hub.url"
         prompt HUB_NAME "Agent name (identifier for this machine)" "$(hostname -s)"
+        validate_yaml_string "$HUB_NAME" "hub.name"
         printf "Hub agent token (input hidden): "
         read -rs HUB_AGENT_TOKEN
         echo
+        # Strip any accidentally-captured newlines (e.g. from terminal paste).
+        HUB_AGENT_TOKEN="${HUB_AGENT_TOKEN//$'\n'/}"
+        HUB_AGENT_TOKEN="${HUB_AGENT_TOKEN//$'\r'/}"
         if [[ -z "$HUB_AGENT_TOKEN" ]]; then
-            warn "No hub token provided. Set HUB_AGENT_TOKEN environment variable before starting the service."
+            warn "No hub token provided. The plist EnvironmentVariables will have an empty token; update it before starting the service."
         fi
     else
         HUB_URL=""
@@ -268,6 +280,7 @@ install_launchd() {
     info "Installing launchd service..."
     mkdir -p "$HOME/Library/LaunchAgents"
     render_template "$plist_tmpl" "$plist_dest"
+    chmod 600 "$plist_dest"
 
     # Unload if already loaded, ignore errors.
     launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
@@ -362,10 +375,12 @@ main() {
     echo
     info "Next steps:"
     info "  1. Edit $AGENTD_CONFIG_DIR/config.yaml to add agent profiles"
+    local next_step=2
     if [[ -n "$HUB_URL" ]]; then
-        info "  2. Ensure HUB_AGENT_TOKEN is set in the service environment before starting"
+        info "  $next_step. Token already written to the launchd plist. To rotate it, edit the plist and reload the service."
+        next_step=$((next_step + 1))
     fi
-    info "  2. Restart the service after config changes:"
+    info "  $next_step. Restart the service after config changes:"
     if [[ "$os" == "darwin" ]]; then
         info "     launchctl kickstart -k gui/$(id -u)/$LABEL"
     else
