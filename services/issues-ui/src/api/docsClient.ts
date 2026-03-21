@@ -20,7 +20,9 @@ export async function fetchDocFiles(): Promise<DocFile[]> {
 }
 
 export async function fetchDocContent(path: string): Promise<string> {
-  const encoded = encodeURIComponent(path);
+  // Encode each path segment individually so that directory separators are
+  // preserved in the URL and correctly matched by the Go {path...} wildcard.
+  const encoded = path.split("/").map(encodeURIComponent).join("/");
   const data = await hubFetch<DocContentResponse>(`/docs/${encoded}`);
   return data.content;
 }

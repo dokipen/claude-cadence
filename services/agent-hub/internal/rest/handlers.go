@@ -85,16 +85,31 @@ func handleListDocs() http.HandlerFunc {
 
 // handleGetDoc returns the content of a single markdown file by path.
 func handleGetDoc() http.HandlerFunc {
+	// Resolve the docs root to an absolute path once at startup so that the
+	// boundary check below is invariant to the process working directory.
+	absDocsRoot, err := filepath.Abs(docsDir)
+	if err != nil {
+		slog.Error("failed to resolve docs directory", "error", err)
+		absDocsRoot = docsDir
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		filePath := r.PathValue("path")
 
-		// Prevent path traversal attacks.
-		if strings.Contains(filePath, "..") {
+		// Only serve markdown files.
+		if !strings.HasSuffix(filePath, ".md") {
 			writeJSONError(w, http.StatusBadRequest, "invalid path")
 			return
 		}
 
-		absPath := filepath.Join(docsDir, filepath.FromSlash(filePath))
+		// Resolve to an absolute path and verify it is inside the docs root.
+		// This prevents path traversal via "..", encoded sequences, or symlink
+		// tricks — filepath.Abs cleans the path and resolves all "..".
+		absPath, err := filepath.Abs(filepath.Join(absDocsRoot, filepath.FromSlash(filePath)))
+		if err != nil || !strings.HasPrefix(absPath, absDocsRoot+string(filepath.Separator)) {
+			writeJSONError(w, http.StatusBadRequest, "invalid path")
+			return
+		}
 
 		content, err := os.ReadFile(absPath)
 		if err != nil {
