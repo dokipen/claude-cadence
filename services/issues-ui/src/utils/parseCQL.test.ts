@@ -102,4 +102,18 @@ describe("parseCQL — errors", () => {
     expect(errors).toHaveLength(1);
     expect(errors[0].toLowerCase()).toContain("conflict");
   });
+
+  it("produces a conflict error for 'label:bug -label:bug' and returns empty filters", () => {
+    const { filters, errors } = parseCQL("label:bug -label:bug");
+    expect(filters).toEqual({});
+    expect(errors).toHaveLength(1);
+    expect(errors[0].toLowerCase()).toContain("conflict");
+  });
+
+  it("produces a conflict error for 'priority:HIGH -priority:HIGH' and returns empty filters", () => {
+    const { filters, errors } = parseCQL("priority:HIGH -priority:HIGH");
+    expect(filters).toEqual({});
+    expect(errors).toHaveLength(1);
+    expect(errors[0].toLowerCase()).toContain("conflict");
+  });
 });

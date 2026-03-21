@@ -90,5 +90,28 @@ export function parseCQL(query: string): { filters: ParsedCQLFilters; errors: st
     errors.push(`Unknown token: "${token}"`);
   }
 
+  // Post-parse conflict checks: same-value include/exclude
+  if (
+    filters.labelName !== undefined &&
+    filters.excludeLabelName !== undefined &&
+    filters.labelName.toLowerCase() === filters.excludeLabelName.toLowerCase()
+  ) {
+    const value = filters.labelName;
+    errors.push(`Conflicting filter: label:${value} and -label:${value} cannot be combined`);
+    delete filters.labelName;
+    delete filters.excludeLabelName;
+  }
+
+  if (
+    filters.priority !== undefined &&
+    filters.excludePriority !== undefined &&
+    filters.priority === filters.excludePriority
+  ) {
+    const value = filters.priority;
+    errors.push(`Conflicting filter: priority:${value} and -priority:${value} cannot be combined`);
+    delete filters.priority;
+    delete filters.excludePriority;
+  }
+
   return { filters, errors };
 }

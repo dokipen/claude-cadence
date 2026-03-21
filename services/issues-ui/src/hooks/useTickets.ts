@@ -94,5 +94,7 @@ export function useTickets(
     return result;
   }, [data.tickets, excludeLabelName, excludePriority]);
 
-  return { tickets, totalCount: data.totalCount, hasNextPage: data.hasNextPage, loading, error };
+  const totalCount = (excludeLabelName || excludePriority) ? tickets.length : data.totalCount;
+
+  return { tickets, totalCount, hasNextPage: data.hasNextPage, loading, error };
 }

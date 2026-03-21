@@ -68,7 +68,11 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
       }
       const { filters: parsed, errors } = parseCQL(value);
       setCqlErrors(errors);
-      onChange(parsed);
+      if (errors.length === 0) {
+        onChange(parsed);
+      } else {
+        onChange({});
+      }
     },
     [onChange],
   );
@@ -107,6 +111,7 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
             value={cqlValue}
             onChange={(e) => handleCqlChange(e.target.value)}
             placeholder="label:bug blocked -priority:LOW"
+            maxLength={500}
             aria-label="CQL filter query"
             aria-describedby={cqlErrors.length > 0 ? cqlErrorsId : undefined}
             aria-invalid={cqlErrors.length > 0}
