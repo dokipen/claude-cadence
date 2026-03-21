@@ -59,6 +59,17 @@ export function AgentManager({ sessions }: AgentManagerProps) {
     });
   }, []);
 
+  const handleReorder = useCallback((dragKey: string, dropKey: string) => {
+    setOpenWindows((prev) => {
+      const dragIdx = prev.findIndex((w) => w.key === dragKey);
+      const dropIdx = prev.findIndex((w) => w.key === dropKey);
+      if (dragIdx === -1 || dropIdx === -1 || dragIdx === dropIdx) return prev;
+      const next = [...prev];
+      [next[dragIdx], next[dropIdx]] = [next[dropIdx], next[dragIdx]];
+      return next;
+    });
+  }, []);
+
   const loading = agentsLoading;
 
   return (
@@ -79,6 +90,7 @@ export function AgentManager({ sessions }: AgentManagerProps) {
             windows={openWindows}
             onMinimize={handleMinimize}
             onTerminated={handleTerminated}
+            onReorder={handleReorder}
           />
         )}
       </div>

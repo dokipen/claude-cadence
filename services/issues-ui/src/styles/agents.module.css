@@ -547,3 +547,17 @@
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
+
+/* Drag and drop */
+.tileHeaderDraggable {
+  cursor: grab;
+}
+
+.tileHeaderDraggable:active {
+  cursor: grabbing;
+}
+
+.tileWindowDragOver {
+  outline: 2px solid var(--primary-light);
+  outline-offset: -2px;
+}

@@ -8,6 +8,12 @@ interface TerminalWindowProps {
   agentName: string;
   onMinimize: () => void;
   onTerminated: () => void;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
+  onDragOver?: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDragLeave?: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDrop?: (e: React.DragEvent<HTMLDivElement>) => void;
+  isDragOver?: boolean;
 }
 
 export function TerminalWindow({
@@ -15,6 +21,12 @@ export function TerminalWindow({
   agentName,
   onMinimize,
   onTerminated,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  isDragOver,
 }: TerminalWindowProps) {
   const ticketMatch = session.name.match(/^lead-(\d+)$/);
 
@@ -35,8 +47,20 @@ export function TerminalWindow({
   };
 
   return (
-    <div className={styles.tileWindow} data-testid="terminal-window">
-      <div className={styles.tileHeader} data-testid="tile-header">
+    <div
+      className={`${styles.tileWindow}${isDragOver ? ` ${styles.tileWindowDragOver}` : ""}`}
+      data-testid="terminal-window"
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
+      <div
+        className={`${styles.tileHeader} ${styles.tileHeaderDraggable}`}
+        data-testid="tile-header"
+        draggable
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+      >
         <span className={styles.tileTitle}>
           {session.name}
           <span className={styles.tileAgent}> on {agentName}</span>
