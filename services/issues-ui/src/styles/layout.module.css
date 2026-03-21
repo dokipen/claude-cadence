@@ -53,11 +53,6 @@
   color: #fff;
 }
 
-.headerCenter {
-  display: flex;
-  align-items: center;
-}
-
 .headerRight {
   display: flex;
   align-items: center;
