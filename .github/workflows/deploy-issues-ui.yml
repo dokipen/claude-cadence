@@ -59,8 +59,13 @@ jobs:
 
           echo "==> Deploy complete"
 
-          # Prune old releases, keep last 5
-          ls -1dt "${DEPLOY_DIR}/releases"/*/ | tail -n +6 | xargs -r rm -rf
+          # Prune old releases, keep last 5.
+          # Non-fatal: some releases may be owned by a different user (manual deploys
+          # pre-dating the CI runner). Emit a warning rather than failing the deploy.
+          # Manual cleanup on bootsy: sudo rm -rf /srv/issues-ui/releases/20260320-*
+          if ! ls -1dt "${DEPLOY_DIR}/releases"/*/ | tail -n +6 | xargs -r rm -rf; then
+            echo "::warning::Could not remove all old releases (permission denied on some). Manual cleanup needed on bootsy: sudo rm -rf ${DEPLOY_DIR}/releases/20260320-*"
+          fi
 
       - name: Verify deployment
         run: |
