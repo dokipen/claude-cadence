@@ -165,10 +165,15 @@ jobs:
           else
             cd services/issues-ui && npx playwright install-deps chromium || echo "::warning::Could not install system deps (sudo may require a password). Ensure deps are pre-installed on the runner."
           fi
+      - name: Compute E2E ports
+        run: |
+          BASE=$(( (GITHUB_RUN_ID % 500) * 2 ))
+          echo "E2E_API_PORT=$((14000 + BASE))" >> $GITHUB_ENV
+          echo "E2E_DEV_PORT=$((14001 + BASE))" >> $GITHUB_ENV
       - name: Kill stale processes on E2E ports
         run: |
-          for port in 14444 5174; do
-            lsof -t -i :"$port" | xargs -r kill -9 2>/dev/null || true
+          for port in "${E2E_API_PORT}" "${E2E_DEV_PORT}"; do
+            [ -n "$port" ] && lsof -t -i :"$port" | xargs -r kill -9 2>/dev/null || true
           done
       - name: Prepare test database
         run: |
@@ -180,6 +185,8 @@ jobs:
         run: cd services/issues-ui && npm run test:e2e
         env:
           CI: true
+          E2E_API_PORT: ${{ env.E2E_API_PORT }}
+          E2E_DEV_PORT: ${{ env.E2E_DEV_PORT }}
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
