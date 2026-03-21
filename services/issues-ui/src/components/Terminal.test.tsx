@@ -3,6 +3,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
 
 // Mock @xterm/xterm — canvas APIs are not available in jsdom
+// Use vi.hoisted so the array is available inside the hoisted vi.mock factory
+const xtermInstances = vi.hoisted(() => [] as Array<{ focus: ReturnType<typeof vi.fn> }>);
+
 vi.mock("@xterm/xterm", () => ({
   Terminal: class MockXTerm {
     loadAddon = vi.fn();
@@ -11,8 +14,12 @@ vi.mock("@xterm/xterm", () => ({
     onData = vi.fn();
     onResize = vi.fn();
     write = vi.fn();
+    focus = vi.fn();
     cols = 80;
     rows = 24;
+    constructor() {
+      xtermInstances.push(this as unknown as { focus: ReturnType<typeof vi.fn> });
+    }
   },
 }));
 
@@ -72,6 +79,7 @@ class MockWebSocket {
 describe("Terminal", () => {
   beforeEach(() => {
     MockWebSocket.instances = [];
+    xtermInstances.length = 0;
     vi.stubGlobal("WebSocket", MockWebSocket);
     vi.stubGlobal("ResizeObserver", class {
       observe = vi.fn();
@@ -208,5 +216,19 @@ describe("Terminal", () => {
     expect(screen.getByText("Reconnect")).toBeDefined();
     expect(screen.queryByTestId("terminal-error")).toBeNull();
     expect(screen.queryByTestId("terminal-connecting")).toBeNull();
+  });
+
+  // 6. Clicking the terminal container focuses the xterm instance (issue #199)
+  it("focuses the xterm instance when the terminal container is clicked", () => {
+    render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+
+    const ws = MockWebSocket.instances[0];
+    act(() => { ws.simulateOpen(); });
+
+    const container = screen.getByTestId("terminal-container");
+    fireEvent.click(container);
+
+    expect(xtermInstances).toHaveLength(1);
+    expect(xtermInstances[0].focus).toHaveBeenCalledTimes(1);
   });
 });
