@@ -98,6 +98,15 @@ func tmuxSessionExists(socketName, sessionName string) bool {
 	return cmd.Run() == nil
 }
 
+func tmuxMouseEnabled(t *testing.T, socketName string) bool {
+	t.Helper()
+	out, err := exec.Command("tmux", "-L", socketName, "show-options", "-g", "mouse").Output()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(out), "mouse on")
+}
+
 func cleanupAllTestSessions(socketName string) {
 	out, err := exec.Command("tmux", "-L", socketName, "list-sessions", "-F", "#{session_name}").Output()
 	if err != nil {
