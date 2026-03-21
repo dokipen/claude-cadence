@@ -91,7 +91,7 @@ function setupMocks(page: import("@playwright/test").Page) {
 test.describe("input notifications", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
-      localStorage.setItem("cadence_project_id", "e2e-test-project");
+      sessionStorage.setItem("cadence_project_id", "e2e-test-project");
     });
     await setupMocks(page);
   });

@@ -96,23 +96,37 @@ function AppShell() {
   const navigate = useNavigate();
   const boardMatch = useMatch("/projects/:projectId/*");
   const projectId = boardMatch?.params.projectId ?? null;
+  const [globalProjectId, setGlobalProjectId] = useState<string | null>(() => {
+    try {
+      const saved = sessionStorage.getItem(STORAGE_KEY);
+      return saved !== null && PROJECT_ID_RE.test(saved) ? saved : null;
+    } catch { return null; }
+  });
   const [filters, setFilters] = useState<TicketFilters>({});
   const showFilters = projectId && !location.pathname.startsWith("/ticket/") && !location.pathname.startsWith("/agents") && !location.pathname.startsWith("/docs");
 
   useEffect(() => {
-    if (projectId && projects.some((p) => p.id === projectId)) {
+    if (projectId) {
+      setGlobalProjectId(projectId);
       try { sessionStorage.setItem(STORAGE_KEY, projectId); } catch { /* storage unavailable */ }
     }
-  }, [projectId, projects]);
+  }, [projectId]);
 
-  const selectedProject = projects.find((p) => p.id === projectId);
+  // Use URL-derived projectId when on a board route (immediate), fall back to globalProjectId (e.g. agents page)
+  const effectiveProjectId = projectId ?? globalProjectId;
+  const selectedProject = projects.find((p) => p.id === effectiveProjectId) ?? null;
   const repoUrl = selectedProject?.repository;
 
+  const isOnBoard = !!boardMatch;
   const handleProjectChange = useCallback((id: string) => {
     if (!projects.some((p) => p.id === id)) return;
-    navigate(`/projects/${id}`);
-    setFilters({});
-  }, [projects, navigate]);
+    setGlobalProjectId(id);
+    try { sessionStorage.setItem(STORAGE_KEY, id); } catch { /* storage unavailable */ }
+    if (isOnBoard) {
+      navigate(`/projects/${id}`);
+      setFilters({});
+    }
+  }, [projects, navigate, isOnBoard]);
 
   return (
     <div className={layoutStyles.shell}>
@@ -131,12 +145,10 @@ function AppShell() {
           <NotificationDropdown waitingSessions={waitingSessions} />
         </div>
         <div className={layoutStyles.headerCenter}>
-          {projectId !== null ? (
-            <ProjectSelector
-              selectedProjectId={projectId}
-              onProjectChange={handleProjectChange}
-            />
-          ) : null}
+          <ProjectSelector
+            selectedProjectId={globalProjectId}
+            onProjectChange={handleProjectChange}
+          />
         </div>
         <div className={layoutStyles.headerRight}>
           {user && (
@@ -156,7 +168,7 @@ function AppShell() {
       )}
       <main className={layoutStyles.main}>
         <Routes>
-          <Route path="/agents" element={<AgentManager sessions={sessions} />} />
+          <Route path="/agents" element={<AgentManager sessions={sessions} selectedProject={selectedProject} />} />
           <Route path="/docs/*" element={<DocsPage />} />
           <Route
             path="/projects/:projectId/*"
