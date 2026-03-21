@@ -143,8 +143,8 @@
 .agentTabTerminal {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 220px);
-  min-height: 400px;
+  flex: 1;
+  min-height: 0;
 }
 
 /* Terminal header */
