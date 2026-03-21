@@ -1,12 +1,11 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { STORAGE_KEY } from "./App";
+import { STORAGE_KEY, PROJECT_ID_RE } from "./App";
 const PROJECTS = [
   { id: "proj-a", name: "Project A" },
   { id: "proj-b", name: "Project B" },
+  { id: "my_project", name: "My Project" },
 ];
-
-const PROJECT_ID_RE = /^[\w-]+$/;
 
 function resolveTargetProject(projects: typeof PROJECTS): string {
   let savedId = sessionStorage.getItem(STORAGE_KEY);
@@ -50,9 +49,9 @@ describe("ProjectRedirect sessionStorage resolution", () => {
 });
 
 describe("ProjectRedirect format validation", () => {
-  it("accepts a valid project ID with alphanumerics and hyphens", () => {
-    sessionStorage.setItem(STORAGE_KEY, "proj-a");
-    expect(resolveTargetProject(PROJECTS)).toBe("proj-a");
+  it("accepts a valid project ID with underscores (verifies \\w includes underscore)", () => {
+    sessionStorage.setItem(STORAGE_KEY, "my_project");
+    expect(resolveTargetProject(PROJECTS)).toBe("my_project");
   });
 
   it("rejects an ID with path-traversal characters", () => {
