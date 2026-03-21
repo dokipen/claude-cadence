@@ -213,6 +213,7 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
         ref={containerRef}
         className={styles.terminalContainer}
         data-testid="terminal-container"
+        onClick={() => termRef.current?.focus()}
       />
       {connState === "connecting" && (
         <div className={styles.terminalOverlay} data-testid="terminal-connecting">
