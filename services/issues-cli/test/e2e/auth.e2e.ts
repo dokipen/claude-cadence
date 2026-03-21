@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { setupTestSuite, type TestSuite } from "./helpers.js";
+import { setupTestSuite, type TestSuite, TEST_PROJECT_ID } from "./helpers.js";
 
 describe("Auth", () => {
   let suite: TestSuite;
@@ -21,7 +21,7 @@ describe("Auth", () => {
     });
 
     it("should reject unauthenticated ticket creation", async () => {
-      const result = await suite.unauthenticatedCli("ticket", "create", "--project", "default-project", "--title", "Should fail");
+      const result = await suite.unauthenticatedCli("ticket", "create", "--project", TEST_PROJECT_ID, "--title", "Should fail");
       expect(result.exitCode).not.toBe(0);
       const output = result.stdout + result.stderr;
       expect(output).toContain("Authentication required");
@@ -37,7 +37,7 @@ describe("Auth", () => {
 
   describe("authenticated access", () => {
     it("should allow authenticated ticket creation", async () => {
-      const result = await suite.cli("ticket", "create", "--project", "default-project", "--title", "Auth test ticket");
+      const result = await suite.cli("ticket", "create", "--project", TEST_PROJECT_ID, "--title", "Auth test ticket");
       expect(result.exitCode).toBe(0);
       const output = result.stdout + result.stderr;
       expect(output).toContain("Auth test ticket");

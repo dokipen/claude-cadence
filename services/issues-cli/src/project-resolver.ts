@@ -49,9 +49,6 @@ export async function resolveProjectId(explicitProject: string | undefined): Pro
     }
 
     // Not a CUID — try name lookup first, then fall back to treating as a literal ID.
-    // The ID fallback handles non-CUID IDs (e.g., test seed data uses
-    // "default-project" as a literal ID). In production, all project IDs
-    // are CUIDs and would be caught by the isCuid check above.
     const client = getClient();
     const data = await client.request<{
       projectByName: { id: string; name: string } | null;

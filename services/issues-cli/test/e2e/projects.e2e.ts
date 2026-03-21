@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { setupTestSuite, type TestSuite } from "./helpers.js";
+import { setupTestSuite, type TestSuite, TEST_PROJECT_ID, TEST_PROJECT_NAME, TEST_PROJECT_REPO } from "./helpers.js";
 
 describe("Project Management", () => {
   let suite: TestSuite;
@@ -14,18 +14,18 @@ describe("Project Management", () => {
 
   let createdProjectId: string;
 
-  it("should list the seeded default project", async () => {
+  it("should list the seeded test project", async () => {
     const result = await suite.cli("project", "list");
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Default");
-    expect(result.stdout).toContain("default/repository");
+    expect(result.stdout).toContain(TEST_PROJECT_NAME);
+    expect(result.stdout).toContain(TEST_PROJECT_REPO);
   });
 
-  it("should view the default project", async () => {
-    const result = await suite.cli("project", "view", "default-project");
+  it("should view the test project", async () => {
+    const result = await suite.cli("project", "view", TEST_PROJECT_ID);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Default");
-    expect(result.stdout).toContain("default/repository");
+    expect(result.stdout).toContain(TEST_PROJECT_NAME);
+    expect(result.stdout).toContain(TEST_PROJECT_REPO);
   });
 
   it("should create a new project", async () => {
@@ -117,24 +117,24 @@ describe("Project Management", () => {
   });
 
   it("should filter tickets by project", async () => {
-    // Create a ticket in the default project
+    // Create a ticket in the test fixture project
     await suite.cli(
       "ticket", "create",
-      "--project", "default-project",
-      "--title", "Default project ticket"
+      "--project", TEST_PROJECT_ID,
+      "--title", "Fixture project ticket"
     );
 
     // Filter by the created project — should only show "Project ticket"
     const result = await suite.cli("ticket", "list", "--project", createdProjectId);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Project ticket");
-    expect(result.stdout).not.toContain("Default project ticket");
+    expect(result.stdout).not.toContain("Fixture project ticket");
 
-    // Filter by default project — should show "Default project ticket" but not "Project ticket"
-    const defaultResult = await suite.cli("ticket", "list", "--project", "default-project");
-    expect(defaultResult.exitCode).toBe(0);
-    expect(defaultResult.stdout).toContain("Default project ticket");
-    expect(defaultResult.stdout).not.toContain("Project ticket");
+    // Filter by test fixture project — should show "Fixture project ticket" but not "Project ticket"
+    const fixtureResult = await suite.cli("ticket", "list", "--project", TEST_PROJECT_ID);
+    expect(fixtureResult.exitCode).toBe(0);
+    expect(fixtureResult.stdout).toContain("Fixture project ticket");
+    expect(fixtureResult.stdout).not.toContain("Project ticket");
   });
 
   it("should reject creating a ticket with non-existent project", async () => {
@@ -151,7 +151,7 @@ describe("Project Management", () => {
   it("should reject creating a project with duplicate name", async () => {
     const result = await suite.cli(
       "project", "create",
-      "--name", "Default",
+      "--name", TEST_PROJECT_NAME,
       "--repository", "org/another-repo"
     );
     expect(result.exitCode).not.toBe(0);
@@ -161,7 +161,7 @@ describe("Project Management", () => {
     const result = await suite.cli(
       "project", "create",
       "--name", "Another Project",
-      "--repository", "default/repository"
+      "--repository", TEST_PROJECT_REPO
     );
     expect(result.exitCode).not.toBe(0);
   });
