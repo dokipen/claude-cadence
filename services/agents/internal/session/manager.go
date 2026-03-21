@@ -25,19 +25,21 @@ var (
 
 // Manager orchestrates session lifecycle using Store and tmux.Client.
 type Manager struct {
-	store    *Store
-	tmux     *tmux.Client
-	ttyd     *ttyd.Client
-	git      *git.Client
-	vault    *vault.Client
-	profiles map[string]config.Profile
+	store          *Store
+	tmux           *tmux.Client
+	ttyd           *ttyd.Client
+	git            *git.Client
+	vault          *vault.Client
+	profiles       map[string]config.Profile
+	tmuxHasSession func(name string) bool
+	processAlive   func(pid int) bool
 }
 
 // NewManager creates a new session Manager.
 // gitClient may be nil if no profiles use repos.
 // vaultClient may be nil if no profiles use vault secrets.
 func NewManager(store *Store, tmuxClient *tmux.Client, ttydClient *ttyd.Client, gitClient *git.Client, vaultClient *vault.Client, profiles map[string]config.Profile) *Manager {
-	return &Manager{
+	m := &Manager{
 		store:    store,
 		tmux:     tmuxClient,
 		ttyd:     ttydClient,
@@ -45,6 +47,13 @@ func NewManager(store *Store, tmuxClient *tmux.Client, ttydClient *ttyd.Client, 
 		vault:    vaultClient,
 		profiles: profiles,
 	}
+	if tmuxClient != nil {
+		m.tmuxHasSession = func(name string) bool { return m.tmux.HasSession(name) }
+	} else {
+		m.tmuxHasSession = func(name string) bool { return false }
+	}
+	m.processAlive = isProcessAlive
+	return m
 }
 
 // CreateRequest holds the parameters for creating a session.
@@ -156,7 +165,8 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		}
 	}
 
-	// If the profile has a repo, clone/pull and create a worktree.
+	// If the profile has a repo, clone/pull and start the session in the clone root.
+	// Agents create their own worktrees via /new-work.
 	workdir := "/"
 	if profile.Repo != "" {
 		if m.git == nil {
@@ -178,27 +188,14 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 			return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
 		}
 
-		worktreeDir := m.git.WorktreeDir(sessionID)
-		resolvedRef, err := m.git.AddWorktree(cloneDir, worktreeDir, req.BaseRef)
-		if err != nil {
-			errMsg := fmt.Sprintf("failed to create worktree: %v", err)
-			m.store.Update(sessionID, func(s *Session) {
-				s.State = StateError
-				s.ErrorMessage = errMsg
-			})
-			return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
-		}
-
-		workdir = worktreeDir
+		workdir = cloneDir
 		m.store.Update(sessionID, func(s *Session) {
-			s.WorktreePath = worktreeDir
 			s.RepoURL = profile.Repo
-			s.BaseRef = resolvedRef
 		})
 	}
 
 	// Render command template.
-	cmdStr, err := m.renderCommand(profile.Command, sess, req.ExtraArgs)
+	cmdStr, err := m.renderCommand(profile.Command, sess, req.ExtraArgs, profile.PluginDir)
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to render command: %v", err)
 		m.store.Update(sessionID, func(s *Session) {
@@ -247,12 +244,6 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	// Create tmux session with command as initial process.
 	if err := m.tmux.NewSession(sessionName, workdir, fullCommand); err != nil {
 		errMsg := fmt.Sprintf("failed to create tmux session: %v", err)
-		// Clean up worktree if we created one.
-		if profile.Repo != "" && m.git != nil {
-			cloneDir, _ := m.git.CloneDir(profile.Repo)
-			worktreeDir := m.git.WorktreeDir(sessionID)
-			_ = m.git.RemoveWorktree(cloneDir, worktreeDir)
-		}
 		m.store.Update(sessionID, func(s *Session) {
 			s.State = StateError
 			s.ErrorMessage = errMsg
@@ -355,22 +346,9 @@ func (m *Manager) Destroy(id string, force bool) error {
 		m.ttyd.Stop(id)
 	}
 
-	if m.tmux.HasSession(sess.TmuxSession) {
+	if m.tmux != nil && m.tmuxHasSession(sess.TmuxSession) {
 		if err := m.tmux.KillSession(sess.TmuxSession); err != nil {
 			slog.Warn("failed to kill tmux session", "session", sess.TmuxSession, "error", err)
-		}
-	}
-
-	// Clean up worktree if one was created.
-	if sess.WorktreePath != "" && sess.RepoURL != "" && m.git != nil {
-		cloneDir, err := m.git.CloneDir(sess.RepoURL)
-		if err == nil {
-			if err := m.git.RemoveWorktree(cloneDir, sess.WorktreePath); err != nil {
-				slog.Warn("failed to remove worktree", "path", sess.WorktreePath, "error", err)
-			}
-			if err := m.git.PruneWorktrees(cloneDir); err != nil {
-				slog.Warn("failed to prune worktrees", "error", err)
-			}
 		}
 	}
 
@@ -456,7 +434,7 @@ func (m *Manager) reconcile(sess *Session) {
 
 	now := time.Now()
 
-	tmuxExists := m.tmux.HasSession(sess.TmuxSession)
+	tmuxExists := m.tmuxHasSession(sess.TmuxSession)
 	if !tmuxExists {
 		m.store.Update(sess.ID, func(s *Session) {
 			s.State = StateStopped
@@ -467,7 +445,7 @@ func (m *Manager) reconcile(sess *Session) {
 		return
 	}
 
-	if sess.AgentPID > 0 && !isProcessAlive(sess.AgentPID) {
+	if sess.AgentPID > 0 && !m.processAlive(sess.AgentPID) {
 		m.store.Update(sess.ID, func(s *Session) {
 			s.State = StateStopped
 			s.StoppedAt = now
@@ -481,14 +459,6 @@ func (m *Manager) reconcile(sess *Session) {
 func (m *Manager) cleanup(sessionID, tmuxSession, errMsg string) {
 	if m.tmux.HasSession(tmuxSession) {
 		_ = m.tmux.KillSession(tmuxSession)
-	}
-
-	// Clean up worktree if one was created.
-	sess, ok := m.store.Get(sessionID)
-	if ok && sess.WorktreePath != "" && sess.RepoURL != "" && m.git != nil {
-		if cloneDir, err := m.git.CloneDir(sess.RepoURL); err == nil {
-			_ = m.git.RemoveWorktree(cloneDir, sess.WorktreePath)
-		}
 	}
 
 	m.store.Update(sessionID, func(s *Session) {
@@ -507,20 +477,26 @@ type templateData struct {
 	SessionName  string // Safe without escaping: validated to [a-zA-Z0-9_-] by tmuxNameRe.
 	ExtraArgs    string // Shell-escaped via shellJoinArgs in renderCommand.
 	WorktreePath string // Shell-escaped in renderCommand when non-empty; empty string when unset.
+	PluginDir    string // Shell-escaped in renderCommand when non-empty; empty string when unset.
 }
 
-func (m *Manager) renderCommand(cmdTemplate string, sess *Session, extraArgs []string) (string, error) {
+func (m *Manager) renderCommand(cmdTemplate string, sess *Session, extraArgs []string, pluginDir string) (string, error) {
 	tmpl, err := template.New("cmd").Parse(cmdTemplate)
 	if err != nil {
 		return "", fmt.Errorf("parsing command template: %w", err)
 	}
 
-	// Leave WorktreePath as empty string (not shell-escaped '\'') when unset,
-	// so template conditionals like {{if .WorktreePath}} work correctly and
-	// commands don't receive a spurious empty-string argument.
+	// Leave WorktreePath and PluginDir as empty string (not shell-escaped '')
+	// when unset, so template conditionals like {{if .WorktreePath}} work
+	// correctly and commands don't receive a spurious empty-string argument.
 	worktreePath := ""
 	if sess.WorktreePath != "" {
 		worktreePath = shellEscapeArg(sess.WorktreePath)
+	}
+
+	escapedPluginDir := ""
+	if pluginDir != "" {
+		escapedPluginDir = shellEscapeArg(pluginDir)
 	}
 
 	data := templateData{
@@ -528,6 +504,7 @@ func (m *Manager) renderCommand(cmdTemplate string, sess *Session, extraArgs []s
 		SessionName:  sess.Name,
 		ExtraArgs:    shellJoinArgs(extraArgs),
 		WorktreePath: worktreePath,
+		PluginDir:    escapedPluginDir,
 	}
 
 	var buf bytes.Buffer

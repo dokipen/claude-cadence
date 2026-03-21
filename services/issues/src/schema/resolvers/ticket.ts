@@ -1,4 +1,5 @@
-import type { PrismaClient, Ticket, Comment, Prisma, User } from "@prisma/client";
+import type { PrismaClient, Ticket, Comment, User } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import type { Loaders } from "../../loaders.js";
 import { validateTransition, checkBlockerGuard } from "../../fsm/ticket-machine.js";
 import { GraphQLError } from "graphql";
@@ -13,6 +14,8 @@ export interface Context {
 const VALID_STATES = new Set(["BACKLOG", "REFINED", "IN_PROGRESS", "CLOSED"]);
 const VALID_PRIORITIES = new Set(["HIGHEST", "HIGH", "MEDIUM", "LOW", "LOWEST"]);
 const MAX_PAGE_SIZE = 100;
+const MAX_LABEL_NAMES = 20;
+const MAX_LABEL_LENGTH = 100;
 
 export const ticketResolvers = {
   Query: {
@@ -49,6 +52,7 @@ export const ticketResolvers = {
       args: {
         state?: string;
         labelName?: string;
+        labelNames?: string[];
         assigneeLogin?: string;
         isBlocked?: boolean;
         priority?: string;
@@ -58,7 +62,7 @@ export const ticketResolvers = {
       },
       { prisma }: Context
     ) => {
-      const { state, labelName, assigneeLogin, isBlocked, priority, projectId, after } = args;
+      const { state, labelName, labelNames, assigneeLogin, isBlocked, priority, projectId, after } = args;
       const rawFirst = args.first ?? MAX_PAGE_SIZE;
       const first = Number.isFinite(rawFirst) ? Math.min(Math.max(1, rawFirst), MAX_PAGE_SIZE) : MAX_PAGE_SIZE;
 
@@ -72,7 +76,24 @@ export const ticketResolvers = {
         where.priority = priority;
       }
 
-      if (labelName) {
+      if (labelNames && labelNames.length > 0) {
+        if (labelNames.length > MAX_LABEL_NAMES) {
+          throw new GraphQLError(`labelNames exceeds maximum of ${MAX_LABEL_NAMES} entries`, { extensions: { code: "BAD_USER_INPUT" } });
+        }
+        const filtered = labelNames.map(n => n.trim()).filter(n => n.length > 0);
+        for (const n of filtered) {
+          if (n.length > MAX_LABEL_LENGTH) {
+            throw new GraphQLError(`Label name exceeds maximum length of ${MAX_LABEL_LENGTH}`, { extensions: { code: "BAD_USER_INPUT" } });
+          }
+        }
+        if (filtered.length > 0) {
+          where.labels = {
+            some: {
+              label: { name: { in: filtered } },
+            },
+          };
+        }
+      } else if (labelName) {
         where.labels = {
           some: {
             label: { name: labelName },
@@ -116,8 +137,12 @@ export const ticketResolvers = {
       }
 
       let tickets: Ticket[];
+      let totalCount: number;
       try {
-        tickets = await prisma.ticket.findMany(queryArgs);
+        [tickets, totalCount] = await Promise.all([
+          prisma.ticket.findMany(queryArgs),
+          prisma.ticket.count({ where }),
+        ]);
       } catch (error) {
         console.error("tickets query failed:", error instanceof Error ? error.message : String(error));
         throw new GraphQLError("Failed to query tickets", {
@@ -137,6 +162,7 @@ export const ticketResolvers = {
           hasNextPage,
           endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
         },
+        totalCount,
       };
     },
 
@@ -301,6 +327,11 @@ export const ticketResolvers = {
         return await prisma.label.create({ data: { name, color } });
       } catch (error) {
         if (error instanceof GraphQLError) throw error;
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          throw new GraphQLError("A label with that name already exists", {
+            extensions: { code: "CONFLICT" },
+          });
+        }
         console.error("Failed to create label:", error instanceof Error ? error.message : String(error));
         throw new GraphQLError("Failed to create label", {
           extensions: { code: "INTERNAL_SERVER_ERROR" },
@@ -336,6 +367,11 @@ export const ticketResolvers = {
         return ticket;
       } catch (error) {
         if (error instanceof GraphQLError) throw error;
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          throw new GraphQLError("Label is already on this ticket", {
+            extensions: { code: "CONFLICT" },
+          });
+        }
         console.error("Failed to add label:", error instanceof Error ? error.message : String(error));
         throw new GraphQLError("Failed to add label", {
           extensions: { code: "INTERNAL_SERVER_ERROR" },
@@ -394,12 +430,23 @@ export const ticketResolvers = {
             extensions: { code: "NOT_FOUND" },
           });
         }
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) {
+          throw new GraphQLError("User not found", {
+            extensions: { code: "NOT_FOUND" },
+          });
+        }
         return await prisma.ticket.update({
           where: { id: ticketId },
           data: { assigneeId: userId },
         });
       } catch (error) {
         if (error instanceof GraphQLError) throw error;
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
+          throw new GraphQLError("User not found", {
+            extensions: { code: "NOT_FOUND" },
+          });
+        }
         console.error("Failed to assign ticket:", error instanceof Error ? error.message : String(error));
         throw new GraphQLError("Failed to assign ticket", {
           extensions: { code: "INTERNAL_SERVER_ERROR" },

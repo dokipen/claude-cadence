@@ -7,7 +7,8 @@ const issuesDir = path.resolve(__dirname, "../issues");
 const testDbUrl = `file:${path.resolve(issuesDir, "test.db")}`;
 
 // Use a non-default port in CI to avoid conflicting with the production service
-const apiPort = process.env.CI ? 4444 : 4000;
+// (port 4444 is Selenium WebDriver's default — use 14444 to avoid collisions)
+const apiPort = process.env.CI ? 14444 : 4000;
 const devPort = process.env.CI ? 5174 : 5173;
 
 export default defineConfig({
@@ -16,7 +17,7 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: process.env.CI ? 4 : undefined,
   reporter: "html",
   use: {
     baseURL: `http://localhost:${devPort}`,

@@ -137,4 +137,27 @@ describe("Label Management", () => {
     expect(viewResult.exitCode).toBe(0);
     expect(viewResult.stdout).not.toContain("attached-label");
   });
+
+  // --- --project flag (ignored gracefully) ---
+
+  it("should accept --project on label list without error", async () => {
+    const result = await suite.cli("label", "list", "--project", "some-project", "--json");
+    expect(result.exitCode).toBe(0);
+    const labels = JSON.parse(result.stdout);
+    expect(Array.isArray(labels)).toBe(true);
+  });
+
+  it("should accept --project on label create without error", async () => {
+    const result = await suite.cli("label", "create", "--name", "project-flag-test", "--color", "#aabbcc", "--project", "some-project");
+    expect(result.exitCode).toBe(0);
+    const output = result.stdout + result.stderr;
+    expect(output).toContain("Label created");
+  });
+
+  it("should accept --project on label delete without error", async () => {
+    const result = await suite.cli("label", "delete", "project-flag-test", "--project", "some-project");
+    expect(result.exitCode).toBe(0);
+    const output = result.stdout + result.stderr;
+    expect(output).toContain("Label deleted");
+  });
 });

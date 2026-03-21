@@ -7,6 +7,7 @@ Scripts to provision and manage self-hosted GitHub Actions runners as systemd se
 - **Linux**: systemd, `gh` CLI, `curl`, `tar`
 - **macOS**: launchd (built-in), `gh` CLI, `curl`, `tar`
 - `gh` must be authenticated with repo admin access
+- **Arch Linux runners**: Playwright system dependencies must be pre-installed (see `docs/runner-security.md` for the full package list)
 
 ## Usage
 

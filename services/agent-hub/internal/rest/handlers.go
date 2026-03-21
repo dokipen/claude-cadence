@@ -9,10 +9,12 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coder/websocket"
 	"github.com/dokipen/claude-cadence/services/agent-hub/internal/hub"
+	"golang.org/x/sync/errgroup"
 )
 
 // handleListAgents returns all registered agents.
@@ -25,6 +27,103 @@ func handleListAgents(h *hub.Hub) http.HandlerFunc {
 			"agents": agents,
 		}); err != nil {
 			slog.Error("failed to encode agents response", "error", err)
+		}
+	}
+}
+
+// listAllSessionsDeadline caps the total fan-out time for handleListAllSessions.
+// Without this, worst-case latency is ceil(N/16)*5s (e.g. 160 agents → 50s),
+// which exceeds the HTTP server's 35s WriteTimeout. Chosen to be safely under WriteTimeout.
+const listAllSessionsDeadline = 28 * time.Second
+
+// handleListAllSessions returns sessions across all online agents.
+func handleListAllSessions(h *hub.Hub, overallDeadline time.Duration) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		agents := h.List()
+
+		params := map[string]any{}
+		if wfi := r.URL.Query().Get("waiting_for_input"); wfi == "true" {
+			params["waiting_for_input"] = true
+		}
+
+		type agentSessions struct {
+			AgentName string          `json:"agent_name"`
+			Sessions  json.RawMessage `json:"sessions"`
+		}
+
+		// sem is per-request so concurrent callers each get their own pool of 16 slots.
+		sem := make(chan struct{}, MaxAgentFanOut)
+
+		var (
+			mu      sync.Mutex
+			results = make([]agentSessions, 0, len(agents))
+		)
+
+		// Apply an overall deadline across the entire fan-out. Without this,
+		// worst-case latency is ceil(N/16)*listAllSessionsTimeout (e.g. 160
+		// agents → 50s), which would exceed the HTTP server's WriteTimeout.
+		fanOutCtx, cancel := context.WithTimeout(r.Context(), overallDeadline)
+		defer cancel()
+
+		eg, egCtx := errgroup.WithContext(fanOutCtx)
+	loop:
+		for _, info := range agents {
+			if info.Status != hub.StatusOnline {
+				continue
+			}
+			agent, ok := h.Get(info.Name)
+			if !ok {
+				continue
+			}
+			// Acquire semaphore before spawning goroutine to bound both
+			// goroutine count and concurrent RPCs.
+			select {
+			case sem <- struct{}{}:
+			case <-egCtx.Done():
+				break loop
+			}
+			eg.Go(func() error {
+				defer func() { <-sem }()
+				callCtx, cancel := context.WithTimeout(egCtx, listAllSessionsTimeout)
+				defer cancel()
+
+				result, err := h.Call(callCtx, agent, "listSessions", params)
+				if err != nil {
+					slog.Debug("failed to list sessions from agent", "agent", info.Name, "error", err)
+					return nil
+				}
+
+				var parsed struct {
+					Sessions json.RawMessage `json:"sessions"`
+				}
+				if err := json.Unmarshal(result, &parsed); err != nil {
+					slog.Debug("failed to parse sessions response", "agent", info.Name, "error", err)
+					return nil
+				}
+
+				mu.Lock()
+				results = append(results, agentSessions{
+					AgentName: info.Name,
+					Sessions:  parsed.Sessions,
+				})
+				mu.Unlock()
+				return nil
+			})
+		}
+		eg.Wait() //nolint:errcheck // goroutines only return nil
+
+		// egCtx is cancelled when fanOutCtx's deadline is exceeded, which is
+		// the only non-nil error source since goroutines always return nil.
+		if errors.Is(egCtx.Err(), context.DeadlineExceeded) {
+			writeJSONError(w, http.StatusGatewayTimeout, "fan-out deadline exceeded")
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"agents": results,
+		}); err != nil {
+			slog.Error("failed to encode sessions response", "error", err)
 		}
 	}
 }
@@ -51,6 +150,14 @@ func handleGetAgent(h *hub.Hub) http.HandlerFunc {
 
 // rpcCallTimeout is the maximum time to wait for an agentd response.
 const rpcCallTimeout = 30 * time.Second
+
+// listAllSessionsTimeout is a tighter timeout for the fan-out polling endpoint,
+// where each RPC is a lightweight in-memory query on the agent side.
+const listAllSessionsTimeout = 5 * time.Second
+
+// MaxAgentFanOut bounds the number of concurrent RPCs in handleListAllSessions
+// to limit goroutine pressure when many agents are online.
+const MaxAgentFanOut = 16
 
 // handleCreateSession forwards a CreateSession request to the target agentd.
 func handleCreateSession(h *hub.Hub) http.HandlerFunc {
@@ -274,6 +381,15 @@ func handleAgentWebSocket(h *hub.Hub, agentToken string) http.HandlerFunc {
 				"agent", params.Name, "address", params.Ttyd.AdvertiseAddress, "error", err)
 			conn.Close(websocket.StatusPolicyViolation, err.Error())
 			return
+		}
+
+		for name, profile := range params.Profiles {
+			if err := hub.ValidateProfileRepo(profile.Repo); err != nil {
+				slog.Warn("rejecting agent registration: invalid profile repo",
+					"agent", params.Name, "profile", name, "error", err)
+				conn.Close(websocket.StatusPolicyViolation, err.Error())
+				return
+			}
 		}
 
 		// Attempt registration before sending the acknowledgment so we can

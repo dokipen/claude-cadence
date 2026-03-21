@@ -55,11 +55,11 @@ fi
 # --- List agents ---
 
 info "Listing registered agents..."
-AGENTS_JSON="$(curl -sf -H "Authorization: Bearer $HUB_API_TOKEN" "$HUB_URL/api/v1/agents" 2>&1)" || {
+AGENTS_JSON="$(ssh "$HOST" "curl -sf -H 'Authorization: Bearer $HUB_API_TOKEN' http://127.0.0.1:4200/api/v1/agents" 2>&1)" || {
     error "Failed to reach agent-hub API at $HUB_URL/api/v1/agents"
 }
 
-AGENT_COUNT="$(echo "$AGENTS_JSON" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")"
+AGENT_COUNT="$(echo "$AGENTS_JSON" | python3 -c "import sys,json; data=json.load(sys.stdin); print(len(data.get('agents', data) if isinstance(data, dict) else data))" 2>/dev/null || echo "0")"
 info "Found $AGENT_COUNT registered agent(s)."
 
 if [[ "$AGENT_COUNT" -eq 0 ]]; then
@@ -67,12 +67,16 @@ if [[ "$AGENT_COUNT" -eq 0 ]]; then
 else
     echo "$AGENTS_JSON" | python3 -c "
 import sys, json
-agents = json.load(sys.stdin)
+data = json.load(sys.stdin)
+agents = data.get('agents', data) if isinstance(data, dict) else data
 for a in agents:
     status = a.get('status', 'unknown')
     name = a.get('name', 'unnamed')
-    profiles = ', '.join(a.get('profiles', []))
-    print(f'  {name}: {status} (profiles: {profiles})')
+    profiles = a.get('profiles', {})
+    for pname, pinfo in profiles.items():
+        repo = pinfo.get('repo', '')
+        repo_str = f' repo={repo}' if repo else ' repo=MISSING'
+        print(f'  {name}: {status} (profile: {pname}{repo_str})')
 " 2>/dev/null || echo "$AGENTS_JSON"
 fi
 
@@ -84,7 +88,8 @@ if [[ "$SMOKE_TEST" == "true" ]]; then
     # Pick the first online agent
     AGENT_NAME="$(echo "$AGENTS_JSON" | python3 -c "
 import sys, json
-agents = json.load(sys.stdin)
+data = json.load(sys.stdin)
+agents = data.get('agents', data) if isinstance(data, dict) else data
 online = [a for a in agents if a.get('status') == 'online']
 if online:
     print(online[0]['name'])
@@ -94,11 +99,11 @@ if online:
         warn "No online agents available for smoke test."
     else
         info "Creating test session on agent '$AGENT_NAME'..."
-        RESPONSE="$(curl -sf -X POST \
-            -H "Authorization: Bearer $HUB_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "{\"agent_profile\":\"claude-cadence\",\"session_name\":\"deploy-verify-test\",\"extra_args\":[\"-p\",\"Say 'deployment verification successful' and exit.\"]}" \
-            "$HUB_URL/api/v1/agents/$AGENT_NAME/sessions" 2>&1)" || {
+        RESPONSE="$(ssh "$HOST" "curl -sf -X POST \
+            -H 'Authorization: Bearer $HUB_API_TOKEN' \
+            -H 'Content-Type: application/json' \
+            -d '{\"agent_profile\":\"claude-cadence\",\"session_name\":\"deploy-verify-test\",\"extra_args\":[\"-p\",\"Say \\\"deployment verification successful\\\" and exit.\"]}' \
+            http://127.0.0.1:4200/api/v1/agents/$AGENT_NAME/sessions" 2>&1)" || {
             warn "Failed to create test session. Response: $RESPONSE"
         }
 

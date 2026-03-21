@@ -31,7 +31,7 @@ export interface Ticket {
   priority: Priority;
   assignee?: User;
   labels: Label[];
-  blockedBy: { id: string }[];
+  blockedBy: { id: string; state: TicketState }[];
 }
 
 export interface Comment {
@@ -99,4 +99,6 @@ export interface Session {
   worktree_path: string;
   repo_url: string;
   base_ref: string;
+  waiting_for_input?: boolean;
+  idle_since?: string;
 }

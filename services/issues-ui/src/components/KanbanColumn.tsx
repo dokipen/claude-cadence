@@ -12,17 +12,26 @@ const STATE_LABELS: Record<TicketState, string> = {
 interface KanbanColumnProps {
   state: TicketState;
   tickets: Ticket[];
+  totalCount: number;
+  hasNextPage: boolean;
   loading: boolean;
   error: string | null;
+  repoUrl?: string;
 }
 
-export function KanbanColumn({ state, tickets, loading, error }: KanbanColumnProps) {
+export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading, error, repoUrl }: KanbanColumnProps) {
+  const displayCount = loading
+    ? "…"
+    : hasNextPage
+      ? `${tickets.length} of ${totalCount}`
+      : String(tickets.length);
+
   return (
     <div className={styles.column} data-testid={`column-${state}`}>
       <div className={styles.columnHeader}>
         <span className={styles.columnTitle}>{STATE_LABELS[state]}</span>
         <span className={styles.columnCount} data-testid={`count-${state}`}>
-          {loading ? "…" : tickets.length}
+          {displayCount}
         </span>
       </div>
       <div className={styles.columnBody}>
@@ -41,7 +50,9 @@ export function KanbanColumn({ state, tickets, loading, error }: KanbanColumnPro
         )}
         {!loading &&
           !error &&
-          tickets.map((ticket) => <TicketCard key={ticket.id} ticket={ticket} />)}
+          tickets.map((ticket) => (
+            <TicketCard key={ticket.id} ticket={ticket} repoUrl={repoUrl} />
+          ))}
       </div>
     </div>
   );

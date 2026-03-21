@@ -8,6 +8,12 @@
 
 set -e
 
+# Verify we're inside a git repository
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+  echo "Error: Not inside a git repository"
+  exit 1
+fi
+
 WORKTREES_DIR=".worktrees"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

@@ -57,6 +57,26 @@ describe("Ticket Management", () => {
     fullTicketId = idMatch![1];
   });
 
+  it("should create a ticket using --body alias for --description", async () => {
+    const result = await suite.cli(
+      "ticket", "create",
+      "--project", "default-project",
+      "--title", "Body alias ticket",
+      "--body", "Description via body flag"
+    );
+    expect(result.exitCode).toBe(0);
+
+    const output = result.stdout + result.stderr;
+    expect(output).toContain("Ticket created");
+    expect(result.stdout).toContain("Body alias ticket");
+
+    // Verify the description was set by viewing the ticket
+    const idMatch = result.stdout.match(/#(\S+)\s+Body alias ticket/);
+    expect(idMatch).toBeTruthy();
+    const viewResult = await suite.cli("ticket", "view", idMatch![1]);
+    expect(viewResult.stdout).toContain("Description via body flag");
+  });
+
   it("should create a ticket with labels", async () => {
     // The `labels` query is not yet in the GraphQL schema (Phase 2), so we cannot
     // look up seeded label IDs. For now, verify the CLI can create a ticket that
@@ -164,6 +184,20 @@ describe("Ticket Management", () => {
     expect(viewResult.stdout).toContain("Updated title");
   });
 
+  it("should update a ticket's description using --body alias", async () => {
+    const result = await suite.cli(
+      "ticket", "update", createdTicketId,
+      "--body", "Description via body update"
+    );
+    expect(result.exitCode).toBe(0);
+
+    const output = result.stdout + result.stderr;
+    expect(output).toContain("Ticket updated");
+
+    const viewResult = await suite.cli("ticket", "view", createdTicketId);
+    expect(viewResult.stdout).toContain("Description via body update");
+  });
+
   it("should update a ticket's description and acceptance criteria", async () => {
     const result = await suite.cli(
       "ticket", "update", createdTicketId,
@@ -195,11 +229,101 @@ describe("Ticket Management", () => {
     expect(output).toContain("HIGHEST");
   });
 
+  it("should filter tickets by single label", async () => {
+    // Create two tickets and attach different labels
+    const r1 = await suite.cli("ticket", "create", "--project", "default-project", "--title", "Bug ticket");
+    expect(r1.exitCode).toBe(0);
+    const id1 = r1.stdout.match(/#(\S+)\s+Bug ticket/)![1];
+
+    const r2 = await suite.cli("ticket", "create", "--project", "default-project", "--title", "Feature ticket");
+    expect(r2.exitCode).toBe(0);
+    const id2 = r2.stdout.match(/#(\S+)\s+Feature ticket/)![1];
+
+    // Look up label IDs from label list (seeded labels)
+    const labelList = await suite.cli("label", "list", "--json");
+    const labels = JSON.parse(labelList.stdout);
+    const bugLabel = labels.find((l: { name: string }) => l.name === "bug");
+    const enhLabel = labels.find((l: { name: string }) => l.name === "enhancement");
+
+    // Add labels to tickets
+    await suite.cli("label", "add", id1, "--label", bugLabel.id);
+    await suite.cli("label", "add", id2, "--label", enhLabel.id);
+
+    // Filter by single label
+    const bugResult = await suite.cli("ticket", "list", "--label", "bug");
+    expect(bugResult.exitCode).toBe(0);
+    expect(bugResult.stdout).toContain("Bug ticket");
+    expect(bugResult.stdout).not.toContain("Feature ticket");
+
+    const enhResult = await suite.cli("ticket", "list", "--label", "enhancement");
+    expect(enhResult.exitCode).toBe(0);
+    expect(enhResult.stdout).toContain("Feature ticket");
+    expect(enhResult.stdout).not.toContain("Bug ticket");
+  });
+
+  it("should filter tickets by multiple labels (OR)", async () => {
+    // Create dedicated tickets for this test
+    const r1 = await suite.cli("ticket", "create", "--project", "default-project", "--title", "Multi-bug ticket");
+    const id1 = r1.stdout.match(/#(\S+)\s+Multi-bug ticket/)![1];
+    const r2 = await suite.cli("ticket", "create", "--project", "default-project", "--title", "Multi-feature ticket");
+    const id2 = r2.stdout.match(/#(\S+)\s+Multi-feature ticket/)![1];
+
+    const labelList = await suite.cli("label", "list", "--json");
+    const labels = JSON.parse(labelList.stdout);
+    const bugLabel = labels.find((l: { name: string }) => l.name === "bug");
+    const enhLabel = labels.find((l: { name: string }) => l.name === "enhancement");
+
+    await suite.cli("label", "add", id1, "--label", bugLabel.id);
+    await suite.cli("label", "add", id2, "--label", enhLabel.id);
+
+    const result = await suite.cli("ticket", "list", "--label", "bug", "--label", "enhancement");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Multi-bug ticket");
+    expect(result.stdout).toContain("Multi-feature ticket");
+  });
+
+  it("should return no tickets for non-existent label", async () => {
+    const result = await suite.cli("ticket", "list", "--label", "nonexistent-label-xyz");
+    expect(result.exitCode).toBe(0);
+    const output = result.stdout + result.stderr;
+    expect(output).toContain("No tickets found");
+  });
+
   it("should handle viewing a non-existent ticket", async () => {
     const result = await suite.cli("ticket", "view", "nonexistent-id-12345");
     // The CLI should indicate the ticket was not found
     expect(result.exitCode).not.toBe(0);
     const output = result.stdout + result.stderr;
     expect(output).toContain("not found");
+  });
+
+  describe("view aliases", () => {
+    it("should support 'ticket get' as a hidden alias for 'ticket view'", async () => {
+      const result = await suite.cli("ticket", "get", fullTicketId);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("Full ticket");
+      expect(result.stdout).toContain(fullTicketId);
+    });
+
+    it("should support 'ticket show' as a hidden alias for 'ticket view'", async () => {
+      const result = await suite.cli("ticket", "show", fullTicketId);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("Full ticket");
+      expect(result.stdout).toContain(fullTicketId);
+    });
+
+    it("should pass --json flag through 'ticket get' alias", async () => {
+      const result = await suite.cli("ticket", "get", fullTicketId, "--json");
+      expect(result.exitCode).toBe(0);
+      const parsed = JSON.parse(result.stdout);
+      expect(parsed.title).toBe("Full ticket");
+    });
+
+    it("should pass --json flag through 'ticket show' alias", async () => {
+      const result = await suite.cli("ticket", "show", fullTicketId, "--json");
+      expect(result.exitCode).toBe(0);
+      const parsed = JSON.parse(result.stdout);
+      expect(parsed.title).toBe("Full ticket");
+    });
   });
 });

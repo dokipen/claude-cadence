@@ -66,13 +66,13 @@ check_prerequisites() {
 
     command -v git >/dev/null 2>&1 || missing+=("git")
     command -v tmux >/dev/null 2>&1 || missing+=("tmux")
+    command -v ttyd >/dev/null 2>&1 || missing+=("ttyd")
 
     if [[ ${#missing[@]} -gt 0 ]]; then
         error "Required tools not found: ${missing[*]}. Please install them and re-run."
     fi
 
     command -v vault >/dev/null 2>&1 || warn "vault CLI not found (optional, needed for private repos)"
-    command -v ttyd >/dev/null 2>&1  || warn "ttyd not found (optional, needed for web terminal access)"
 
     info "Prerequisites satisfied."
 }
@@ -136,6 +136,39 @@ setup_directories() {
     sudo chown "$AGENTD_USER:$AGENTD_GROUP" "$AGENTD_CONFIG_DIR" "$AGENTD_LOG_DIR"
 }
 
+# --- Hub configuration ---
+
+validate_yaml_string() {
+    local value="$1" field="$2"
+    if [[ "$value" == *'"'* || "$value" == *$'\n'* ]]; then
+        error "$field must not contain double-quotes or newlines"
+    fi
+}
+
+setup_hub() {
+    echo
+    info "Hub configuration (optional — connects this agent to an agent-hub)"
+    if confirm "Connect this agent to an agent-hub?"; then
+        prompt HUB_URL "Hub WebSocket URL" "wss://cadence.bootsy.internal/ws/agent"
+        validate_yaml_string "$HUB_URL" "hub.url"
+        prompt HUB_NAME "Agent name (identifier for this machine)" "$(hostname -s)"
+        validate_yaml_string "$HUB_NAME" "hub.name"
+        printf "Hub agent token (input hidden): "
+        read -rs HUB_AGENT_TOKEN
+        echo
+        # Strip any accidentally-captured newlines (e.g. from terminal paste).
+        HUB_AGENT_TOKEN="${HUB_AGENT_TOKEN//$'\n'/}"
+        HUB_AGENT_TOKEN="${HUB_AGENT_TOKEN//$'\r'/}"
+        if [[ -z "$HUB_AGENT_TOKEN" ]]; then
+            warn "No hub token provided. The plist EnvironmentVariables will have an empty token; update it before starting the service."
+        fi
+    else
+        HUB_URL=""
+        HUB_NAME=""
+        HUB_AGENT_TOKEN=""
+    fi
+}
+
 # --- Config generation ---
 
 generate_config() {
@@ -162,7 +195,7 @@ tmux:
   socket_name: "agentd"
 
 ttyd:
-  enabled: false
+  enabled: true
   base_port: 7681
 
 log:
@@ -172,6 +205,19 @@ log:
 # Add agent profiles below:
 profiles: {}
 EOF
+
+    if [[ -n "$HUB_URL" ]]; then
+        cat >> "$config_path" <<EOF
+
+# agent-hub connection
+hub:
+  url: "$HUB_URL"
+  name: "$HUB_NAME"
+  token_env_var: "HUB_AGENT_TOKEN"
+  reconnect_interval: "5s"
+EOF
+        info "Hub config written (url=$HUB_URL, name=$HUB_NAME)"
+    fi
 
     info "Config written to $config_path"
 }
@@ -215,6 +261,7 @@ render_template() {
         -e "s|__GROUP__|$(sed_escape "$AGENTD_GROUP")|g" \
         -e "s|__ROOT_DIR__|$(sed_escape "$AGENTD_ROOT_DIR")|g" \
         -e "s|__LOG_DIR__|$(sed_escape "$AGENTD_LOG_DIR")|g" \
+        -e "s|__HUB_AGENT_TOKEN__|$(sed_escape "${HUB_AGENT_TOKEN:-}")|g" \
         "$template" > "$output"
 }
 
@@ -233,6 +280,7 @@ install_launchd() {
     info "Installing launchd service..."
     mkdir -p "$HOME/Library/LaunchAgents"
     render_template "$plist_tmpl" "$plist_dest"
+    chmod 600 "$plist_dest"
 
     # Unload if already loaded, ignore errors.
     launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
@@ -308,6 +356,7 @@ main() {
     validate_port "$AGENTD_PORT"
 
     setup_directories "$os"
+    setup_hub
     install_binary
     generate_config
 
@@ -326,7 +375,16 @@ main() {
     echo
     info "Next steps:"
     info "  1. Edit $AGENTD_CONFIG_DIR/config.yaml to add agent profiles"
-    info "  2. Restart the service after config changes:"
+    local next_step=2
+    if [[ -n "$HUB_URL" ]]; then
+        if [[ "$os" == "darwin" ]]; then
+            info "  $next_step. To rotate the hub token, edit ~/Library/LaunchAgents/$LABEL.plist and reload the service."
+        else
+            info "  $next_step. To rotate the hub token, edit /etc/agentd/env and restart the service."
+        fi
+        next_step=$((next_step + 1))
+    fi
+    info "  $next_step. Restart the service after config changes:"
     if [[ "$os" == "darwin" ]]; then
         info "     launchctl kickstart -k gui/$(id -u)/$LABEL"
     else

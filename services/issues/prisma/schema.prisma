@@ -58,6 +58,8 @@ model Ticket {
   blockedBy   BlockRelation[] @relation("blocked")
 
   @@unique([projectId, number])
+  @@index([projectId, state])
+  @@index([assigneeId])
 }
 
 model Label {

@@ -1,6 +1,7 @@
 import { Component, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import type { Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 const components: Components = {
   a: ({ href, children }) => (
@@ -31,7 +32,9 @@ class MarkdownErrorBoundary extends Component<
 export function Markdown({ children }: { children: string }) {
   return (
     <MarkdownErrorBoundary fallback={children}>
-      <ReactMarkdown components={components}>{children}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+        {children}
+      </ReactMarkdown>
     </MarkdownErrorBoundary>
   );
 }

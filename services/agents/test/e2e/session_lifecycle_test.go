@@ -46,6 +46,9 @@ func TestCreateSession_Success(t *testing.T) {
 	if !tmuxSessionExists("agentd-test", name) {
 		t.Errorf("expected tmux session %q to exist", name)
 	}
+	if !tmuxMouseEnabled(t, "agentd-test") {
+		t.Error("mouse mode should be enabled")
+	}
 }
 
 func TestCreateSession_DuplicateName(t *testing.T) {

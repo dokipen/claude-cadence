@@ -1,0 +1,615 @@
+.launcher {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.launcherInline {
+  composes: launcher;
+  padding: 1.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.launcherMessage {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  padding: 0.5rem 0;
+}
+
+.launcherError {
+  font-size: 0.85rem;
+  color: var(--error);
+  padding: 0.25rem 0;
+}
+
+.profileSingle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.profileSelect {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.profileLabel {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.profileValue {
+  font-size: 0.9rem;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.select {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.select:focus {
+  outline: 2px solid var(--primary-light);
+  outline-offset: 1px;
+}
+
+.launchButton {
+  padding: 0.5rem 1rem;
+  background: var(--primary);
+  color: var(--on-primary);
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.launchButton:hover:not(:disabled) {
+  background: var(--primary-light);
+}
+
+.launchButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Card launch button */
+.cardLaunchButton {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cardLaunchButton:hover {
+  background: var(--primary);
+  color: var(--on-primary);
+  border-color: var(--primary);
+}
+
+/* Tab navigation */
+.tabBar {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 1.5rem;
+}
+
+.tab {
+  padding: 0.5rem 1rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tabActive {
+  composes: tab;
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  font-weight: 600;
+}
+
+/* Agent tab content */
+.agentTabContent {
+  padding: 0.5rem 0;
+}
+
+.agentTabTerminal {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Terminal header */
+.terminalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  margin-bottom: 0.5rem;
+}
+
+.terminalSessionName {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-family: monospace;
+}
+
+.destroyButton {
+  padding: 0.3rem 0.75rem;
+  background: none;
+  border: 1px solid var(--error);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--error);
+  cursor: pointer;
+}
+
+.destroyButton:hover:not(:disabled) {
+  background: var(--error);
+  color: #fff;
+}
+
+.destroyButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Terminal wrapper */
+.terminalWrapper {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.terminalContainer {
+  width: 100%;
+  height: 100%;
+}
+
+.terminalContainer .xterm {
+  padding: 4px;
+}
+
+/* Terminal overlays */
+.terminalOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  background: rgba(13, 17, 23, 0.85);
+  color: #e6edf3;
+  font-size: 0.9rem;
+  z-index: 10;
+}
+
+.reconnectButton {
+  padding: 0.4rem 1rem;
+  background: var(--primary);
+  color: var(--on-primary);
+  border: none;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.reconnectButton:hover {
+  background: var(--primary-light);
+}
+
+.agentTabEmpty {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.agentTabEmptyTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 0.5rem;
+}
+
+.agentTabEmptyDesc {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0 0 1.5rem;
+}
+
+/* ── Agent Launch Form ── */
+
+.launchForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.launchFormFields {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.launchFormFields .profileSelect {
+  flex: 1;
+  min-width: 120px;
+}
+
+.nameInput {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.85rem;
+  width: 100%;
+}
+
+.nameInput:focus {
+  outline: 2px solid var(--primary-light);
+  outline-offset: 1px;
+}
+
+.nameInput::placeholder {
+  color: var(--text-muted);
+}
+
+/* ── Agent Manager ── */
+
+.agentManager {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.agentManagerBody {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Sidebar */
+.sessionSidebar {
+  width: 220px;
+  min-width: 180px;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  overflow-y: auto;
+  padding: 0.75rem 0;
+  flex-shrink: 0;
+}
+
+.sidebarTitle {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  padding: 0 0.75rem 0.5rem;
+  margin: 0;
+}
+
+.sidebarEmpty {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  padding: 0.5rem 0.75rem;
+  margin: 0;
+}
+
+.sidebarAgent {
+  margin-bottom: 0.25rem;
+}
+
+.sidebarAgentHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.statusDotOnline,
+.statusDotOffline {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.statusDotOnline {
+  background: #3fb950;
+}
+
+.statusDotOffline {
+  background: var(--text-muted);
+}
+
+.sidebarAgentName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebarNoSessions {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding: 0.15rem 0.75rem 0.15rem 1.75rem;
+  margin: 0;
+}
+
+.sidebarSession {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 0.25rem 0.75rem 0.25rem 1.75rem;
+  background: none;
+  border: none;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+
+.sidebarSession:hover {
+  background: rgba(128, 128, 128, 0.08);
+  color: var(--text);
+}
+
+.sidebarSessionOpen {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.sidebarSessionStopped {
+  opacity: 0.5;
+}
+
+.sessionDot {
+  font-size: 0.55rem;
+  line-height: 1;
+}
+
+.sessionName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Tiling container */
+.tilingContainer {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.tilingArea {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.tilingEmpty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+/* Split containers */
+.tileSplitH {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.tileSplitV {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Dividers */
+.tileDividerH {
+  width: 4px;
+  cursor: col-resize;
+  background: var(--border);
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.tileDividerH:hover {
+  background: var(--primary-light);
+}
+
+.tileDividerV {
+  height: 4px;
+  cursor: row-resize;
+  background: var(--border);
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.tileDividerV:hover {
+  background: var(--primary-light);
+}
+
+/* Terminal window tile */
+.tileWindow {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--border);
+}
+
+.tileHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0.5rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.tileTitle {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text);
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tileAgent {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.tileTicketLink {
+  margin-left: 0.4rem;
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.tileTicketLink:hover {
+  text-decoration: underline;
+}
+
+.tileControls {
+  display: flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.tileMinimize,
+.tileTerminate {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.8rem;
+  line-height: 1;
+  color: var(--text-secondary);
+  padding: 0;
+}
+
+.tileMinimize:hover {
+  background: rgba(128, 128, 128, 0.15);
+  color: var(--text);
+}
+
+.tileTerminate:hover {
+  background: var(--error);
+  border-color: var(--error);
+  color: #fff;
+}
+
+.tileBody {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.sidebarSessionWaiting {
+  color: var(--amber);
+}
+
+.sidebarSessionWaiting .sessionDot {
+  color: var(--amber);
+}
+
+/* Spinner for terminal connecting overlay */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(230, 237, 243, 0.2);
+  border-top-color: #e6edf3;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Drag and drop */
+.tileHeaderDraggable {
+  cursor: grab;
+}
+
+.tileHeaderDraggable:active {
+  cursor: grabbing;
+}
+
+.tileWindowDragOver {
+  outline: 2px solid var(--primary-light);
+  outline-offset: -2px;
+}

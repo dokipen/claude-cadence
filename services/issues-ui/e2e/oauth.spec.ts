@@ -151,8 +151,8 @@ test.describe("OAuth", () => {
 
     await page.goto("/auth/callback?code=test-code&state=test-state-789");
 
-    // Should default to home when no redirect is stored
-    await expect(page).toHaveURL("/");
+    // Should default to home when no redirect is stored — root redirects to /projects/:id
+    await expect(page).toHaveURL(/\/projects\//);
     await expect(page.getByTestId("user-info")).toHaveText("E2E Tester");
   });
 

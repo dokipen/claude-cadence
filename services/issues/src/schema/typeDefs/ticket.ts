@@ -75,6 +75,7 @@ export const ticketTypeDefs = `
   type TicketConnection {
     edges: [TicketEdge!]!
     pageInfo: PageInfo!
+    totalCount: Int!
   }
 
   input CreateTicketInput {
@@ -101,7 +102,9 @@ export const ticketTypeDefs = `
     ticketByNumber(projectId: ID!, number: Int!): Ticket
     tickets(
       state: TicketState
-      labelName: String
+      labelName: String @deprecated(reason: "Use labelNames instead.")
+      "Filter by multiple label names (OR). Max 20 entries."
+      labelNames: [String!]
       assigneeLogin: String
       isBlocked: Boolean
       priority: Priority

@@ -62,7 +62,7 @@ for dir in "$WORKTREES_DIR"/*/; do
   if [ -d "$WORKTREES_DIR/$branch_name" ]; then
     git worktree remove "$WORKTREES_DIR/$branch_name" 2>/dev/null \
       || git worktree remove --force "$WORKTREES_DIR/$branch_name" 2>/dev/null \
-      || rm -rf "$WORKTREES_DIR/$branch_name" \
+      || rm -rf "${WORKTREES_DIR:?}/${branch_name:?}" \
       || echo "  Warning: failed to remove worktree directory"
   fi
 

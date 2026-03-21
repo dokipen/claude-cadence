@@ -95,4 +95,4 @@ The two providers use different terminology in some areas:
 - **Default is `github`** — existing projects work without any configuration changes
 - When using `issues-api`, the API URL from `CLAUDE.md` must be reachable
 - When using `issues-api`, `project_id` is required for `ticket list`, `ticket create`, and `ticket view` (when using ticket numbers). Other commands take a CUID ticket ID and don't need `--project`.
-- The `issues` CLI must be installed and authenticated (`issues auth login --pat <token>`)
+- The `issues` CLI must be installed and authenticated (`gh auth token | issues auth login --pat -`)

@@ -14,11 +14,20 @@ interface TicketsResponse {
       hasNextPage: boolean;
       endCursor: string | null;
     };
+    totalCount: number;
   };
+}
+
+interface TransformedTickets {
+  tickets: Ticket[];
+  totalCount: number;
+  hasNextPage: boolean;
 }
 
 interface UseTicketsResult {
   tickets: Ticket[];
+  totalCount: number;
+  hasNextPage: boolean;
   loading: boolean;
   error: string | null;
 }
@@ -27,10 +36,15 @@ export interface TicketFilters {
   labelName?: string;
   isBlocked?: boolean;
   priority?: Priority;
+  excludeLabelName?: string;
+  excludePriority?: Priority;
 }
 
-const transformTickets = (result: TicketsResponse): Ticket[] =>
-  result.tickets.edges.map((e) => e.node);
+const transformTickets = (result: TicketsResponse): TransformedTickets => ({
+  tickets: result.tickets.edges.map((e) => e.node),
+  totalCount: result.tickets.totalCount,
+  hasNextPage: result.tickets.pageInfo.hasNextPage,
+});
 
 export function useTickets(
   state: TicketState,
@@ -41,6 +55,8 @@ export function useTickets(
   const labelName = filters?.labelName;
   const isBlocked = filters?.isBlocked;
   const priority = filters?.priority;
+  const excludeLabelName = filters?.excludeLabelName;
+  const excludePriority = filters?.excludePriority;
 
   const variables = useMemo(
     () =>
@@ -57,13 +73,28 @@ export function useTickets(
     [state, projectId, first, labelName, isBlocked, priority],
   );
 
-  const { data, loading, error } = usePollingQuery<TicketsResponse, Ticket[]>({
+  const { data, loading, error } = usePollingQuery<TicketsResponse, TransformedTickets>({
     query: BOARD_TICKETS_QUERY,
     variables,
     transform: transformTickets,
-    initialData: [],
+    initialData: { tickets: [], totalCount: 0, hasNextPage: false },
     errorMessage: "Failed to load tickets",
   });
 
-  return { tickets: data, loading, error };
+  const tickets = useMemo(() => {
+    let result = data.tickets;
+    if (excludeLabelName) {
+      result = result.filter(
+        (ticket) => !ticket.labels.some((label) => label.name === excludeLabelName),
+      );
+    }
+    if (excludePriority) {
+      result = result.filter((ticket) => ticket.priority !== excludePriority);
+    }
+    return result;
+  }, [data.tickets, excludeLabelName, excludePriority]);
+
+  const totalCount = (excludeLabelName || excludePriority) ? tickets.length : data.totalCount;
+
+  return { tickets, totalCount, hasNextPage: data.hasNextPage, loading, error };
 }

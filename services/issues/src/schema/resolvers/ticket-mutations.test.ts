@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { GraphQLError } from "graphql";
 import type { User } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 process.env.JWT_SECRET = "test-secret-for-unit-tests";
 
@@ -36,6 +37,7 @@ function makeMockContext(currentUser: User | null) {
         ticketLabel: { findUnique: vi.fn(), create: vi.fn(), delete: vi.fn() },
         blockRelation: { findUnique: vi.fn(), upsert: vi.fn(), delete: vi.fn() },
         project: { findUnique: vi.fn() },
+        user: { findUnique: vi.fn() },
         $transaction: vi.fn(async (fn: any) => fn(txMock)),
       } as any,
       loaders: {} as any,
@@ -249,6 +251,22 @@ describe("createLabel", () => {
       createLabel(undefined, { name: "bug", color: "#ff0000" }, ctx)
     ).rejects.toMatchObject({ extensions: { code: "INTERNAL_SERVER_ERROR" } });
   });
+
+  it("throws CONFLICT when label name already exists (P2002)", async () => {
+    const { ctx } = makeMockContext(mockUser);
+    const prismaError = new Prisma.PrismaClientKnownRequestError(
+      "Unique constraint failed", { code: "P2002", clientVersion: "0.0.0" }
+    );
+    ctx.prisma.label.create.mockRejectedValue(prismaError);
+
+    await expect(
+      createLabel(undefined, { name: "bug", color: "#ff0000" }, ctx)
+    ).rejects.toThrow("A label with that name already exists");
+
+    await expect(
+      createLabel(undefined, { name: "bug", color: "#ff0000" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "CONFLICT" } });
+  });
 });
 
 describe("addLabel", () => {
@@ -303,6 +321,24 @@ describe("addLabel", () => {
     await expect(
       addLabel(undefined, { ticketId: "t1", labelId: "missing" }, ctx)
     ).rejects.toMatchObject({ extensions: { code: "NOT_FOUND" } });
+  });
+
+  it("throws CONFLICT when label is already on ticket (P2002)", async () => {
+    const { ctx } = makeMockContext(mockUser);
+    ctx.prisma.ticket.findUnique.mockResolvedValue({ id: "t1" });
+    ctx.prisma.label.findUnique.mockResolvedValue({ id: "l1", name: "bug" });
+    const prismaError = new Prisma.PrismaClientKnownRequestError(
+      "Unique constraint failed", { code: "P2002", clientVersion: "0.0.0" }
+    );
+    ctx.prisma.ticketLabel.create.mockRejectedValue(prismaError);
+
+    await expect(
+      addLabel(undefined, { ticketId: "t1", labelId: "l1" }, ctx)
+    ).rejects.toThrow("Label is already on this ticket");
+
+    await expect(
+      addLabel(undefined, { ticketId: "t1", labelId: "l1" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "CONFLICT" } });
   });
 });
 
@@ -371,6 +407,7 @@ describe("assignTicket", () => {
     const ticket = { id: "t1", title: "My ticket", assigneeId: null };
     const updated = { id: "t1", title: "My ticket", assigneeId: "u1" };
     ctx.prisma.ticket.findUnique.mockResolvedValue(ticket);
+    ctx.prisma.user.findUnique.mockResolvedValue(mockUser);
     ctx.prisma.ticket.update.mockResolvedValue(updated);
 
     const result = await assignTicket(
@@ -399,9 +436,24 @@ describe("assignTicket", () => {
     ).rejects.toMatchObject({ extensions: { code: "NOT_FOUND" } });
   });
 
+  it("throws NOT_FOUND when user does not exist", async () => {
+    const { ctx } = makeMockContext(mockUser);
+    ctx.prisma.ticket.findUnique.mockResolvedValue({ id: "t1" });
+    ctx.prisma.user.findUnique.mockResolvedValue(null);
+
+    await expect(
+      assignTicket(undefined, { ticketId: "t1", userId: "missing-user" }, ctx)
+    ).rejects.toThrow("User not found");
+
+    await expect(
+      assignTicket(undefined, { ticketId: "t1", userId: "missing-user" }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "NOT_FOUND" } });
+  });
+
   it("throws INTERNAL_SERVER_ERROR on DB failure", async () => {
     const { ctx } = makeMockContext(mockUser);
     ctx.prisma.ticket.findUnique.mockResolvedValue({ id: "t1" });
+    ctx.prisma.user.findUnique.mockResolvedValue(mockUser);
     ctx.prisma.ticket.update.mockRejectedValue(new Error("DB error"));
 
     await expect(

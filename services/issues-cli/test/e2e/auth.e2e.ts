@@ -67,6 +67,19 @@ describe("Auth", () => {
       const result = await suite.unauthenticatedCli("auth", "whoami");
       expect(result.exitCode).not.toBe(0);
     });
+
+    it("should support 'auth status' as a hidden alias for 'auth whoami'", async () => {
+      const result = await suite.cli("auth", "status");
+      expect(result.exitCode).toBe(0);
+      const output = result.stdout + result.stderr;
+      expect(output).toContain("testuser");
+      expect(output).toContain("Test User");
+    });
+
+    it("should reject unauthenticated 'auth status' alias", async () => {
+      const result = await suite.unauthenticatedCli("auth", "status");
+      expect(result.exitCode).not.toBe(0);
+    });
   });
 
   describe("login stdin", () => {

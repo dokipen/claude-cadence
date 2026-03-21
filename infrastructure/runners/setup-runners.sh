@@ -423,13 +423,113 @@ Aborting — the downloaded file may be corrupted or tampered with."
     info "  Checksum verified: $actual_hash"
 }
 
+# --- Runner deregistration (without directory removal) ---
+
+deregister_runner() {
+    local runner_dir="$1"
+
+    info "  Deregistering runner at $runner_dir..."
+
+    # Stop and uninstall service (svc.sh handles both systemd and launchd)
+    if [[ -f "$runner_dir/svc.sh" ]]; then
+        info "  Stopping service..."
+        if [[ "$OS" == "darwin" ]]; then
+            (cd "$runner_dir" && ./svc.sh stop) || true
+        else
+            (cd "$runner_dir" && sudo ./svc.sh stop) || true
+        fi
+
+        info "  Uninstalling service..."
+        if [[ "$OS" == "darwin" ]]; then
+            (cd "$runner_dir" && ./svc.sh uninstall) || true
+        else
+            (cd "$runner_dir" && sudo ./svc.sh uninstall) || true
+        fi
+    elif [[ "$DRY_RUN" == "true" ]]; then
+        info "  Stopping service..."
+        if [[ "$OS" == "darwin" ]]; then
+            dry_run_print "" sh -c "cd $runner_dir && ./svc.sh stop"
+        else
+            dry_run_print "sudo" sh -c "cd $runner_dir && ./svc.sh stop"
+        fi
+        info "  Uninstalling service..."
+        if [[ "$OS" == "darwin" ]]; then
+            dry_run_print "" sh -c "cd $runner_dir && ./svc.sh uninstall"
+        else
+            dry_run_print "sudo" sh -c "cd $runner_dir && ./svc.sh uninstall"
+        fi
+    fi
+
+    # Remove runner registration — pass token via environment variable
+    if [[ -f "$runner_dir/config.sh" ]] || [[ "$DRY_RUN" == "true" ]]; then
+        info "  Removing runner registration..."
+        if [[ "$DRY_RUN" == "true" ]]; then
+            dry_run_print "ACTIONS_RUNNER_INPUT_TOKEN=<token>" \
+                "$runner_dir/config.sh" remove
+        elif [[ "$OS" == "darwin" ]]; then
+            ACTIONS_RUNNER_INPUT_TOKEN="$REMOVE_TOKEN" "$runner_dir/config.sh" remove || {
+                warn "  Could not unconfigure runner (may already be removed from GitHub)."
+            }
+        else
+            export ACTIONS_RUNNER_INPUT_TOKEN="$REMOVE_TOKEN"
+            sudo -u "$RUNNER_USER" --preserve-env=ACTIONS_RUNNER_INPUT_TOKEN \
+                "$runner_dir/config.sh" remove || {
+                warn "  Could not unconfigure runner (may already be removed from GitHub)."
+            }
+            unset ACTIONS_RUNNER_INPUT_TOKEN
+        fi
+    fi
+}
+
+# --- Tarball cache download ---
+
+download_runner_tarball() {
+    local tarball_url="https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-${RUNNER_OS}-${RUNNER_ARCH}-${RUNNER_VERSION}.tar.gz"
+    local cache_dir="${BASE_DIR}/actions-runner-cache"
+    RUNNER_TARBALL_CACHE="${cache_dir}/actions-runner-${RUNNER_OS}-${RUNNER_ARCH}-${RUNNER_VERSION}.tar.gz"
+
+    info "Preparing runner tarball cache..."
+
+    # Create cache directory
+    if [[ "$OS" == "darwin" ]]; then
+        run_cmd mkdir -p "$cache_dir"
+    else
+        sudo_cmd mkdir -p "$cache_dir"
+    fi
+
+    # If cache file already exists, verify its integrity then skip download
+    if [[ -f "$RUNNER_TARBALL_CACHE" ]]; then
+        info "  Using cached tarball: $RUNNER_TARBALL_CACHE"
+        if [[ "$DRY_RUN" != "true" ]]; then
+            verify_checksum "$RUNNER_TARBALL_CACHE"
+        fi
+        return 0
+    fi
+
+    info "  Downloading actions-runner v${RUNNER_VERSION} (${RUNNER_OS}/${RUNNER_ARCH})..."
+    if [[ "$DRY_RUN" == "true" ]]; then
+        run_cmd curl -sL "$tarball_url" -o "$RUNNER_TARBALL_CACHE"
+        dry_run_print "" "verify_checksum" "$RUNNER_TARBALL_CACHE"
+    elif [[ "$OS" == "darwin" ]]; then
+        curl -sfL "$tarball_url" -o "$RUNNER_TARBALL_CACHE" \
+            || error "Failed to download actions-runner tarball from $tarball_url"
+        verify_checksum "$RUNNER_TARBALL_CACHE"
+    else
+        curl -sfL "$tarball_url" -o "$RUNNER_TARBALL_CACHE" \
+            || error "Failed to download actions-runner tarball from $tarball_url"
+        verify_checksum "$RUNNER_TARBALL_CACHE"
+        sudo_cmd chmod a+r "$RUNNER_TARBALL_CACHE"
+    fi
+
+    info "  Tarball cached at $RUNNER_TARBALL_CACHE"
+}
+
 # --- Runner setup ---
 
 setup_runner() {
     local index="$1"
     local runner_name="${HOSTNAME_PREFIX}-${REPO_NAME}-${index}"
     local runner_dir="${BASE_DIR}/actions-runner-${REPO_NAME}-${index}"
-    local tarball_url="https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-${RUNNER_OS}-${RUNNER_ARCH}-${RUNNER_VERSION}.tar.gz"
 
     info "Setting up runner $index: $runner_name"
 
@@ -439,7 +539,8 @@ setup_runner() {
             warn "Runner '$runner_name' already configured and running at $runner_dir — skipping."
             return 0
         fi
-        warn "Runner '$runner_name' configured but service not running — re-installing service."
+        warn "Runner '$runner_name' configured but service not running — deregistering and re-installing."
+        deregister_runner "$runner_dir"
     fi
 
     # Create and extract
@@ -451,25 +552,13 @@ setup_runner() {
         sudo_cmd chown "$RUNNER_USER:$(id -gn "$RUNNER_USER" 2>/dev/null || echo "$RUNNER_USER")" "$runner_dir"
     fi
 
-    info "  Downloading actions-runner v${RUNNER_VERSION} (${RUNNER_OS}/${RUNNER_ARCH})..."
+    info "  Extracting from cached tarball..."
     if [[ "$DRY_RUN" == "true" ]]; then
-        run_cmd curl -sL "$tarball_url" -o "$runner_dir/actions-runner.tar.gz"
-        dry_run_print "" "verify_checksum" "$runner_dir/actions-runner.tar.gz"
-        run_cmd tar -xzf "$runner_dir/actions-runner.tar.gz" -C "$runner_dir"
-        run_cmd rm -f "$runner_dir/actions-runner.tar.gz"
+        run_cmd tar -xzf "$RUNNER_TARBALL_CACHE" -C "$runner_dir"
     elif [[ "$OS" == "darwin" ]]; then
-        curl -sfL "$tarball_url" -o "$runner_dir/actions-runner.tar.gz" \
-            || error "Failed to download actions-runner tarball from $tarball_url"
-        verify_checksum "$runner_dir/actions-runner.tar.gz"
-        tar -xzf "$runner_dir/actions-runner.tar.gz" -C "$runner_dir"
-        rm -f "$runner_dir/actions-runner.tar.gz"
+        tar -xzf "$RUNNER_TARBALL_CACHE" -C "$runner_dir"
     else
-        sudo -u "$RUNNER_USER" -- sh -c 'cd "$1" && curl -sfL "$2" -o actions-runner.tar.gz' _ "$runner_dir" "$tarball_url" \
-            || error "Failed to download actions-runner tarball from $tarball_url"
-        # Ensure tarball is readable for checksum verification (downloaded as RUNNER_USER)
-        chmod a+r "$runner_dir/actions-runner.tar.gz"
-        verify_checksum "$runner_dir/actions-runner.tar.gz"
-        sudo -u "$RUNNER_USER" -- sh -c 'cd "$1" && tar -xzf actions-runner.tar.gz && rm -f actions-runner.tar.gz' _ "$runner_dir"
+        sudo -u "$RUNNER_USER" -- sh -c 'tar -xzf "$1" -C "$2"' _ "$RUNNER_TARBALL_CACHE" "$runner_dir"
     fi
 
     # Configure — pass token via environment variable to avoid process list exposure
@@ -478,14 +567,13 @@ setup_runner() {
         dry_run_print "ACTIONS_RUNNER_INPUT_TOKEN=<token>" \
             "$runner_dir/config.sh" --unattended \
             --url "https://github.com/$REPO" \
-            --name "$runner_name" --labels "$LABELS" --replace
+            --name "$runner_name" --labels "$LABELS"
     elif [[ "$OS" == "darwin" ]]; then
         ACTIONS_RUNNER_INPUT_TOKEN="$REG_TOKEN" "$runner_dir/config.sh" \
             --unattended \
             --url "https://github.com/$REPO" \
             --name "$runner_name" \
-            --labels "$LABELS" \
-            --replace
+            --labels "$LABELS"
     else
         export ACTIONS_RUNNER_INPUT_TOKEN="$REG_TOKEN"
         sudo -u "$RUNNER_USER" --preserve-env=ACTIONS_RUNNER_INPUT_TOKEN \
@@ -493,8 +581,7 @@ setup_runner() {
             --unattended \
             --url "https://github.com/$REPO" \
             --name "$runner_name" \
-            --labels "$LABELS" \
-            --replace
+            --labels "$LABELS"
         unset ACTIONS_RUNNER_INPUT_TOKEN
     fi
 
@@ -549,6 +636,8 @@ main() {
     echo
     resolve_runner_version
     fetch_registration_token
+    fetch_removal_token
+    download_runner_tarball
 
     TORN_DOWN_COUNT=0
     teardown_excess_runners

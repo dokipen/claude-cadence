@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { hubFetch } from "../api/agentHubClient";
+import { fetchAgents } from "../api/agentHubClient";
 import { usePageVisibility } from "./usePageVisibility";
 import type { Agent, AgentProfile } from "../types";
 
@@ -24,13 +24,13 @@ export function useAgents(): UseAgentsResult {
     const isInitialFetch = !hasFetchedRef.current;
     let consecutiveFailures = 0;
 
-    const fetchAgents = () => {
+    const pollAgents = () => {
       if (isInitialFetch) {
         setLoading(true);
         setError(null);
       }
 
-      hubFetch<{ agents: Agent[] }>("/agents")
+      fetchAgents()
         .then((result) => {
           if (!cancelled) {
             setAgents(result.agents);
@@ -60,10 +60,10 @@ export function useAgents(): UseAgentsResult {
     if (hidden) {
       if (isInitialFetch) setLoading(false);
     } else {
-      fetchAgents();
+      pollAgents();
     }
 
-    const interval = hidden ? null : setInterval(fetchAgents, POLL_INTERVAL_MS);
+    const interval = hidden ? null : setInterval(pollAgents, POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
       if (interval) clearInterval(interval);
@@ -79,6 +79,27 @@ export interface AgentProfileEntry {
   profile: AgentProfile;
 }
 
+/**
+ * Extract "owner/repo" slug from a GitHub repo reference.
+ *
+ * Handles:
+ * - HTTPS:  https://github.com/owner/repo[.git]
+ * - HTTP:   http://github.com/owner/repo[.git]
+ * - SSH:    git@github.com:owner/repo[.git]
+ *
+ * Non-GitHub hosts are returned as-is (minus any trailing .git).
+ *
+ * @returns A plain "owner/repo" slug for GitHub URLs, or the input (minus
+ *   .git) for other inputs. Do not render the return value as HTML or use it
+ *   as a URL without further validation.
+ */
+export function normalizeRepo(repo: string): string {
+  return repo
+    .replace(/^git@github\.com:/, "") // SSH: git@github.com:owner/repo
+    .replace(/^https?:\/\/github\.com\//, "") // HTTPS/HTTP: https://github.com/owner/repo
+    .replace(/\.git$/, "");
+}
+
 export function useAgentProfiles(
   repoUrl: string | undefined,
   agents: Agent[],
@@ -86,11 +107,12 @@ export function useAgentProfiles(
   return useMemo(() => {
     if (!repoUrl) return [];
 
+    const normalizedUrl = normalizeRepo(repoUrl);
     const entries: AgentProfileEntry[] = [];
     for (const agent of agents) {
       if (agent.status !== "online") continue;
       for (const [profileName, profile] of Object.entries(agent.profiles)) {
-        if (profile.repo === repoUrl) {
+        if (normalizeRepo(profile.repo) === normalizedUrl) {
           entries.push({ agent: agent.name, profileName, profile });
         }
       }

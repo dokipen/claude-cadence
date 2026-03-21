@@ -103,14 +103,25 @@ ${vhost} {
 		-Server
 	}
 
-	# Rate limiting — per client IP, 60 requests per minute.
-	# Allows short bursts while preventing sustained abuse.
+	# Rate limiting — per client IP, 300 requests per minute on API routes only.
+	# Static assets, WebSocket connections, and SPA files are exempt.
 	# Requires the caddy-ratelimit module (github.com/mholt/caddy-ratelimit).
-	rate_limit {
+	@api path_regexp ^/(graphql|api/v1/|agents\.v1\.)
+	rate_limit @api {
 		zone api_zone {
 			key    {http.request.remote.host}
-			events 60
+			events 300
 			window 1m
+		}
+	}
+
+	# Rate limiting — per client IP on WebSocket connection establishment.
+	@ws path_regexp ^/ws/
+	rate_limit @ws {
+		zone ws_zone {
+			key    {http.request.remote.host}
+			events ${WS_RATE_LIMIT_EVENTS:-30}
+			window ${WS_RATE_LIMIT_WINDOW:-1m}
 		}
 	}
 
@@ -130,8 +141,11 @@ ${vhost} {
 	}
 
 	# Agent Hub — REST API
+	# Inject the API token server-side so the browser never handles it.
 	handle /api/v1/* {
-		reverse_proxy localhost:4200
+		reverse_proxy localhost:4200 {
+			header_up Authorization "Bearer {env.HUB_API_TOKEN}"
+		}
 	}
 
 	# Agent Hub — agent WebSocket registration
@@ -140,8 +154,11 @@ ${vhost} {
 	}
 
 	# Agent Hub — terminal WebSocket proxy
+	# Inject the API token server-side so the browser never handles it.
 	handle /ws/terminal/* {
-		reverse_proxy localhost:4200
+		reverse_proxy localhost:4200 {
+			header_up Authorization "Bearer {env.HUB_API_TOKEN}"
+		}
 	}
 
 	# Issues UI — static SPA with client-side routing

@@ -78,6 +78,7 @@ export const BOARD_TICKETS_QUERY = gql`
           }
           blockedBy {
             id
+            state
           }
         }
       }
@@ -85,6 +86,7 @@ export const BOARD_TICKETS_QUERY = gql`
         hasNextPage
         endCursor
       }
+      totalCount
     }
   }
 `;

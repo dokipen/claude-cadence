@@ -38,11 +38,34 @@ Use this value to select the correct commands throughout the workflow.
    Check all refinement criteria and report findings.
    For any missing items, apply best-effort fixes directly.
    Estimate based on scope and complexity — do not ask the user.
+   Ensure the ticket is assigned — if unassigned, assign to the current
+   authenticated user (or a named developer if the context is clear).
+   Assignment must be applied before transitioning to REFINED.
    ```
 
-2. **Apply all fixes** including estimates, labels, and title improvements
+2. **Apply all fixes** including estimates, labels, title improvements, and assignment
 
-3. **Mark refined** when all criteria pass:
+3. **Verify assignment before marking refined** — confirm the ticket has an assignee. If not, the ticket-refiner agent should have assigned one; if it didn't, assign now:
+
+   **GitHub:**
+   ```bash
+   ASSIGNEE=$(gh issue view 123 --json assignees --jq '.assignees[0].login')
+   if [ -z "$ASSIGNEE" ]; then
+     CURRENT_USER=$(gh api user --jq '.login')
+     gh issue edit 123 --add-assignee "$CURRENT_USER"
+   fi
+   ```
+
+   **Issues API:**
+   ```bash
+   ASSIGNEE=$(issues ticket view 123 --project "$PROJECT" --json | jq -r '.assignee.login // empty')
+   if [ -z "$ASSIGNEE" ]; then
+     CURRENT_USER_ID=$(issues auth whoami --json | jq -r '.id')
+     issues assign "$TICKET_ID" --user "$CURRENT_USER_ID" --json
+   fi
+   ```
+
+4. **Mark refined** when all criteria pass (including assignment):
 
    **GitHub (default):**
    ```bash
@@ -66,10 +89,10 @@ Use this value to select the correct commands throughout the workflow.
 
    **Issues API:**
    ```bash
-   issues ticket list --project $PROJECT --state BACKLOG --json
+   issues ticket list --project "$PROJECT" --state BACKLOG --json
    ```
 
-2. **For each issue**, delegate to ticket-refiner agent
+2. **For each issue**, delegate to ticket-refiner agent with the same assignment instructions as single-issue mode (ensure each ticket is assigned before marking refined)
 
 3. **Present summary** of all issues reviewed and changes made
 

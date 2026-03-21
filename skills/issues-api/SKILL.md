@@ -12,7 +12,7 @@ This skill documents the `issues` CLI client for the issues microservice. Use th
 
 - The issues microservice must be running at the configured `api_url`
 - The CLI must be authenticated: `issues auth whoami`
-- If not authenticated: `issues auth login --pat <github-pat>`
+- If not authenticated: `gh auth token | issues auth login --pat -`
 
 ## Project Name Resolution
 
@@ -68,6 +68,8 @@ issues ticket create \
   --json
 ```
 
+`--body` is accepted as an alias for `--description` on both `create` and `update`.
+
 Note: `--project` is optional if you're in a git repo whose origin matches a known project.
 
 ### View a ticket
@@ -86,6 +88,7 @@ Shows: title, state, priority, story points, assignee, labels, description, acce
 issues ticket list --json
 issues ticket list --state REFINED --json
 issues ticket list --label "bug" --json
+issues ticket list --label "bug" --label "enhancement" --json  # OR filter: matches either label
 issues ticket list --assignee "username" --json
 issues ticket list --blocked --json
 issues ticket list --priority HIGH --json
@@ -122,6 +125,38 @@ Valid transitions:
 - `CLOSED` -> `BACKLOG`
 
 Blocked tickets cannot transition to `IN_PROGRESS`.
+
+**State machine:**
+
+```
+           ┌────────────────────────┐
+           ↓                        │
+BACKLOG ──→ REFINED ──→ IN_PROGRESS │
+  ↑  │       │  ↑           │       │
+  │  │       │  └───────────┘       │
+  │  └───────┴──────────────────→ CLOSED
+  │                                 │
+  └─────────────────────────────────┘
+                (reopen)
+```
+
+> **IMPORTANT:** Always check the ticket's current state before transitioning.
+> Use `issues ticket view TICKET_ID --project PROJECT --json` and read the `state` field.
+> - Transitioning to the current state is an error
+> - Skipping states is an error (e.g., `BACKLOG` → `IN_PROGRESS` is invalid — must go through `REFINED`)
+
+**Common multi-step transitions:**
+
+```bash
+# Start work on a BACKLOG ticket (must pass through REFINED):
+issues ticket transition TICKET_ID --to REFINED --json
+issues ticket transition TICKET_ID --to IN_PROGRESS --json
+
+# Reopen a CLOSED ticket and start work:
+issues ticket transition TICKET_ID --to BACKLOG --json
+issues ticket transition TICKET_ID --to REFINED --json
+issues ticket transition TICKET_ID --to IN_PROGRESS --json
+```
 
 ## Labels
 
@@ -209,17 +244,21 @@ issues unassign TICKET_ID --json
 
 ## Authentication
 
-### Login with GitHub PAT
+### Login / re-authentication (secure — token never in shell history)
 
 ```bash
-issues auth login --pat <github-personal-access-token>
+gh auth token | issues auth login --pat -
 ```
 
-### Login with OAuth code
+Delegates to the already-authenticated `gh` CLI to supply the PAT via stdin. Works for both initial login and re-authentication when a token expires mid-session. Requires `gh` to be authenticated first — run `gh auth login` if needed.
+
+### Auth check with auto-recovery
 
 ```bash
-issues auth login --code <oauth-code>
+issues auth whoami || (gh auth token | issues auth login --pat -)
 ```
+
+Use this one-liner at the start of a session to verify auth is valid and automatically re-authenticate if it has expired.
 
 ### Check current user
 

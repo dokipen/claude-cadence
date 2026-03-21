@@ -1,10 +1,14 @@
-import { useParams, Link } from "react-router";
+import { useCallback } from "react";
+import { useParams, useSearchParams, Link, Navigate } from "react-router";
 import { useTicket } from "../hooks/useTicket";
+import { useProjects } from "../hooks/useProjects";
 import { PriorityBadge } from "./PriorityBadge";
 import { LabelBadge } from "./LabelBadge";
 import { Markdown } from "./Markdown";
+import { AgentTab } from "./AgentTab";
 import type { Comment as CommentType, RelatedTicket, TicketState } from "../types";
 import styles from "../styles/detail.module.css";
+import agentStyles from "../styles/agents.module.css";
 
 const STATE_LABELS: Record<TicketState, { label: string; className: string }> = {
   BACKLOG: { label: "Backlog", className: styles.stateBacklog },
@@ -91,9 +95,25 @@ function BlockingList({
   );
 }
 
+type TabId = "details" | "agent";
+
 export function TicketDetail() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab: TabId = searchParams.get("tab") === "agent" ? "agent" : "details";
   const { ticket, loading, error } = useTicket(id);
+  const { projects, loading: projectsLoading } = useProjects();
+
+  const handleTabChange = useCallback(
+    (tab: TabId) => {
+      if (tab === "agent") {
+        setSearchParams({ tab: "agent" });
+      } else {
+        setSearchParams({});
+      }
+    },
+    [setSearchParams],
+  );
 
   if (loading) {
     return (
@@ -113,11 +133,22 @@ export function TicketDetail() {
     );
   }
 
+  // Defense-in-depth: validate ticket's project against known projects list.
+  // Allow rendering while projects are loading or empty to avoid flash redirects —
+  // the project ID comes from the API so the risk during this window is minimal.
+  const projectValid =
+    projectsLoading ||
+    projects.length === 0 ||
+    projects.some((p) => p.id === ticket.project.id);
+  if (!projectValid) {
+    return <Navigate to="/" replace />;
+  }
+
   const stateConfig = STATE_LABELS[ticket.state];
 
   return (
     <div className={styles.container} data-testid="ticket-detail">
-      <Link to="/" className={styles.backLink} data-testid="back-link">
+      <Link to={`/projects/${ticket.project.id}`} className={styles.backLink} data-testid="back-link">
         &larr; Back to board
       </Link>
 
@@ -135,79 +166,107 @@ export function TicketDetail() {
         </div>
       </div>
 
-      <div className={styles.sidebar}>
-        <div className={styles.sidebarItem}>
-          <span className={styles.sidebarLabel}>Assignee</span>
-          <span className={styles.sidebarValue} data-testid="detail-assignee">
-            {ticket.assignee ? (
-              <span className={styles.assigneeDisplay}>
-                {ticket.assignee.avatarUrl?.startsWith("https://") ? (
-                  <img
-                    src={ticket.assignee.avatarUrl}
-                    alt={ticket.assignee.login}
-                    className={styles.assigneeAvatar}
-                  />
-                ) : (
-                  <span className={styles.assigneeAvatarFallback}>
-                    {ticket.assignee.login[0].toUpperCase()}
+      <div className={agentStyles.tabBar} data-testid="tab-bar">
+        <button
+          className={activeTab === "details" ? agentStyles.tabActive : agentStyles.tab}
+          onClick={() => handleTabChange("details")}
+          data-testid="tab-details"
+        >
+          Details
+        </button>
+        <button
+          className={activeTab === "agent" ? agentStyles.tabActive : agentStyles.tab}
+          onClick={() => handleTabChange("agent")}
+          data-testid="tab-agent"
+        >
+          Agent
+        </button>
+      </div>
+
+      {activeTab === "details" && (
+        <>
+          <div className={styles.sidebar}>
+            <div className={styles.sidebarItem}>
+              <span className={styles.sidebarLabel}>Assignee</span>
+              <span className={styles.sidebarValue} data-testid="detail-assignee">
+                {ticket.assignee ? (
+                  <span className={styles.assigneeDisplay}>
+                    {ticket.assignee.avatarUrl?.startsWith("https://") ? (
+                      <img
+                        src={ticket.assignee.avatarUrl}
+                        alt={ticket.assignee.login}
+                        className={styles.assigneeAvatar}
+                      />
+                    ) : (
+                      <span className={styles.assigneeAvatarFallback}>
+                        {ticket.assignee.login[0].toUpperCase()}
+                      </span>
+                    )}
+                    {ticket.assignee.displayName || ticket.assignee.login}
                   </span>
+                ) : (
+                  <span className={styles.sidebarNone}>Unassigned</span>
                 )}
-                {ticket.assignee.displayName || ticket.assignee.login}
               </span>
-            ) : (
-              <span className={styles.sidebarNone}>Unassigned</span>
-            )}
-          </span>
-        </div>
-        <div className={styles.sidebarItem}>
-          <span className={styles.sidebarLabel}>Story Points</span>
-          <span className={styles.sidebarValue} data-testid="detail-story-points">
-            {ticket.storyPoints != null ? ticket.storyPoints : (
-              <span className={styles.sidebarNone}>—</span>
-            )}
-          </span>
-        </div>
-        <div className={styles.sidebarItem}>
-          <span className={styles.sidebarLabel}>Labels</span>
-          <span className={styles.sidebarValue} data-testid="detail-labels">
-            {ticket.labels.length > 0 ? (
-              <span className={styles.labelsRow}>
-                {ticket.labels.map((label) => (
-                  <LabelBadge key={label.id} label={label} />
-                ))}
+            </div>
+            <div className={styles.sidebarItem}>
+              <span className={styles.sidebarLabel}>Story Points</span>
+              <span className={styles.sidebarValue} data-testid="detail-story-points">
+                {ticket.storyPoints != null ? ticket.storyPoints : (
+                  <span className={styles.sidebarNone}>—</span>
+                )}
               </span>
-            ) : (
-              <span className={styles.sidebarNone}>None</span>
-            )}
-          </span>
-        </div>
-        <div className={styles.sidebarItem}>
-          <span className={styles.sidebarLabel}>Created</span>
-          <span className={styles.sidebarValue}>{formatDate(ticket.createdAt)}</span>
-        </div>
-      </div>
+            </div>
+            <div className={styles.sidebarItem}>
+              <span className={styles.sidebarLabel}>Labels</span>
+              <span className={styles.sidebarValue} data-testid="detail-labels">
+                {ticket.labels.length > 0 ? (
+                  <span className={styles.labelsRow}>
+                    {ticket.labels.map((label) => (
+                      <LabelBadge key={label.id} label={label} />
+                    ))}
+                  </span>
+                ) : (
+                  <span className={styles.sidebarNone}>None</span>
+                )}
+              </span>
+            </div>
+            <div className={styles.sidebarItem}>
+              <span className={styles.sidebarLabel}>Created</span>
+              <span className={styles.sidebarValue}>{formatDate(ticket.createdAt)}</span>
+            </div>
+          </div>
 
-      {ticket.description && (
-        <div className={styles.section} data-testid="detail-description">
-          <h3 className={styles.sectionTitle}>Description</h3>
-          <div className={styles.body}><Markdown>{ticket.description}</Markdown></div>
-        </div>
+          {ticket.description && (
+            <div className={styles.section} data-testid="detail-description">
+              <h3 className={styles.sectionTitle}>Description</h3>
+              <div className={styles.body}><Markdown>{ticket.description}</Markdown></div>
+            </div>
+          )}
+
+          {ticket.acceptanceCriteria && (
+            <div className={styles.section} data-testid="detail-acceptance-criteria">
+              <h3 className={styles.sectionTitle}>Acceptance Criteria</h3>
+              <div className={styles.body}><Markdown>{ticket.acceptanceCriteria}</Markdown></div>
+            </div>
+          )}
+
+          <BlockingList tickets={ticket.blockedBy} label="Blocked by" testId="detail-blocked-by" />
+          <BlockingList tickets={ticket.blocks} label="Blocks" testId="detail-blocks" />
+
+          <div className={styles.section}>
+            <h3 className={styles.sectionTitle}>Comments</h3>
+            <CommentList comments={ticket.comments} />
+          </div>
+        </>
       )}
 
-      {ticket.acceptanceCriteria && (
-        <div className={styles.section} data-testid="detail-acceptance-criteria">
-          <h3 className={styles.sectionTitle}>Acceptance Criteria</h3>
-          <div className={styles.body}><Markdown>{ticket.acceptanceCriteria}</Markdown></div>
-        </div>
+      {activeTab === "agent" && (
+        <AgentTab
+          ticketNumber={ticket.number}
+          repoUrl={ticket.project.repository}
+        />
       )}
-
-      <BlockingList tickets={ticket.blockedBy} label="Blocked by" testId="detail-blocked-by" />
-      <BlockingList tickets={ticket.blocks} label="Blocks" testId="detail-blocks" />
-
-      <div className={styles.section}>
-        <h3 className={styles.sectionTitle}>Comments</h3>
-        <CommentList comments={ticket.comments} />
-      </div>
     </div>
   );
 }

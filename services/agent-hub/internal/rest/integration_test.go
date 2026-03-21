@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -503,5 +504,232 @@ func TestIntegration_RejectLoopbackAdvertiseAddress(t *testing.T) {
 	json.NewDecoder(resp.Body).Decode(&body)
 	if len(body["agents"]) != 0 {
 		t.Fatalf("expected 0 agents after loopback rejection, got %d", len(body["agents"]))
+	}
+}
+
+// simulateAgentWithDelay connects a simulated agentd that adds a controlled
+// delay to listSessions responses. It increments/decrements the provided
+// atomic counter to track concurrency, recording the observed peak in peak.
+func simulateAgentWithDelay(t *testing.T, baseURL, agentToken, name string, inflight *int64, peak *int64, delay time.Duration) {
+	t.Helper()
+
+	wsURL := "ws" + strings.TrimPrefix(baseURL, "http") + "/ws/agent"
+	ctx := context.Background()
+
+	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+		HTTPHeader: http.Header{
+			"Authorization": {"Bearer " + agentToken},
+		},
+	})
+	if err != nil {
+		t.Errorf("dial hub (%s): %v", name, err)
+		return
+	}
+	t.Cleanup(func() { conn.Close(websocket.StatusNormalClosure, "test done") })
+
+	// Send register message.
+	regReq, _ := hub.NewRequest("reg-1", "register", &hub.RegisterParams{
+		Name: name,
+		Profiles: map[string]hub.ProfileInfo{
+			"default": {Description: "test profile", Repo: "https://github.com/test/repo"},
+		},
+	})
+	data, _ := json.Marshal(regReq)
+	if err := conn.Write(ctx, websocket.MessageText, data); err != nil {
+		t.Errorf("write register (%s): %v", name, err)
+		return
+	}
+
+	// Read register ack.
+	if _, _, err = conn.Read(ctx); err != nil {
+		t.Errorf("read register ack (%s): %v", name, err)
+		return
+	}
+
+	// Echo loop with delay for listSessions.
+	go func() {
+		for {
+			_, data, err := conn.Read(context.Background())
+			if err != nil {
+				return
+			}
+			var req hub.Request
+			json.Unmarshal(data, &req)
+
+			var resp *hub.Response
+			if req.Method == "listSessions" {
+				// Track concurrency.
+				cur := atomic.AddInt64(inflight, 1)
+				// Record peak using a CAS loop.
+				for {
+					old := atomic.LoadInt64(peak)
+					if cur <= old {
+						break
+					}
+					if atomic.CompareAndSwapInt64(peak, old, cur) {
+						break
+					}
+				}
+				time.Sleep(delay)
+				atomic.AddInt64(inflight, -1)
+				// Return a well-formed sessions response so the handler appends this agent.
+				resp, _ = hub.NewResponse(req.ID, map[string]any{"sessions": []any{}})
+			} else if req.Method == "ping" {
+				resp, _ = hub.NewResponse(req.ID, map[string]bool{"pong": true})
+			} else {
+				resp, _ = hub.NewResponse(req.ID, map[string]string{"echo": req.Method})
+			}
+			respData, _ := json.Marshal(resp)
+			conn.Write(context.Background(), websocket.MessageText, respData)
+		}
+	}()
+}
+
+func TestIntegration_ListAllSessionsConcurrencyCap(t *testing.T) {
+	const numAgents = 24
+	maxFanOut := rest.MaxAgentFanOut
+
+	apiToken := "test-api-token"
+	agentToken := "test-agent-token"
+	cfg := testConfig(apiToken, agentToken)
+
+	h, baseURL := startIntegrationServer(t, cfg)
+
+	var inflight, peak int64
+
+	for i := 0; i < numAgents; i++ {
+		name := fmt.Sprintf("fanout-agent-%d", i)
+		simulateAgentWithDelay(t, baseURL, agentToken, name, &inflight, &peak, 150*time.Millisecond)
+		waitForAgent(t, h, name)
+	}
+
+	req, _ := http.NewRequest("GET", baseURL+"/api/v1/sessions", nil)
+	req.Header.Set("Authorization", "Bearer "+apiToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("list all sessions: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+	}
+
+	var result struct {
+		Agents []json.RawMessage `json:"agents"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	// All agents should have responded (none timed out with a 150ms delay and 5s timeout).
+	if len(result.Agents) != numAgents {
+		t.Errorf("expected sessions from all %d agents, got %d", numAgents, len(result.Agents))
+	}
+
+	// Peak in-flight RPCs must never have exceeded the semaphore cap.
+	if peak > int64(maxFanOut) {
+		t.Errorf("peak concurrent listSessions RPCs = %d, want <= %d", peak, maxFanOut)
+	}
+}
+
+func TestIntegration_RateLimiting_WSAgent(t *testing.T) {
+	apiToken := "test-api-token"
+	agentToken := "test-agent-token"
+	cfg := testConfig(apiToken, agentToken)
+	// Very low rate limit so burst is exhausted quickly.
+	cfg.RateLimit.RequestsPerSecond = 1
+	cfg.RateLimit.Burst = 2
+
+	_, baseURL := startIntegrationServer(t, cfg)
+
+	// Brief pause so token-bucket refills to its initial burst capacity after
+	// any internal server setup requests (none fire against rate-limited paths,
+	// but the pause keeps the timing consistent with other rate limit tests).
+	time.Sleep(100 * time.Millisecond)
+
+	// Send 20 rapid HTTP requests to /ws/agent with WebSocket upgrade headers.
+	// With Burst=2, the token bucket allows 2 requests before returning 429;
+	// the 3rd request and beyond should be rejected. We fire 20 to be safe.
+	// The rate limiter fires before any WebSocket upgrade occurs.
+	client := &http.Client{
+		// Do not follow redirects; we want the raw status code.
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	var rateLimited bool
+	for i := 0; i < 20; i++ {
+		req, _ := http.NewRequest("GET", baseURL+"/ws/agent", nil)
+		req.Header.Set("Authorization", "Bearer "+agentToken)
+		req.Header.Set("Upgrade", "websocket")
+		req.Header.Set("Connection", "Upgrade")
+		req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+		req.Header.Set("Sec-WebSocket-Version", "13")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("request %d: %v", i, err)
+		}
+		resp.Body.Close()
+
+		if resp.StatusCode == http.StatusTooManyRequests {
+			rateLimited = true
+			break
+		}
+	}
+
+	if !rateLimited {
+		t.Error("expected /ws/agent to be rate limited after burst exhausted, but no 429 was returned")
+	}
+}
+
+func TestIntegration_RateLimiting_WSTerminal(t *testing.T) {
+	apiToken := "test-api-token"
+	agentToken := "test-agent-token"
+	cfg := testConfig(apiToken, agentToken)
+	// Very low rate limit so burst is exhausted quickly.
+	cfg.RateLimit.RequestsPerSecond = 1
+	cfg.RateLimit.Burst = 2
+
+	_, baseURL := startIntegrationServer(t, cfg)
+
+	// Brief pause for token-bucket consistency (mirrors WSAgent test above).
+	time.Sleep(100 * time.Millisecond)
+
+	// Send 20 rapid HTTP requests to /ws/terminal/<session-id> with WebSocket
+	// upgrade headers. /ws/terminal/ routes through apiHandler which wraps
+	// rateLimiter, so the rate limiter fires before any WebSocket upgrade.
+	// With Burst=2, the 3rd request should return 429.
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	var rateLimited bool
+	for i := 0; i < 20; i++ {
+		req, _ := http.NewRequest("GET", baseURL+"/ws/terminal/test-agent/session-id", nil)
+		req.Header.Set("Authorization", "Bearer "+apiToken)
+		req.Header.Set("Upgrade", "websocket")
+		req.Header.Set("Connection", "Upgrade")
+		req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+		req.Header.Set("Sec-WebSocket-Version", "13")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("request %d: %v", i, err)
+		}
+		resp.Body.Close()
+
+		if resp.StatusCode == http.StatusTooManyRequests {
+			rateLimited = true
+			break
+		}
+	}
+
+	if !rateLimited {
+		t.Error("expected /ws/terminal/ to be rate limited after burst exhausted, but no 429 was returned")
 	}
 }

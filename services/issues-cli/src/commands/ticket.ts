@@ -139,7 +139,7 @@ const GET_TICKET_BY_NUMBER = gql`
 const LIST_TICKETS = gql`
   query ListTickets(
     $state: TicketState
-    $labelName: String
+    $labelNames: [String!]
     $assigneeLogin: String
     $isBlocked: Boolean
     $priority: Priority
@@ -149,7 +149,7 @@ const LIST_TICKETS = gql`
   ) {
     tickets(
       state: $state
-      labelName: $labelName
+      labelNames: $labelNames
       assigneeLogin: $assigneeLogin
       isBlocked: $isBlocked
       priority: $priority
@@ -193,7 +193,7 @@ const LIST_TICKETS = gql`
 const LIST_TICKETS_VERBOSE = gql`
   query ListTicketsVerbose(
     $state: TicketState
-    $labelName: String
+    $labelNames: [String!]
     $assigneeLogin: String
     $isBlocked: Boolean
     $priority: Priority
@@ -203,7 +203,7 @@ const LIST_TICKETS_VERBOSE = gql`
   ) {
     tickets(
       state: $state
-      labelName: $labelName
+      labelNames: $labelNames
       assigneeLogin: $assigneeLogin
       isBlocked: $isBlocked
       priority: $priority
@@ -416,7 +416,7 @@ interface CreateOptions {
 
 interface ListOptions {
   state?: string;
-  label?: string;
+  label?: string[];
   assignee?: string;
   blocked?: boolean;
   priority?: string;
@@ -452,7 +452,7 @@ export function registerTicketCommand(program: Command): void {
     .description("Create a new ticket")
     .requiredOption("--title <title>", "Ticket title")
     .option("--project <project>", "Project name or ID (inferred from git origin if omitted)")
-    .option("--description <description>", "Ticket description")
+    .option("--body, --description <description>", "Ticket description (alias: --body)")
     .option("--acceptance-criteria <criteria>", "Acceptance criteria")
     .option("--labels <names-or-ids>", "Comma-separated label names or IDs")
     .option("--assignee <id>", "Assignee user ID")
@@ -516,13 +516,8 @@ export function registerTicketCommand(program: Command): void {
       }
     });
 
-  // --- view ---
-  ticket
-    .command("view <id>")
-    .description("View ticket details (accepts ticket number or CUID)")
-    .option("--project <project>", "Project name or ID (inferred from git origin if omitted)")
-    .option("--json", "Output raw JSON")
-    .action(async (id: string, opts: { project?: string; json?: boolean }) => {
+  // --- view (+ hidden aliases: get, show) ---
+  const viewAction = async (id: string, opts: { project?: string; json?: boolean }) => {
       const spinner = ora("Fetching ticket...").start();
       try {
         const client = getClient();
@@ -651,14 +646,30 @@ export function registerTicketCommand(program: Command): void {
         spinner.fail("Failed to fetch ticket");
         handleError(error);
       }
-    });
+    };
+
+  ticket
+    .command("view <id>")
+    .description("View ticket details (accepts ticket number or CUID)")
+    .option("--project <project>", "Project name or ID (inferred from git origin if omitted)")
+    .option("--json", "Output raw JSON")
+    .action(viewAction);
+
+  // Hidden aliases for view (agents frequently guess these names)
+  for (const alias of ["get", "show"]) {
+    ticket
+      .command(`${alias} <id>`, { hidden: true })
+      .option("--project <project>", "Project name or ID (inferred from git origin if omitted)")
+      .option("--json", "Output raw JSON")
+      .action(viewAction);
+  }
 
   // --- list ---
   ticket
     .command("list")
     .description("List tickets")
     .option("--state <state>", "Filter by state (BACKLOG, REFINED, IN_PROGRESS, CLOSED)")
-    .option("--label <name>", "Filter by label name")
+    .option("--label <name>", "Filter by label name (repeatable for OR filtering)", (val: string, acc: string[]) => acc.concat(val), [] as string[])
     .option("--assignee <login>", "Filter by assignee login")
     .option("--blocked", "Filter to only blocked tickets")
     .option("--priority <priority>", "Filter by priority (HIGHEST, HIGH, MEDIUM, LOW, LOWEST)")
@@ -690,7 +701,7 @@ export function registerTicketCommand(program: Command): void {
           first: limit,
         };
         if (opts.state) variables.state = opts.state;
-        if (opts.label) variables.labelName = opts.label;
+        if (opts.label && opts.label.length > 0) variables.labelNames = opts.label;
         if (opts.assignee) variables.assigneeLogin = opts.assignee;
         if (opts.blocked) variables.isBlocked = true;
         if (opts.priority) variables.priority = opts.priority;
@@ -798,7 +809,7 @@ export function registerTicketCommand(program: Command): void {
     .description("Update a ticket")
     .option("--project <project>", "Project name or ID (required when using ticket number)")
     .option("--title <title>", "New title")
-    .option("--description <description>", "New description")
+    .option("--body, --description <description>", "New description (alias: --body)")
     .option("--acceptance-criteria <criteria>", "New acceptance criteria")
     .option("--points <points>", "New story points")
     .option("--priority <priority>", "New priority (HIGHEST, HIGH, MEDIUM, LOW, LOWEST)")

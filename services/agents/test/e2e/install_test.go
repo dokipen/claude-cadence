@@ -17,13 +17,14 @@ func renderTemplate(template string, vars map[string]string) string {
 
 func defaultVars() map[string]string {
 	return map[string]string{
-		"__BINARY_PATH__": "/usr/local/bin/agentd",
-		"__CONFIG_PATH__": "/etc/agentd/config.yaml",
-		"__ENV_PATH__":    "/etc/agentd/env",
-		"__USER__":        "agentd",
-		"__GROUP__":       "agentd",
-		"__ROOT_DIR__":    "/var/lib/agentd",
-		"__LOG_DIR__":     "/var/log/agentd",
+		"__BINARY_PATH__":     "/usr/local/bin/agentd",
+		"__CONFIG_PATH__":     "/etc/agentd/config.yaml",
+		"__ENV_PATH__":        "/etc/agentd/env",
+		"__USER__":            "agentd",
+		"__GROUP__":           "agentd",
+		"__ROOT_DIR__":        "/var/lib/agentd",
+		"__LOG_DIR__":         "/var/log/agentd",
+		"__HUB_AGENT_TOKEN__": "",
 	}
 }
 
@@ -125,12 +126,13 @@ func TestInstall_PlistCustomValues(t *testing.T) {
 	}
 
 	vars := map[string]string{
-		"__BINARY_PATH__": "/opt/agentd/bin/agentd",
-		"__CONFIG_PATH__": "/home/deploy/.config/agentd/config.yaml",
-		"__USER__":        "deploy",
-		"__GROUP__":       "deploy",
-		"__ROOT_DIR__":    "/data/agentd",
-		"__LOG_DIR__":     "/home/deploy/logs",
+		"__BINARY_PATH__":     "/opt/agentd/bin/agentd",
+		"__CONFIG_PATH__":     "/home/deploy/.config/agentd/config.yaml",
+		"__USER__":            "deploy",
+		"__GROUP__":           "deploy",
+		"__ROOT_DIR__":        "/data/agentd",
+		"__LOG_DIR__":         "/home/deploy/logs",
+		"__HUB_AGENT_TOKEN__": "",
 	}
 
 	rendered := renderTemplate(string(tmpl), vars)
@@ -178,5 +180,26 @@ func TestInstall_SystemdCustomValues(t *testing.T) {
 	}
 	if !strings.Contains(rendered, `ExecStart="/opt/agentd/bin/agentd" --config "/etc/agentd/custom.yaml"`) {
 		t.Error("custom exec start not rendered")
+	}
+}
+
+func TestInstall_PlistWithHubToken(t *testing.T) {
+	tmpl, err := os.ReadFile("../../install/agentd.plist.tmpl")
+	if err != nil {
+		t.Fatalf("reading plist template: %v", err)
+	}
+
+	vars := defaultVars()
+	vars["__HUB_AGENT_TOKEN__"] = "test-hub-secret"
+	rendered := renderTemplate(string(tmpl), vars)
+
+	if strings.Contains(rendered, "__") {
+		t.Error("rendered plist contains unreplaced placeholders")
+	}
+	if !strings.Contains(rendered, "<key>HUB_AGENT_TOKEN</key>") {
+		t.Error("plist missing HUB_AGENT_TOKEN environment variable key")
+	}
+	if !strings.Contains(rendered, "<string>test-hub-secret</string>") {
+		t.Error("plist missing hub token value")
 	}
 }

@@ -43,6 +43,7 @@ type ProfileInfo struct {
 type TtydInfo struct {
 	AdvertiseAddress string `json:"advertise_address"`
 	BasePort         int    `json:"base_port"`
+	MaxPorts         int    `json:"max_ports"`
 }
 
 // RegisterResult is returned by the hub to acknowledge registration.

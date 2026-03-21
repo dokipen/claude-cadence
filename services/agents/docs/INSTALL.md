@@ -178,27 +178,32 @@ Profile `command` strings are Go templates evaluated at session start:
 | Variable | Description |
 |---|---|
 | `{{.WorktreePath}}` | Absolute path of the checked-out worktree |
+| `{{.PluginDir}}` | Plugin directory from profile config (empty if not set) |
 | `{{.ExtraArgs}}` | Additional arguments passed by the caller at session creation |
 | `{{.SessionName}}` | Human-readable tmux session name |
 | `{{.SessionID}}` | Unique session UUID |
+
+Use `{{if .PluginDir}}` conditionals to omit flags when the variable is unset.
 
 ### Examples
 
 ```yaml
 profiles:
-  # Claude Code reviewer using the sonnet model
+  # Claude Code reviewer with plugin support
   claude-reviewer:
     repo: "https://github.com/org/project.git"
-    command: "claude --model sonnet --permission-mode accept --cwd {{.WorktreePath}} {{.ExtraArgs}}"
+    command: "claude --model sonnet --permission-mode accept{{if .PluginDir}} --plugin-dir {{.PluginDir}}{{end}} --cwd {{.WorktreePath}} {{.ExtraArgs}}"
+    plugin_dir: "/opt/cadence/plugin"
     description: "Claude Code reviewer"
 
   # Claude Opus for complex tasks
   claude-opus:
     repo: "https://github.com/org/project.git"
-    command: "claude --model opus --permission-mode accept --cwd {{.WorktreePath}} {{.ExtraArgs}}"
+    command: "claude --model opus --permission-mode accept{{if .PluginDir}} --plugin-dir {{.PluginDir}}{{end}} --cwd {{.WorktreePath}} {{.ExtraArgs}}"
+    plugin_dir: "/opt/cadence/plugin"
     description: "Claude Opus agent"
 
-  # Custom agent script
+  # Custom agent script (no plugin)
   my-agent:
     repo: "https://github.com/org/project.git"
     command: "/usr/local/bin/my-agent --session {{.SessionID}} --dir {{.WorktreePath}} {{.ExtraArgs}}"
@@ -294,7 +299,79 @@ The value is the Vault KV path from which agentd reads credentials before clonin
 
 ---
 
-## 9. Stale Session Cleanup
+## 9. Agent Hub Integration
+
+agentd can optionally connect to a central agent-hub, making it visible and dispatchable from the issues UI. The hub block is optional — agentd runs standalone without it.
+
+### Configuration
+
+Add a `hub:` block to `config.yaml`:
+
+```yaml
+hub:
+  url: "wss://cadence.bootsy.internal/ws/agent"
+  name: "mbp-bob"              # unique identifier for this machine
+  token_env_var: "HUB_AGENT_TOKEN"  # read token from environment (recommended)
+  reconnect_interval: "5s"    # default: 5s
+```
+
+The `token_env_var` field names an environment variable that holds the hub authentication token. This avoids embedding secrets directly in the config file. You can also set `token` inline (not recommended for production).
+
+### Installing with hub support
+
+The interactive installer prompts for hub configuration:
+
+```
+==> Hub configuration (optional — connects this agent to an agent-hub)
+Connect this agent to an agent-hub? [y/N]: y
+Hub WebSocket URL [wss://cadence.bootsy.internal/ws/agent]:
+Agent name (identifier for this machine) [mbp-bob]:
+Hub agent token (input hidden):
+```
+
+When you answer `y`, the installer adds the `hub:` block to `config.yaml` and sets `HUB_AGENT_TOKEN` in the launchd plist (macOS) so the token is injected into the service environment automatically.
+
+### Manual token injection (macOS)
+
+If you install manually or need to rotate the token, edit the plist at `~/Library/LaunchAgents/com.cadence.agentd.plist` and update the `HUB_AGENT_TOKEN` value under `EnvironmentVariables`:
+
+```xml
+<key>EnvironmentVariables</key>
+<dict>
+    <key>HUB_AGENT_TOKEN</key>
+    <string>your-token-here</string>
+</dict>
+```
+
+Reload the service after editing:
+
+```bash
+launchctl bootout "gui/$(id -u)/com.cadence.agentd"
+launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.cadence.agentd.plist
+```
+
+On Linux, write the token to the environment file (default `/etc/agentd/env`):
+
+```bash
+echo "HUB_AGENT_TOKEN=your-token-here" | sudo tee /etc/agentd/env
+sudo chmod 600 /etc/agentd/env
+sudo systemctl restart agentd
+```
+
+### Verifying hub registration
+
+After the service starts, verify the agent appears in the hub:
+
+```bash
+curl -s -H "Authorization: Bearer $HUB_API_TOKEN" \
+  https://cadence.bootsy.internal/api/v1/agents | jq '.[].name'
+```
+
+The agent's name (e.g. `"mbp-bob"`) should appear with `"status": "online"`. It will then be visible and dispatchable from the issues UI.
+
+---
+
+## 10. Stale Session Cleanup
 
 agentd automatically tracks session state. When a tmux session stops (the agent
 process exits), the session transitions to a stopped state. The cleanup subsystem
@@ -312,7 +389,7 @@ cleanup:
 
 ---
 
-## 10. Service Management
+## 11. Service Management
 
 The interactive installer registers agentd as a system service automatically. For
 manual setups, use the templates in `install/`.
@@ -360,7 +437,7 @@ with a 5-second restart delay. Logs go to the journal (`SyslogIdentifier=agentd`
 
 ---
 
-## 11. Reverse Proxy (Caddy)
+## 12. Reverse Proxy (Caddy)
 
 A shared Caddyfile in `infrastructure/Caddyfile` provides a single entry point for both the issues and agents services. See the [Caddy setup section](../../../infrastructure/README.md) for full details.
 
@@ -368,7 +445,7 @@ When running behind Caddy, gRPC requests to agentd are routed through `/agents/*
 
 ---
 
-## 12. Troubleshooting
+## 13. Troubleshooting
 
 ### Port already in use
 

@@ -114,7 +114,75 @@ func TestRenderCommand(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := m.renderCommand(tt.template, tt.sess, tt.extraArgs)
+			got, err := m.renderCommand(tt.template, tt.sess, tt.extraArgs, "")
+			if err != nil {
+				t.Fatalf("renderCommand() error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("renderCommand() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRenderCommandPluginDir(t *testing.T) {
+	m := &Manager{}
+
+	tests := []struct {
+		name      string
+		template  string
+		sess      *Session
+		extraArgs []string
+		pluginDir string
+		want      string
+	}{
+		{
+			name:      "PluginDir with spaces is escaped",
+			template:  "cmd --plugin-dir {{.PluginDir}}",
+			sess:      &Session{ID: "test-id", Name: "test-name"},
+			pluginDir: "/path/with spaces/plugin",
+			want:      "cmd --plugin-dir '/path/with spaces/plugin'",
+		},
+		{
+			name:      "PluginDir with shell metacharacters is escaped",
+			template:  "cmd --plugin-dir {{.PluginDir}}",
+			sess:      &Session{ID: "test-id", Name: "test-name"},
+			pluginDir: "/path/$(injection)/plugin",
+			want:      "cmd --plugin-dir '/path/$(injection)/plugin'",
+		},
+		{
+			name:      "empty PluginDir produces empty string not quoted",
+			template:  "cmd --plugin-dir {{.PluginDir}}",
+			sess:      &Session{ID: "test-id", Name: "test-name"},
+			pluginDir: "",
+			want:      "cmd --plugin-dir ",
+		},
+		{
+			name:      "empty PluginDir with conditional omits flag",
+			template:  "cmd{{if .PluginDir}} --plugin-dir {{.PluginDir}}{{end}}",
+			sess:      &Session{ID: "test-id", Name: "test-name"},
+			pluginDir: "",
+			want:      "cmd",
+		},
+		{
+			name:      "non-empty PluginDir with conditional includes flag",
+			template:  "cmd{{if .PluginDir}} --plugin-dir {{.PluginDir}}{{end}}",
+			sess:      &Session{ID: "test-id", Name: "test-name"},
+			pluginDir: "/some/plugin",
+			want:      "cmd --plugin-dir '/some/plugin'",
+		},
+		{
+			name:      "all fields with PluginDir",
+			template:  "cmd --id {{.SessionID}} --name {{.SessionName}} --cwd {{.WorktreePath}}{{if .PluginDir}} --plugin-dir {{.PluginDir}}{{end}} {{.ExtraArgs}}",
+			sess:      &Session{ID: "test-id", Name: "test-name", WorktreePath: "/safe/path"},
+			extraArgs: []string{"--flag", "value"},
+			pluginDir: "/my/plugin",
+			want:      "cmd --id 'test-id' --name test-name --cwd '/safe/path' --plugin-dir '/my/plugin' '--flag' 'value'",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := m.renderCommand(tt.template, tt.sess, tt.extraArgs, tt.pluginDir)
 			if err != nil {
 				t.Fatalf("renderCommand() error: %v", err)
 			}

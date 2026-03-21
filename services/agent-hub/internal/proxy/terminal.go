@@ -57,12 +57,26 @@ func HandleTerminalProxy(h *hub.Hub) http.HandlerFunc {
 			return
 		}
 
-		if endpoint.Address != agent.TtydConfig.AdvertiseAddress ||
-			endpoint.Port != agent.TtydConfig.BasePort {
-			slog.Warn("terminal endpoint mismatch",
+		if endpoint.Address != agent.TtydConfig.AdvertiseAddress {
+			slog.Warn("terminal endpoint address mismatch",
 				"agent", agentName,
 				"expected_address", agent.TtydConfig.AdvertiseAddress,
-				"expected_port", agent.TtydConfig.BasePort,
+				"actual_address", endpoint.Address,
+			)
+			writeJSONError(w, http.StatusBadGateway, "terminal endpoint mismatch")
+			return
+		}
+		maxPorts := agent.TtydConfig.MaxPorts
+		if maxPorts <= 0 {
+			maxPorts = 100 // default matches agentd's default
+		}
+		maxPort := agent.TtydConfig.BasePort + maxPorts
+		if endpoint.Port < agent.TtydConfig.BasePort || endpoint.Port >= maxPort {
+			slog.Warn("terminal endpoint port out of range",
+				"agent", agentName,
+				"port", endpoint.Port,
+				"range_start", agent.TtydConfig.BasePort,
+				"range_end", maxPort,
 			)
 			writeJSONError(w, http.StatusBadGateway, "terminal endpoint mismatch")
 			return
@@ -70,7 +84,9 @@ func HandleTerminalProxy(h *hub.Hub) http.HandlerFunc {
 
 		// Dial agentd's ttyd WebSocket.
 		ttydURL := fmt.Sprintf("ws://%s:%d/ws", endpoint.Address, endpoint.Port)
-		ttydConn, _, err := websocket.Dial(r.Context(), ttydURL, nil)
+		ttydConn, _, err := websocket.Dial(r.Context(), ttydURL, &websocket.DialOptions{
+			Subprotocols: []string{"tty"},
+		})
 		if err != nil {
 			slog.Error("failed to dial ttyd", "url", ttydURL, "error", err)
 			writeJSONError(w, http.StatusBadGateway, "failed to connect to terminal")
@@ -79,9 +95,13 @@ func HandleTerminalProxy(h *hub.Hub) http.HandlerFunc {
 		defer ttydConn.Close(websocket.StatusGoingAway, "proxy closing")
 
 		// Accept the browser's WebSocket upgrade.
-		// Origin checking is enforced by default (InsecureSkipVerify is false),
-		// preventing cross-origin WebSocket hijacking.
-		browserConn, err := websocket.Accept(w, r, nil)
+		// Allow any origin because the hub sits behind a reverse proxy (Caddy)
+		// which forwards the browser's Origin (e.g. https://cadence.bootsy.internal)
+		// while the hub sees Host as 127.0.0.1:4200. Caddy handles TLS and access control.
+		browserConn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+			InsecureSkipVerify: true,
+			Subprotocols:       []string{"tty"},
+		})
 		if err != nil {
 			slog.Error("failed to accept browser websocket", "error", err)
 			ttydConn.Close(websocket.StatusGoingAway, "browser accept failed")

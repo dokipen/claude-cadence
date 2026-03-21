@@ -3,6 +3,7 @@ package hub
 import (
 	"fmt"
 	"net"
+	"net/url"
 )
 
 // ValidateAdvertiseAddress checks that addr is a valid, routable IP address
@@ -34,5 +35,34 @@ func ValidateAdvertiseAddress(addr string) error {
 
 	// RFC 1918 private ranges (10/8, 172.16/12, 192.168/16) are intentionally
 	// allowed — agents are expected to run on private infrastructure.
+	return nil
+}
+
+// ValidateProfileRepo checks that repo is either empty or a valid http/https
+// URL. Empty strings are accepted (repo not specified). Plain strings, bare
+// hostnames, and non-http schemes are rejected.
+func ValidateProfileRepo(repo string) error {
+	if repo == "" {
+		return nil
+	}
+
+	const maxRepoLen = 2048
+	if len(repo) > maxRepoLen {
+		return fmt.Errorf("profile repo exceeds maximum length of %d characters", maxRepoLen)
+	}
+
+	u, err := url.Parse(repo)
+	if err != nil {
+		return fmt.Errorf("profile repo %q is not a valid URL", repo)
+	}
+
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("profile repo %q must use http or https scheme", repo)
+	}
+
+	if u.Host == "" {
+		return fmt.Errorf("profile repo %q is missing a host", repo)
+	}
+
 	return nil
 }

@@ -148,8 +148,12 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory="${SCRIPT_DIR}"
-ExecStart="${DOCKER_BIN}" compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --force-recreate
-ExecStop="${DOCKER_BIN}" compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" down
+ExecStart="${DOCKER_BIN}" compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --force-recreate --wait
+ExecStop="${DOCKER_BIN}" compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" stop
+# Zero-downtime redeploy: systemctl reload $SERVICE_NAME
+# Builds the new image, then --force-recreate --wait starts the new container
+# and waits for it to pass the health check before returning.
+ExecReload="${DOCKER_BIN}" compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --build --force-recreate --wait
 
 [Install]
 WantedBy=default.target

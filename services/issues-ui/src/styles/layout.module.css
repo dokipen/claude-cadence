@@ -1,5 +1,6 @@
 .shell {
-  min-height: 100vh;
+  height: 100vh;   /* fallback */
+  height: 100dvh;  /* correct on iOS Safari 15.4+: excludes retractable address bar */
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -22,6 +23,14 @@
   gap: 0;
 }
 
+.logoLink {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  text-decoration: none;
+  color: inherit;
+}
+
 .logoText {
   font-family: "Space Grotesk", sans-serif;
   font-weight: 700;
@@ -29,6 +38,19 @@
   letter-spacing: -0.02em;
   margin-top: 3px;
   line-height: 1;
+}
+
+.navLink {
+  margin-left: 0.75rem;
+  margin-top: 3px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  text-decoration: none;
+}
+
+.navLink:hover {
+  color: #fff;
 }
 
 .headerCenter {
@@ -86,6 +108,99 @@
 
 .main {
   flex: 1;
+  min-height: 0;
   display: flex;
   overflow: auto;
+}
+
+/* Notification system */
+.notificationWrapper {
+  position: relative;
+  margin-left: 0.5rem;
+  margin-top: 3px;
+}
+
+.notificationTrigger {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+}
+
+.notificationBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--amber);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.notificationDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 260px;
+  max-height: 360px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  z-index: 100;
+}
+
+.notificationHeader {
+  padding: 0.6rem 0.75rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.notificationItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  text-decoration: none;
+  color: var(--text);
+  font-size: 0.8rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.notificationItem:last-child {
+  border-bottom: none;
+}
+
+.notificationItem:hover {
+  background: rgba(128, 128, 128, 0.08);
+}
+
+.notificationSessionName {
+  font-weight: 600;
+  font-family: monospace;
+  font-size: 0.78rem;
+}
+
+.notificationAgent {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.notificationIdle {
+  margin-left: auto;
+  color: var(--amber);
+  font-size: 0.7rem;
+  font-weight: 600;
 }
