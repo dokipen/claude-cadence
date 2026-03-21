@@ -111,6 +111,12 @@ test.describe("kanban board", () => {
     await expect(page.getByTestId("count-CLOSED")).toHaveText("1");
   });
 
+  test("ticket with only closed blockers does not show blocked badge", async ({ page }) => {
+    // The backlog ticket is blocked only by the closed ticket — badge should not appear
+    const backlogCard = page.getByTestId("column-BACKLOG").getByTestId("ticket-card").first();
+    await expect(backlogCard.getByTestId("blocked-badge")).not.toBeAttached();
+  });
+
   test("empty column shows empty state message", async ({ page }) => {
     // Switch to the second project which has only a BACKLOG ticket
     const selector = page.getByTestId("project-selector");

@@ -179,6 +179,14 @@ test.describe("ticket detail page", () => {
     await expect(page.getByTestId("detail-labels")).toContainText("None");
   });
 
+  test("ticket with only closed blockers does not show blocked-by section", async ({ page }) => {
+    await page.goto("/");
+    // Navigate to backlog ticket (use first() since markdown ticket is also in BACKLOG)
+    await page.getByTestId("column-BACKLOG").getByTestId("ticket-card").first().click();
+    await expect(page.getByTestId("ticket-detail")).toBeVisible();
+    await expect(page.getByTestId("detail-blocked-by")).not.toBeAttached();
+  });
+
   test("detail page shows blocks relationships", async ({ page }) => {
     await page.goto("/projects/e2e-test-project");
     // In-progress ticket blocks the refined ticket
