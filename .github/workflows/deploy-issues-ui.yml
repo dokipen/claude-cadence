@@ -59,8 +59,10 @@ jobs:
 
           echo "==> Deploy complete"
 
-          # Prune old releases, keep last 5
-          ls -1dt "${DEPLOY_DIR}/releases"/*/ | tail -n +6 | xargs -r rm -rf
+          # Prune old releases, keep last 5.
+          # Non-fatal: some old releases may be owned by a different user (manual deploys
+          # pre-dating the CI runner). Those can be cleaned up manually on bootsy.
+          ls -1dt "${DEPLOY_DIR}/releases"/*/ | tail -n +6 | xargs -r rm -rf || true
 
       - name: Verify deployment
         run: |
