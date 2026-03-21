@@ -6,7 +6,8 @@ import (
 	"time"
 )
 
-// Cleaner periodically destroys stale stopped sessions.
+// Cleaner periodically destroys stale stopped sessions and immediately reaps
+// sessions whose agent process has exited.
 type Cleaner struct {
 	manager  *Manager
 	ttl      time.Duration
@@ -16,8 +17,11 @@ type Cleaner struct {
 	once     sync.Once
 }
 
-// NewCleaner creates a Cleaner that will destroy stopped sessions older than ttl,
-// checking every interval.
+// NewCleaner creates a Cleaner that will:
+//   - Immediately destroy running/creating sessions whose agent process has exited
+//   - Destroy stopped/error sessions older than ttl
+//
+// Both checks run on every interval tick.
 func NewCleaner(manager *Manager, ttl, interval time.Duration) *Cleaner {
 	return &Cleaner{
 		manager:  manager,
@@ -65,31 +69,55 @@ func (c *Cleaner) cleanup() {
 	now := time.Now()
 
 	for _, sess := range sessions {
-		// Reconcile to get current state.
+		originalState := sess.State
+
+		// Reconcile updates sess in-place: Running/Creating → Stopped if process died.
 		c.manager.reconcile(sess)
 
-		if sess.State != StateStopped {
-			continue
-		}
-		if sess.StoppedAt.IsZero() {
-			continue
-		}
-		if now.Sub(sess.StoppedAt) < c.ttl {
-			continue
-		}
-
-		slog.Info("destroying stale session",
-			"id", sess.ID,
-			"name", sess.Name,
-			"stopped_at", sess.StoppedAt,
-			"age", now.Sub(sess.StoppedAt).String(),
-		)
-
-		if err := c.manager.Destroy(sess.ID, true); err != nil {
-			slog.Warn("failed to destroy stale session",
+		switch {
+		case (originalState == StateRunning || originalState == StateCreating) && sess.State == StateStopped:
+			// Process just exited — destroy immediately without waiting for TTL.
+			slog.Info("auto-destroying session: agent process exited",
 				"id", sess.ID,
-				"error", err,
+				"name", sess.Name,
+				"pid", sess.AgentPID,
 			)
+			if err := c.manager.Destroy(sess.ID, true); err != nil {
+				slog.Warn("failed to auto-destroy session",
+					"id", sess.ID,
+					"error", err,
+				)
+			}
+
+		case sess.State == StateStopped || sess.State == StateError:
+			// Session was already stopped/errored before this tick.
+			// Reap it once it has been in this state longer than the TTL.
+			age := ageOf(sess, now)
+			if age < c.ttl {
+				continue
+			}
+			slog.Info("destroying stale session",
+				"id", sess.ID,
+				"name", sess.Name,
+				"state", sess.State,
+				"age", age.String(),
+			)
+			if err := c.manager.Destroy(sess.ID, true); err != nil {
+				slog.Warn("failed to destroy stale session",
+					"id", sess.ID,
+					"error", err,
+				)
+			}
 		}
 	}
+}
+
+// ageOf returns how long a session has been in its terminal state.
+// It uses StoppedAt when set, falling back to CreatedAt for StateError
+// sessions where StoppedAt may not have been recorded.
+func ageOf(sess *Session, now time.Time) time.Duration {
+	if !sess.StoppedAt.IsZero() {
+		return now.Sub(sess.StoppedAt)
+	}
+	return now.Sub(sess.CreatedAt)
 }

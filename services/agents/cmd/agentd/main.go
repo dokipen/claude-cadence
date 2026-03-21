@@ -88,7 +88,7 @@ func main() {
 	}
 
 	// Start background stale session cleaner.
-	cleaner := session.NewCleaner(manager, cfg.Cleanup.StaleSessionTTL, cfg.Cleanup.CheckInterval)
+	cleaner := session.NewCleaner(manager, cfg.Cleanup.StaleSessionTTL, cfg.Cleanup.ReapInterval)
 	cleaner.Start()
 
 	// Start background idle input monitor.

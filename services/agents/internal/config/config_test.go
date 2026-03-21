@@ -12,8 +12,8 @@ func validProfiles() map[string]Profile {
 
 func validCleanup() CleanupConfig {
 	return CleanupConfig{
-		StaleSessionTTL: 24 * time.Hour,
-		CheckInterval:   5 * time.Minute,
+		StaleSessionTTL: time.Hour,
+		ReapInterval:    30 * time.Second,
 	}
 }
 

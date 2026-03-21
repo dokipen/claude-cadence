@@ -101,9 +101,9 @@ type Config struct {
 // CleanupConfig holds stale session cleanup settings.
 type CleanupConfig struct {
 	StaleSessionTTL time.Duration `yaml:"-"`
-	CheckInterval   time.Duration `yaml:"-"`
+	ReapInterval    time.Duration `yaml:"-"`
 	RawTTL          string        `yaml:"stale_session_ttl"`
-	RawInterval     string        `yaml:"check_interval"`
+	RawReapInterval string        `yaml:"session_reap_interval"`
 }
 
 // TmuxConfig holds tmux-specific settings.
@@ -192,10 +192,10 @@ func applyDefaults(cfg *Config) {
 		cfg.Auth.Mode = "none"
 	}
 	if cfg.Cleanup.RawTTL == "" {
-		cfg.Cleanup.RawTTL = "24h"
+		cfg.Cleanup.RawTTL = "1h"
 	}
-	if cfg.Cleanup.RawInterval == "" {
-		cfg.Cleanup.RawInterval = "5m"
+	if cfg.Cleanup.RawReapInterval == "" {
+		cfg.Cleanup.RawReapInterval = "30s"
 	}
 	if cfg.Hub != nil {
 		if cfg.Hub.RawReconnect == "" {
@@ -211,11 +211,11 @@ func parseDurations(cfg *Config) error {
 	}
 	cfg.Cleanup.StaleSessionTTL = ttl
 
-	interval, err := time.ParseDuration(cfg.Cleanup.RawInterval)
+	reapInterval, err := time.ParseDuration(cfg.Cleanup.RawReapInterval)
 	if err != nil {
-		return fmt.Errorf("cleanup.check_interval: %w", err)
+		return fmt.Errorf("cleanup.session_reap_interval: %w", err)
 	}
-	cfg.Cleanup.CheckInterval = interval
+	cfg.Cleanup.ReapInterval = reapInterval
 
 	if cfg.Hub != nil {
 		reconnect, err := time.ParseDuration(cfg.Hub.RawReconnect)
@@ -259,8 +259,8 @@ func validate(cfg *Config) error {
 	}
 
 	// Auth mode validation.
-	if cfg.Cleanup.CheckInterval <= 0 {
-		return fmt.Errorf("cleanup.check_interval must be positive")
+	if cfg.Cleanup.ReapInterval <= 0 {
+		return fmt.Errorf("cleanup.session_reap_interval must be positive")
 	}
 
 	switch cfg.Auth.Mode {

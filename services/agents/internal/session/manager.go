@@ -25,19 +25,21 @@ var (
 
 // Manager orchestrates session lifecycle using Store and tmux.Client.
 type Manager struct {
-	store    *Store
-	tmux     *tmux.Client
-	ttyd     *ttyd.Client
-	git      *git.Client
-	vault    *vault.Client
-	profiles map[string]config.Profile
+	store          *Store
+	tmux           *tmux.Client
+	ttyd           *ttyd.Client
+	git            *git.Client
+	vault          *vault.Client
+	profiles       map[string]config.Profile
+	tmuxHasSession func(name string) bool
+	processAlive   func(pid int) bool
 }
 
 // NewManager creates a new session Manager.
 // gitClient may be nil if no profiles use repos.
 // vaultClient may be nil if no profiles use vault secrets.
 func NewManager(store *Store, tmuxClient *tmux.Client, ttydClient *ttyd.Client, gitClient *git.Client, vaultClient *vault.Client, profiles map[string]config.Profile) *Manager {
-	return &Manager{
+	m := &Manager{
 		store:    store,
 		tmux:     tmuxClient,
 		ttyd:     ttydClient,
@@ -45,6 +47,13 @@ func NewManager(store *Store, tmuxClient *tmux.Client, ttydClient *ttyd.Client, 
 		vault:    vaultClient,
 		profiles: profiles,
 	}
+	if tmuxClient != nil {
+		m.tmuxHasSession = func(name string) bool { return m.tmux.HasSession(name) }
+	} else {
+		m.tmuxHasSession = func(name string) bool { return false }
+	}
+	m.processAlive = isProcessAlive
+	return m
 }
 
 // CreateRequest holds the parameters for creating a session.
@@ -355,7 +364,7 @@ func (m *Manager) Destroy(id string, force bool) error {
 		m.ttyd.Stop(id)
 	}
 
-	if m.tmux.HasSession(sess.TmuxSession) {
+	if m.tmux != nil && m.tmuxHasSession(sess.TmuxSession) {
 		if err := m.tmux.KillSession(sess.TmuxSession); err != nil {
 			slog.Warn("failed to kill tmux session", "session", sess.TmuxSession, "error", err)
 		}
@@ -456,7 +465,7 @@ func (m *Manager) reconcile(sess *Session) {
 
 	now := time.Now()
 
-	tmuxExists := m.tmux.HasSession(sess.TmuxSession)
+	tmuxExists := m.tmuxHasSession(sess.TmuxSession)
 	if !tmuxExists {
 		m.store.Update(sess.ID, func(s *Session) {
 			s.State = StateStopped
@@ -467,7 +476,7 @@ func (m *Manager) reconcile(sess *Session) {
 		return
 	}
 
-	if sess.AgentPID > 0 && !isProcessAlive(sess.AgentPID) {
+	if sess.AgentPID > 0 && !m.processAlive(sess.AgentPID) {
 		m.store.Update(sess.ID, func(s *Session) {
 			s.State = StateStopped
 			s.StoppedAt = now
