@@ -222,6 +222,9 @@ describe("Terminal", () => {
   it("focuses the xterm instance when the terminal container is clicked", () => {
     render(<Terminal agentName="agent-1" sessionId="sess-1" />);
 
+    const ws = MockWebSocket.instances[0];
+    act(() => { ws.simulateOpen(); });
+
     const container = screen.getByTestId("terminal-container");
     fireEvent.click(container);
 
