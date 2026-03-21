@@ -14,6 +14,25 @@ export function AgentManager({ sessions }: AgentManagerProps) {
   const { agents, loading: agentsLoading } = useAgents();
   const [openWindows, setOpenWindows] = useState<TiledWindow[]>([]);
   const [minimizedKeys, setMinimizedKeys] = useState<Set<string>>(new Set());
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("cadence_sidebar_collapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebar = useCallback(() => {
+    setIsCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("cadence_sidebar_collapsed", String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
 
   const openKeys = new Set(openWindows.map((w) => w.key));
 
@@ -68,6 +87,8 @@ export function AgentManager({ sessions }: AgentManagerProps) {
         sessions={sessions}
         openKeys={new Set([...openKeys, ...minimizedKeys])}
         onSessionClick={handleSessionClick}
+        isCollapsed={isCollapsed}
+        onToggle={toggleSidebar}
       />
       <div className={styles.tilingContainer}>
         {loading && sessions.length === 0 ? (

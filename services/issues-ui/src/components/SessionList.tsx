@@ -7,13 +7,15 @@ interface SessionListProps {
   sessions: AgentSession[];
   openKeys: Set<string>;
   onSessionClick: (session: AgentSession) => void;
+  isCollapsed: boolean;
+  onToggle: () => void;
 }
 
 function sessionKey(s: AgentSession): string {
   return `${s.agentName}:${s.session.id}`;
 }
 
-export function SessionList({ agents, sessions, openKeys, onSessionClick }: SessionListProps) {
+export function SessionList({ agents, sessions, openKeys, onSessionClick, isCollapsed, onToggle }: SessionListProps) {
   // Group sessions by agent
   const sessionsByAgent = new Map<string, AgentSession[]>();
   for (const s of sessions) {
@@ -23,7 +25,18 @@ export function SessionList({ agents, sessions, openKeys, onSessionClick }: Sess
   }
 
   return (
-    <div className={styles.sessionSidebar} data-testid="session-list">
+    <div className={`${styles.sessionSidebar}${isCollapsed ? ` ${styles.collapsed}` : ""}`} data-testid="session-list">
+      <button
+        className={styles.sidebarToggle}
+        onClick={onToggle}
+        aria-expanded={!isCollapsed}
+        data-testid="sidebar-toggle"
+        title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+      >
+        {isCollapsed ? "▶" : "◀"}
+      </button>
+      {!isCollapsed && (
+        <>
       <h3 className={styles.sidebarTitle}>Agents</h3>
       {agents.length === 0 && (
         <p className={styles.sidebarEmpty}>No agents registered.</p>
@@ -68,6 +81,8 @@ export function SessionList({ agents, sessions, openKeys, onSessionClick }: Sess
           </div>
         );
       })}
+        </>
+      )}
     </div>
   );
 }
