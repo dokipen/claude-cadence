@@ -36,6 +36,8 @@ export interface TicketFilters {
   labelName?: string;
   isBlocked?: boolean;
   priority?: Priority;
+  excludeLabelName?: string;
+  excludePriority?: Priority;
 }
 
 const transformTickets = (result: TicketsResponse): TransformedTickets => ({
@@ -53,6 +55,8 @@ export function useTickets(
   const labelName = filters?.labelName;
   const isBlocked = filters?.isBlocked;
   const priority = filters?.priority;
+  const excludeLabelName = filters?.excludeLabelName;
+  const excludePriority = filters?.excludePriority;
 
   const variables = useMemo(
     () =>
@@ -77,5 +81,18 @@ export function useTickets(
     errorMessage: "Failed to load tickets",
   });
 
-  return { tickets: data.tickets, totalCount: data.totalCount, hasNextPage: data.hasNextPage, loading, error };
+  const tickets = useMemo(() => {
+    let result = data.tickets;
+    if (excludeLabelName) {
+      result = result.filter(
+        (ticket) => !ticket.labels.some((label) => label.name === excludeLabelName),
+      );
+    }
+    if (excludePriority) {
+      result = result.filter((ticket) => ticket.priority !== excludePriority);
+    }
+    return result;
+  }, [data.tickets, excludeLabelName, excludePriority]);
+
+  return { tickets, totalCount: data.totalCount, hasNextPage: data.hasNextPage, loading, error };
 }
