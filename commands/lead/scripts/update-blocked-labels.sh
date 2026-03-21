@@ -14,7 +14,6 @@ set -e
 # Detect ticket provider from the project's CLAUDE.md
 PROVIDER=$(grep -A3 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'provider:' | tail -1 | awk '{print $2}')
 PROVIDER=${PROVIDER:-github}
-PROJECT=$(grep -A4 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'project_id:' | tail -1 | awk '{print $2}')
 
 if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
   echo "Usage: ./scripts/update-blocked-labels.sh"
