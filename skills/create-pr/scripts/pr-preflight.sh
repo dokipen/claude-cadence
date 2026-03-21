@@ -37,14 +37,14 @@ echo ""
 echo "2. Running verification..."
 VERIFY_CMD=""
 
-# Look for verification command in CLAUDE.md
+# Look for verification command in CLAUDE.md (skipping headings inside fenced code blocks)
 if [ -f "CLAUDE.md" ]; then
-  # Extract the line after "## Verification"
-  VERIFY_CMD=$(awk '/^## Verification/{getline; if(/^```/){getline}; print; exit}' CLAUDE.md)
+  VERIFY_CMD=$(awk 'BEGIN{fence=0} /^```/{fence=!fence; next} !fence && /^## Verification/{getline; print; exit}' CLAUDE.md)
 fi
 
 if [ -n "$VERIFY_CMD" ]; then
   echo "   Running: ${VERIFY_CMD}"
+  shopt -s globstar 2>/dev/null || true  # enable ** globs in bash
   if ! eval "$VERIFY_CMD"; then
     echo "   ERROR: Verification failed"
     exit 2
