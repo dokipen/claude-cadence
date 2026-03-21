@@ -45,7 +45,9 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
       retryTimerRef.current = null;
     }
 
-    // Manual connect resets retry counter; auto-retry preserves it
+    // Manual connect resets retry counter; auto-retry preserves it.
+    // everConnectedRef always resets: a manual Reconnect after a drop starts a
+    // fresh retry cycle rather than immediately showing "Connection lost." again.
     if (!isAutoRetryRef.current) {
       retryCountRef.current = 0;
     }
@@ -98,6 +100,9 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
 
     termRef.current = term;
     fitRef.current = fit;
+
+    // Close any previous WebSocket before creating a new one.
+    wsRef.current?.close();
 
     const url = buildWsUrl(agentName, sessionId);
     // Request the "tty" subprotocol required by ttyd.

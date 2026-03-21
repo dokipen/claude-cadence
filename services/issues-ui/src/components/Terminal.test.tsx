@@ -63,10 +63,6 @@ class MockWebSocket {
     this.onclose?.(new CloseEvent("close"));
   }
 
-  simulateError() {
-    this.onerror?.(new Event("error"));
-    this.simulateClose();
-  }
 }
 
 // ---------------------------------------------------------------------------
