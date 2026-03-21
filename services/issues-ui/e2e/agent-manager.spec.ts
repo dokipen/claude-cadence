@@ -356,12 +356,12 @@ const LAUNCH_FORM_AGENTS = {
       status: "online",
       profiles: {
         default: {
+          description: "Default profile",
           repo: "https://github.com/test/repo",
-          model: "claude-opus-4-6",
         },
         fast: {
+          description: "Fast profile",
           repo: "https://github.com/test/repo",
-          model: "claude-haiku-4-5-20251001",
         },
       },
       last_seen: "2026-01-01T00:00:00Z",
@@ -371,8 +371,8 @@ const LAUNCH_FORM_AGENTS = {
       status: "offline",
       profiles: {
         default: {
+          description: "Default profile",
           repo: "https://github.com/test/repo",
-          model: "claude-opus-4-6",
         },
       },
       last_seen: "2025-12-01T00:00:00Z",
@@ -389,7 +389,7 @@ const LAUNCHED_SESSION = {
   created_at: "2026-01-01T01:00:00Z",
   agent_pid: 9999,
   worktree_path: "/tmp/new-wt",
-  repo_url: "https://github.com/test/repo",
+  repo_url: "test-agent/test-repo",
   base_ref: "main",
 };
 
