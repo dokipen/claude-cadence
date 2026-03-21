@@ -258,9 +258,12 @@ func validate(cfg *Config) error {
 		}
 	}
 
-	// Auth mode validation.
+	// Cleanup validation.
 	if cfg.Cleanup.ReapInterval <= 0 {
 		return fmt.Errorf("cleanup.session_reap_interval must be positive")
+	}
+	if cfg.Cleanup.StaleSessionTTL <= 0 {
+		return fmt.Errorf("cleanup.stale_session_ttl must be positive")
 	}
 
 	switch cfg.Auth.Mode {

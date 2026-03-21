@@ -77,7 +77,7 @@ func (c *Cleaner) cleanup() {
 		switch {
 		case (originalState == StateRunning || originalState == StateCreating) && sess.State == StateStopped:
 			// Process just exited — destroy immediately without waiting for TTL.
-			slog.Info("auto-destroying session: agent process exited",
+			slog.Info("auto-destroying session: process no longer alive",
 				"id", sess.ID,
 				"name", sess.Name,
 				"pid", sess.AgentPID,
@@ -114,10 +114,14 @@ func (c *Cleaner) cleanup() {
 
 // ageOf returns how long a session has been in its terminal state.
 // It uses StoppedAt when set, falling back to CreatedAt for StateError
-// sessions where StoppedAt may not have been recorded.
+// sessions where StoppedAt may not have been recorded. Returns 0 if
+// neither timestamp is set to avoid spurious immediate reaping.
 func ageOf(sess *Session, now time.Time) time.Duration {
 	if !sess.StoppedAt.IsZero() {
 		return now.Sub(sess.StoppedAt)
 	}
-	return now.Sub(sess.CreatedAt)
+	if !sess.CreatedAt.IsZero() {
+		return now.Sub(sess.CreatedAt)
+	}
+	return 0
 }
