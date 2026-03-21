@@ -531,3 +531,19 @@
 .sidebarSessionWaiting .sessionDot {
   color: var(--amber);
 }
+
+/* Spinner for terminal connecting overlay */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(230, 237, 243, 0.2);
+  border-top-color: #e6edf3;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}

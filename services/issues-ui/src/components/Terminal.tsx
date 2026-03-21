@@ -20,6 +20,8 @@ const MSG_OUTPUT = "0"; // terminal output
 // const MSG_SET_TITLE = "1";
 // const MSG_SET_PREFS = "2";
 
+const RETRY_DELAYS_MS = [2000, 4000, 8000, 16000];
+
 function buildWsUrl(agentName: string, sessionId: string): string {
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
   return `${proto}//${window.location.host}/ws/terminal/${encodeURIComponent(agentName)}/${encodeURIComponent(sessionId)}`;
@@ -30,9 +32,26 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
   const termRef = useRef<XTerm | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  const retryCountRef = useRef(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const everConnectedRef = useRef(false);
+  const isAutoRetryRef = useRef(false);
   const [connState, setConnState] = useState<ConnectionState>("connecting");
 
   const connect = useCallback(() => {
+    // Clear any pending retry timer
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+
+    // Manual connect resets retry counter; auto-retry preserves it
+    if (!isAutoRetryRef.current) {
+      retryCountRef.current = 0;
+    }
+    isAutoRetryRef.current = false;
+    everConnectedRef.current = false;
+
     const container = containerRef.current;
     if (!container) return;
 
@@ -87,6 +106,8 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
     wsRef.current = ws;
 
     ws.onopen = () => {
+      everConnectedRef.current = true;
+      retryCountRef.current = 0;
       setConnState("connected");
 
       // Send initial handshake: JSON with terminal dimensions.
@@ -130,11 +151,24 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
     };
 
     ws.onerror = () => {
-      setConnState("error");
+      // Connection error; handled by onclose which fires immediately after.
     };
 
     ws.onclose = () => {
-      setConnState((prev) => (prev === "error" ? "error" : "disconnected"));
+      if (everConnectedRef.current) {
+        // Was connected, then lost the connection.
+        setConnState("disconnected");
+      } else if (retryCountRef.current < RETRY_DELAYS_MS.length) {
+        // Never connected — schedule an auto-retry with backoff.
+        const delay = RETRY_DELAYS_MS[retryCountRef.current];
+        retryCountRef.current += 1;
+        setConnState("connecting");
+        isAutoRetryRef.current = true;
+        retryTimerRef.current = setTimeout(connect, delay);
+      } else {
+        // Retries exhausted — show permanent error.
+        setConnState("error");
+      }
     };
   }, [agentName, sessionId]);
 
@@ -143,6 +177,10 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
     connect();
 
     return () => {
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
       termRef.current?.dispose();
       wsRef.current?.close();
       termRef.current = null;
@@ -173,7 +211,8 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
       />
       {connState === "connecting" && (
         <div className={styles.terminalOverlay} data-testid="terminal-connecting">
-          <span>Connecting to terminal…</span>
+          <div className={styles.spinner} />
+          <span>Starting session…</span>
         </div>
       )}
       {connState === "disconnected" && (
