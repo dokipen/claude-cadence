@@ -136,6 +136,12 @@ function AppShell() {
             <img src="/cadence-icon-light.svg" alt="" width={24} height={24} />
             <span className={layoutStyles.logoText}>Cadence</span>
           </Link>
+          <div style={{ marginLeft: "0.75rem", marginRight: "0.5rem" }}>
+            <ProjectSelector
+              selectedProjectId={globalProjectId}
+              onProjectChange={handleProjectChange}
+            />
+          </div>
           <Link to="/agents" className={layoutStyles.navLink} data-testid="agents-nav-link">
             Agents
           </Link>
@@ -143,12 +149,6 @@ function AppShell() {
             Docs
           </Link>
           <NotificationDropdown waitingSessions={waitingSessions} />
-        </div>
-        <div className={layoutStyles.headerCenter}>
-          <ProjectSelector
-            selectedProjectId={globalProjectId}
-            onProjectChange={handleProjectChange}
-          />
         </div>
         <div className={layoutStyles.headerRight}>
           {user && (
