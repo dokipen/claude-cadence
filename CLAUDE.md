@@ -77,6 +77,9 @@ Bump the `version` field in `.claude-plugin/plugin.json` only when preparing a r
 - **Communication**: Issue comments pre-PR, PR comments post-PR
 - **GitHub access**: Always use `gh` CLI, never WebFetch for GitHub URLs
 
+## Verification
+shellcheck commands/**/*.sh skills/**/*.sh
+
 ## Ticket Provider
 provider: issues-api
 api_url: https://cadence.bootsy.internal
