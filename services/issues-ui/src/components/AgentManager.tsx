@@ -81,25 +81,27 @@ export function AgentManager({ sessions }: AgentManagerProps) {
   return (
     <div className={styles.agentManager} data-testid="agent-manager">
       <AgentLaunchForm agents={agents} onLaunched={handleLaunched} />
-      <SessionList
-        agents={agents}
-        sessions={sessions}
-        openKeys={new Set([...openKeys, ...minimizedKeys])}
-        onSessionClick={handleSessionClick}
-      />
-      <div className={styles.tilingContainer}>
-        {loading && sessions.length === 0 ? (
-          <div className={styles.tilingEmpty} data-testid="tiling-area">
-            <p>Loading sessions…</p>
-          </div>
-        ) : (
-          <TilingLayout
-            windows={openWindows}
-            onMinimize={handleMinimize}
-            onTerminated={handleTerminated}
-            onReorder={handleReorder}
-          />
-        )}
+      <div className={styles.agentManagerBody}>
+        <SessionList
+          agents={agents}
+          sessions={sessions}
+          openKeys={new Set([...openKeys, ...minimizedKeys])}
+          onSessionClick={handleSessionClick}
+        />
+        <div className={styles.tilingContainer}>
+          {loading && sessions.length === 0 ? (
+            <div className={styles.tilingEmpty} data-testid="tiling-area">
+              <p>Loading sessions…</p>
+            </div>
+          ) : (
+            <TilingLayout
+              windows={openWindows}
+              onMinimize={handleMinimize}
+              onTerminated={handleTerminated}
+              onReorder={handleReorder}
+            />
+          )}
+        </div>
       </div>
     </div>
   );

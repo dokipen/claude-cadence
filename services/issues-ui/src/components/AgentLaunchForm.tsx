@@ -55,6 +55,9 @@ export function AgentLaunchForm({ agents, onLaunched }: AgentLaunchFormProps) {
           },
         );
         onLaunched(session, selectedHost);
+        setSelectedHost("");
+        setSelectedProfile("");
+        setName("");
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Failed to launch session",
@@ -128,6 +131,7 @@ export function AgentLaunchForm({ agents, onLaunched }: AgentLaunchFormProps) {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Session name"
+            maxLength={100}
             data-testid="name-input"
           />
         </div>
