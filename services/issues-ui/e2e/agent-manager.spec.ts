@@ -457,7 +457,7 @@ const LAUNCHED_SESSION = {
   created_at: "2026-01-01T01:00:00Z",
   agent_pid: 9999,
   worktree_path: "/tmp/new-wt",
-  repo_url: "test-agent/test-repo",
+  repo_url: "test-org/test-repo",
   base_ref: "main",
 };
 
@@ -486,6 +486,25 @@ function setupLaunchFormMocks(page: import("@playwright/test").Page) {
         route.continue();
       }
     }),
+    // Mock projects so the selected project has a known repository for session filtering
+    page.route("**/graphql", (route) => {
+      const body = JSON.parse(route.request().postData() ?? "{}") as { query?: string };
+      if (typeof body.query === "string" && body.query.includes("Projects")) {
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: {
+              projects: [
+                { id: "e2e-test-project", name: "E2E Test Project", repository: "test-org/test-repo" },
+              ],
+            },
+          }),
+        });
+      } else {
+        route.continue();
+      }
+    }),
   ]);
 }
 
@@ -496,7 +515,7 @@ function setupLaunchFormMocks(page: import("@playwright/test").Page) {
 test.describe("agent launch form", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
-      localStorage.setItem("cadence_project_id", "e2e-test-project");
+      sessionStorage.setItem("cadence_project_id", "e2e-test-project");
     });
     await setupLaunchFormMocks(page);
   });
