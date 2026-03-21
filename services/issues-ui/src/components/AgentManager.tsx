@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
-import { useAgents } from "../hooks/useAgents";
+import type { Project } from "../types";
+import { useAgents, normalizeRepo } from "../hooks/useAgents";
 import { SessionList, sessionKey } from "./SessionList";
 import { TilingLayout } from "./TilingLayout";
 import { AgentLaunchForm } from "./AgentLaunchForm";
@@ -10,9 +11,15 @@ import styles from "../styles/agents.module.css";
 
 interface AgentManagerProps {
   sessions: AgentSession[];
+  selectedProject?: Project | null;
 }
 
-export function AgentManager({ sessions }: AgentManagerProps) {
+export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
+  const filteredSessions = selectedProject?.repository
+    ? sessions.filter(
+        (s) => normalizeRepo(s.session.repo_url) === normalizeRepo(selectedProject.repository!)
+      )
+    : sessions;
   const { agents, loading: agentsLoading } = useAgents();
   const [openWindows, setOpenWindows] = useState<TiledWindow[]>([]);
   const [minimizedKeys, setMinimizedKeys] = useState<Set<string>>(new Set());
@@ -103,14 +110,14 @@ export function AgentManager({ sessions }: AgentManagerProps) {
       <div className={styles.agentManagerBody}>
         <SessionList
           agents={agents}
-          sessions={sessions}
+          sessions={filteredSessions}
           openKeys={new Set([...openKeys, ...minimizedKeys])}
           onSessionClick={handleSessionClick}
           isCollapsed={isCollapsed}
           onToggle={toggleSidebar}
         />
         <div className={styles.tilingContainer}>
-          {loading && sessions.length === 0 ? (
+          {loading && filteredSessions.length === 0 ? (
             <div className={styles.tilingEmpty} data-testid="tiling-area">
               <p>Loading sessions…</p>
             </div>
