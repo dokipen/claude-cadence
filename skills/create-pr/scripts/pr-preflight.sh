@@ -15,6 +15,7 @@
 # 2 - Verification command failed
 
 set -e
+shopt -s globstar  # enable ** globs for verification commands
 
 echo "PR Pre-flight Checks"
 echo "===================="
@@ -44,7 +45,6 @@ fi
 
 if [ -n "$VERIFY_CMD" ]; then
   echo "   Running: ${VERIFY_CMD}"
-  shopt -s globstar 2>/dev/null || true  # enable ** globs in bash
   if ! eval "$VERIFY_CMD"; then
     echo "   ERROR: Verification failed"
     exit 2
