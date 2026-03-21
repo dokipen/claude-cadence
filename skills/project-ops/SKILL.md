@@ -51,6 +51,18 @@ scripts/cleanup-worktree.sh <branch-name>
 - Removes local worktree directory
 - Prunes orphaned worktree references
 
+### detect-worktree.sh
+
+Detect if the current directory is inside a git worktree.
+
+```bash
+scripts/detect-worktree.sh
+```
+
+- Outputs JSON: `{"in_worktree": true|false, "branch": "<name>"}`
+- Safe to run outside a git repo (returns `in_worktree: false`)
+- Used by `/lead` Phase 0 for worktree detection
+
 ### check-orphaned-worktrees.sh
 
 Check for orphaned worktree directories not tracked by git.
