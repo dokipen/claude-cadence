@@ -169,6 +169,12 @@ func (c *Client) pullDefaultBranch(cloneDir string, creds *Credentials) error {
 		return fmt.Errorf("git update-ref: %w: %s", err, string(output))
 	}
 
+	// Update the working tree so sessions starting in cloneDir see the latest
+	// content. This runs under the per-clone mutex, but the mutex is released
+	// before the tmux session starts. Concurrent sessions for the same repo
+	// share this working tree; any uncommitted changes a session writes before
+	// calling /new-work could be discarded by a subsequent pull. The workflow
+	// contract (agents call /new-work immediately) keeps this window small.
 	reset := exec.Command("git", "-C", cloneDir, "reset", "--hard", "refs/remotes/origin/"+branch)
 	if output, err := reset.CombinedOutput(); err != nil {
 		return fmt.Errorf("git reset: %w: %s", err, string(output))
