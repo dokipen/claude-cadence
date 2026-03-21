@@ -2,8 +2,10 @@ import { useState, useCallback } from "react";
 import { useAgents } from "../hooks/useAgents";
 import { SessionList, sessionKey } from "./SessionList";
 import { TilingLayout } from "./TilingLayout";
+import { AgentLaunchForm } from "./AgentLaunchForm";
 import type { TiledWindow } from "./TilingLayout";
 import type { AgentSession } from "../hooks/useAllSessions";
+import type { Session } from "../types";
 import styles from "../styles/agents.module.css";
 
 interface AgentManagerProps {
@@ -70,29 +72,36 @@ export function AgentManager({ sessions }: AgentManagerProps) {
     });
   }, []);
 
+  const handleLaunched = useCallback((_session: Session, _agentName: string) => {
+    // The useAllSessions polling will pick up the new session automatically.
+  }, []);
+
   const loading = agentsLoading;
 
   return (
     <div className={styles.agentManager} data-testid="agent-manager">
-      <SessionList
-        agents={agents}
-        sessions={sessions}
-        openKeys={new Set([...openKeys, ...minimizedKeys])}
-        onSessionClick={handleSessionClick}
-      />
-      <div className={styles.tilingContainer}>
-        {loading && sessions.length === 0 ? (
-          <div className={styles.tilingEmpty} data-testid="tiling-area">
-            <p>Loading sessions…</p>
-          </div>
-        ) : (
-          <TilingLayout
-            windows={openWindows}
-            onMinimize={handleMinimize}
-            onTerminated={handleTerminated}
-            onReorder={handleReorder}
-          />
-        )}
+      <AgentLaunchForm agents={agents} onLaunched={handleLaunched} />
+      <div className={styles.agentManagerBody}>
+        <SessionList
+          agents={agents}
+          sessions={sessions}
+          openKeys={new Set([...openKeys, ...minimizedKeys])}
+          onSessionClick={handleSessionClick}
+        />
+        <div className={styles.tilingContainer}>
+          {loading && sessions.length === 0 ? (
+            <div className={styles.tilingEmpty} data-testid="tiling-area">
+              <p>Loading sessions…</p>
+            </div>
+          ) : (
+            <TilingLayout
+              windows={openWindows}
+              onMinimize={handleMinimize}
+              onTerminated={handleTerminated}
+              onReorder={handleReorder}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
