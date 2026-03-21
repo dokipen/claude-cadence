@@ -251,6 +251,49 @@
   margin: 0 0 1.5rem;
 }
 
+/* ── Agent Launch Form ── */
+
+.launchForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.launchFormFields {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.launchFormFields .profileSelect {
+  flex: 1;
+  min-width: 120px;
+}
+
+.nameInput {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.85rem;
+  width: 100%;
+}
+
+.nameInput:focus {
+  outline: 2px solid var(--primary-light);
+  outline-offset: 1px;
+}
+
+.nameInput::placeholder {
+  color: var(--text-muted);
+}
+
 /* ── Agent Manager ── */
 
 .agentManager {

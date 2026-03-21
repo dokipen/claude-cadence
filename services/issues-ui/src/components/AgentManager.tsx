@@ -2,8 +2,10 @@ import { useState, useCallback } from "react";
 import { useAgents } from "../hooks/useAgents";
 import { SessionList, sessionKey } from "./SessionList";
 import { TilingLayout } from "./TilingLayout";
+import { AgentLaunchForm } from "./AgentLaunchForm";
 import type { TiledWindow } from "./TilingLayout";
 import type { AgentSession } from "../hooks/useAllSessions";
+import type { Session } from "../types";
 import styles from "../styles/agents.module.css";
 
 interface AgentManagerProps {
@@ -70,10 +72,15 @@ export function AgentManager({ sessions }: AgentManagerProps) {
     });
   }, []);
 
+  const handleLaunched = useCallback((_session: Session, _agentName: string) => {
+    // The useAllSessions polling will pick up the new session automatically.
+  }, []);
+
   const loading = agentsLoading;
 
   return (
     <div className={styles.agentManager} data-testid="agent-manager">
+      <AgentLaunchForm agents={agents} onLaunched={handleLaunched} />
       <SessionList
         agents={agents}
         sessions={sessions}
