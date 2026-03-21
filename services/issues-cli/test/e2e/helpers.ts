@@ -13,6 +13,9 @@ const ISSUES_CLI_DIR = join(REPO_ROOT, "services", "issues-cli");
 
 const TEST_JWT_SECRET = "test-secret";
 export const TEST_USER_ID = "test-user-id-000";
+export const TEST_PROJECT_ID = "e2e-cli-project";
+export const TEST_PROJECT_NAME = "E2E CLI Project";
+export const TEST_PROJECT_REPO = "e2e-org/cli-repo";
 
 export interface TestServer {
   url: string;
@@ -54,7 +57,10 @@ export async function createTestServer(): Promise<TestServer> {
   // Create a test user directly via SQL
   const sqlFile = join(tmpDir, "create-test-user.sql");
   const now = new Date().toISOString();
-  writeFileSync(sqlFile, `INSERT INTO User (id, githubId, login, displayName, avatarUrl, createdAt, updatedAt) VALUES ('${TEST_USER_ID}', 12345, 'testuser', 'Test User', NULL, '${now}', '${now}');`);
+  writeFileSync(sqlFile, [
+    `INSERT INTO User (id, githubId, login, displayName, avatarUrl, createdAt, updatedAt) VALUES ('${TEST_USER_ID}', 12345, 'testuser', 'Test User', NULL, '${now}', '${now}');`,
+    `INSERT INTO Project (id, name, repository, createdAt, updatedAt) VALUES ('${TEST_PROJECT_ID}', '${TEST_PROJECT_NAME}', '${TEST_PROJECT_REPO}', '${now}', '${now}');`,
+  ].join("\n"));
 
   execSync(`npx prisma db execute --file ${sqlFile} --schema prisma/schema.prisma`, {
     cwd: ISSUES_SERVICE_DIR,

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { setupTestSuite, type TestSuite } from "./helpers.js";
+import { setupTestSuite, type TestSuite, TEST_PROJECT_ID } from "./helpers.js";
 
 describe("Priority and Estimation", () => {
   let suite: TestSuite;
@@ -20,7 +20,7 @@ describe("Priority and Estimation", () => {
   it("should create a ticket with HIGHEST priority", async () => {
     const result = await suite.cli(
       "ticket", "create",
-      "--project", "default-project",
+      "--project", TEST_PROJECT_ID,
       "--title", "Critical bug",
       "--priority", "HIGHEST"
     );
@@ -39,7 +39,7 @@ describe("Priority and Estimation", () => {
   it("should create a ticket with story points", async () => {
     const result = await suite.cli(
       "ticket", "create",
-      "--project", "default-project",
+      "--project", TEST_PROJECT_ID,
       "--title", "Sized task",
       "--points", "13"
     );
@@ -58,7 +58,7 @@ describe("Priority and Estimation", () => {
   it("should create a ticket with both priority and story points", async () => {
     const result = await suite.cli(
       "ticket", "create",
-      "--project", "default-project",
+      "--project", TEST_PROJECT_ID,
       "--title", "Urgent epic",
       "--priority", "HIGH",
       "--points", "8"
@@ -80,7 +80,7 @@ describe("Priority and Estimation", () => {
     // Create a ticket with default priority
     const createResult = await suite.cli(
       "ticket", "create",
-      "--project", "default-project",
+      "--project", TEST_PROJECT_ID,
       "--title", "Priority update target"
     );
     expect(createResult.exitCode).toBe(0);
@@ -146,7 +146,7 @@ describe("Priority and Estimation", () => {
     // Create tickets with LOWEST and LOW priorities
     const lowResult = await suite.cli(
       "ticket", "create",
-      "--project", "default-project",
+      "--project", TEST_PROJECT_ID,
       "--title", "Low priority task",
       "--priority", "LOW"
     );
@@ -156,7 +156,7 @@ describe("Priority and Estimation", () => {
 
     const lowestResult = await suite.cli(
       "ticket", "create",
-      "--project", "default-project",
+      "--project", TEST_PROJECT_ID,
       "--title", "Lowest priority task",
       "--priority", "LOWEST"
     );

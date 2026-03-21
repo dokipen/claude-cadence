@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { setupTestSuite, type TestSuite } from "./helpers.js";
+import { setupTestSuite, type TestSuite, TEST_PROJECT_ID } from "./helpers.js";
 
 describe("Ticket Management", () => {
   let suite: TestSuite;
@@ -18,7 +18,7 @@ describe("Ticket Management", () => {
   let labelTicketId: string;
 
   it("should create a ticket with title only", async () => {
-    const result = await suite.cli("ticket", "create", "--project", "default-project", "--title", "Simple ticket");
+    const result = await suite.cli("ticket", "create", "--project", TEST_PROJECT_ID, "--title", "Simple ticket");
     expect(result.exitCode).toBe(0);
 
     // ora spinner writes to stderr, actual data to stdout
@@ -37,7 +37,7 @@ describe("Ticket Management", () => {
   it("should create a ticket with all fields", async () => {
     const result = await suite.cli(
       "ticket", "create",
-      "--project", "default-project",
+      "--project", TEST_PROJECT_ID,
       "--title", "Full ticket",
       "--description", "A detailed description",
       "--acceptance-criteria", "It must work",
@@ -60,7 +60,7 @@ describe("Ticket Management", () => {
   it("should create a ticket using --body alias for --description", async () => {
     const result = await suite.cli(
       "ticket", "create",
-      "--project", "default-project",
+      "--project", TEST_PROJECT_ID,
       "--title", "Body alias ticket",
       "--body", "Description via body flag"
     );
@@ -84,7 +84,7 @@ describe("Ticket Management", () => {
     // test will be added when label CLI commands land.
     const result = await suite.cli(
       "ticket", "create",
-      "--project", "default-project",
+      "--project", TEST_PROJECT_ID,
       "--title", "Labeled ticket",
       "--description", "Ticket with labels"
     );
@@ -231,11 +231,11 @@ describe("Ticket Management", () => {
 
   it("should filter tickets by single label", async () => {
     // Create two tickets and attach different labels
-    const r1 = await suite.cli("ticket", "create", "--project", "default-project", "--title", "Bug ticket");
+    const r1 = await suite.cli("ticket", "create", "--project", TEST_PROJECT_ID, "--title", "Bug ticket");
     expect(r1.exitCode).toBe(0);
     const id1 = r1.stdout.match(/#(\S+)\s+Bug ticket/)![1];
 
-    const r2 = await suite.cli("ticket", "create", "--project", "default-project", "--title", "Feature ticket");
+    const r2 = await suite.cli("ticket", "create", "--project", TEST_PROJECT_ID, "--title", "Feature ticket");
     expect(r2.exitCode).toBe(0);
     const id2 = r2.stdout.match(/#(\S+)\s+Feature ticket/)![1];
 
@@ -263,9 +263,9 @@ describe("Ticket Management", () => {
 
   it("should filter tickets by multiple labels (OR)", async () => {
     // Create dedicated tickets for this test
-    const r1 = await suite.cli("ticket", "create", "--project", "default-project", "--title", "Multi-bug ticket");
+    const r1 = await suite.cli("ticket", "create", "--project", TEST_PROJECT_ID, "--title", "Multi-bug ticket");
     const id1 = r1.stdout.match(/#(\S+)\s+Multi-bug ticket/)![1];
-    const r2 = await suite.cli("ticket", "create", "--project", "default-project", "--title", "Multi-feature ticket");
+    const r2 = await suite.cli("ticket", "create", "--project", TEST_PROJECT_ID, "--title", "Multi-feature ticket");
     const id2 = r2.stdout.match(/#(\S+)\s+Multi-feature ticket/)![1];
 
     const labelList = await suite.cli("label", "list", "--json");

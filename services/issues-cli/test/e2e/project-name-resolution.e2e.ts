@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { setupTestSuite, type TestSuite } from "./helpers.js";
+import { setupTestSuite, type TestSuite, TEST_PROJECT_ID, TEST_PROJECT_NAME } from "./helpers.js";
 
 describe("Project Name Resolution", () => {
   let suite: TestSuite;
@@ -41,11 +41,11 @@ describe("Project Name Resolution", () => {
   });
 
   it("should fall back to literal ID for non-CUID values", async () => {
-    // "default-project" is a literal ID in seed data that doesn't match any project name.
+    // TEST_PROJECT_ID is a literal ID that doesn't match the CUID pattern.
     // When name lookup fails, it falls back to treating the value as a literal ID.
-    const result = await suite.cli("project", "view", "default-project");
+    const result = await suite.cli("project", "view", TEST_PROJECT_ID);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Default");
+    expect(result.stdout).toContain(TEST_PROJECT_NAME);
   });
 
   it("should error for a non-existent project name", async () => {
@@ -110,18 +110,18 @@ describe("Project Name Resolution", () => {
   // --- ticket list with project name ---
 
   it("should list tickets filtered by project name", async () => {
-    // Create a ticket in the default project for comparison
+    // Create a ticket in the fixture project for comparison
     await suite.cli(
       "ticket", "create",
-      "--project", "default-project",
-      "--title", "Default project ticket for name test"
+      "--project", TEST_PROJECT_ID,
+      "--title", "Fixture project ticket for name test"
     );
 
     // List with project name filter
     const result = await suite.cli("ticket", "list", "--project", "My Test Project");
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Ticket via project name");
-    expect(result.stdout).not.toContain("Default project ticket for name test");
+    expect(result.stdout).not.toContain("Fixture project ticket for name test");
   });
 
   // --- backward compatibility: CUID still works ---

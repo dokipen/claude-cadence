@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { setupTestSuite, type TestSuite, TEST_USER_ID } from "./helpers.js";
+import { setupTestSuite, type TestSuite, TEST_USER_ID, TEST_PROJECT_ID } from "./helpers.js";
 
 describe("Assignment Management", () => {
   let suite: TestSuite;
@@ -19,7 +19,7 @@ describe("Assignment Management", () => {
     userId = TEST_USER_ID;
     expect(userId).toBeTruthy();
 
-    const result = await suite.cli("ticket", "create", "--project", "default-project", "--title", "Assignment test ticket");
+    const result = await suite.cli("ticket", "create", "--project", TEST_PROJECT_ID, "--title", "Assignment test ticket");
     expect(result.exitCode).toBe(0);
 
     const idMatch = result.stdout.match(/#(\S+)\s+Assignment test ticket/);

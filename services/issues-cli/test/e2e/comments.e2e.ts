@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { GraphQLClient, gql } from "graphql-request";
-import { setupTestSuite, type TestSuite } from "./helpers.js";
+import { setupTestSuite, type TestSuite, TEST_PROJECT_ID } from "./helpers.js";
 
 describe("Comment Management", () => {
   let suite: TestSuite;
@@ -13,7 +13,7 @@ describe("Comment Management", () => {
     // Test user is created by the test helper (testuser)
 
     // Create a ticket for comment operations
-    const result = await suite.cli("ticket", "create", "--project", "default-project", "--title", "Comment test ticket");
+    const result = await suite.cli("ticket", "create", "--project", TEST_PROJECT_ID, "--title", "Comment test ticket");
     const idMatch = result.stdout.match(/#(\S+)\s+Comment test ticket/);
     ticketId = idMatch![1];
   });
