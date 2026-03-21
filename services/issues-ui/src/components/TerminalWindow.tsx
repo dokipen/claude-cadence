@@ -55,9 +55,9 @@ export function TerminalWindow({
       onDrop={onDrop}
     >
       <div
-        className={`${styles.tileHeader} ${styles.tileHeaderDraggable}`}
+        className={`${styles.tileHeader}${onDragStart ? ` ${styles.tileHeaderDraggable}` : ""}`}
         data-testid="tile-header"
-        draggable
+        draggable={!!onDragStart}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
       >

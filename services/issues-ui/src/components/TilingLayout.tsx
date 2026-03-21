@@ -82,7 +82,7 @@ export function TilingLayout({ windows, onMinimize, onTerminated, onReorder }: T
   const layout = buildLayout(keys);
   const [ratios, setRatios] = useState<Map<string, number>>(new Map());
   const draggingRef = useRef<{ path: string; direction: "horizontal" | "vertical"; startPos: number; startRatio: number; containerSize: number } | null>(null);
-  const [dragKey, setDragKey] = useState<string | null>(null);
+  const dragKeyRef = useRef<string | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
 
   // Prune stale ratio entries when layout changes
@@ -160,11 +160,11 @@ export function TilingLayout({ windows, onMinimize, onTerminated, onReorder }: T
           agentName={win.agentName}
           onMinimize={() => onMinimize(win.key)}
           onTerminated={() => onTerminated(win.key)}
-          onDragStart={() => setDragKey(win.key)}
-          onDragEnd={() => { setDragKey(null); setDragOverKey(null); }}
-          onDragOver={(e) => { e.preventDefault(); if (dragKey && dragKey !== win.key) setDragOverKey(win.key); }}
-          onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverKey(null); }}
-          onDrop={(e) => { e.preventDefault(); if (dragKey && dragKey !== win.key && onReorder) { onReorder(dragKey, win.key); } setDragKey(null); setDragOverKey(null); }}
+          onDragStart={() => { dragKeyRef.current = win.key; }}
+          onDragEnd={() => { dragKeyRef.current = null; setDragOverKey(null); }}
+          onDragOver={(e) => { e.preventDefault(); if (dragKeyRef.current && dragKeyRef.current !== win.key) setDragOverKey(win.key); }}
+          onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOverKey(null); }}
+          onDrop={(e) => { e.preventDefault(); if (dragKeyRef.current && dragKeyRef.current !== win.key && onReorder) { onReorder(dragKeyRef.current, win.key); } dragKeyRef.current = null; setDragOverKey(null); }}
           isDragOver={dragOverKey === win.key}
         />
       );
