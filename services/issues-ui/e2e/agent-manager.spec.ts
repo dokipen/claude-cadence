@@ -392,19 +392,23 @@ test.describe("agent manager page", () => {
     await expect(page.getByTestId("sidebar-session")).toHaveCount(3, { timeout: 15000 });
   });
 
-  test("persistence: collapsed state survives navigation", async ({ page }) => {
-    // Seed localStorage with the collapsed state before page load
-    await page.addInitScript(() => {
-      localStorage.setItem("cadence_sidebar_collapsed", "true");
-    });
-
+  test("collapsed state persists after navigating away and back", async ({ page }) => {
     await page.goto("/agents");
 
-    // Sidebar should start collapsed because localStorage was pre-seeded
+    // Sidebar should start expanded (normal state)
+    await expect(page.getByTestId("sidebar-toggle")).toHaveAttribute("aria-expanded", "true");
+
+    // Collapse the sidebar
+    await page.getByTestId("sidebar-toggle").click();
     await expect(page.getByTestId("sidebar-toggle")).toHaveAttribute("aria-expanded", "false");
 
-    // Session content should not be rendered
-    await expect(page.getByTestId("sidebar-agent")).toHaveCount(0);
-    await expect(page.getByTestId("sidebar-session")).toHaveCount(0);
+    // Navigate away to a different route
+    await page.goto("/");
+
+    // Navigate back to /agents
+    await page.goto("/agents");
+
+    // Sidebar should still be collapsed — localStorage persisted the state
+    await expect(page.getByTestId("sidebar-toggle")).toHaveAttribute("aria-expanded", "false");
   });
 });
