@@ -12,6 +12,16 @@
 #   everything else → issues-ui (Vite dev server, port 5173)
 
 :80 {
+	# Security response headers
+	header {
+		-Server
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://avatars.githubusercontent.com; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), accelerometer=(), gyroscope=(), magnetometer=(), display-capture=(), fullscreen=(), picture-in-picture=(), screen-wake-lock=(), web-share=(), interest-cohort=()"
+	}
+
 	# Issues service — GraphQL API
 	handle /graphql {
 		reverse_proxy issues:4000
