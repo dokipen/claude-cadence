@@ -5,8 +5,8 @@ An issue-driven, multi-agent development workflow plugin for Claude Code.
 ## What This Plugin Provides
 
 ### Commands (user-invoked slash commands)
-- `/lead` — Coordinate implementation through structured phases with specialist agents
-- `/refine` — Refine GitHub issues to quality standards
+- `/lead N` — Coordinate implementation through structured phases with specialist agents
+- `/refine N` — Refine GitHub issues to quality standards
 
 ### Skills (model-invoked)
 - `new-work` — Create git worktrees for isolated feature development
@@ -80,7 +80,7 @@ Bump the `version` field in `.claude-plugin/plugin.json` only when preparing a r
 
 ## Workflow Rules
 
-These rules reduce ambiguity for contributors and agents working on this plugin.
+These rules reduce ambiguity for contributors and agents working in this repo and in projects integrating Claude Cadence.
 
 ### Command Intent
 
@@ -88,11 +88,11 @@ Each command has a specific intent — do not conflate them:
 
 - `/lead N` — **Implement** issue N end-to-end through all workflow phases
 - `/refine N` — **Refine** issue N to quality standards; do not start implementation
-- Requests like "create a ticket for X" or "open an issue for X" — **create the ticket only**; do not start implementation unless explicitly asked
+- "create a ticket for X" / "open an issue for X" — **Create the ticket only**; do not start implementation unless explicitly asked
 
 ### Target Project Confirmation
 
-When a prompt is ambiguous about which project to target (e.g., "create a ticket for X" without specifying where), **always confirm the target project** before creating tickets or starting work. The default project for this repo is `claude-cadence`. If context suggests a different consuming project, ask before acting.
+When a prompt is ambiguous about which project to target (e.g., "create a ticket for X" without specifying where), **always confirm the target project** before creating tickets or starting work. The default project for this repo is `claude-cadence`. If context suggests a different consuming project, confirm before proceeding.
 
 ### Recommended Conventions for Consuming Projects
 
