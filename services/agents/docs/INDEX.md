@@ -9,5 +9,4 @@
 ## Quick Links
 
 - **Config example**: [`config.example.yaml`](../config.example.yaml)
-- **Proto definition**: [`proto/agents/v1/agents.proto`](../proto/agents/v1/agents.proto)
 - **Makefile targets**: [`Makefile`](../Makefile)

@@ -2,16 +2,16 @@
 
 ## Context
 
-The cadence project needs a gRPC service that manages AI agent sessions. The service handles the full agent lifecycle: loading configured agent profiles, managing git repository clones, creating isolated worktree environments, and launching agent processes in tmux sessions with optional web-based terminal access via ttyd.
+The cadence project needs a service that manages AI agent sessions. The service handles the full agent lifecycle: loading configured agent profiles, managing git repository clones, creating isolated worktree environments, and launching agent processes in tmux sessions with optional web-based terminal access via ttyd.
 
-This enables running multiple concurrent agent sessions, each in their own isolated git worktree, observable via browser, and manageable through a gRPC API. The service runs as a system daemon (launchd on macOS, systemd on Linux) on bare metal -- not containerized, since it manages tmux sessions directly.
+This enables running multiple concurrent agent sessions, each in their own isolated git worktree, observable via browser, and manageable through the agent-hub API. The service runs as a system daemon (launchd on macOS, systemd on Linux) on bare metal -- not containerized, since it manages tmux sessions directly.
 
 ## Architecture Decisions
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Language | Go | First-class gRPC, single static binary, excellent process management, fast startup for system daemon |
-| API | gRPC (proto3) | User requirement. Clean typed API with codegen |
+| Language | Go | Single static binary, excellent process management, fast startup for system daemon |
+| API | JSON-RPC over hub WebSocket | Session commands dispatched through agent-hub reverse connection |
 | Config | YAML | Standard for Go services, supports comments, human-readable |
 | Session management | tmux | User requirement. Dedicated socket (`agentd`) isolates from user tmux |
 | Web terminal | ttyd | Exposes tmux sessions as websocket-backed terminals in browser |
@@ -23,21 +23,12 @@ This enables running multiple concurrent agent sessions, each in their own isola
 
 ```
 services/agents/
-├── proto/
-│   └── agents/v1/
-│       └── agents.proto              # gRPC service definition
-├── gen/
-│   └── agents/v1/                        # Generated proto Go code (protoc output)
 ├── cmd/
 │   └── agentd/
 │       └── main.go                   # Entry point, config load, graceful shutdown
 ├── internal/
 │   ├── config/
 │   │   └── config.go                 # YAML config loading + validation
-│   ├── server/
-│   │   └── server.go                 # gRPC server setup, interceptors
-│   ├── service/
-│   │   └── agent_service.go          # RPC implementations
 │   ├── tmux/
 │   │   └── tmux.go                   # Session create/destroy/list/has-session
 │   ├── git/
@@ -78,120 +69,29 @@ services/agents/
 └── README.md
 ```
 
-## gRPC API
+## API
 
-```protobuf
-syntax = "proto3";
+agentd no longer exposes a direct gRPC port. Session management is dispatched through the agent-hub WebSocket reverse connection using JSON-RPC. The API surface is defined in `services/agents/internal/hub/dispatch.go`.
 
-package agents.v1;
+### JSON-RPC Methods
 
-option go_package = "services/agents/gen/agents/v1;agentsv1";
+| Method | Description |
+|--------|-------------|
+| `createSession` | Launch an agent in a new tmux session |
+| `getSession` | Get current state of a session (reconciled with tmux) |
+| `listSessions` | List sessions with optional profile/state filters |
+| `destroySession` | Kill tmux session, clean up worktree, remove state |
+| `getTerminalEndpoint` | Get terminal relay or URL for a session |
 
-import "google/protobuf/timestamp.proto";
-import "google/protobuf/empty.proto";
-
-service AgentService {
-  // CreateSession launches an agent in a new tmux session.
-  // In later phases: clones repo, creates worktree, starts ttyd.
-  rpc CreateSession(CreateSessionRequest) returns (CreateSessionResponse);
-
-  // GetSession returns the current state of a session.
-  // Reconciles in-memory state with tmux reality.
-  rpc GetSession(GetSessionRequest) returns (GetSessionResponse);
-
-  // ListSessions returns all tracked sessions, optionally filtered.
-  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
-
-  // DestroySession kills the tmux session, cleans up worktree,
-  // stops ttyd, and removes session state.
-  rpc DestroySession(DestroySessionRequest) returns (google.protobuf.Empty);
-}
-
-message CreateSessionRequest {
-  // Agent profile name from config (e.g. "claude-reviewer", "gemini-agent").
-  // Each profile defines a command template + repo pairing.
-  string agent_profile = 1;
-
-  // Human-readable session name. Becomes the tmux session name.
-  // Must be unique among active sessions. Validated for tmux-safe chars.
-  // If empty, auto-generated: {profile}-{unix_timestamp}.
-  string session_name = 2;
-
-  // Optional git ref to base the worktree on. Defaults to default branch.
-  string base_ref = 3;
-
-  // Optional env vars injected into the tmux session.
-  map<string, string> env = 4;
-
-  // Optional args appended to the command template.
-  // Each arg is individually shell-escaped (single-quoted) before joining.
-  // Validated: no null bytes, max 64 args, max 4096 bytes each.
-  repeated string extra_args = 5;
-}
-
-message CreateSessionResponse {
-  Session session = 1;
-}
-
-message GetSessionRequest {
-  string session_id = 1;
-}
-
-message GetSessionResponse {
-  Session session = 1;
-}
-
-message ListSessionsRequest {
-  // Filter by profile name. Empty returns all.
-  string agent_profile = 1;
-  // Filter by state. UNSPECIFIED returns all.
-  SessionState state = 2;
-}
-
-message ListSessionsResponse {
-  repeated Session sessions = 1;
-}
-
-message DestroySessionRequest {
-  string session_id = 1;
-  // If true, forcibly kill even if process is running.
-  // If false and process is running, returns FAILED_PRECONDITION.
-  bool force = 2;
-}
-
-message Session {
-  string id = 1;                            // UUID v4
-  string name = 2;                          // Human-readable, tmux session name
-  string agent_profile = 3;
-  SessionState state = 4;
-  string worktree_path = 5;                 // Absolute path (empty until git phase)
-  string repo_url = 6;                      // From profile config
-  string base_ref = 7;                      // Git ref worktree was based on
-  string tmux_session = 8;                  // tmux session identifier
-  google.protobuf.Timestamp created_at = 9;
-  string error_message = 10;               // Set when state=ERROR
-  int32 agent_pid = 11;                    // PID inside tmux (0 if not running)
-  string websocket_url = 12;               // ttyd URL (empty until websocket phase)
-}
-
-enum SessionState {
-  SESSION_STATE_UNSPECIFIED = 0;
-  SESSION_STATE_CREATING = 1;
-  SESSION_STATE_RUNNING = 2;
-  SESSION_STATE_STOPPED = 3;    // Agent process exited
-  SESSION_STATE_ERROR = 4;
-  SESSION_STATE_DESTROYING = 5;
-}
-```
+Requests are dispatched by agent-hub over the WebSocket connection that agentd maintains to the hub. agentd does not accept inbound connections.
 
 ## Configuration Schema
 
 ```yaml
 # ~/.config/agentd/config.yaml
 
-# Network binding
+# Network binding (loopback only — agentd does not accept inbound connections)
 host: "127.0.0.1"
-port: 4141
 
 # Root directory for git clones and worktrees
 root_dir: "/var/lib/agentd"
@@ -303,11 +203,11 @@ Look up by ID. Reconcile with tmux:
 
 ## E2E Testing Strategy
 
-Tests use Go's built-in `testing` package. The gRPC server runs **in-process** (not as a subprocess) for coverage and simplicity.
+Tests use Go's built-in `testing` package. The session manager runs **in-process** (not as a subprocess) for coverage and simplicity.
 
 ### Test infrastructure (`helpers_test.go`)
-- `TestMain`: starts gRPC server on random port, creates test config, tears down after all tests
-- `newTestClient(t)`: creates a gRPC client connection with `t.Cleanup`
+- `TestMain`: starts session manager with test config, tears down after all tests
+- `newTestClient(t)`: creates a test dispatcher backed by the session manager with `t.Cleanup`
 - `uniqueSessionName(t)`: generates `e2e-{TestName}-{nanos}` to prevent collisions
 - `tmuxSessionExists(name)`: independent tmux verification via `tmux has-session`
 - `cleanupAllTestSessions()`: safety net that kills all `e2e-` prefixed tmux sessions
@@ -343,7 +243,6 @@ profiles:
    - User to run as (default: current user, option to create new)
    - Root directory (default: `/var/lib/agentd`)
    - Host (default: `127.0.0.1`)
-   - Port (default: `4141`)
 3. **Verify prerequisites**: git, tmux installed. Warn if vault CLI missing.
 4. **Build/copy binary** to `/usr/local/bin/agentd`
 5. **Create directories**: root_dir/repos, root_dir/worktrees, config dir
@@ -351,7 +250,7 @@ profiles:
 7. **Install service**:
    - macOS: render `agentd.plist.tmpl` -> `~/Library/LaunchAgents/com.cadence.agentd.plist`, `launchctl load`
    - Linux: render `agentd.service.tmpl` -> `/etc/systemd/system/agentd.service`, `systemctl enable && start`
-8. **Verify**: health check the gRPC endpoint
+8. **Verify**: check that the agentd process is running
 
 ## Implementation Phases (GitHub Issues)
 
@@ -360,10 +259,10 @@ profiles:
 
 Create the `services/agents/docs/` directory, drop the plan into it, create the GitHub milestone and all phase issues. This issue is the foundation that all other issues reference for context.
 
-### Phase 1: Steel Thread -- gRPC + Config + Tmux Session CRUD (est: 5)
+### Phase 1: Steel Thread -- Config + Tmux Session CRUD (est: 5)
 **Blocked by:** Phase 0
 
-Proves the core control plane: gRPC server starts, CreateSession starts a process in tmux, Get/List/Destroy work, e2e tests pass. No git, no vault, no ttyd, no install script.
+Proves the core control plane: session manager starts, CreateSession starts a process in tmux, Get/List/Destroy work, e2e tests pass. No git, no vault, no ttyd, no install script.
 
 ### Phase 2: Git Repository Management + Worktrees (est: 5)
 **Blocked by:** Phase 1
@@ -402,7 +301,7 @@ Plugin skill integration, full documentation, and GitHub Actions CI.
 | Phase | Est | Description | Depends on |
 |-------|-----|-------------|------------|
 | 0 | 1 | Project setup: docs, plan, issue scaffolding | -- |
-| 1 | 5 | Steel thread: gRPC + config + tmux CRUD | Phase 0 |
+| 1 | 5 | Steel thread: config + tmux CRUD | Phase 0 |
 | 2 | 5 | Git repository management + worktrees | Phase 1 |
 | 3 | 3 | Vault integration | Phase 2 |
 | 4 | 3 | ttyd web terminal access | Phase 1 |
@@ -416,8 +315,6 @@ Phases 4, 5, 6 are independent of each other (all only depend on Phase 1), so th
 
 ## Key Dependencies (Go modules)
 
-- `google.golang.org/grpc` -- gRPC server
-- `google.golang.org/protobuf` -- proto runtime
 - `gopkg.in/yaml.v3` -- config loading
 - `github.com/google/uuid` -- session IDs
 - `github.com/hashicorp/vault/api` -- Vault client (Phase 3)

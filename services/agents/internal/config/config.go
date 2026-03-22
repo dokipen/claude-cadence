@@ -86,19 +86,16 @@ func (h *HubConfig) ResolveToken() string {
 
 // Config is the top-level agentd configuration.
 type Config struct {
-	Host       string             `yaml:"host"`
-	Port       int                `yaml:"port"`
-	RootDir    string             `yaml:"root_dir"`
-	Tmux       TmuxConfig         `yaml:"tmux"` // Deprecated: unused after tmux removal
-	Ttyd       TtydConfig         `yaml:"ttyd"` // Deprecated: unused after tmux removal
-	PTY        PTYConfig          `yaml:"pty"`
-	Log        LogConfig          `yaml:"log"`
-	Profiles   map[string]Profile `yaml:"profiles"`
-	Auth       AuthConfig         `yaml:"auth"`
-	Vault      *VaultConfig       `yaml:"vault"`
-	Reflection bool               `yaml:"reflection"`
-	Cleanup    CleanupConfig      `yaml:"cleanup"`
-	Hub        *HubConfig         `yaml:"hub"`
+	RootDir  string             `yaml:"root_dir"`
+	Tmux     TmuxConfig         `yaml:"tmux"` // Deprecated: unused after tmux removal
+	Ttyd     TtydConfig         `yaml:"ttyd"` // Deprecated: unused after tmux removal
+	PTY      PTYConfig          `yaml:"pty"`
+	Log      LogConfig          `yaml:"log"`
+	Profiles map[string]Profile `yaml:"profiles"`
+	Auth     AuthConfig         `yaml:"auth"`
+	Vault    *VaultConfig       `yaml:"vault"`
+	Cleanup  CleanupConfig      `yaml:"cleanup"`
+	Hub      *HubConfig         `yaml:"hub"`
 }
 
 // CleanupConfig holds stale session cleanup settings.
@@ -170,12 +167,6 @@ func Load(path string) (*Config, error) {
 }
 
 func applyDefaults(cfg *Config) {
-	if cfg.Host == "" {
-		cfg.Host = "127.0.0.1"
-	}
-	if cfg.Port == 0 {
-		cfg.Port = 4141
-	}
 	if cfg.Log.Level == "" {
 		cfg.Log.Level = "info"
 	}
@@ -241,13 +232,6 @@ func validate(cfg *Config) error {
 	// Validate ttyd.advertise_address format to prevent URL injection.
 	if addr := cfg.Ttyd.AdvertiseAddress; addr != "" && strings.ContainsAny(addr, "/?#@") {
 		return fmt.Errorf("ttyd.advertise_address: %q is not a valid host or host:port value", addr)
-	}
-
-	// Require authentication for non-loopback bindings.
-	if cfg.Host != "127.0.0.1" && cfg.Host != "localhost" && cfg.Host != "::1" {
-		if cfg.Auth.Mode == "none" {
-			return fmt.Errorf("authentication required for non-localhost bindings")
-		}
 	}
 
 	// Cleanup validation.

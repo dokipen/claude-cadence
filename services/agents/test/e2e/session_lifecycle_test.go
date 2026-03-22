@@ -2,6 +2,7 @@ package e2e_test
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"strings"
@@ -9,186 +10,149 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	agentsv1 "github.com/dokipen/claude-cadence/services/agents/gen/agents/v1"
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
 	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 func TestCreateSession_Success(t *testing.T) {
-	client := newTestClient(t)
-	ctx := context.Background()
 	name := uniqueSessionName(t)
 
-	resp, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	sess, err := testMgr.Create(session.CreateRequest{
 		AgentProfile: "sleeper",
 		SessionName:  name,
 	})
 	if err != nil {
-		t.Fatalf("CreateSession: %v", err)
+		t.Fatalf("Create: %v", err)
 	}
 
 	t.Cleanup(func() {
-		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-			SessionId: resp.GetSession().GetId(),
-			Force:     true,
-		})
+		testMgr.Destroy(sess.ID, true)
 	})
 
-	sess := resp.GetSession()
-	if sess.GetId() == "" {
+	if sess.ID == "" {
 		t.Error("expected non-empty session ID")
 	}
-	if sess.GetName() != name {
-		t.Errorf("expected name %q, got %q", name, sess.GetName())
+	if sess.Name != name {
+		t.Errorf("expected name %q, got %q", name, sess.Name)
 	}
-	if sess.GetState() != agentsv1.SessionState_SESSION_STATE_RUNNING {
-		t.Errorf("expected state RUNNING, got %v", sess.GetState())
+	if sess.State != session.StateRunning {
+		t.Errorf("expected state RUNNING, got %v", sess.State)
 	}
-	if sess.GetAgentProfile() != "sleeper" {
-		t.Errorf("expected agent_profile %q, got %q", "sleeper", sess.GetAgentProfile())
+	if sess.AgentProfile != "sleeper" {
+		t.Errorf("expected agent_profile %q, got %q", "sleeper", sess.AgentProfile)
 	}
 }
 
 func TestCreateSession_DuplicateName(t *testing.T) {
-	client := newTestClient(t)
-	ctx := context.Background()
 	name := uniqueSessionName(t)
 
-	resp, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	sess, err := testMgr.Create(session.CreateRequest{
 		AgentProfile: "sleeper",
 		SessionName:  name,
 	})
 	if err != nil {
-		t.Fatalf("first CreateSession: %v", err)
+		t.Fatalf("first Create: %v", err)
 	}
 
 	t.Cleanup(func() {
-		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-			SessionId: resp.GetSession().GetId(),
-			Force:     true,
-		})
+		testMgr.Destroy(sess.ID, true)
 	})
 
-	_, err = client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	_, err = testMgr.Create(session.CreateRequest{
 		AgentProfile: "sleeper",
 		SessionName:  name,
 	})
 	if err == nil {
 		t.Fatal("expected error on duplicate name, got nil")
 	}
-	if code := status.Code(err); code != codes.AlreadyExists {
-		t.Errorf("expected AlreadyExists, got %v", code)
+	var sessErr *session.Error
+	if !errors.As(err, &sessErr) || sessErr.Code != session.ErrAlreadyExists {
+		t.Errorf("expected ErrAlreadyExists, got %v", err)
 	}
 }
 
 func TestCreateSession_InvalidProfile(t *testing.T) {
-	client := newTestClient(t)
-	ctx := context.Background()
-
-	_, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	_, err := testMgr.Create(session.CreateRequest{
 		AgentProfile: "nonexistent",
 		SessionName:  uniqueSessionName(t),
 	})
 	if err == nil {
 		t.Fatal("expected error for unknown profile, got nil")
 	}
-	if code := status.Code(err); code != codes.NotFound {
-		t.Errorf("expected NotFound, got %v", code)
+	var sessErr *session.Error
+	if !errors.As(err, &sessErr) || sessErr.Code != session.ErrNotFound {
+		t.Errorf("expected ErrNotFound, got %v", err)
 	}
 }
 
 func TestCreateSession_AutoName(t *testing.T) {
-	client := newTestClient(t)
-	ctx := context.Background()
-
-	resp, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	sess, err := testMgr.Create(session.CreateRequest{
 		AgentProfile: "sleeper",
 		SessionName:  "",
 	})
 	if err != nil {
-		t.Fatalf("CreateSession with empty name: %v", err)
+		t.Fatalf("Create with empty name: %v", err)
 	}
 
 	t.Cleanup(func() {
-		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-			SessionId: resp.GetSession().GetId(),
-			Force:     true,
-		})
+		testMgr.Destroy(sess.ID, true)
 	})
 
-	if resp.GetSession().GetName() == "" {
+	if sess.Name == "" {
 		t.Error("expected auto-generated non-empty session name")
 	}
 }
 
 func TestGetSession_Running(t *testing.T) {
-	client := newTestClient(t)
-	ctx := context.Background()
 	name := uniqueSessionName(t)
 
-	createResp, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	sess, err := testMgr.Create(session.CreateRequest{
 		AgentProfile: "sleeper",
 		SessionName:  name,
 	})
 	if err != nil {
-		t.Fatalf("CreateSession: %v", err)
+		t.Fatalf("Create: %v", err)
 	}
-	sessionID := createResp.GetSession().GetId()
 
 	t.Cleanup(func() {
-		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-			SessionId: sessionID,
-			Force:     true,
-		})
+		testMgr.Destroy(sess.ID, true)
 	})
 
-	getResp, err := client.GetSession(ctx, &agentsv1.GetSessionRequest{
-		SessionId: sessionID,
-	})
+	got, err := testMgr.Get(sess.ID)
 	if err != nil {
-		t.Fatalf("GetSession: %v", err)
+		t.Fatalf("Get: %v", err)
 	}
-	if getResp.GetSession().GetState() != agentsv1.SessionState_SESSION_STATE_RUNNING {
-		t.Errorf("expected state RUNNING, got %v", getResp.GetSession().GetState())
+	if got.State != session.StateRunning {
+		t.Errorf("expected state RUNNING, got %v", got.State)
 	}
 }
 
 func TestGetSession_Stopped(t *testing.T) {
-	client := newTestClient(t)
-	ctx := context.Background()
 	name := uniqueSessionName(t)
 
-	createResp, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	sess, err := testMgr.Create(session.CreateRequest{
 		AgentProfile: "fast-exit",
 		SessionName:  name,
 	})
 	if err != nil {
-		t.Fatalf("CreateSession: %v", err)
+		t.Fatalf("Create: %v", err)
 	}
-	sessionID := createResp.GetSession().GetId()
 
 	t.Cleanup(func() {
-		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-			SessionId: sessionID,
-			Force:     true,
-		})
+		testMgr.Destroy(sess.ID, true)
 	})
 
 	// Poll until the session transitions to STOPPED (process exits).
 	deadline := time.Now().Add(5 * time.Second)
-	var lastState agentsv1.SessionState
+	var lastState session.SessionState
 	for time.Now().Before(deadline) {
-		getResp, err := client.GetSession(ctx, &agentsv1.GetSessionRequest{
-			SessionId: sessionID,
-		})
+		got, err := testMgr.Get(sess.ID)
 		if err != nil {
-			t.Fatalf("GetSession: %v", err)
+			t.Fatalf("Get: %v", err)
 		}
-		lastState = getResp.GetSession().GetState()
-		if lastState == agentsv1.SessionState_SESSION_STATE_STOPPED {
+		lastState = got.State
+		if lastState == session.StateStopped {
 			return
 		}
 		time.Sleep(250 * time.Millisecond)
@@ -197,199 +161,155 @@ func TestGetSession_Stopped(t *testing.T) {
 }
 
 func TestGetSession_NotFound(t *testing.T) {
-	client := newTestClient(t)
-	ctx := context.Background()
-
-	_, err := client.GetSession(ctx, &agentsv1.GetSessionRequest{
-		SessionId: "nonexistent-uuid",
-	})
+	_, err := testMgr.Get("nonexistent-uuid")
 	if err == nil {
 		t.Fatal("expected error for nonexistent session ID, got nil")
 	}
-	if code := status.Code(err); code != codes.NotFound {
-		t.Errorf("expected NotFound, got %v", code)
+	var sessErr *session.Error
+	if !errors.As(err, &sessErr) || sessErr.Code != session.ErrNotFound {
+		t.Errorf("expected ErrNotFound, got %v", err)
 	}
 }
 
 func TestListSessions_Empty(t *testing.T) {
-	client := newTestClient(t)
-	ctx := context.Background()
-
 	// Use a profile filter that would only match sessions with a fake profile
 	// that does not exist, ensuring an empty result even if other tests created sessions.
-	resp, err := client.ListSessions(ctx, &agentsv1.ListSessionsRequest{
-		AgentProfile: "no-such-profile-xyz",
-	})
+	sessions, err := testMgr.List("no-such-profile-xyz")
 	if err != nil {
-		t.Fatalf("ListSessions: %v", err)
+		t.Fatalf("List: %v", err)
 	}
-	if len(resp.GetSessions()) != 0 {
-		t.Errorf("expected 0 sessions, got %d", len(resp.GetSessions()))
+	if len(sessions) != 0 {
+		t.Errorf("expected 0 sessions, got %d", len(sessions))
 	}
 }
 
 func TestListSessions_Multiple(t *testing.T) {
-	client := newTestClient(t)
-	ctx := context.Background()
 	name1 := uniqueSessionName(t)
 	name2 := uniqueSessionName(t)
 
-	resp1, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	sess1, err := testMgr.Create(session.CreateRequest{
 		AgentProfile: "sleeper",
 		SessionName:  name1,
 	})
 	if err != nil {
-		t.Fatalf("CreateSession 1: %v", err)
+		t.Fatalf("Create 1: %v", err)
 	}
 	t.Cleanup(func() {
-		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-			SessionId: resp1.GetSession().GetId(),
-			Force:     true,
-		})
+		testMgr.Destroy(sess1.ID, true)
 	})
 
-	resp2, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	sess2, err := testMgr.Create(session.CreateRequest{
 		AgentProfile: "sleeper",
 		SessionName:  name2,
 	})
 	if err != nil {
-		t.Fatalf("CreateSession 2: %v", err)
+		t.Fatalf("Create 2: %v", err)
 	}
 	t.Cleanup(func() {
-		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-			SessionId: resp2.GetSession().GetId(),
-			Force:     true,
-		})
+		testMgr.Destroy(sess2.ID, true)
 	})
 
-	listResp, err := client.ListSessions(ctx, &agentsv1.ListSessionsRequest{})
+	sessions, err := testMgr.List("")
 	if err != nil {
-		t.Fatalf("ListSessions: %v", err)
+		t.Fatalf("List: %v", err)
 	}
 
-	id1 := resp1.GetSession().GetId()
-	id2 := resp2.GetSession().GetId()
 	found := make(map[string]bool)
-	for _, s := range listResp.GetSessions() {
-		if s.GetId() == id1 || s.GetId() == id2 {
-			found[s.GetId()] = true
+	for _, s := range sessions {
+		if s.ID == sess1.ID || s.ID == sess2.ID {
+			found[s.ID] = true
 		}
 	}
-	if !found[id1] {
-		t.Errorf("session %q not found in list", id1)
+	if !found[sess1.ID] {
+		t.Errorf("session %q not found in list", sess1.ID)
 	}
-	if !found[id2] {
-		t.Errorf("session %q not found in list", id2)
+	if !found[sess2.ID] {
+		t.Errorf("session %q not found in list", sess2.ID)
 	}
 }
 
 func TestListSessions_FilterByProfile(t *testing.T) {
-	client := newTestClient(t)
-	ctx := context.Background()
 	sleeperName := uniqueSessionName(t)
 	echoName := uniqueSessionName(t)
 
-	sleeperResp, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	sleeperSess, err := testMgr.Create(session.CreateRequest{
 		AgentProfile: "sleeper",
 		SessionName:  sleeperName,
 	})
 	if err != nil {
-		t.Fatalf("CreateSession sleeper: %v", err)
+		t.Fatalf("Create sleeper: %v", err)
 	}
 	t.Cleanup(func() {
-		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-			SessionId: sleeperResp.GetSession().GetId(),
-			Force:     true,
-		})
+		testMgr.Destroy(sleeperSess.ID, true)
 	})
 
-	echoResp, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	echoSess, err := testMgr.Create(session.CreateRequest{
 		AgentProfile: "echo-and-exit",
 		SessionName:  echoName,
 	})
 	if err != nil {
-		t.Fatalf("CreateSession echo-and-exit: %v", err)
+		t.Fatalf("Create echo-and-exit: %v", err)
 	}
 	t.Cleanup(func() {
-		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-			SessionId: echoResp.GetSession().GetId(),
-			Force:     true,
-		})
+		testMgr.Destroy(echoSess.ID, true)
 	})
 
-	listResp, err := client.ListSessions(ctx, &agentsv1.ListSessionsRequest{
-		AgentProfile: "sleeper",
-	})
+	sessions, err := testMgr.List("sleeper")
 	if err != nil {
-		t.Fatalf("ListSessions with filter: %v", err)
+		t.Fatalf("List with filter: %v", err)
 	}
 
-	sleeperID := sleeperResp.GetSession().GetId()
-	echoID := echoResp.GetSession().GetId()
 	foundSleeper := false
 	foundEcho := false
-	for _, s := range listResp.GetSessions() {
-		if s.GetId() == sleeperID {
+	for _, s := range sessions {
+		if s.ID == sleeperSess.ID {
 			foundSleeper = true
 		}
-		if s.GetId() == echoID {
+		if s.ID == echoSess.ID {
 			foundEcho = true
 		}
 	}
 	if !foundSleeper {
-		t.Errorf("sleeper session %q not found in filtered list", sleeperID)
+		t.Errorf("sleeper session %q not found in filtered list", sleeperSess.ID)
 	}
 	if foundEcho {
-		t.Errorf("echo-and-exit session %q should not appear in sleeper-filtered list", echoID)
+		t.Errorf("echo-and-exit session %q should not appear in sleeper-filtered list", echoSess.ID)
 	}
 }
 
 func TestDestroySession_Force(t *testing.T) {
-	client := newTestClient(t)
-	ctx := context.Background()
 	name := uniqueSessionName(t)
 
-	createResp, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	sess, err := testMgr.Create(session.CreateRequest{
 		AgentProfile: "sleeper",
 		SessionName:  name,
 	})
 	if err != nil {
-		t.Fatalf("CreateSession: %v", err)
-	}
-	sessionID := createResp.GetSession().GetId()
-
-	_, err = client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-		SessionId: sessionID,
-		Force:     true,
-	})
-	if err != nil {
-		t.Fatalf("DestroySession: %v", err)
+		t.Fatalf("Create: %v", err)
 	}
 
-	_, err = client.GetSession(ctx, &agentsv1.GetSessionRequest{
-		SessionId: sessionID,
-	})
+	if err := testMgr.Destroy(sess.ID, true); err != nil {
+		t.Fatalf("Destroy: %v", err)
+	}
+
+	_, err = testMgr.Get(sess.ID)
 	if err == nil {
-		t.Fatal("expected GetSession to return error after destroy, got nil")
+		t.Fatal("expected Get to return error after destroy, got nil")
 	}
-	if code := status.Code(err); code != codes.NotFound {
-		t.Errorf("expected NotFound after destroy, got %v", code)
+	var sessErr *session.Error
+	if !errors.As(err, &sessErr) || sessErr.Code != session.ErrNotFound {
+		t.Errorf("expected ErrNotFound after destroy, got %v", err)
 	}
 }
 
 func TestDestroySession_NotFound(t *testing.T) {
-	client := newTestClient(t)
-	ctx := context.Background()
-
-	_, err := client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-		SessionId: "nonexistent-uuid",
-		Force:     true,
-	})
+	err := testMgr.Destroy("nonexistent-uuid", true)
 	if err == nil {
 		t.Fatal("expected error for nonexistent session ID, got nil")
 	}
-	if code := status.Code(err); code != codes.NotFound {
-		t.Errorf("expected NotFound, got %v", code)
+	var sessErr *session.Error
+	if !errors.As(err, &sessErr) || sessErr.Code != session.ErrNotFound {
+		t.Errorf("expected ErrNotFound, got %v", err)
 	}
 }
 

@@ -76,7 +76,7 @@ if [ ! -f "$AGENTD_CONFIG" ] || ! grep -v '^\s*#' "$AGENTD_CONFIG" 2>/dev/null |
   warn "agentd token authentication is not configured."
   printf '\n' >&2
   warn "  This Caddy site block forwards external traffic to agentd on localhost,"
-  warn "  bypassing agentd's bind-address guard. Without token auth, the gRPC API"
+  warn "  bypassing agentd's bind-address guard. Without token auth, the hub API"
   warn "  will be accessible to anyone on the network without authentication."
   printf '\n' >&2
   warn "  To fix, set auth.mode to \"token\" in:"
@@ -106,7 +106,7 @@ ${vhost} {
 	# Rate limiting — per client IP, 300 requests per minute on API routes only.
 	# Static assets, WebSocket connections, and SPA files are exempt.
 	# Requires the caddy-ratelimit module (github.com/mholt/caddy-ratelimit).
-	@api path_regexp ^/(graphql|api/v1/|agents\.v1\.)
+	@api path_regexp ^/(graphql|api/v1/)
 	rate_limit @api {
 		zone api_zone {
 			key    {http.request.remote.host}
@@ -128,16 +128,6 @@ ${vhost} {
 	# Issues service — GraphQL API
 	handle /graphql {
 		reverse_proxy localhost:4000
-	}
-
-	# Agents service — gRPC
-	@grpc path_regexp ^/agents\.v1\.
-	handle @grpc {
-		reverse_proxy localhost:4141 {
-			transport http {
-				versions h2c
-			}
-		}
 	}
 
 	# Agent Hub — REST API
@@ -193,5 +183,4 @@ sudo systemctl reload caddy
 log "Done! Services available at:"
 log "  https://${vhost}/          — Issues UI"
 log "  https://${vhost}/graphql   — Issues GraphQL API"
-log "  https://${vhost}/agents.v1.AgentService/<Method>  — Agents gRPC endpoint"
 log "  https://${vhost}/api/v1/   — Agent Hub REST API"

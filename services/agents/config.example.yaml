@@ -1,10 +1,6 @@
 # agentd configuration example
 # Copy to ~/.config/agentd/config.yaml and customize.
 
-# Network binding
-host: "127.0.0.1"
-port: 4141
-
 # Root directory for git clones and worktrees
 root_dir: "/var/lib/agentd"
 

@@ -13,7 +13,6 @@ An interactive install script configures the agent service as a system daemon us
 - As a user, I'm offered the option to create a new system user for the service
 - As a user, I'm prompted for the root directory (default: `/var/lib/agentd`)
 - As a user, I'm prompted for the host binding (default: `127.0.0.1`)
-- As a user, I'm prompted for the port (default: `4141`)
 - As a user, the installer verifies prerequisites (git) and warns about optional dependencies (vault)
 
 ### macOS (launchd)
@@ -34,7 +33,7 @@ An interactive install script configures the agent service as a system daemon us
 - As a user, the uninstaller stops the service, removes the service definition, and optionally removes data
 
 ### Verification
-- As a user, the installer verifies the service started by health-checking the gRPC endpoint
+- As a user, the installer verifies the service started by checking the agentd process is running
 
 ## E2E Test Cases
 

@@ -15,8 +15,6 @@ import (
 	"github.com/dokipen/claude-cadence/services/agents/internal/git"
 	"github.com/dokipen/claude-cadence/services/agents/internal/hub"
 	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
-	"github.com/dokipen/claude-cadence/services/agents/internal/server"
-	"github.com/dokipen/claude-cadence/services/agents/internal/service"
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
 	"github.com/dokipen/claude-cadence/services/agents/internal/vault"
 	"github.com/dokipen/claude-cadence/services/agents/internal/wsauth"
@@ -92,14 +90,6 @@ func main() {
 	monitor := session.NewMonitor(manager, ptyManager, 5*time.Second)
 	monitor.Start()
 
-	agentService := service.NewAgentService(manager)
-
-	srv, err := server.New(agentService, cfg)
-	if err != nil {
-		slog.Error("failed to create server", "error", err)
-		os.Exit(1)
-	}
-
 	// Start hub client if configured.
 	var hubClient *hub.Client
 	if cfg.Hub != nil {
@@ -108,13 +98,6 @@ func main() {
 		hubClient.Start()
 		slog.Info("hub client started", "url", cfg.Hub.URL, "name", cfg.Hub.Name)
 	}
-
-	// Start server in goroutine.
-	errCh := make(chan error, 1)
-	go func() {
-		slog.Info("starting agentd", "addr", srv.Addr())
-		errCh <- srv.Start()
-	}()
 
 	// Start HTTP terminal server only when advertise_address is set.
 	// When advertise_address is empty, agentd uses the relay path through the
@@ -157,21 +140,16 @@ func main() {
 		}()
 	}
 
-	// Wait for signal or server error.
+	// Wait for signal.
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	select {
-	case sig := <-sigCh:
-		slog.Info("received signal, shutting down", "signal", sig)
-	case err := <-errCh:
-		slog.Error("server error, shutting down", "error", err)
-	}
+	sig := <-sigCh
+	slog.Info("received signal, shutting down", "signal", sig)
 
 	if hubClient != nil {
 		hubClient.Stop()
 	}
 	monitor.Stop()
 	cleaner.Stop()
-	srv.Stop()
 	slog.Info("agentd stopped")
 }

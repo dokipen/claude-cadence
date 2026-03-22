@@ -1,155 +1,127 @@
 ---
 name: agent-service
-description: Interacting with the agentd gRPC service for managing AI agent sessions. Use when working with agent sessions, profiles, or the agentd API.
+description: Understanding agentd's hub-based architecture for managing AI agent sessions. Use when working with agent sessions, profiles, or the agentd API through the agent-hub.
 user-invokable: false
 ---
 
 ## Overview
 
-`agentd` is a gRPC service that manages AI agent sessions. It handles session lifecycle: creating, monitoring, and destroying agent processes. The service is `agents.v1.AgentService`, defaulting to `127.0.0.1:4141`.
+`agentd` is a service that manages AI agent sessions in tmux. It no longer exposes a direct gRPC port. Instead, session management is dispatched through the agent-hub WebSocket reverse connection — agentd connects outbound to the hub and receives JSON-RPC commands over that persistent connection.
 
-## Prerequisites
+This is an internal skill for understanding agentd's architecture and its API surface.
 
-- `agentd` must be running on the target host
-- `grpcurl` must be installed
-- Either server reflection is enabled, or the proto file is available at `proto/agents/v1/agents.proto`
+## Architecture
 
-```bash
-# Check connectivity
-grpcurl -plaintext 127.0.0.1:4141 list
+```
+                  ┌──────────────────────────────────────┐
+  Issues UI / ────► agent-hub (4200)                     │
+  REST clients    │   REST/WebSocket API                  │
+                  │   dispatches commands to agentd       │
+                  └──────────────┬───────────────────────┘
+                                 │ WebSocket (outbound from agentd)
+                                 ▼
+                  ┌──────────────────────────────────────┐
+                  │ agentd (host loopback only)           │
+                  │   session manager + tmux sessions     │
+                  │   JSON-RPC dispatcher                 │
+                  └──────────────────────────────────────┘
 ```
 
-**Note:** `-plaintext` disables TLS and is only appropriate for loopback connections (`127.0.0.1`). For remote hosts, omit `-plaintext` and use TLS.
+Key points:
+- agentd does **not** listen for inbound connections from external clients
+- agentd connects outbound to agent-hub via WebSocket (`hub.url` in config)
+- Commands arrive as JSON-RPC requests over that WebSocket
+- The API surface is defined in `services/agents/internal/hub/dispatch.go`
 
-Two modes for specifying the API schema:
+## JSON-RPC Methods
 
-```bash
-# Reflection mode (server must have reflection enabled)
-grpcurl -plaintext 127.0.0.1:4141 agents.v1.AgentService/ListSessions
+The dispatcher handles the following methods (see `dispatch.go` for full param/result types):
 
-# Proto file mode (use from services/agents/ directory)
-grpcurl -plaintext -import-path proto -proto agents/v1/agents.proto \
-  127.0.0.1:4141 agents.v1.AgentService/ListSessions
+| Method | Description |
+|--------|-------------|
+| `createSession` | Launch an agent in a new tmux session |
+| `getSession` | Get current state of a session (reconciled with tmux) |
+| `listSessions` | List sessions with optional `agent_profile`, `state`, and `waiting_for_input` filters |
+| `destroySession` | Kill tmux session, clean up worktree, remove state |
+| `getTerminalEndpoint` | Get terminal relay info for a session |
 
-# Or from repo root
-grpcurl -plaintext -import-path services/agents/proto -proto agents/v1/agents.proto \
-  127.0.0.1:4141 agents.v1.AgentService/ListSessions
-```
+### Session States
 
-## Authentication
+| State string | Description |
+|---|---|
+| `creating` | Session is being set up |
+| `running` | Agent process is active |
+| `stopped` | Agent process has exited |
+| `error` | Session encountered an error |
+| `destroying` | Session is being torn down |
 
-When the service is configured with token auth, include the `Authorization` header:
+### Session Object Fields
 
-```bash
-grpcurl -plaintext -H "Authorization: Bearer $TOKEN" \
-  127.0.0.1:4141 agents.v1.AgentService/ListSessions
-```
-
-## Session States
-
-| Value | Name |
-|-------|------|
-| 0 | SESSION_STATE_UNSPECIFIED |
-| 1 | SESSION_STATE_CREATING |
-| 2 | SESSION_STATE_RUNNING |
-| 3 | SESSION_STATE_STOPPED |
-| 4 | SESSION_STATE_ERROR |
-| 5 | SESSION_STATE_DESTROYING |
-
-## RPCs
-
-### CreateSession
-
-```bash
-grpcurl -plaintext -d '{
-  "agent_profile": "code-reviewer",
-  "session_name": "review-pr-42",
+```json
+{
+  "id": "uuid-v4",
+  "name": "human-readable-name",
+  "agent_profile": "profile-name",
+  "state": "running",
+  "worktree_path": "/var/lib/agentd/worktrees/<id>",
+  "repo_url": "https://github.com/org/repo.git",
   "base_ref": "main",
-  "env": {
-    "GITHUB_TOKEN": "$GITHUB_TOKEN"
-  },
-  "extra_args": ["--verbose"]
-}' 127.0.0.1:4141 agents.v1.AgentService/CreateSession
+  "created_at": "2025-01-01T00:00:00Z",
+  "error_message": "",
+  "agent_pid": 12345,
+  "websocket_url": "",
+  "waiting_for_input": false,
+  "idle_since": null
+}
 ```
 
-Fields:
-- `agent_profile` — name of the agent profile to run (required)
-- `session_name` — human-readable label for the session (required)
-- `base_ref` — git ref to base the session on (optional)
-- `env` — additional environment variables as a string map (optional)
-- `extra_args` — extra CLI arguments passed to the agent (optional)
+### getTerminalEndpoint
 
-### GetSession
+Returns either:
+- `{"relay": true}` — terminal traffic is relayed through the hub WebSocket (default when no `advertise_address` is configured)
+- `{"url": "wss://host/ws/terminal/<session-id>"}` — direct URL (when `advertise_address` is set in config)
+
+## Configuration
+
+agentd connects to agent-hub via a `hub:` block in `~/.config/agentd/config.yaml`:
+
+```yaml
+hub:
+  url: "wss://cadence.bootsy.internal/ws/agent"
+  name: "my-machine"               # unique identifier for this agentd instance
+  token_env_var: "HUB_AGENT_TOKEN" # env var holding the hub auth token
+  reconnect_interval: "5s"
+```
+
+## Interacting with Agent Sessions
+
+Session operations go through the agent-hub REST API, not directly to agentd.
 
 ```bash
-grpcurl -plaintext -d '{"session_id": "sess_abc123"}' \
-  127.0.0.1:4141 agents.v1.AgentService/GetSession
+# List all agents registered with the hub
+curl -s -H "Authorization: Bearer $HUB_API_TOKEN" \
+  https://cadence.bootsy.internal/api/v1/agents | jq '.'
+
+# Dispatch a createSession command to a specific agent
+curl -s -X POST \
+  -H "Authorization: Bearer $HUB_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"agent_profile": "code-reviewer", "session_name": "review-pr-42"}' \
+  https://cadence.bootsy.internal/api/v1/agents/<agent-name>/sessions
+
+# List sessions on an agent
+curl -s -H "Authorization: Bearer $HUB_API_TOKEN" \
+  https://cadence.bootsy.internal/api/v1/agents/<agent-name>/sessions | jq '.'
 ```
 
-### ListSessions
+## Error Codes
 
-```bash
-# List all sessions
-grpcurl -plaintext -d '{}' 127.0.0.1:4141 agents.v1.AgentService/ListSessions
+JSON-RPC errors returned by the dispatcher use these codes:
 
-# Filter by agent profile
-grpcurl -plaintext -d '{"agent_profile": "code-reviewer"}' \
-  127.0.0.1:4141 agents.v1.AgentService/ListSessions
-
-# Filter by state (e.g., running = 2)
-grpcurl -plaintext -d '{"state": 2}' \
-  127.0.0.1:4141 agents.v1.AgentService/ListSessions
-
-# Combine filters
-grpcurl -plaintext -d '{"agent_profile": "tester", "state": 2}' \
-  127.0.0.1:4141 agents.v1.AgentService/ListSessions
-```
-
-### DestroySession
-
-```bash
-# Graceful shutdown
-grpcurl -plaintext -d '{"session_id": "sess_abc123", "force": false}' \
-  127.0.0.1:4141 agents.v1.AgentService/DestroySession
-
-# Force kill
-grpcurl -plaintext -d '{"session_id": "sess_abc123", "force": true}' \
-  127.0.0.1:4141 agents.v1.AgentService/DestroySession
-```
-
-## Common Patterns
-
-### List all running sessions
-
-```bash
-grpcurl -plaintext -d '{"state": 2}' \
-  127.0.0.1:4141 agents.v1.AgentService/ListSessions
-```
-
-### Create a session and monitor it
-
-```bash
-# Create
-SESSION=$(grpcurl -plaintext -d '{
-  "agent_profile": "tester",
-  "session_name": "test-issue-99"
-}' 127.0.0.1:4141 agents.v1.AgentService/CreateSession)
-
-SESSION_ID=$(echo "$SESSION" | jq -r '.session.id')
-
-# Poll until no longer creating
-grpcurl -plaintext -d "{\"session_id\": \"$SESSION_ID\"}" \
-  127.0.0.1:4141 agents.v1.AgentService/GetSession
-```
-
-### Force-destroy a stuck session
-
-```bash
-# Find stuck sessions (state 1 = creating, 5 = destroying)
-grpcurl -plaintext -d '{"state": 1}' \
-  127.0.0.1:4141 agents.v1.AgentService/ListSessions
-
-# Force destroy
-grpcurl -plaintext -d "{\"session_id\": \"$SESSION_ID\", \"force\": true}" \
-  127.0.0.1:4141 agents.v1.AgentService/DestroySession
-```
+| Code | Meaning |
+|------|---------|
+| -32000 | Internal error |
+| -32001 | Not found |
+| -32002 | Already exists |
+| -32003 | Invalid argument |
+| -32004 | Failed precondition (e.g., destroying a running session without force) |
