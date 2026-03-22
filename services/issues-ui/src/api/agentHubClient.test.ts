@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { hubFetch, fetchAgents, HubError } from "./agentHubClient";
+import { hubFetch, fetchAgents, createSession, HubError } from "./agentHubClient";
 
 function mockFetch(response: {
   ok?: boolean;
@@ -296,6 +296,84 @@ describe("fetchAgents", () => {
   it("uses 502 status code for validation errors", async () => {
     mockFetch({ json: () => Promise.resolve("bad") });
     const err = await fetchAgents().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HubError);
+    expect(err).toMatchObject({ status: 502 });
+  });
+});
+
+describe("createSession", () => {
+  const validSession = {
+    id: "sess-1",
+    name: "my-session",
+    agent_profile: "default",
+    state: "creating",
+    tmux_session: "tmux-1",
+    created_at: "2026-03-22T00:00:00Z",
+    agent_pid: 42,
+    worktree_path: "/tmp/work",
+    base_ref: "main",
+  };
+
+  it("POSTs to correct URL with correct body and returns typed Session", async () => {
+    const fn = mockFetch({ json: () => Promise.resolve(validSession) });
+    const result = await createSession("my-agent", "default", "my-session");
+    expect(fn).toHaveBeenCalledWith(
+      "/api/v1/agents/my-agent/sessions",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ agent_profile: "default", session_name: "my-session" }),
+      }),
+    );
+    expect(result).toEqual(validSession);
+    expect(result.id).toBe("sess-1");
+    expect(result.agent_profile).toBe("default");
+  });
+
+  it("includes extra_args in request body when provided", async () => {
+    const fn = mockFetch({ json: () => Promise.resolve(validSession) });
+    await createSession("my-agent", "default", "my-session", ["--foo", "--bar"]);
+    const sentBody = JSON.parse(fn.mock.calls[0][1].body as string);
+    expect(sentBody).toEqual({
+      agent_profile: "default",
+      session_name: "my-session",
+      extra_args: ["--foo", "--bar"],
+    });
+  });
+
+  it("omits extra_args from request body when not provided", async () => {
+    const fn = mockFetch({ json: () => Promise.resolve(validSession) });
+    await createSession("my-agent", "default", "my-session");
+    const sentBody = JSON.parse(fn.mock.calls[0][1].body as string);
+    expect(sentBody).not.toHaveProperty("extra_args");
+  });
+
+  it("URL encodes agent names with special characters", async () => {
+    const fn = mockFetch({ json: () => Promise.resolve(validSession) });
+    await createSession("my agent/v2", "default", "my-session");
+    const calledUrl = fn.mock.calls[0][0] as string;
+    expect(calledUrl).toBe("/api/v1/agents/my%20agent%2Fv2/sessions");
+  });
+
+  it("throws HubError on non-OK response", async () => {
+    mockFetch({
+      ok: false,
+      status: 503,
+      statusText: "Service Unavailable",
+      json: () => Promise.resolve({ error: "agent offline" }),
+    });
+    const err = await createSession("my-agent", "default", "my-session").catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(HubError);
+    expect(err).toMatchObject({ status: 503, message: "agent offline" });
+  });
+
+  it("throws HubError with status 502 when response is missing required field id", async () => {
+    const { id: _id, ...withoutId } = validSession;
+    mockFetch({ json: () => Promise.resolve(withoutId) });
+    const err = await createSession("my-agent", "default", "my-session").catch(
+      (e: unknown) => e,
+    );
     expect(err).toBeInstanceOf(HubError);
     expect(err).toMatchObject({ status: 502 });
   });

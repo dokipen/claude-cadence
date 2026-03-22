@@ -1,4 +1,4 @@
-import type { Agent, AgentProfile, AgentStatus } from "../types";
+import type { Agent, AgentProfile, AgentStatus, Session, SessionState } from "../types";
 
 const BASE_PATH = "/api/v1";
 
@@ -109,4 +109,73 @@ function validateAgentsResponse(data: unknown): { agents: Agent[] } {
 
 export async function fetchAgents(): Promise<{ agents: Agent[] }> {
   return hubFetch("/agents", undefined, validateAgentsResponse);
+}
+
+const VALID_SESSION_STATES: SessionState[] = ["creating", "running", "stopped", "error", "destroying"];
+
+function validateSessionResponse(data: unknown): Session {
+  if (!isRecord(data)) {
+    throw new HubError(502, "Invalid session response: expected object");
+  }
+  if (!isString(data.id)) {
+    throw new HubError(502, 'Invalid session response: missing or invalid "id"');
+  }
+  if (!isString(data.name)) {
+    throw new HubError(502, 'Invalid session response: missing or invalid "name"');
+  }
+  if (!isString(data.agent_profile)) {
+    throw new HubError(502, 'Invalid session response: missing or invalid "agent_profile"');
+  }
+  if (!VALID_SESSION_STATES.includes(data.state as SessionState)) {
+    throw new HubError(502, 'Invalid session response: missing or invalid "state"');
+  }
+  if (!isString(data.tmux_session)) {
+    throw new HubError(502, 'Invalid session response: missing or invalid "tmux_session"');
+  }
+  if (!isString(data.created_at)) {
+    throw new HubError(502, 'Invalid session response: missing or invalid "created_at"');
+  }
+  if (typeof data.agent_pid !== "number") {
+    throw new HubError(502, 'Invalid session response: missing or invalid "agent_pid"');
+  }
+  if (!isString(data.worktree_path)) {
+    throw new HubError(502, 'Invalid session response: missing or invalid "worktree_path"');
+  }
+  if (!isString(data.base_ref)) {
+    throw new HubError(502, 'Invalid session response: missing or invalid "base_ref"');
+  }
+  return {
+    id: data.id,
+    name: data.name,
+    agent_profile: data.agent_profile,
+    state: data.state as SessionState,
+    tmux_session: data.tmux_session,
+    created_at: data.created_at,
+    agent_pid: data.agent_pid,
+    worktree_path: data.worktree_path,
+    base_ref: data.base_ref,
+    ...(isString(data.stopped_at) ? { stopped_at: data.stopped_at } : {}),
+    ...(isString(data.error_message) ? { error_message: data.error_message } : {}),
+    ...(isString(data.repo_url) ? { repo_url: data.repo_url } : {}),
+    ...(typeof data.waiting_for_input === "boolean" ? { waiting_for_input: data.waiting_for_input } : {}),
+    ...(isString(data.idle_since) ? { idle_since: data.idle_since } : {}),
+  };
+}
+
+export async function createSession(
+  agentName: string,
+  profile: string,
+  sessionName: string,
+  extraArgs?: string[],
+): Promise<Session> {
+  const body: Record<string, unknown> = {
+    agent_profile: profile,
+    session_name: sessionName,
+    ...(extraArgs ? { extra_args: extraArgs } : {}),
+  };
+  return hubFetch(
+    `/agents/${encodeURIComponent(agentName)}/sessions`,
+    { method: "POST", body: JSON.stringify(body) },
+    validateSessionResponse,
+  );
 }

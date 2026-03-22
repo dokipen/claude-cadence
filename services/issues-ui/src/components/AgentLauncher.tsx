@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { hubFetch } from "../api/agentHubClient";
+import { createSession } from "../api/agentHubClient";
 import { useAgents, useAgentProfiles } from "../hooks/useAgents";
 import type { Session } from "../types";
 import styles from "../styles/agents.module.css";
@@ -47,17 +47,7 @@ export function AgentLauncher({
       command.length > 500 ? command.slice(0, 500) + "…" : command;
 
     try {
-      const session = await hubFetch<Session>(
-        `/agents/${encodeURIComponent(selected.agent)}/sessions`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            agent_profile: selected.profileName,
-            session_name: sessionName,
-            extra_args: [cappedCommand],
-          }),
-        },
-      );
+      const session = await createSession(selected.agent, selected.profileName, sessionName, [cappedCommand]);
       onLaunched(session, selected.agent);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to launch agent");
