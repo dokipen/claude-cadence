@@ -79,7 +79,7 @@ function setupSessionMock(
       route.fulfill({
         status: 201,
         contentType: "application/json",
-        body: JSON.stringify(MOCK_SESSION),
+        body: JSON.stringify({ session: MOCK_SESSION }),
       });
     } else if (route.request().method() === "GET") {
       route.fulfill({
@@ -201,7 +201,7 @@ test.describe("launch agent dialog", () => {
         route.fulfill({
           status: 201,
           contentType: "application/json",
-          body: JSON.stringify(MOCK_SESSION),
+          body: JSON.stringify({ session: MOCK_SESSION }),
         });
       } else {
         route.continue();
@@ -271,7 +271,7 @@ test.describe("launch agent dialog", () => {
         route.fulfill({
           status: 201,
           contentType: "application/json",
-          body: JSON.stringify(MOCK_SESSION),
+          body: JSON.stringify({ session: MOCK_SESSION }),
         });
       } else {
         route.continue();
@@ -289,7 +289,8 @@ test.describe("launch agent dialog", () => {
     await dialog.getByTestId("launch-submit").click();
 
     expect(capturedBody).not.toBeNull();
-    expect((capturedBody as Record<string, unknown>).extra_args).toEqual(["/refine 1"]);
+    // Newest-first ordering puts ticket #6 (markdown ticket) first in BACKLOG
+    expect((capturedBody as Record<string, unknown>).extra_args).toEqual(["/refine 6"]);
   });
 
   test("POST body contains discuss prompt when clicking Discuss on CLOSED card", async ({ page }) => {
@@ -301,7 +302,7 @@ test.describe("launch agent dialog", () => {
         route.fulfill({
           status: 201,
           contentType: "application/json",
-          body: JSON.stringify(MOCK_SESSION),
+          body: JSON.stringify({ session: MOCK_SESSION }),
         });
       } else {
         route.continue();

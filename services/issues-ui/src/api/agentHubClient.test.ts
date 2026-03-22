@@ -314,8 +314,9 @@ describe("createSession", () => {
     base_ref: "main",
   };
 
+  // Server wraps the session in a {session: {...}} envelope — fix for bug #269
   it("POSTs to correct URL with correct body and returns typed Session", async () => {
-    const fn = mockFetch({ json: () => Promise.resolve(validSession) });
+    const fn = mockFetch({ json: () => Promise.resolve({ session: validSession }) });
     const result = await createSession("my-agent", "default", "my-session");
     expect(fn).toHaveBeenCalledWith(
       "/api/v1/agents/my-agent/sessions",
@@ -330,7 +331,7 @@ describe("createSession", () => {
   });
 
   it("includes extra_args in request body when provided", async () => {
-    const fn = mockFetch({ json: () => Promise.resolve(validSession) });
+    const fn = mockFetch({ json: () => Promise.resolve({ session: validSession }) });
     await createSession("my-agent", "default", "my-session", ["--foo", "--bar"]);
     const sentBody = JSON.parse(fn.mock.calls[0][1].body as string);
     expect(sentBody).toEqual({
@@ -341,14 +342,14 @@ describe("createSession", () => {
   });
 
   it("omits extra_args from request body when not provided", async () => {
-    const fn = mockFetch({ json: () => Promise.resolve(validSession) });
+    const fn = mockFetch({ json: () => Promise.resolve({ session: validSession }) });
     await createSession("my-agent", "default", "my-session");
     const sentBody = JSON.parse(fn.mock.calls[0][1].body as string);
     expect(sentBody).not.toHaveProperty("extra_args");
   });
 
   it("URL encodes agent names with special characters", async () => {
-    const fn = mockFetch({ json: () => Promise.resolve(validSession) });
+    const fn = mockFetch({ json: () => Promise.resolve({ session: validSession }) });
     await createSession("my agent/v2", "default", "my-session");
     const calledUrl = fn.mock.calls[0][0] as string;
     expect(calledUrl).toBe("/api/v1/agents/my%20agent%2Fv2/sessions");
@@ -370,7 +371,25 @@ describe("createSession", () => {
 
   it("throws HubError with status 502 when response is missing required field id", async () => {
     const { id: _id, ...withoutId } = validSession;
-    mockFetch({ json: () => Promise.resolve(withoutId) });
+    mockFetch({ json: () => Promise.resolve({ session: withoutId }) });
+    const err = await createSession("my-agent", "default", "my-session").catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(HubError);
+    expect(err).toMatchObject({ status: 502 });
+  });
+
+  it("throws HubError with status 502 when response envelope is missing the session key", async () => {
+    mockFetch({ json: () => Promise.resolve({ notSession: validSession }) });
+    const err = await createSession("my-agent", "default", "my-session").catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(HubError);
+    expect(err).toMatchObject({ status: 502 });
+  });
+
+  it("throws HubError with status 502 when response is not an object", async () => {
+    mockFetch({ json: () => Promise.resolve("invalid") });
     const err = await createSession("my-agent", "default", "my-session").catch(
       (e: unknown) => e,
     );
@@ -378,3 +397,4 @@ describe("createSession", () => {
     expect(err).toMatchObject({ status: 502 });
   });
 });
+

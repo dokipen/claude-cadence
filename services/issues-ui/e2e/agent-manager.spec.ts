@@ -576,7 +576,7 @@ test.describe("agent launch form", () => {
     await page.route("**/api/v1/agents/*/sessions", (route) => {
       if (route.request().method() === "POST") {
         postCalled = true;
-        route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify(LAUNCHED_SESSION) });
+        route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ session: LAUNCHED_SESSION }) });
       } else {
         route.continue();
       }
@@ -605,7 +605,7 @@ test.describe("agent launch form", () => {
         route.fulfill({
           status: 201,
           contentType: "application/json",
-          body: JSON.stringify(LAUNCHED_SESSION),
+          body: JSON.stringify({ session: LAUNCHED_SESSION }),
         });
       } else {
         route.continue();
@@ -659,7 +659,7 @@ test.describe("agent launch form", () => {
         route.fulfill({
           status: 201,
           contentType: "application/json",
-          body: JSON.stringify(LAUNCHED_SESSION),
+          body: JSON.stringify({ session: LAUNCHED_SESSION }),
         });
       } else {
         route.continue();
