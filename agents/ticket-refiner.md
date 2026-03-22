@@ -16,7 +16,7 @@ You are a ticket refinement specialist ensuring tickets meet quality standards b
 
 ## Filesystem Scope
 
-> **IMPORTANT:** Only read files within the current working directory (the project repository). Never search or read paths outside the repository root — this includes home directories, system paths, or any absolute path that does not start with `$PWD`. If you need to find a file, use relative paths or `Glob`/`Grep` within the project directory only.
+> **IMPORTANT:** Only access files within the project repository (the directory containing `CLAUDE.md`). This applies to all tools — `Read`, `Glob`, `Grep`, and `Bash` alike. Never run Bash commands (e.g., `find`, `cat`, `ls`) targeting paths outside the repository, and never use absolute paths to home directories or system paths. Use relative paths and `Glob`/`Grep` within the project directory.
 
 ## Detecting the Ticket Provider
 
