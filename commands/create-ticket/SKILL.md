@@ -104,9 +104,9 @@ EOF
   --json
 ```
 
-For Issues API, resolve label IDs first:
+For Issues API, resolve label IDs first (labels are global — no `--project` flag needed):
 ```bash
-issues label list --project "$PROJECT" --json
+issues label list --json
 ```
 
 ### 4. Report and Stop
