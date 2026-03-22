@@ -64,6 +64,7 @@ services:
       - ./infrastructure/Caddyfile.dev:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+    env_file: .env.dev
     depends_on:
       - issues
       - issues-ui
