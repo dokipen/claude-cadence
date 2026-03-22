@@ -1,3 +1,7 @@
+.cardWrapper {
+  position: relative;
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -135,6 +139,17 @@
   align-items: center;
   gap: 0.35rem;
   margin-left: auto;
+}
+
+.cardActionsOverlay {
+  position: absolute;
+  bottom: 0.5rem;
+  right: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  z-index: 1;
+  pointer-events: auto;
 }
 
 .storyPoints {

@@ -52,66 +52,68 @@ export function TicketCard({
 
   return (
     <>
-      <Link to={`/ticket/${ticket.id}`} className={styles.cardLink} data-testid="ticket-card">
-        <div className={styles.cardNumber} data-testid="card-number">#{ticket.number}</div>
-        <div className={styles.cardTitle} data-testid="card-title">{ticket.title}</div>
-        <div className={styles.cardMeta}>
-          <PriorityBadge priority={ticket.priority} />
-          {ticket.labels.map((label) => (
-            <LabelBadge key={label.id} label={label} />
-          ))}
-          {ticket.blockedBy.some((b) => b.state !== "CLOSED") && (
-            <span className={styles.blockedBadge} data-testid="blocked-badge">
-              Blocked
-            </span>
-          )}
-        </div>
-        <div className={styles.cardFooter}>
-          {ticket.assignee && (
-            <span className={styles.assignee} data-testid="assignee">
-              {ticket.assignee.avatarUrl?.startsWith("https://") ? (
-                <img
-                  src={ticket.assignee.avatarUrl}
-                  alt={ticket.assignee.login}
-                  className={styles.avatar}
-                />
-              ) : (
-                <span className={styles.avatarFallback}>
-                  {ticket.assignee.login[0].toUpperCase()}
-                </span>
-              )}
-              <span className={styles.assigneeLogin}>{ticket.assignee.login}</span>
-            </span>
-          )}
-          <span className={styles.cardActions}>
-            {activeSession ? (
-              <button
-                type="button"
-                className={styles.activeSessionLogo}
-                data-testid="active-session-logo"
-                aria-label="Session in progress"
-                onClick={handleActiveSessionClick}
-                style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
-              >
-                <img src="/cadence-icon-light.svg" alt="" width={18} height={18} className={styles.spinningLogo} />
-              </button>
-            ) : (
-              <button
-                className={agentStyles.cardLaunchButton}
-                onClick={handleLaunchClick}
-                data-testid="card-launch-button"
-              >
-                {launchButtonLabel}
-              </button>
-            )}
-            {ticket.storyPoints != null && (
-              <span className={styles.storyPoints} data-testid="story-points">
-                {ticket.storyPoints}
+      <div className={styles.cardWrapper}>
+        <Link to={`/ticket/${ticket.id}`} className={styles.cardLink} data-testid="ticket-card">
+          <div className={styles.cardNumber} data-testid="card-number">#{ticket.number}</div>
+          <div className={styles.cardTitle} data-testid="card-title">{ticket.title}</div>
+          <div className={styles.cardMeta}>
+            <PriorityBadge priority={ticket.priority} />
+            {ticket.labels.map((label) => (
+              <LabelBadge key={label.id} label={label} />
+            ))}
+            {ticket.blockedBy.some((b) => b.state !== "CLOSED") && (
+              <span className={styles.blockedBadge} data-testid="blocked-badge">
+                Blocked
               </span>
             )}
-          </span>
-        </div>
-      </Link>
+          </div>
+          <div className={styles.cardFooter}>
+            {ticket.assignee && (
+              <span className={styles.assignee} data-testid="assignee">
+                {ticket.assignee.avatarUrl?.startsWith("https://") ? (
+                  <img
+                    src={ticket.assignee.avatarUrl}
+                    alt={ticket.assignee.login}
+                    className={styles.avatar}
+                  />
+                ) : (
+                  <span className={styles.avatarFallback}>
+                    {ticket.assignee.login[0].toUpperCase()}
+                  </span>
+                )}
+                <span className={styles.assigneeLogin}>{ticket.assignee.login}</span>
+              </span>
+            )}
+          </div>
+        </Link>
+        <span className={styles.cardActionsOverlay}>
+          {activeSession ? (
+            <button
+              type="button"
+              className={styles.activeSessionLogo}
+              data-testid="active-session-logo"
+              aria-label="Session in progress"
+              onClick={handleActiveSessionClick}
+              style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+            >
+              <img src="/cadence-icon-light.svg" alt="" width={18} height={18} className={styles.spinningLogo} />
+            </button>
+          ) : (
+            <button
+              className={agentStyles.cardLaunchButton}
+              onClick={handleLaunchClick}
+              data-testid="card-launch-button"
+            >
+              {launchButtonLabel}
+            </button>
+          )}
+          {ticket.storyPoints != null && (
+            <span className={styles.storyPoints} data-testid="story-points">
+              {ticket.storyPoints}
+            </span>
+          )}
+        </span>
+      </div>
       <LaunchAgentDialog
         ticketNumber={ticket.number}
         ticketState={ticket.state}
