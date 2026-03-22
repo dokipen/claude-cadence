@@ -6,11 +6,13 @@ import (
 	"net/url"
 )
 
-// ValidateAdvertiseAddress checks that addr is a valid, routable IP address
-// suitable for use as a terminal WebSocket advertise address. Accepts either
-// a bare IP ("10.0.0.1") or host:port ("10.0.0.1:8001"). An empty string is
-// accepted (terminal server disabled). Loopback, link-local, unspecified, and
-// multicast addresses are rejected.
+// ValidateAdvertiseAddress checks that addr is a valid address suitable for use
+// as a terminal WebSocket advertise address. Accepts bare IPs ("10.0.0.1"),
+// host:port with IPs ("10.0.0.1:8001"), and DNS hostnames ("agentd:4142") for
+// Docker/Kubernetes environments. An empty string is accepted (terminal server
+// disabled). For IP addresses, loopback, link-local, unspecified, and multicast
+// addresses are rejected. DNS hostnames are accepted without resolution — they
+// are validated at connection time.
 func ValidateAdvertiseAddress(addr string) error {
 	if addr == "" {
 		return nil
@@ -23,11 +25,20 @@ func ValidateAdvertiseAddress(addr string) error {
 		var err error
 		host, _, err = net.SplitHostPort(addr)
 		if err != nil {
-			return fmt.Errorf("advertise address %q is not a valid IP or host:port", addr)
+			// Not a valid IP and not host:port — could be a bare hostname.
+			// Reject obvious junk but allow DNS names.
+			if !isValidHostname(addr) {
+				return fmt.Errorf("advertise address %q is not a valid IP, host:port, or hostname", addr)
+			}
+			return nil
 		}
 		ip = net.ParseIP(host)
 		if ip == nil {
-			return fmt.Errorf("advertise address %q: host %q is not a valid IP", addr, host)
+			// host:port where host is a DNS name (e.g., "agentd:4142").
+			if !isValidHostname(host) {
+				return fmt.Errorf("advertise address %q: host %q is not a valid IP or hostname", addr, host)
+			}
+			return nil
 		}
 	}
 
@@ -47,6 +58,20 @@ func ValidateAdvertiseAddress(addr string) error {
 	// RFC 1918 private ranges (10/8, 172.16/12, 192.168/16) are intentionally
 	// allowed — agents are expected to run on private infrastructure.
 	return nil
+}
+
+// isValidHostname checks that s looks like a DNS hostname: non-empty, no
+// whitespace, no path separators, and within reasonable length limits.
+func isValidHostname(s string) bool {
+	if s == "" || len(s) > 253 {
+		return false
+	}
+	for _, c := range s {
+		if c == ' ' || c == '/' || c == '\\' {
+			return false
+		}
+	}
+	return true
 }
 
 // ValidateProfileRepo checks that repo is either empty or a valid http/https
