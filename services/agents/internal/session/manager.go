@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"log/slog"
+	"os"
 	"regexp"
 	"strings"
 	"syscall"
@@ -197,7 +198,9 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	}
 
 	// Build env slice for PTY (format: "KEY=VALUE").
-	var envSlice []string
+	// Start from the daemon's own environment so PATH, HOME, TERM, etc. are
+	// inherited. Vault secrets and request env vars override anything inherited.
+	envSlice := os.Environ()
 
 	// Vault secrets as env vars.
 	if vaultSecrets != nil {
@@ -229,8 +232,9 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	// correctly.
 	command := []string{"bash", "-c", cmdStr}
 
-	// Create PTY session.
-	if err := m.pty.Create(sessionName, workdir, command, envSlice, 0, 0); err != nil {
+	// Create PTY session. Use sessionID (UUID) as the PTY key so all
+	// subsequent lookups (Destroy, PID, Has) resolve to the same entry.
+	if err := m.pty.Create(sessionID, workdir, command, envSlice, 0, 0); err != nil {
 		errMsg := fmt.Sprintf("failed to create PTY session: %v", err)
 		m.store.Update(sessionID, func(s *Session) {
 			s.State = StateError
@@ -242,10 +246,10 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	// Get PID of the child process.
 	// If the command exited immediately (e.g., fast-exit profile), the PTY
 	// session may already be gone. Mark as stopped in that case.
-	pid, err := m.pty.PID(sessionName)
+	pid, err := m.pty.PID(sessionID)
 	if err != nil {
-		slog.Info("session command exited immediately", "session", sessionName, "error", err)
-		_ = m.pty.Destroy(sessionName)
+		slog.Info("session command exited immediately", "session", sessionID, "error", err)
+		_ = m.pty.Destroy(sessionID)
 		m.store.Update(sessionID, func(s *Session) {
 			s.State = StateStopped
 			s.StoppedAt = time.Now()

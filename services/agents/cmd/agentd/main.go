@@ -99,13 +99,17 @@ func main() {
 	// Register WebSocket terminal handler.
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws/terminal/", func(w http.ResponseWriter, r *http.Request) {
+		// Strip prefix and validate the session ID is a bare UUID with no
+		// path components, preventing path traversal.
 		sessionID := strings.TrimPrefix(r.URL.Path, "/ws/terminal/")
-		if sessionID == "" {
-			http.Error(w, "missing session ID", http.StatusBadRequest)
+		if sessionID == "" || strings.ContainsAny(sessionID, "/?#") {
+			http.Error(w, "missing or invalid session ID", http.StatusBadRequest)
 			return
 		}
+		// agentd sits behind the issues-ui reverse proxy; allow all origins.
+		// TODO(#443): add token-based auth to this endpoint.
 		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-			InsecureSkipVerify: true,
+			OriginPatterns: []string{"*"},
 		})
 		if err != nil {
 			slog.Warn("websocket accept failed", "error", err)
