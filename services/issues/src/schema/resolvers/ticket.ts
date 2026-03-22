@@ -100,11 +100,17 @@ export const ticketResolvers = {
           };
         }
       } else if (labelName) {
-        where.labels = {
-          some: {
-            label: { name: labelName },
-          },
-        };
+        const trimmedLabelName = labelName.trim();
+        if (trimmedLabelName.length > 0) {
+          if (trimmedLabelName.length > MAX_LABEL_LENGTH) {
+            throw new GraphQLError(`labelName exceeds maximum length of ${MAX_LABEL_LENGTH}`, { extensions: { code: "BAD_USER_INPUT" } });
+          }
+          where.labels = {
+            some: {
+              label: { name: trimmedLabelName },
+            },
+          };
+        }
       }
 
       if (excludeLabelName) {
