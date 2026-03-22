@@ -86,6 +86,11 @@ export type SessionState =
   | "error"
   | "destroying";
 
+export interface ActiveSessionInfo {
+  name: string;
+  state: SessionState;
+}
+
 export interface Session {
   id: string;
   name: string;

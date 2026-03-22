@@ -12,6 +12,7 @@ import { ProjectSelector } from "./components/ProjectSelector";
 import { useProjects } from "./hooks/useProjects";
 import type { TicketFilters } from "./hooks/useTickets";
 import { useAllSessions } from "./hooks/useAllSessions";
+import type { ActiveSessionInfo } from "./types";
 import { NotificationDropdown } from "./components/NotificationDropdown";
 import type { ReactNode } from "react";
 import layoutStyles from "./styles/layout.module.css";
@@ -118,6 +119,7 @@ function AppShell() {
   const repoUrl = selectedProject?.repository;
 
   const isOnBoard = !!boardMatch;
+  const activeSessions = sessions?.map((s): ActiveSessionInfo => ({ name: s.session.name, state: s.session.state }));
   const handleProjectChange = useCallback((id: string) => {
     if (!projects.some((p) => p.id === id)) return;
     setGlobalProjectId(id);
@@ -172,7 +174,7 @@ function AppShell() {
           <Route path="/docs/*" element={<DocsPage />} />
           <Route
             path="/projects/:projectId/*"
-            element={<KanbanBoard projectId={projectId} filters={filters} repoUrl={repoUrl} sessions={sessions} />}
+            element={<KanbanBoard projectId={projectId} filters={filters} repoUrl={repoUrl} sessions={activeSessions} />}
           />
           <Route path="/ticket/:id" element={<TicketDetail />} />
           <Route path="/*" element={<ProjectRedirect />} />
