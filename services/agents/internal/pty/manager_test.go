@@ -103,3 +103,73 @@ func TestPTYManager_DefaultWindowSize(t *testing.T) {
 	}
 	t.Cleanup(func() { m.Destroy("defsize") })
 }
+
+func TestPTYManager_MaxSessions_Enforced(t *testing.T) {
+	m := NewPTYManager(PTYConfig{MaxSessions: 2})
+
+	err := m.Create("cap1", t.TempDir(), []string{"sleep", "10"}, nil, 80, 24)
+	if err != nil {
+		t.Fatalf("Create cap1 failed: %v", err)
+	}
+	t.Cleanup(func() { m.Destroy("cap1") })
+
+	err = m.Create("cap2", t.TempDir(), []string{"sleep", "10"}, nil, 80, 24)
+	if err != nil {
+		t.Fatalf("Create cap2 failed: %v", err)
+	}
+	t.Cleanup(func() { m.Destroy("cap2") })
+
+	err = m.Create("cap3", t.TempDir(), []string{"sleep", "10"}, nil, 80, 24)
+	if err == nil {
+		t.Cleanup(func() { m.Destroy("cap3") })
+		t.Fatal("expected error on 3rd Create when MaxSessions=2, got nil")
+	}
+	if !strings.Contains(err.Error(), "max sessions") {
+		t.Errorf("expected error containing \"max sessions\", got: %v", err)
+	}
+}
+
+func TestPTYManager_MaxSessions_Zero_Unlimited(t *testing.T) {
+	m := NewPTYManager(PTYConfig{MaxSessions: 0})
+
+	for i, id := range []string{"unlim1", "unlim2", "unlim3"} {
+		err := m.Create(id, t.TempDir(), []string{"sleep", "10"}, nil, 80, 24)
+		if err != nil {
+			t.Fatalf("Create session %d (%s) failed: %v", i+1, id, err)
+		}
+		t.Cleanup(func() { m.Destroy(id) })
+	}
+}
+
+func TestPTYManager_MaxSessions_SlotFreedAfterDestroy(t *testing.T) {
+	m := NewPTYManager(PTYConfig{MaxSessions: 2})
+
+	err := m.Create("slot1", t.TempDir(), []string{"sleep", "10"}, nil, 80, 24)
+	if err != nil {
+		t.Fatalf("Create slot1 failed: %v", err)
+	}
+	t.Cleanup(func() { m.Destroy("slot1") })
+
+	err = m.Create("slot2", t.TempDir(), []string{"sleep", "10"}, nil, 80, 24)
+	if err != nil {
+		t.Fatalf("Create slot2 failed: %v", err)
+	}
+
+	// Destroy slot2 to free a slot.
+	if err = m.Destroy("slot2"); err != nil {
+		t.Fatalf("Destroy slot2 failed: %v", err)
+	}
+
+	// Now slot3 should succeed because a slot was freed.
+	err = m.Create("slot3", t.TempDir(), []string{"sleep", "10"}, nil, 80, 24)
+	if err != nil {
+		t.Fatalf("Create slot3 after Destroy expected to succeed, got: %v", err)
+	}
+	t.Cleanup(func() { m.Destroy("slot3") })
+}
+
+func TestMaxResizeDimension(t *testing.T) {
+	if maxResizeDimension != 500 {
+		t.Errorf("expected maxResizeDimension=500, got %d", maxResizeDimension)
+	}
+}

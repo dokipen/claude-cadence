@@ -106,3 +106,63 @@ func TestServeTerminal_BufferReplay(t *testing.T) {
 		t.Errorf("client2 (sequential reconnect): expected REPLAY_MARKER in replay, got: %q", out2)
 	}
 }
+
+// TestServeTerminal_ResizeClamped verifies that sending an oversized resize frame
+// does not crash or panic the session — the session must remain usable afterwards.
+func TestServeTerminal_ResizeClamped(t *testing.T) {
+	m := internalpty.NewPTYManager(internalpty.PTYConfig{})
+
+	err := m.Create("resize-clamp-test", t.TempDir(),
+		[]string{"sh", "-c", "sleep 30"},
+		nil, 80, 24)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	t.Cleanup(func() { m.Destroy("resize-clamp-test") })
+
+	// Start an HTTP server that serves the terminal WebSocket.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen failed: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws/terminal", func(w http.ResponseWriter, r *http.Request) {
+		conn, acceptErr := websocket.Accept(w, r, &websocket.AcceptOptions{
+			InsecureSkipVerify: true,
+		})
+		if acceptErr != nil {
+			return
+		}
+		defer conn.CloseNow()
+		_ = m.ServeTerminal(r.Context(), "resize-clamp-test", conn)
+	})
+	srv := &http.Server{Handler: mux}
+	go srv.Serve(ln)
+	t.Cleanup(func() { srv.Close() })
+
+	wsURL := "ws://" + ln.Addr().String() + "/ws/terminal"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, _, dialErr := websocket.Dial(ctx, wsURL, nil)
+	if dialErr != nil {
+		t.Fatalf("dial failed: %v", dialErr)
+	}
+	defer conn.CloseNow()
+
+	// Send an oversized resize frame: byte '1' + JSON with 9999x9999 dimensions.
+	resizeFrame := []byte(`1{"columns":9999,"rows":9999}`)
+	if writeErr := conn.Write(ctx, websocket.MessageText, resizeFrame); writeErr != nil {
+		t.Fatalf("failed to send resize frame: %v", writeErr)
+	}
+
+	// Send a small input frame after the resize to verify the session is still alive.
+	inputFrame := []byte("0\n")
+	if writeErr := conn.Write(ctx, websocket.MessageText, inputFrame); writeErr != nil {
+		t.Fatalf("session appears broken after oversized resize: %v", writeErr)
+	}
+
+	// The test asserts no panic/crash occurred by reaching this point.
+}
