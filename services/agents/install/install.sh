@@ -169,6 +169,18 @@ setup_hub() {
     fi
 }
 
+# Returns 0 if the URL points to a LAN/internal host (RFC 1918 range or internal TLD).
+is_lan_url() {
+    local url="$1"
+    # RFC 1918 address ranges
+    [[ "$url" =~ ://10\.[0-9]+\.[0-9]+\.[0-9]+ ]]          && return 0
+    [[ "$url" =~ ://172\.(1[6-9]|2[0-9]|3[01])\.[0-9]+ ]]  && return 0
+    [[ "$url" =~ ://192\.168\.[0-9]+\.[0-9]+ ]]             && return 0
+    # Common internal/private TLD suffixes
+    [[ "$url" =~ \.(local|internal|lan|home|localdomain|corp)(/|:|$) ]] && return 0
+    return 1
+}
+
 # --- Config generation ---
 
 generate_config() {
@@ -366,6 +378,15 @@ main() {
     esac
 
     health_check || true
+
+    if [[ "$os" == "darwin" && -n "$HUB_URL" ]] && is_lan_url "$HUB_URL"; then
+        echo
+        warn "macOS Local Network permission may be required"
+        info "macOS may silently block launchd agents from reaching LAN hosts."
+        info "If the hub connection fails (\"no route to host\" in logs), open:"
+        info "  System Settings > Privacy & Security > Local Network"
+        info "and enable access for agentd (it may appear as 'a.out' in the list)."
+    fi
 
     echo
     info "Installation complete!"
