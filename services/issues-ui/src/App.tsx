@@ -12,6 +12,7 @@ import { ProjectSelector } from "./components/ProjectSelector";
 import { useProjects } from "./hooks/useProjects";
 import type { TicketFilters } from "./hooks/useTickets";
 import { useAllSessions } from "./hooks/useAllSessions";
+import type { ActiveSessionInfo } from "./types";
 import { NotificationDropdown } from "./components/NotificationDropdown";
 import type { ReactNode } from "react";
 import layoutStyles from "./styles/layout.module.css";
@@ -172,7 +173,7 @@ function AppShell() {
           <Route path="/docs/*" element={<DocsPage />} />
           <Route
             path="/projects/:projectId/*"
-            element={<KanbanBoard projectId={projectId} filters={filters} repoUrl={repoUrl} sessions={sessions} />}
+            element={<KanbanBoard projectId={projectId} filters={filters} repoUrl={repoUrl} sessions={sessions?.map((s): ActiveSessionInfo => ({ name: s.session.name, state: s.session.state }))} />}
           />
           <Route path="/ticket/:id" element={<TicketDetail />} />
           <Route path="/*" element={<ProjectRedirect />} />
