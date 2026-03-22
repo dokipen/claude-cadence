@@ -120,11 +120,18 @@ func (c *Client) CleanupStaleSocket() error {
 	}
 	socketPath := filepath.Join(tmpdir, fmt.Sprintf("tmux-%d", os.Getuid()), c.socketName)
 
-	// If socket doesn't exist, nothing to clean.
-	if _, err := os.Stat(socketPath); os.IsNotExist(err) {
+	// If socket doesn't exist, nothing to clean. Use Lstat to avoid following symlinks.
+	info, err := os.Lstat(socketPath)
+	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
 		return fmt.Errorf("stat tmux socket %s: %w", socketPath, err)
+	}
+
+	// Refuse to remove anything that isn't a socket to prevent accidental deletion
+	// of regular files or symlinks that may have been placed at this path.
+	if info.Mode()&os.ModeSocket == 0 {
+		return fmt.Errorf("refusing to remove non-socket file at %s", socketPath)
 	}
 
 	// Probe whether a tmux server is responding on this socket.

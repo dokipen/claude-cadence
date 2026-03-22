@@ -2,6 +2,7 @@ package tmux
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -61,10 +62,12 @@ func TestCleanupStaleSocket_StaleSocket(t *testing.T) {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 
-	// Create a fake socket file (regular file — no server will respond).
-	if err := os.WriteFile(socketPath, []byte("stale"), 0o600); err != nil {
-		t.Fatalf("WriteFile: %v", err)
+	// Create a real Unix socket file (no server will respond on it).
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatalf("net.Listen unix: %v", err)
 	}
+	listener.Close() // Close immediately — leaves a stale socket file behind.
 	t.Cleanup(func() {
 		os.Remove(socketPath)
 	})
