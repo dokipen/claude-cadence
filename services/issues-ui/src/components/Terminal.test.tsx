@@ -4,7 +4,7 @@ import { render, screen, cleanup, fireEvent, act } from "@testing-library/react"
 
 // Mock @xterm/xterm — canvas APIs are not available in jsdom
 // Use vi.hoisted so the array is available inside the hoisted vi.mock factory
-const xtermInstances = vi.hoisted(() => [] as Array<{ focus: ReturnType<typeof vi.fn> }>);
+const xtermInstances = vi.hoisted(() => [] as Array<{ focus: ReturnType<typeof vi.fn>; options: Record<string, unknown> }>);
 const fitAddonInstances = vi.hoisted(() => [] as Array<{ fit: ReturnType<typeof vi.fn> }>);
 
 vi.mock("@xterm/xterm", () => ({
@@ -18,8 +18,10 @@ vi.mock("@xterm/xterm", () => ({
     focus = vi.fn();
     cols = 80;
     rows = 24;
-    constructor() {
-      xtermInstances.push(this as unknown as { focus: ReturnType<typeof vi.fn> });
+    options: Record<string, unknown> = {};
+    constructor(opts?: Record<string, unknown>) {
+      this.options = opts ?? {};
+      xtermInstances.push(this as unknown as { focus: ReturnType<typeof vi.fn>; options: Record<string, unknown> });
     }
   },
 }));
@@ -235,6 +237,21 @@ describe("Terminal", () => {
 
     expect(xtermInstances).toHaveLength(1);
     expect(xtermInstances[0].focus).toHaveBeenCalledTimes(1);
+  });
+
+  // 7. xterm.js Terminal must be constructed with scroll-related options (issue #248)
+  it("constructs xterm.js Terminal with scrollback >= 1000 and scrollSensitivity >= 1", () => {
+    render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+
+    const ws = MockWebSocket.instances[0];
+    act(() => { ws.simulateOpen(); });
+
+    expect(xtermInstances).toHaveLength(1);
+    const opts = xtermInstances[0].options;
+    expect(typeof opts.scrollback).toBe("number");
+    expect(opts.scrollback as number).toBeGreaterThanOrEqual(1000);
+    expect(typeof opts.scrollSensitivity).toBe("number");
+    expect(opts.scrollSensitivity as number).toBeGreaterThanOrEqual(1);
   });
 
   // ---------------------------------------------------------------------------
