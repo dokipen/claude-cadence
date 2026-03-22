@@ -47,12 +47,12 @@ Gather the following — infer from arguments where possible, otherwise ask the 
 
 If the user provided a title as an argument, use it. Ask for anything missing in a single prompt — do not ping-pong with one question at a time.
 
-### 2. Confirm Before Creating
+### 2. Show Summary
 
-Present a summary and ask for confirmation before creating:
+Present a summary of what will be created. Do not ask for confirmation — proceed directly to step 3 to create the ticket:
 
 ```
-About to create ticket:
+Creating ticket:
   Title: <title>
   Type: <label>
   Project: <project> (if issues-api)
@@ -62,11 +62,7 @@ Description:
 
 Acceptance criteria:
 <criteria>
-
-Proceed? [Y/n]
 ```
-
-Skip confirmation only when the user explicitly provided **all three** of title, description, and acceptance criteria in their initial message.
 
 ### 3. Create the Ticket
 
