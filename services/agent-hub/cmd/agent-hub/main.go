@@ -55,6 +55,10 @@ func main() {
 	}
 	slog.SetDefault(slog.New(handler))
 
+	if len(cfg.AllowedOrigins) == 0 && cfg.Auth.Mode == "token" {
+		slog.Warn("allowed_origins is not configured; terminal WebSocket accepts connections from any origin")
+	}
+
 	// Create hub.
 	h := hub.New(cfg.Heartbeat.Interval, cfg.Heartbeat.Timeout, cfg.AgentTTL)
 	h.Start()
