@@ -26,6 +26,7 @@ export function TicketCard({
   sessions?: ActiveSessionInfo[];
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [anchorRect, setAnchorRect] = useState<DOMRect | undefined>(undefined);
   const navigate = useNavigate();
 
   const launchButtonLabel = getLaunchConfig(ticket.state).buttonLabel;
@@ -43,6 +44,8 @@ export function TicketCard({
     (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      setAnchorRect(rect);
       setDialogOpen(true);
     },
     [],
@@ -119,6 +122,7 @@ export function TicketCard({
         repoUrl={repoUrl}
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
+        anchorRect={anchorRect}
       />
     </>
   );

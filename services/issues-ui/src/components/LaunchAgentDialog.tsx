@@ -11,6 +11,7 @@ interface LaunchAgentDialogProps {
   onClose: () => void;
   ticketState: TicketState;
   ticketTitle: string;
+  anchorRect?: DOMRect;
 }
 
 export function LaunchAgentDialog({
@@ -20,6 +21,7 @@ export function LaunchAgentDialog({
   onClose,
   ticketState,
   ticketTitle,
+  anchorRect,
 }: LaunchAgentDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -34,14 +36,37 @@ export function LaunchAgentDialog({
 
     if (open && !el.open) {
       el.showModal();
+      if (anchorRect) {
+        el.style.position = 'fixed';
+        el.style.margin = '0';
+        const gap = 8;
+        let top = anchorRect.bottom + gap;
+        let left = anchorRect.left;
+        const dialogWidth = el.offsetWidth;
+        const dialogHeight = el.offsetHeight;
+        if (left + dialogWidth > window.innerWidth - gap) {
+          left = window.innerWidth - dialogWidth - gap;
+        }
+        if (left < gap) left = gap;
+        if (top + dialogHeight > window.innerHeight - gap) {
+          top = anchorRect.top - dialogHeight - gap;
+        }
+        if (top < gap) top = gap;
+        el.style.top = `${top}px`;
+        el.style.left = `${left}px`;
+      }
     } else if (!open && el.open) {
+      el.style.position = '';
+      el.style.margin = '';
+      el.style.top = '';
+      el.style.left = '';
       el.close();
     }
 
     return () => {
       if (el.open) el.close();
     };
-  }, [open]);
+  }, [open, anchorRect]);
 
   const handleClose = useCallback(() => {
     dialogRef.current?.close();
