@@ -152,8 +152,8 @@ All public methods belong to `tmux.Client`, constructed with `tmux.NewClient(soc
 | 114 | `m.tmux.HasSession(sessionName)` | Guards against duplicate tmux sessions before creation. | Per-`Create` | Remove; PTY manager's `Create` returns error on duplicate IDs. |
 | 129 | `sess.TmuxSession = sessionName` | Populates `TmuxSession` on Session struct. | Per-`Create` | Remove population; keep field as `""` during transition. |
 | 245 | `m.tmux.NewSession(sessionName, workdir, fullCommand)` | Creates tmux session, launches agent command as its initial process. | Per-`Create` | Replace with `m.pty.Create(id, workdir, cmd, env, cols, rows)`. |
-| 257–268 | `m.tmux.SetEnv(...)` (vault secrets loop) | Mirrors vault secrets into tmux session environment. | Per-`Create`, per-secret | Remove; env vars already passed via `export` in the command string. |
-| 270–272 | `m.tmux.SetEnv(...)` (request env loop) | Mirrors request env vars into tmux session environment. | Per-`Create`, per-env-var | Remove; same reason. |
+| 257–268 | `m.tmux.SetEnv(...)` (vault secrets loop) | Mirrors vault secrets into tmux session environment. Intentional design: enables `tmux show-environment` tooling visibility for debugging. | Per-`Create`, per-secret | Remove tmux-based mirroring; if tooling visibility is still required, expose env via a dedicated agentd debug endpoint instead. |
+| 270–272 | `m.tmux.SetEnv(...)` (request env loop) | Mirrors request env vars into tmux session environment (same tooling visibility intent). | Per-`Create`, per-env-var | Same as above. |
 | 279 | `m.tmux.GetPanePID(sessionName)` | Gets agent process PID after session creation. | Per-`Create` (once) | Remove; PID known from `cmd.Start()` via `pty.Session.PID`. |
 | 282 | `m.tmuxHasSession(sessionName)` | Guards `KillSession` when `GetPanePID` fails (fast-exit detection). | Per-`Create`, error path | Remove; PTY manager tracks liveness directly. |
 | 283 | `m.tmux.KillSession(sessionName)` | Cleans up fast-exiting tmux session. | Per-`Create`, error path | Remove; PTY child exits naturally; master fd closed by manager. |
@@ -204,7 +204,8 @@ ttyd is fundamentally coupled to tmux. `ttyd.Start` (line 82–88) launches: `tt
 
 **Frontend TypeScript** (`services/issues-ui/src/`):
 - `types.ts` line 99: `tmux_session: string` — required field in the `Session` interface.
-- `agentHubClient.ts` lines 132–133: `validateSessionResponse` throws `HubError(502)` if `data.tmux_session` is not a string. **An empty string `""` passes `isString("")`** — keeping the field as `""` during transition requires no frontend change.
+- `agentHubClient.ts` lines 132–133: `validateSessionResponse` throws `HubError(502)` if `data.tmux_session` is not a string.
+- **⚠️ `omitempty` interaction**: The hub struct field is tagged `json:"tmux_session,omitempty"`. When `TmuxSession` is set to `""` in Go, the key is **omitted from the JSON response entirely** — `data.tmux_session` arrives as `undefined` in the frontend, not `""`. `isString(undefined)` is `false`, so the hub throws `HubError(502)`. **Both a backend change (remove `omitempty` from the tag) and a frontend change (make the field optional or provide a default) are required** before zeroing the field. The `omitempty` tag must be removed first.
 - No UI component renders or uses `tmux_session` for display or logic — it is carried through the type system but never referenced in component source.
 
 ---
@@ -246,12 +247,12 @@ ttyd is fundamentally coupled to tmux. `ttyd.Start` (line 82–88) launches: `tt
 | `GetPanePID` — PID discovery | `pty.Session.PID` known at `cmd.Start()` time |
 | `CapturePane` — visible pane text | `pty.ReadBuffer(id)` — ring buffer snapshot |
 | `ListSessions` — recovery enumeration | No-op (Option A: restarts terminate sessions) |
-| `SetEnv` — environment mirroring | Removed; env already in command-line `export` prefix |
+| `SetEnv` — environment mirroring | Remove tmux-based mirroring; expose env via a dedicated agentd debug endpoint if tooling visibility is still needed |
 | `HasSession` / `KillSession` — liveness/cleanup | `pty.Has(id)` / `pty.Destroy(id)` |
 | `CleanupStaleSocket` | Eliminated; no socket files |
 | `ttyd.Start/Stop/CleanupOrphans` | Eliminated; agentd serves WS terminal endpoint directly |
-| `TmuxSession` field | Keep as `""` during transition; remove in Phase 6 protocol cleanup |
-| `tmux_session` in hub JSON / gRPC | Populate with `""` initially; coordinate removal as breaking change |
+| `TmuxSession` field | Requires coordinated backend + frontend change: (1) remove `omitempty` from hub JSON tag, (2) update frontend to treat missing/empty field gracefully, (3) zero the field; remove entirely in Phase 6 |
+| `tmux_session` in hub JSON / gRPC | Remove `omitempty` tag first; then zero the value; coordinate full removal as breaking change in Phase 6 |
 
 ---
 
