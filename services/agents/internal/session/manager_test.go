@@ -71,6 +71,8 @@ func TestCreate_SessionNameInvalidCharsReturnErrInvalidArgument(t *testing.T) {
 		{"unicode emoji", "agent🚀"},
 		{"at sign", "user@host"},
 		{"semicolon", "sess;ion"},
+		{"leading dot", ".hidden"},
+		{"leading tilde", "~session"},
 	}
 
 	for _, tt := range tests {
