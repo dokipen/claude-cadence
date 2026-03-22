@@ -84,7 +84,7 @@ func TestHandleTerminalProxy_AgentNotFound(t *testing.T) {
 	defer h.Stop()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
@@ -154,7 +154,7 @@ func TestHandleTerminalProxy_Relay(t *testing.T) {
 
 	// Start proxy server.
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -251,7 +251,7 @@ func TestHandleTerminalProxy_AddressMismatch(t *testing.T) {
 	waitForAgent(t, h, "mismatch-agent")
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -272,7 +272,7 @@ func TestHandleTerminalProxy_EmptyAddress(t *testing.T) {
 	waitForAgent(t, h, "empty-addr-agent")
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -293,7 +293,7 @@ func TestHandleTerminalProxy_PortMismatch(t *testing.T) {
 	waitForAgent(t, h, "port-mismatch-agent")
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 

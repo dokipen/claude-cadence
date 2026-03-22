@@ -25,7 +25,11 @@ const (
 
 // HandleTerminalProxy returns an HTTP handler that proxies WebSocket connections
 // from the browser to an agentd's ttyd instance via the hub.
-func HandleTerminalProxy(h *hub.Hub) http.HandlerFunc {
+// allowedOrigins restricts which browser origins may connect via Origin header
+// validation (CSRF protection). When empty, connections from any origin are
+// accepted — suitable for development or when the reverse proxy enforces access
+// control. When non-empty, only the listed origin patterns are allowed.
+func HandleTerminalProxy(h *hub.Hub, allowedOrigins []string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		agentName := r.PathValue("agent_name")
 		sessionID := r.PathValue("session_id")
@@ -95,13 +99,20 @@ func HandleTerminalProxy(h *hub.Hub) http.HandlerFunc {
 		defer ttydConn.Close(websocket.StatusGoingAway, "proxy closing")
 
 		// Accept the browser's WebSocket upgrade.
-		// Allow any origin because the hub sits behind a reverse proxy (Caddy)
-		// which forwards the browser's Origin (e.g. https://cadence.bootsy.internal)
-		// while the hub sees Host as 127.0.0.1:4200. Caddy handles TLS and access control.
-		browserConn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-			InsecureSkipVerify: true,
-			Subprotocols:       []string{"tty"},
-		})
+		// When allowed_origins is configured, only those origins are permitted
+		// (CSRF protection via Origin header validation). When it is empty we
+		// fall back to skipping the check — this is safe for local development
+		// or when the reverse proxy (e.g. Caddy) enforces access control and
+		// the hub is not directly exposed to the internet.
+		acceptOpts := &websocket.AcceptOptions{
+			Subprotocols: []string{"tty"},
+		}
+		if len(allowedOrigins) > 0 {
+			acceptOpts.OriginPatterns = allowedOrigins
+		} else {
+			acceptOpts.InsecureSkipVerify = true
+		}
+		browserConn, err := websocket.Accept(w, r, acceptOpts)
 		if err != nil {
 			slog.Error("failed to accept browser websocket", "error", err)
 			ttydConn.Close(websocket.StatusGoingAway, "browser accept failed")

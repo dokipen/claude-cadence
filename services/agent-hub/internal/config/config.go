@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
@@ -10,15 +11,16 @@ import (
 
 // Config is the top-level agent-hub configuration.
 type Config struct {
-	Host      string          `yaml:"host"`
-	Port      int             `yaml:"port"`
-	Auth      AuthConfig      `yaml:"auth"`
-	HubAuth   HubAuthConfig   `yaml:"hub_auth"`
-	Heartbeat HeartbeatConfig `yaml:"heartbeat"`
-	AgentTTL  time.Duration   `yaml:"-"`
-	RawTTL    string          `yaml:"agent_ttl"`
-	RateLimit RateLimitConfig `yaml:"rate_limit"`
-	Log       LogConfig       `yaml:"log"`
+	Host           string          `yaml:"host"`
+	Port           int             `yaml:"port"`
+	Auth           AuthConfig      `yaml:"auth"`
+	HubAuth        HubAuthConfig   `yaml:"hub_auth"`
+	AllowedOrigins []string        `yaml:"allowed_origins"`
+	Heartbeat      HeartbeatConfig `yaml:"heartbeat"`
+	AgentTTL       time.Duration   `yaml:"-"`
+	RawTTL         string          `yaml:"agent_ttl"`
+	RateLimit      RateLimitConfig `yaml:"rate_limit"`
+	Log            LogConfig       `yaml:"log"`
 }
 
 // RateLimitConfig holds rate limiting settings for the REST API.
@@ -193,6 +195,10 @@ func validate(cfg *Config) error {
 	}
 	if cfg.RateLimit.Burst < 0 {
 		return fmt.Errorf("rate_limit.burst must not be negative")
+	}
+
+	if len(cfg.AllowedOrigins) == 0 && cfg.Auth.Mode == "token" {
+		slog.Warn("allowed_origins is not configured; terminal WebSocket accepts connections from any origin")
 	}
 
 	return nil
