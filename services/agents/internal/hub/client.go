@@ -13,7 +13,10 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/google/uuid"
+
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
+	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
 )
 
 // SessionDispatcher handles session CRUD and terminal operations dispatched from the hub.
@@ -31,22 +34,37 @@ type Client struct {
 	profiles   map[string]config.Profile
 	ttyd       config.TtydConfig
 	dispatcher SessionDispatcher
+	ptyMgr     *pty.PTYManager
 
 	mu      sync.Mutex
 	conn    *websocket.Conn
 	writeMu sync.Mutex // protects concurrent WebSocket writes
 	cancel  context.CancelFunc
 	done    chan struct{}
+
+	// terminalRelayCh maps session ID → channel for incoming binary relay
+	// frames from the hub (browser input forwarded to the PTY session).
+	relayCh   map[string]chan []byte
+	relayChMu sync.Mutex
 }
 
 // NewClient creates a new hub client.
-func NewClient(cfg config.HubConfig, profiles map[string]config.Profile, ttyd config.TtydConfig, dispatcher SessionDispatcher) *Client {
+// ptyMgr is optional: pass it to enable the terminal relay path. When nil
+// (or when advertise_address is configured), the dispatcher falls back to the
+// direct URL-based response. Task 5 will wire this up in main.go.
+func NewClient(cfg config.HubConfig, profiles map[string]config.Profile, ttyd config.TtydConfig, dispatcher SessionDispatcher, ptyMgr ...*pty.PTYManager) *Client {
+	var mgr *pty.PTYManager
+	if len(ptyMgr) > 0 {
+		mgr = ptyMgr[0]
+	}
 	return &Client{
 		cfg:        cfg,
 		profiles:   profiles,
 		ttyd:       ttyd,
 		dispatcher: dispatcher,
+		ptyMgr:     mgr,
 		done:       make(chan struct{}),
+		relayCh:    make(map[string]chan []byte),
 	}
 }
 
@@ -182,9 +200,15 @@ func (c *Client) register(ctx context.Context, conn *websocket.Conn) error {
 
 func (c *Client) readLoop(ctx context.Context, conn *websocket.Conn) error {
 	for {
-		_, data, err := conn.Read(ctx)
+		msgType, data, err := conn.Read(ctx)
 		if err != nil {
 			return fmt.Errorf("read: %w", err)
+		}
+
+		// Binary frames carry terminal relay data (browser → PTY).
+		if msgType == websocket.MessageBinary {
+			c.dispatchBinaryFrame(data)
+			continue
 		}
 
 		var req request
@@ -211,7 +235,33 @@ func (c *Client) readLoop(ctx context.Context, conn *websocket.Conn) error {
 	}
 }
 
+// dispatchBinaryFrame routes an incoming binary relay frame to the registered
+// channel for the target session. Frames that cannot be decoded or have no
+// registered channel are silently dropped.
+func (c *Client) dispatchBinaryFrame(data []byte) {
+	sessionUUID, payload, err := decodeTerminalFrame(data)
+	if err != nil {
+		slog.Debug("relay: dropping malformed binary frame", "error", err)
+		return
+	}
+	sessID := sessionUUID.String()
+	c.relayChMu.Lock()
+	ch, ok := c.relayCh[sessID]
+	c.relayChMu.Unlock()
+	if !ok {
+		slog.Debug("relay: no relay channel for session, dropping frame", "session_id", sessID)
+		return
+	}
+	// Non-blocking send: drop if the channel is full.
+	select {
+	case ch <- payload:
+	default:
+		slog.Debug("relay: input channel full, dropping frame", "session_id", sessID)
+	}
+}
+
 // dispatchSessionAsync dispatches a session method and writes the response.
+// For getTerminalEndpoint with relay: true, it also starts the relay pump.
 func (c *Client) dispatchSessionAsync(ctx context.Context, conn *websocket.Conn, req request) {
 	var fn func(json.RawMessage) (json.RawMessage, *rpcError)
 	switch req.Method {
@@ -230,6 +280,19 @@ func (c *Client) dispatchSessionAsync(ctx context.Context, conn *websocket.Conn,
 	resp := c.dispatchSession(req.ID, req.Params, fn)
 	if err := c.writeResponse(ctx, conn, resp); err != nil {
 		slog.Warn("failed to write dispatch response", "method", req.Method, "error", err)
+		return
+	}
+
+	// If this was a getTerminalEndpoint call that returned relay: true, start
+	// the relay pump now that the JSON-RPC response has been sent.
+	if req.Method == "getTerminalEndpoint" && resp.Error == nil && c.ptyMgr != nil {
+		var result terminalEndpointResult
+		if err := json.Unmarshal(resp.Result, &result); err == nil && result.Relay {
+			var p getTerminalEndpointParams
+			if err := json.Unmarshal(req.Params, &p); err == nil {
+				go c.runTerminalRelay(ctx, conn, p.SessionID, c.ptyMgr)
+			}
+		}
 	}
 }
 
@@ -242,6 +305,44 @@ func (c *Client) writeResponse(ctx context.Context, conn *websocket.Conn, resp *
 		return fmt.Errorf("write response: %w", err)
 	}
 	return nil
+}
+
+// RegisterRelaySession creates a buffered input channel for terminal relay
+// frames destined for sessionID. Returns the channel and a cleanup function
+// that removes the registration. The caller must invoke cleanup when the relay
+// session ends.
+func (c *Client) RegisterRelaySession(sessionID string) (<-chan []byte, func()) {
+	ch := make(chan []byte, 64)
+	c.relayChMu.Lock()
+	c.relayCh[sessionID] = ch
+	c.relayChMu.Unlock()
+	cleanup := func() {
+		c.relayChMu.Lock()
+		delete(c.relayCh, sessionID)
+		c.relayChMu.Unlock()
+	}
+	return ch, cleanup
+}
+
+// WriteRelayFrame encodes a binary terminal relay frame and writes it to the
+// hub WebSocket. It is safe to call from multiple goroutines.
+func (c *Client) WriteRelayFrame(ctx context.Context, sessionID string, payload []byte) error {
+	parsed, err := uuid.Parse(sessionID)
+	if err != nil {
+		return fmt.Errorf("relay: invalid session UUID %q: %w", sessionID, err)
+	}
+	frame := encodeTerminalFrame(parsed, payload)
+	// Acquire mu first to read conn (consistent with closeConn lock order),
+	// then release mu before acquiring writeMu for the write.
+	c.mu.Lock()
+	conn := c.conn
+	c.mu.Unlock()
+	if conn == nil {
+		return fmt.Errorf("relay: not connected")
+	}
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	return conn.Write(ctx, websocket.MessageBinary, frame)
 }
 
 // dispatchSession calls a SessionDispatcher method and wraps the result in a response.

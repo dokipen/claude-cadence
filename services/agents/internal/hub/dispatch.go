@@ -123,6 +123,11 @@ func (d *Dispatcher) DestroySession(params json.RawMessage) (json.RawMessage, *r
 }
 
 // GetTerminalEndpoint handles the getTerminalEndpoint JSON-RPC method.
+//
+// If relay is available (no advertise_address configured), it returns
+// {relay: true} and the Client will start a terminal relay pump over the hub
+// WebSocket. If advertise_address is configured, it falls back to the direct
+// URL-based response for backward compatibility.
 func (d *Dispatcher) GetTerminalEndpoint(params json.RawMessage) (json.RawMessage, *rpcError) {
 	var p getTerminalEndpointParams
 	if err := json.Unmarshal(params, &p); err != nil {
@@ -134,10 +139,12 @@ func (d *Dispatcher) GetTerminalEndpoint(params json.RawMessage) (json.RawMessag
 		return nil, mapSessionError(err)
 	}
 
+	// Prefer relay path when no advertise_address is configured.
 	if d.advertiseAddress == "" {
-		return nil, &rpcError{Code: rpcErrInternal, Message: "advertise address not configured"}
+		return marshalResult(terminalEndpointResult{Relay: true})
 	}
 
+	// Backward compat: return a direct URL when advertise_address is set.
 	return marshalResult(terminalEndpointResult{
 		URL: d.webSocketScheme + "://" + d.advertiseAddress + "/ws/terminal/" + p.SessionID,
 	})
@@ -173,7 +180,8 @@ type getTerminalEndpointParams struct {
 }
 
 type terminalEndpointResult struct {
-	URL string `json:"url"`
+	URL   string `json:"url,omitempty"`
+	Relay bool   `json:"relay,omitempty"`
 }
 
 // JSON response types.
