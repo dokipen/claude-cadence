@@ -311,7 +311,25 @@ describe("Terminal", () => {
     });
   });
 
-  // 8. Right-click on terminal container must NOT suppress the browser native context menu.
+  // 8. On WebSocket open, a correctly-prefixed CMD_RESIZE frame is sent so the PTY gets initial dimensions (#317)
+  it("sends a CMD_RESIZE frame ('1' prefix) with terminal dimensions immediately on connection open", () => {
+    render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+
+    const ws = MockWebSocket.instances[0];
+    act(() => { ws.simulateOpen(); });
+
+    // The first send() call must be a resize frame (prefix "1") with cols/rows from xterm
+    expect(ws.send).toHaveBeenCalled();
+    const firstCall = ws.send.mock.calls[0][0] as string;
+    expect(firstCall[0]).toBe("1");
+    const payload = JSON.parse(firstCall.slice(1)) as { columns: number; rows: number };
+    expect(typeof payload.columns).toBe("number");
+    expect(typeof payload.rows).toBe("number");
+    expect(payload.columns).toBeGreaterThan(0);
+    expect(payload.rows).toBeGreaterThan(0);
+  });
+
+  // 9. Right-click on terminal container must NOT suppress the browser native context menu.
   it("does not suppress the browser native context menu (contextmenu event default NOT prevented)", () => {
     render(<Terminal agentName="agent-1" sessionId="sess-1" />);
 
