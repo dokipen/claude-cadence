@@ -87,8 +87,9 @@ type Config struct {
 	Host       string             `yaml:"host"`
 	Port       int                `yaml:"port"`
 	RootDir    string             `yaml:"root_dir"`
-	Tmux       TmuxConfig         `yaml:"tmux"`
-	Ttyd       TtydConfig         `yaml:"ttyd"`
+	Tmux       TmuxConfig         `yaml:"tmux"`  // Deprecated: unused after tmux removal
+	Ttyd       TtydConfig         `yaml:"ttyd"`  // Deprecated: unused after tmux removal
+	PTY        PTYConfig          `yaml:"pty"`
 	Log        LogConfig          `yaml:"log"`
 	Profiles   map[string]Profile `yaml:"profiles"`
 	Auth       AuthConfig         `yaml:"auth"`
@@ -118,6 +119,11 @@ type TtydConfig struct {
 	MaxPorts         int    `yaml:"max_ports"`
 	BindAddress      string `yaml:"bind_address"`
 	AdvertiseAddress string `yaml:"advertise_address"`
+}
+
+// PTYConfig holds PTY manager settings.
+type PTYConfig struct {
+	BufferSize int `yaml:"buffer_size"` // ring buffer size in bytes; defaults to 1 MB
 }
 
 // LogConfig holds logging settings.
@@ -201,6 +207,9 @@ func applyDefaults(cfg *Config) {
 		if cfg.Hub.RawReconnect == "" {
 			cfg.Hub.RawReconnect = "5s"
 		}
+	}
+	if cfg.PTY.BufferSize == 0 {
+		cfg.PTY.BufferSize = 1048576
 	}
 }
 

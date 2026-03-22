@@ -43,12 +43,6 @@ func TestCreateSession_Success(t *testing.T) {
 	if sess.GetAgentProfile() != "sleeper" {
 		t.Errorf("expected agent_profile %q, got %q", "sleeper", sess.GetAgentProfile())
 	}
-	if !tmuxSessionExists("agentd-test", name) {
-		t.Errorf("expected tmux session %q to exist", name)
-	}
-	if !tmuxMouseEnabled(t, "agentd-test") {
-		t.Error("mouse mode should be enabled")
-	}
 }
 
 func TestCreateSession_DuplicateName(t *testing.T) {
@@ -176,7 +170,7 @@ func TestGetSession_Stopped(t *testing.T) {
 		})
 	})
 
-	// Poll until the session transitions to STOPPED (tmux session exits).
+	// Poll until the session transitions to STOPPED (process exits).
 	deadline := time.Now().Add(5 * time.Second)
 	var lastState agentsv1.SessionState
 	for time.Now().Before(deadline) {
@@ -363,10 +357,6 @@ func TestDestroySession_Force(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("DestroySession: %v", err)
-	}
-
-	if tmuxSessionExists("agentd-test", name) {
-		t.Errorf("expected tmux session %q to be gone after destroy", name)
 	}
 
 	_, err = client.GetSession(ctx, &agentsv1.GetSessionRequest{

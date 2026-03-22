@@ -33,7 +33,8 @@ type session struct {
 	master  *os.File     // PTY master
 	rb      *RingBuffer
 	writers []io.Writer  // active WS writers (stub for future broadcast)
-	done    chan struct{} // closed when PTY read goroutine exits
+	done    chan struct{} // closed when PTY read goroutine exits AND cmd.Wait() has returned
+	waitOnce sync.Once   // ensures cmd.Wait() is called exactly once
 	mu      sync.Mutex
 }
 
@@ -105,6 +106,10 @@ func (m *PTYManager) Create(id, workdir string, command []string, env []string, 
 	m.sessions[id] = sess
 
 	// Read goroutine: fan PTY output to ring buffer and active writers.
+	// When the child exits, the slave PTY fd closes and master.Read returns
+	// EIO. We call cmd.Wait() here to reap the child so it does not become
+	// a zombie — otherwise syscall.Kill(pid, 0) would still succeed and the
+	// session.Manager reconciler would never mark the session as stopped.
 	go func() {
 		defer close(sess.done)
 		buf := make([]byte, 4096)
@@ -121,6 +126,9 @@ func (m *PTYManager) Create(id, workdir string, command []string, env []string, 
 				sess.mu.Unlock()
 			}
 			if readErr != nil {
+				// Reap the child before signalling done. waitOnce ensures
+				// Destroy's cmd.Wait() call is a harmless no-op if it races.
+				sess.waitOnce.Do(func() { _ = sess.cmd.Wait() })
 				return
 			}
 		}
@@ -167,8 +175,8 @@ func (m *PTYManager) Destroy(id string) error {
 		_ = sess.cmd.Process.Kill()
 	}
 	_ = sess.master.Close()
-	<-sess.done         // wait for read goroutine to exit before reaping
-	_ = sess.cmd.Wait() // reap the child
+	<-sess.done // wait for read goroutine to exit (it calls cmd.Wait via waitOnce)
+	sess.waitOnce.Do(func() { _ = sess.cmd.Wait() }) // no-op if goroutine already reaped
 	return nil
 }
 

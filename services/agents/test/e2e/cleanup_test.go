@@ -1,20 +1,13 @@
 package e2e_test
 
 import (
-	"fmt"
-	"os"
-	"os/exec"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
+	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
-	"github.com/dokipen/claude-cadence/services/agents/internal/tmux"
-	"github.com/dokipen/claude-cadence/services/agents/internal/ttyd"
 )
-
-const testSocket = "agentd-test"
 
 // newTestManager creates an isolated Manager with its own Store for test isolation.
 func newTestManager(t *testing.T) (*session.Manager, *session.Store) {
@@ -24,9 +17,8 @@ func newTestManager(t *testing.T) (*session.Manager, *session.Store) {
 		"fast-exit": {Command: "true"},
 	}
 	store := session.NewStore()
-	tmuxClient := tmux.NewClient(testSocket)
-	ttydClient := ttyd.NewClient(false, 0, 100, "", "")
-	mgr := session.NewManager(store, tmuxClient, ttydClient, nil, nil, profiles)
+	ptyManager := pty.NewPTYManager(pty.PTYConfig{BufferSize: 65536})
+	mgr := session.NewManager(store, ptyManager, nil, nil, profiles)
 	return mgr, store
 }
 
@@ -119,155 +111,5 @@ func TestCleanup_RunningSessionNotDestroyed(t *testing.T) {
 	}
 	if got.State != session.StateRunning {
 		t.Errorf("expected RUNNING, got %d", got.State)
-	}
-}
-
-func TestRecoverSessions_RediscoversRunning(t *testing.T) {
-	// Create a tmux session directly (simulating a daemon restart with orphaned sessions).
-	name := uniqueSessionName(t)
-	cmd := exec.Command("tmux", "-L", testSocket, "new-session", "-d", "-s", name, "sleep", "3600")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("failed to create tmux session: %v: %s", err, out)
-	}
-
-	t.Cleanup(func() {
-		exec.Command("tmux", "-L", testSocket, "kill-session", "-t", name).Run()
-	})
-
-	// Create a fresh manager (simulating restart — empty store).
-	mgr, store := newTestManager(t)
-
-	// The store should be empty.
-	if sessions := store.List(); len(sessions) != 0 {
-		t.Fatalf("expected empty store, got %d sessions", len(sessions))
-	}
-
-	// Recover sessions.
-	recovered, err := mgr.RecoverSessions()
-	if err != nil {
-		t.Fatalf("RecoverSessions: %v", err)
-	}
-	if recovered < 1 {
-		t.Fatalf("expected at least 1 recovered session, got %d", recovered)
-	}
-
-	// Find our session in the store by name.
-	sess, ok := store.GetByName(name)
-	if !ok {
-		t.Fatalf("expected recovered session %q in store", name)
-	}
-	if sess.State != session.StateRunning {
-		t.Errorf("expected RUNNING for recovered session, got %d", sess.State)
-	}
-}
-
-func TestRecoverSessions_RediscoversStopped(t *testing.T) {
-	// Create a tmux session with a sleep process, then kill the process.
-	// This leaves the tmux session alive but with a dead process — the stopped state.
-	name := uniqueSessionName(t)
-	cmd := exec.Command("tmux", "-L", testSocket, "new-session", "-d", "-s", name, "sleep", "3600")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("failed to create tmux session: %v: %s", err, out)
-	}
-
-	// Set remain-on-exit so the tmux session persists after the process is killed.
-	exec.Command("tmux", "-L", testSocket, "set-option", "-t", name, "remain-on-exit", "on").Run()
-
-	t.Cleanup(func() {
-		exec.Command("tmux", "-L", testSocket, "kill-session", "-t", name).Run()
-	})
-
-	// Get the pane PID and kill it, leaving the tmux session orphaned.
-	pidOut, err := exec.Command("tmux", "-L", testSocket, "list-panes", "-t", name, "-F", "#{pane_pid}").Output()
-	if err != nil {
-		t.Fatalf("failed to get pane PID: %v", err)
-	}
-
-	// Kill the sleep process. Use SIGKILL to ensure it dies immediately.
-	pidStr := strings.TrimSpace(string(pidOut))
-	killCmd := exec.Command("kill", "-9", pidStr)
-	if out, err := killCmd.CombinedOutput(); err != nil {
-		t.Fatalf("failed to kill process %s: %v: %s", pidStr, err, out)
-	}
-
-	// Wait briefly for the process to die.
-	time.Sleep(500 * time.Millisecond)
-
-	// Verify the tmux session still exists.
-	if !tmuxSessionExists(testSocket, name) {
-		t.Skip("tmux session was auto-destroyed after process kill; skipping")
-	}
-
-	// Create a fresh manager.
-	mgr, store := newTestManager(t)
-
-	recovered, err := mgr.RecoverSessions()
-	if err != nil {
-		t.Fatalf("RecoverSessions: %v", err)
-	}
-	if recovered < 1 {
-		t.Fatalf("expected at least 1 recovered session, got %d", recovered)
-	}
-
-	sess, ok := store.GetByName(name)
-	if !ok {
-		t.Fatalf("expected recovered session %q in store", name)
-	}
-	if sess.State != session.StateStopped {
-		t.Errorf("expected STOPPED for recovered session with dead process, got %d", sess.State)
-	}
-	if sess.StoppedAt.IsZero() {
-		t.Error("expected non-zero StoppedAt for stopped recovered session")
-	}
-}
-
-func TestCleanupStaleSocket_SessionsWorkAfterCleanup(t *testing.T) {
-	// 1. Create a tmux session on testSocket to establish the socket file.
-	name := uniqueSessionName(t)
-	cmd := exec.Command("tmux", "-L", testSocket, "-f", "/dev/null", "new-session", "-d", "-s", name, "sleep", "30")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("failed to create tmux session: %v: %s", err, out)
-	}
-
-	// 2. Kill the tmux server to leave a stale socket.
-	killCmd := exec.Command("tmux", "-L", testSocket, "-f", "/dev/null", "kill-server")
-	killCmd.Run()
-
-	// Give it a moment to clean up.
-	time.Sleep(200 * time.Millisecond)
-
-	// 3. Verify the socket file still exists (stale).
-	// Resolve socket path same way as the implementation.
-	tmpdir := os.Getenv("TMUX_TMPDIR")
-	if tmpdir == "" {
-		tmpdir = os.TempDir()
-	}
-	socketPath := fmt.Sprintf("%s/tmux-%d/%s", tmpdir, os.Getuid(), testSocket)
-	if _, err := os.Stat(socketPath); os.IsNotExist(err) {
-		t.Skip("socket file already cleaned up by OS; skipping")
-	}
-
-	// 4. Clean up the stale socket.
-	tmuxClient := tmux.NewClient(testSocket)
-	if err := tmuxClient.CleanupStaleSocket(); err != nil {
-		t.Fatalf("CleanupStaleSocket: %v", err)
-	}
-
-	// 5. Now create a session through the manager — should work.
-	mgr, _ := newTestManager(t)
-	sessName := uniqueSessionName(t)
-	sess, err := mgr.Create(session.CreateRequest{
-		AgentProfile: "sleeper",
-		SessionName:  sessName,
-	})
-	if err != nil {
-		t.Fatalf("Create after socket cleanup: %v", err)
-	}
-	t.Cleanup(func() {
-		mgr.Destroy(sess.ID, true)
-	})
-
-	if sess.State != session.StateRunning {
-		t.Errorf("expected RUNNING after socket cleanup, got %d", sess.State)
 	}
 }

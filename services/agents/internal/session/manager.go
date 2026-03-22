@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"log/slog"
+	"os"
 	"regexp"
 	"strings"
 	"syscall"
@@ -12,45 +13,44 @@ import (
 
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
 	"github.com/dokipen/claude-cadence/services/agents/internal/git"
-	"github.com/dokipen/claude-cadence/services/agents/internal/tmux"
-	"github.com/dokipen/claude-cadence/services/agents/internal/ttyd"
+	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
 	"github.com/dokipen/claude-cadence/services/agents/internal/vault"
 	"github.com/google/uuid"
 )
 
 var (
-	tmuxNameRe = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
-	envKeyRe   = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+	envKeyRe = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 )
 
-// Manager orchestrates session lifecycle using Store and tmux.Client.
+// Manager orchestrates session lifecycle using Store and pty.PTYManager.
 type Manager struct {
-	store          *Store
-	tmux           *tmux.Client
-	ttyd           *ttyd.Client
-	git            *git.Client
-	vault          *vault.Client
-	profiles       map[string]config.Profile
-	tmuxHasSession func(name string) bool
-	processAlive   func(pid int) bool
+	store        *Store
+	pty          *pty.PTYManager
+	git          *git.Client
+	vault        *vault.Client
+	profiles     map[string]config.Profile
+	ptyHasSession func(id string) bool // injectable for tests; defaults to checking pty.PID
+	processAlive  func(pid int) bool
 }
 
 // NewManager creates a new session Manager.
 // gitClient may be nil if no profiles use repos.
 // vaultClient may be nil if no profiles use vault secrets.
-func NewManager(store *Store, tmuxClient *tmux.Client, ttydClient *ttyd.Client, gitClient *git.Client, vaultClient *vault.Client, profiles map[string]config.Profile) *Manager {
+func NewManager(store *Store, ptyManager *pty.PTYManager, gitClient *git.Client, vaultClient *vault.Client, profiles map[string]config.Profile) *Manager {
 	m := &Manager{
 		store:    store,
-		tmux:     tmuxClient,
-		ttyd:     ttydClient,
+		pty:      ptyManager,
 		git:      gitClient,
 		vault:    vaultClient,
 		profiles: profiles,
 	}
-	if tmuxClient != nil {
-		m.tmuxHasSession = func(name string) bool { return m.tmux.HasSession(name) }
+	if ptyManager != nil {
+		m.ptyHasSession = func(id string) bool {
+			_, err := ptyManager.PID(id)
+			return err == nil
+		}
 	} else {
-		m.tmuxHasSession = func(name string) bool { return false }
+		m.ptyHasSession = func(id string) bool { return false }
 	}
 	m.processAlive = isProcessAlive
 	return m
@@ -66,11 +66,11 @@ type CreateRequest struct {
 }
 
 const (
-	maxExtraArgs    = 64
-	maxExtraArgLen  = 4096
+	maxExtraArgs   = 64
+	maxExtraArgLen = 4096
 )
 
-// Create validates inputs, creates tmux session, starts command, returns Session.
+// Create validates inputs, creates PTY session, starts command, returns Session.
 func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	// Validate ExtraArgs limits and content.
 	if len(req.ExtraArgs) > maxExtraArgs {
@@ -97,22 +97,14 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		sessionName = fmt.Sprintf("%s-%d", req.AgentProfile, time.Now().UnixNano())
 	}
 
-	// Validate name is tmux-safe.
+	// Validate name length.
 	if len(sessionName) > 200 {
 		return nil, &Error{Code: ErrInvalidArgument, Message: "session name must be 200 characters or fewer"}
-	}
-	if !tmuxNameRe.MatchString(sessionName) {
-		return nil, &Error{Code: ErrInvalidArgument, Message: "session name must match [a-zA-Z0-9_-]"}
 	}
 
 	// Validate name is unique in store.
 	if _, exists := m.store.GetByName(sessionName); exists {
 		return nil, &Error{Code: ErrAlreadyExists, Message: fmt.Sprintf("session %q already exists", sessionName)}
-	}
-
-	// Validate name is unique in tmux.
-	if m.tmux.HasSession(sessionName) {
-		return nil, &Error{Code: ErrAlreadyExists, Message: fmt.Sprintf("tmux session %q already exists", sessionName)}
 	}
 
 	// Validate baseRef before any state changes.
@@ -126,7 +118,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		Name:         sessionName,
 		AgentProfile: req.AgentProfile,
 		State:        StateCreating,
-		TmuxSession:  sessionName,
+		TmuxSession:  "",
 		CreatedAt:    time.Now(),
 	}
 	m.store.Add(sess)
@@ -205,8 +197,10 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
 	}
 
-	// Build env var exports to prepend to the command.
-	var envExports []string
+	// Build env slice for PTY (format: "KEY=VALUE").
+	// Start from the daemon's own environment so PATH, HOME, TERM, etc. are
+	// inherited. Vault secrets and request env vars override anything inherited.
+	envSlice := os.Environ()
 
 	// Vault secrets as env vars.
 	if vaultSecrets != nil {
@@ -217,7 +211,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 				continue
 			}
 			strVal := fmt.Sprintf("%v", v)
-			envExports = append(envExports, fmt.Sprintf("export %s=%s;", envKey, shellEscapeArg(strVal)))
+			envSlice = append(envSlice, fmt.Sprintf("%s=%s", envKey, strVal))
 		}
 	}
 
@@ -230,20 +224,18 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 			})
 			return m.mustGet(sessionID), &Error{Code: ErrInvalidArgument, Message: fmt.Sprintf("invalid env var key: %q", k)}
 		}
-		envExports = append(envExports, fmt.Sprintf("export %s=%s;", k, shellEscapeArg(v)))
+		envSlice = append(envSlice, fmt.Sprintf("%s=%s", k, v))
 	}
 
-	// Build full command with env exports prepended. Use exec so the shell
-	// replaces itself with the agent process, ensuring GetPanePID returns the
-	// agent PID rather than the intermediate sh PID.
-	fullCommand := cmdStr
-	if len(envExports) > 0 {
-		fullCommand = strings.Join(envExports, " ") + " exec " + cmdStr
-	}
+	// Build PTY command: wrap the shell command string via bash -c so that
+	// the rendered cmdStr (which may include shell operators) is interpreted
+	// correctly.
+	command := []string{"bash", "-c", cmdStr}
 
-	// Create tmux session with command as initial process.
-	if err := m.tmux.NewSession(sessionName, workdir, fullCommand); err != nil {
-		errMsg := fmt.Sprintf("failed to create tmux session: %v", err)
+	// Create PTY session. Use sessionID (UUID) as the PTY key so all
+	// subsequent lookups (Destroy, PID, Has) resolve to the same entry.
+	if err := m.pty.Create(sessionID, workdir, command, envSlice, 0, 0); err != nil {
+		errMsg := fmt.Sprintf("failed to create PTY session: %v", err)
 		m.store.Update(sessionID, func(s *Session) {
 			s.State = StateError
 			s.ErrorMessage = errMsg
@@ -251,37 +243,13 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
 	}
 
-	// Mirror env vars into tmux session environment for tooling visibility
-	// (e.g., tmux show-environment). The process itself gets them via the
-	// command-line export prefix above.
-	if vaultSecrets != nil {
-		for k, v := range vaultSecrets {
-			envKey := strings.ToUpper(k)
-			if !envKeyRe.MatchString(envKey) {
-				continue
-			}
-			strVal := fmt.Sprintf("%v", v)
-			if err := m.tmux.SetEnv(sessionName, envKey, strVal); err != nil {
-				slog.Warn("failed to set vault env var in tmux", "key", envKey, "error", err)
-			}
-		}
-	}
-	for k, v := range req.Env {
-		if err := m.tmux.SetEnv(sessionName, k, v); err != nil {
-			slog.Warn("failed to set env var in tmux", "key", k, "error", err)
-		}
-	}
-
-	// Get PID (now returns agent process PID directly).
-	// If the command exited immediately (e.g., fast-exit profile), the tmux
-	// session and server may already be gone. Mark as stopped and skip ttyd
-	// to avoid launching a terminal for a dead session.
-	pid, err := m.tmux.GetPanePID(sessionName)
+	// Get PID of the child process.
+	// If the command exited immediately (e.g., fast-exit profile), the PTY
+	// session may already be gone. Mark as stopped in that case.
+	pid, err := m.pty.PID(sessionID)
 	if err != nil {
-		slog.Info("session command exited immediately", "session", sessionName, "error", err)
-		if m.tmuxHasSession(sessionName) {
-			_ = m.tmux.KillSession(sessionName)
-		}
+		slog.Info("session command exited immediately", "session", sessionID, "error", err)
+		_ = m.pty.Destroy(sessionID)
 		m.store.Update(sessionID, func(s *Session) {
 			s.State = StateStopped
 			s.StoppedAt = time.Now()
@@ -289,27 +257,16 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		return m.mustGet(sessionID), nil
 	}
 
-	// Start ttyd if enabled.
-	var websocketURL string
-	if m.ttyd != nil {
-		wsURL, err := m.ttyd.Start(sessionID, m.tmux.SocketName(), sessionName)
-		if err != nil {
-			slog.Warn("failed to start ttyd", "session", sessionName, "error", err)
-		} else {
-			websocketURL = wsURL
-		}
-	}
-
 	m.store.Update(sessionID, func(s *Session) {
 		s.State = StateRunning
 		s.AgentPID = pid
-		s.WebsocketURL = websocketURL
+		s.WebsocketURL = ""
 	})
 
 	return m.mustGet(sessionID), nil
 }
 
-// Get returns a session by ID, reconciling state with tmux reality.
+// Get returns a session by ID, reconciling state with PTY reality.
 func (m *Manager) Get(id string) (*Session, error) {
 	sess, ok := m.store.Get(id)
 	if !ok {
@@ -334,7 +291,7 @@ func (m *Manager) List(profileFilter string) ([]*Session, error) {
 	return result, nil
 }
 
-// Destroy kills tmux session and removes from store.
+// Destroy kills the PTY session and removes from store.
 func (m *Manager) Destroy(id string, force bool) error {
 	sess, ok := m.store.Get(id)
 	if !ok {
@@ -352,90 +309,14 @@ func (m *Manager) Destroy(id string, force bool) error {
 		s.State = StateDestroying
 	})
 
-	// Stop ttyd before killing tmux session.
-	if m.ttyd != nil {
-		m.ttyd.Stop(id)
-	}
-
-	if m.tmux != nil && m.tmuxHasSession(sess.TmuxSession) {
-		if err := m.tmux.KillSession(sess.TmuxSession); err != nil {
-			slog.Warn("failed to kill tmux session", "session", sess.TmuxSession, "error", err)
+	if m.pty != nil {
+		if err := m.pty.Destroy(sess.ID); err != nil {
+			slog.Warn("failed to destroy PTY session", "session", sess.ID, "error", err)
 		}
 	}
 
 	m.store.Delete(id)
 	return nil
-}
-
-// RecoverSessions rediscovers tmux sessions on the agentd socket that are not
-// tracked in the in-memory store. This handles daemon restarts where the store
-// was lost but tmux sessions survived. Recovered sessions are added to the
-// store with correct RUNNING/STOPPED state based on process liveness.
-//
-// Recovered sessions have an empty AgentProfile since the original profile
-// cannot be determined from tmux alone. They will not appear in
-// profile-filtered List calls.
-//
-// This must be called before the server starts accepting connections.
-func (m *Manager) RecoverSessions() (int, error) {
-	tmuxSessions, err := m.tmux.ListSessions()
-	if err != nil {
-		return 0, fmt.Errorf("listing tmux sessions: %w", err)
-	}
-
-	// Build a set of tmux session names already tracked in the store.
-	tracked := make(map[string]bool)
-	for _, sess := range m.store.List() {
-		tracked[sess.TmuxSession] = true
-	}
-
-	recovered := 0
-	now := time.Now()
-	for _, tmuxName := range tmuxSessions {
-		if tracked[tmuxName] {
-			continue
-		}
-
-		// Skip sessions with names that don't match agentd naming conventions.
-		if !tmuxNameRe.MatchString(tmuxName) {
-			slog.Debug("skipping non-agentd tmux session during recovery", "name", tmuxName)
-			continue
-		}
-
-		// Determine state by checking if the pane process is alive.
-		state := StateRunning
-		var stoppedAt time.Time
-		pid, err := m.tmux.GetPanePID(tmuxName)
-		if err != nil {
-			// Can't get PID — treat as stopped.
-			state = StateStopped
-			stoppedAt = now
-			pid = 0
-		} else if !isProcessAlive(pid) {
-			state = StateStopped
-			stoppedAt = now
-		}
-
-		sess := &Session{
-			ID:          uuid.New().String(),
-			Name:        tmuxName,
-			State:       state,
-			TmuxSession: tmuxName,
-			CreatedAt:   now,
-			StoppedAt:   stoppedAt,
-			AgentPID:    pid,
-		}
-		m.store.Add(sess)
-		recovered++
-
-		slog.Info("recovered tmux session",
-			"name", tmuxName,
-			"id", sess.ID,
-			"state", state,
-		)
-	}
-
-	return recovered, nil
 }
 
 func (m *Manager) reconcile(sess *Session) {
@@ -445,8 +326,9 @@ func (m *Manager) reconcile(sess *Session) {
 
 	now := time.Now()
 
-	tmuxExists := m.tmuxHasSession(sess.TmuxSession)
-	if !tmuxExists {
+	// Check if PTY session still exists.
+	ptyExists := m.ptyHasSession(sess.ID)
+	if !ptyExists {
 		m.store.Update(sess.ID, func(s *Session) {
 			s.State = StateStopped
 			s.StoppedAt = now
@@ -467,10 +349,8 @@ func (m *Manager) reconcile(sess *Session) {
 	}
 }
 
-func (m *Manager) cleanup(sessionID, tmuxSession, errMsg string) {
-	if m.tmux.HasSession(tmuxSession) {
-		_ = m.tmux.KillSession(tmuxSession)
-	}
+func (m *Manager) cleanup(sessionID, errMsg string) {
+	_ = m.pty.Destroy(sessionID)
 
 	m.store.Update(sessionID, func(s *Session) {
 		s.State = StateError

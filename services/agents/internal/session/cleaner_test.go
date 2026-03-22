@@ -5,25 +5,26 @@ import (
 	"time"
 )
 
-// newTestManager creates a Manager wired with fake tmux and process liveness
-// functions, suitable for unit tests that don't need real tmux or syscall.
-func newTestManager(tmuxSessions map[string]bool, alivePIDs map[int]bool) *Manager {
+// newTestManager creates a Manager wired with fake PTY and process liveness
+// functions, suitable for unit tests that don't need a real PTY or syscall.
+// ptySessions maps session IDs to whether they are "alive" in the PTY manager.
+func newTestManager(ptySessions map[string]bool, alivePIDs map[int]bool) *Manager {
 	store := NewStore()
 	m := &Manager{
-		store:          store,
-		tmuxHasSession: func(name string) bool { return tmuxSessions[name] },
-		processAlive:   func(pid int) bool { return alivePIDs[pid] },
+		store:         store,
+		ptyHasSession: func(id string) bool { return ptySessions[id] },
+		processAlive:  func(pid int) bool { return alivePIDs[pid] },
 	}
 	return m
 }
 
 func TestCleaner_ImmediateDestroyOnProcessExit(t *testing.T) {
-	// Session is Running with a dead PID and an existing tmux session.
+	// Session is Running with a dead PID and an existing PTY session.
 	// Cleaner should destroy it immediately (not wait for TTL).
-	tmuxSessions := map[string]bool{"tmux-1": true}
+	ptySessions := map[string]bool{"sess-1": true}
 	alivePIDs := map[int]bool{} // PID 42 is not alive
 
-	m := newTestManager(tmuxSessions, alivePIDs)
+	m := newTestManager(ptySessions, alivePIDs)
 	sess := &Session{
 		ID:          "sess-1",
 		Name:        "test-1",
@@ -45,12 +46,12 @@ func TestCleaner_ImmediateDestroyOnProcessExit(t *testing.T) {
 }
 
 func TestCleaner_ImmediateDestroyOnTmuxGone(t *testing.T) {
-	// Session is Running but the tmux session is gone (e.g., daemon restart killed it).
+	// Session is Running but the PTY session is gone (e.g., daemon restart killed it).
 	// Cleaner should destroy it immediately.
-	tmuxSessions := map[string]bool{} // tmux-1 is gone
+	ptySessions := map[string]bool{} // sess-2 is not in PTY manager
 	alivePIDs := map[int]bool{42: true}
 
-	m := newTestManager(tmuxSessions, alivePIDs)
+	m := newTestManager(ptySessions, alivePIDs)
 	sess := &Session{
 		ID:          "sess-2",
 		Name:        "test-2",
@@ -71,10 +72,10 @@ func TestCleaner_ImmediateDestroyOnTmuxGone(t *testing.T) {
 
 func TestCleaner_ImmediateDestroyOnCreatingProcessExit(t *testing.T) {
 	// Session is in StateCreating (not yet fully running) but process died.
-	tmuxSessions := map[string]bool{"tmux-3": true}
+	ptySessions := map[string]bool{"sess-3": true}
 	alivePIDs := map[int]bool{} // PID 99 not alive
 
-	m := newTestManager(tmuxSessions, alivePIDs)
+	m := newTestManager(ptySessions, alivePIDs)
 	sess := &Session{
 		ID:          "sess-3",
 		Name:        "test-3",
@@ -95,10 +96,10 @@ func TestCleaner_ImmediateDestroyOnCreatingProcessExit(t *testing.T) {
 
 func TestCleaner_SkipsRunningSessionWithAliveProcess(t *testing.T) {
 	// Session is Running with an alive PID — should NOT be destroyed.
-	tmuxSessions := map[string]bool{"tmux-4": true}
+	ptySessions := map[string]bool{"sess-4": true}
 	alivePIDs := map[int]bool{100: true}
 
-	m := newTestManager(tmuxSessions, alivePIDs)
+	m := newTestManager(ptySessions, alivePIDs)
 	sess := &Session{
 		ID:          "sess-4",
 		Name:        "test-4",

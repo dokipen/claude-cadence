@@ -4,18 +4,16 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"strings"
 	"testing"
 	"time"
 
 	agentsv1 "github.com/dokipen/claude-cadence/services/agents/gen/agents/v1"
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
+	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
 	"github.com/dokipen/claude-cadence/services/agents/internal/server"
 	"github.com/dokipen/claude-cadence/services/agents/internal/service"
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
-	"github.com/dokipen/claude-cadence/services/agents/internal/tmux"
-	"github.com/dokipen/claude-cadence/services/agents/internal/ttyd"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -30,10 +28,9 @@ func TestMain(m *testing.M) {
 	}
 
 	// Create components
-	tmuxClient := tmux.NewClient(cfg.Tmux.SocketName)
-	ttydClient := ttyd.NewClient(cfg.Ttyd.Enabled, cfg.Ttyd.BasePort, cfg.Ttyd.MaxPorts, cfg.Ttyd.BindAddress, cfg.Ttyd.AdvertiseAddress)
+	ptyManager := pty.NewPTYManager(pty.PTYConfig{BufferSize: cfg.PTY.BufferSize})
 	store := session.NewStore()
-	mgr := session.NewManager(store, tmuxClient, ttydClient, nil, nil, cfg.Profiles)
+	mgr := session.NewManager(store, ptyManager, nil, nil, cfg.Profiles)
 	svc := service.NewAgentService(mgr)
 
 	// Create a minimal config for test server
@@ -63,7 +60,6 @@ func TestMain(m *testing.M) {
 
 	// Cleanup
 	srv.Stop()
-	cleanupAllTestSessions(cfg.Tmux.SocketName)
 
 	os.Exit(code)
 }
@@ -83,7 +79,7 @@ func uniqueSessionName(t *testing.T) string {
 	// Use test name (sanitized) + nanos for uniqueness
 	name := strings.ReplaceAll(t.Name(), "/", "-")
 	name = strings.ReplaceAll(name, " ", "-")
-	// Keep only tmux-safe chars
+	// Keep only safe chars
 	safe := ""
 	for _, c := range name {
 		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-' {
@@ -91,31 +87,4 @@ func uniqueSessionName(t *testing.T) string {
 		}
 	}
 	return fmt.Sprintf("e2e-%s-%d", safe, time.Now().UnixNano())
-}
-
-func tmuxSessionExists(socketName, sessionName string) bool {
-	cmd := exec.Command("tmux", "-L", socketName, "has-session", "-t", sessionName)
-	return cmd.Run() == nil
-}
-
-func tmuxMouseEnabled(t *testing.T, socketName string) bool {
-	t.Helper()
-	out, err := exec.Command("tmux", "-L", socketName, "-f", "/dev/null", "show-options", "-g", "mouse").CombinedOutput()
-	if err != nil {
-		t.Logf("tmuxMouseEnabled: show-options failed: %v: %s", err, string(out))
-		return false
-	}
-	return strings.Contains(string(out), "mouse on")
-}
-
-func cleanupAllTestSessions(socketName string) {
-	out, err := exec.Command("tmux", "-L", socketName, "list-sessions", "-F", "#{session_name}").Output()
-	if err != nil {
-		return // no sessions
-	}
-	for _, name := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if strings.HasPrefix(name, "e2e-") {
-			exec.Command("tmux", "-L", socketName, "kill-session", "-t", name).Run()
-		}
-	}
 }
