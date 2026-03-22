@@ -14,7 +14,7 @@ func TestValidateAdvertiseAddress(t *testing.T) {
 		// Empty string: ttyd disabled, always valid.
 		{name: "empty string", addr: "", wantErr: false},
 
-		// Valid routable addresses.
+		// Valid routable addresses (bare IP).
 		{name: "private RFC1918 10.x", addr: "10.0.0.1", wantErr: false},
 		{name: "private RFC1918 172.16.x", addr: "172.16.0.1", wantErr: false},
 		{name: "private RFC1918 192.168.x", addr: "192.168.1.1", wantErr: false},
@@ -22,8 +22,14 @@ func TestValidateAdvertiseAddress(t *testing.T) {
 		{name: "IPv6 global unicast", addr: "2001:db8::1", wantErr: false},
 		{name: "IPv6 global unicast 2", addr: "2600:1f18::1", wantErr: false},
 
-		// Loopback addresses.
+		// Valid routable addresses (host:port).
+		{name: "private IP with port", addr: "192.168.1.1:8001", wantErr: false},
+		{name: "public IP with port", addr: "8.8.8.8:7681", wantErr: false},
+		{name: "IPv6 with port", addr: "[2001:db8::1]:8001", wantErr: false},
+
+		// Loopback addresses (bare and with port).
 		{name: "IPv4 loopback", addr: "127.0.0.1", wantErr: true},
+		{name: "IPv4 loopback with port", addr: "127.0.0.1:8001", wantErr: true},
 		{name: "IPv6 loopback", addr: "::1", wantErr: true},
 
 		// Link-local unicast addresses.

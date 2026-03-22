@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"time"
@@ -82,8 +83,13 @@ func HandleTerminalProxy(h *hub.Hub, allowedOrigins []string) http.HandlerFunc {
 		}
 
 		// Compare hostname (without port) against the registered advertise
-		// address, which is validated as a bare IP at registration time.
-		if parsed.Hostname() != agent.TtydConfig.AdvertiseAddress {
+		// address. AdvertiseAddress may be a bare IP or host:port; extract
+		// just the IP for comparison.
+		expectedHost := agent.TtydConfig.AdvertiseAddress
+		if h, _, err := net.SplitHostPort(expectedHost); err == nil {
+			expectedHost = h
+		}
+		if parsed.Hostname() != expectedHost {
 			slog.Warn("terminal endpoint host mismatch",
 				"agent", agentName,
 				"expected_host", agent.TtydConfig.AdvertiseAddress,

@@ -7,17 +7,28 @@ import (
 )
 
 // ValidateAdvertiseAddress checks that addr is a valid, routable IP address
-// suitable for use as a ttyd advertise address. An empty string is accepted
-// (ttyd disabled). Loopback, link-local, unspecified, and multicast addresses
-// are rejected.
+// suitable for use as a terminal WebSocket advertise address. Accepts either
+// a bare IP ("10.0.0.1") or host:port ("10.0.0.1:8001"). An empty string is
+// accepted (terminal server disabled). Loopback, link-local, unspecified, and
+// multicast addresses are rejected.
 func ValidateAdvertiseAddress(addr string) error {
 	if addr == "" {
 		return nil
 	}
 
-	ip := net.ParseIP(addr)
+	// Try bare IP first, then host:port.
+	host := addr
+	ip := net.ParseIP(host)
 	if ip == nil {
-		return fmt.Errorf("advertise address %q is not a valid IP address", addr)
+		var err error
+		host, _, err = net.SplitHostPort(addr)
+		if err != nil {
+			return fmt.Errorf("advertise address %q is not a valid IP or host:port", addr)
+		}
+		ip = net.ParseIP(host)
+		if ip == nil {
+			return fmt.Errorf("advertise address %q: host %q is not a valid IP", addr, host)
+		}
 	}
 
 	if ip.IsLoopback() {
