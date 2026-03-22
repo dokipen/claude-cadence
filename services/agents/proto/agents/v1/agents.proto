@@ -30,7 +30,8 @@ message Session {
   string worktree_path = 5;
   string repo_url = 6;
   string base_ref = 7;
-  string tmux_session = 8;
+  reserved 8;
+  reserved "tmux_session";
   google.protobuf.Timestamp created_at = 9;
   string error_message = 10;
   int32 agent_pid = 11;

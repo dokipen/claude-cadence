@@ -18,9 +18,8 @@ message Session {
   // base_ref is optional because Go serializes it with omitempty; it may be
   // absent when the session was not created with a specific base ref.
   optional string base_ref = 7;
-  // tmux_session is optional because Go serializes it with omitempty; it may
-  // be absent while the session is still initializing.
-  optional string tmux_session = 8;
+  reserved 8;
+  reserved "tmux_session";
   // created_at is an RFC3339 timestamp string.
   string created_at = 9;
   optional string error_message = 10;

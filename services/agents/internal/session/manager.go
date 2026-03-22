@@ -125,7 +125,6 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		Name:         sessionName,
 		AgentProfile: req.AgentProfile,
 		State:        StateCreating,
-		TmuxSession:  "",
 		CreatedAt:    time.Now(),
 	}
 	m.store.Add(sess)

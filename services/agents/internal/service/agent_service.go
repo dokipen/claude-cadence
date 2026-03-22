@@ -88,7 +88,6 @@ func sessionToProto(sess *session.Session) *agentsv1.Session {
 		WorktreePath: sess.WorktreePath,
 		RepoUrl:      sess.RepoURL,
 		BaseRef:      sess.BaseRef,
-		TmuxSession:  sess.TmuxSession,
 		CreatedAt:    timestamppb.New(sess.CreatedAt),
 		ErrorMessage: sess.ErrorMessage,
 		AgentPid:     int32(sess.AgentPID),

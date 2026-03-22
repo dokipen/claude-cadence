@@ -22,7 +22,6 @@ type Session struct {
 	Name         string
 	AgentProfile string
 	State        SessionState
-	TmuxSession  string
 	CreatedAt    time.Time
 	StoppedAt    time.Time
 	ErrorMessage string
