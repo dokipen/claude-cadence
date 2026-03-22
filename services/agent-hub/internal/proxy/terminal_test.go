@@ -3,7 +3,6 @@ package proxy
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -59,10 +58,13 @@ func startTestHub(t *testing.T, mockTtydAddr string) (*hub.Hub, string) {
 }
 
 // connectAgent registers an agent that responds to getTerminalEndpoint with
-// the same address and port it advertised at registration.
-func connectAgent(t *testing.T, url, name, ttydHost string, ttydPort int) {
+// a URL whose hostname matches the advertised address.
+// advertiseIP is the bare IP registered with the hub (validated by
+// ValidateAdvertiseAddress). ttydAddr is the host:port used in the response URL.
+func connectAgent(t *testing.T, url, name, advertiseIP, ttydAddr string) {
 	t.Helper()
-	connectAgentWithMismatch(t, url, name, ttydHost, ttydPort, ttydHost, ttydPort)
+	respURL := "ws://" + ttydAddr + "/ws/terminal/any"
+	connectAgentWithMismatch(t, url, name, advertiseIP, respURL)
 }
 
 // waitForAgent polls until the agent appears in the hub.
@@ -140,16 +142,13 @@ func TestHandleTerminalProxy_Relay(t *testing.T) {
 	}))
 	defer mockTtyd.Close()
 
-	// Parse the mock ttyd address.
+	// Parse the mock ttyd address (host:port) and extract bare IP for registration.
 	mockAddr := strings.TrimPrefix(mockTtyd.URL, "http://")
-	parts := strings.SplitN(mockAddr, ":", 2)
-	mockHost := parts[0]
-	mockPort := 0
-	fmt.Sscanf(parts[1], "%d", &mockPort)
+	mockHost := strings.SplitN(mockAddr, ":", 2)[0]
 
 	// Start hub with agent.
 	h, hubURL := startTestHub(t, mockTtyd.URL)
-	connectAgent(t, hubURL, "test-agent", mockHost, mockPort)
+	connectAgent(t, hubURL, "test-agent", mockHost, mockAddr)
 	waitForAgent(t, h, "test-agent")
 
 	// Start proxy server.
@@ -188,9 +187,9 @@ func TestHandleTerminalProxy_Relay(t *testing.T) {
 }
 
 // connectAgentWithMismatch is like connectAgent but lets the caller specify a
-// different address/port in the getTerminalEndpoint response than what was
-// advertised at registration.
-func connectAgentWithMismatch(t *testing.T, url, name, advertiseHost string, advertisePort int, respHost string, respPort int) {
+// different URL in the getTerminalEndpoint response than what was advertised
+// at registration.
+func connectAgentWithMismatch(t *testing.T, url, name, advertiseAddr, respURL string) {
 	t.Helper()
 	wsURL := "ws" + strings.TrimPrefix(url, "http")
 	conn, _, err := websocket.Dial(context.Background(), wsURL, nil)
@@ -201,7 +200,7 @@ func connectAgentWithMismatch(t *testing.T, url, name, advertiseHost string, adv
 	regReq, _ := hub.NewRequest("reg-1", "register", &hub.RegisterParams{
 		Name:     name,
 		Profiles: map[string]hub.ProfileInfo{"default": {Description: "test"}},
-		Ttyd:     hub.TtydInfo{AdvertiseAddress: advertiseHost, BasePort: advertisePort},
+		Ttyd:     hub.TtydInfo{AdvertiseAddress: advertiseAddr, BasePort: 0},
 	})
 	data, _ := json.Marshal(regReq)
 	conn.Write(context.Background(), websocket.MessageText, data)
@@ -220,8 +219,7 @@ func connectAgentWithMismatch(t *testing.T, url, name, advertiseHost string, adv
 			switch req.Method {
 			case "getTerminalEndpoint":
 				result, _ := json.Marshal(hub.GetTerminalEndpointResult{
-					Address: respHost,
-					Port:    respPort,
+					URL: respURL,
 				})
 				resp = &hub.Response{
 					JSONRPC: "2.0",
@@ -247,7 +245,7 @@ func connectAgentWithMismatch(t *testing.T, url, name, advertiseHost string, adv
 
 func TestHandleTerminalProxy_AddressMismatch(t *testing.T) {
 	h, hubURL := startTestHub(t, "")
-	connectAgentWithMismatch(t, hubURL, "mismatch-agent", "10.0.0.1", 7681, "192.168.1.100", 7681)
+	connectAgentWithMismatch(t, hubURL, "mismatch-agent", "10.0.0.1", "ws://192.168.1.100:7681/ws/terminal/sess-1")
 	waitForAgent(t, h, "mismatch-agent")
 
 	mux := http.NewServeMux()
@@ -266,9 +264,9 @@ func TestHandleTerminalProxy_AddressMismatch(t *testing.T) {
 	}
 }
 
-func TestHandleTerminalProxy_EmptyAddress(t *testing.T) {
+func TestHandleTerminalProxy_EmptyURL(t *testing.T) {
 	h, hubURL := startTestHub(t, "")
-	connectAgentWithMismatch(t, hubURL, "empty-addr-agent", "10.0.0.1", 7681, "", 7681)
+	connectAgentWithMismatch(t, hubURL, "empty-addr-agent", "10.0.0.1", "")
 	waitForAgent(t, h, "empty-addr-agent")
 
 	mux := http.NewServeMux()
@@ -287,17 +285,38 @@ func TestHandleTerminalProxy_EmptyAddress(t *testing.T) {
 	}
 }
 
-func TestHandleTerminalProxy_PortMismatch(t *testing.T) {
+func TestHandleTerminalProxy_BadScheme(t *testing.T) {
 	h, hubURL := startTestHub(t, "")
-	connectAgentWithMismatch(t, hubURL, "port-mismatch-agent", "10.0.0.1", 7681, "10.0.0.1", 22)
-	waitForAgent(t, h, "port-mismatch-agent")
+	connectAgentWithMismatch(t, hubURL, "bad-scheme-agent", "10.0.0.1", "http://10.0.0.1:7681/ws/terminal/sess-1")
+	waitForAgent(t, h, "bad-scheme-agent")
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
-	resp, err := http.Get(proxySrv.URL + "/ws/terminal/port-mismatch-agent/sess-1")
+	resp, err := http.Get(proxySrv.URL + "/ws/terminal/bad-scheme-agent/sess-1")
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadGateway {
+		t.Errorf("expected 502, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandleTerminalProxy_MalformedURL(t *testing.T) {
+	h, hubURL := startTestHub(t, "")
+	connectAgentWithMismatch(t, hubURL, "malformed-agent", "10.0.0.1", "://missing-scheme")
+	waitForAgent(t, h, "malformed-agent")
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
+	proxySrv := httptest.NewServer(mux)
+	defer proxySrv.Close()
+
+	resp, err := http.Get(proxySrv.URL + "/ws/terminal/malformed-agent/sess-1")
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}

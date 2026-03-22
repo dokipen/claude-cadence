@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/coder/websocket"
@@ -61,33 +62,45 @@ func HandleTerminalProxy(h *hub.Hub, allowedOrigins []string) http.HandlerFunc {
 			return
 		}
 
-		if endpoint.Address != agent.TtydConfig.AdvertiseAddress {
-			slog.Warn("terminal endpoint address mismatch",
-				"agent", agentName,
-				"expected_address", agent.TtydConfig.AdvertiseAddress,
-				"actual_address", endpoint.Address,
-			)
-			writeJSONError(w, http.StatusBadGateway, "terminal endpoint mismatch")
+		if endpoint.URL == "" {
+			writeJSONError(w, http.StatusBadGateway, "empty terminal endpoint URL")
 			return
 		}
-		maxPorts := agent.TtydConfig.MaxPorts
-		if maxPorts <= 0 {
-			maxPorts = 100 // default matches agentd's default
+
+		parsed, err := url.Parse(endpoint.URL)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			writeJSONError(w, http.StatusBadGateway, "invalid terminal endpoint URL")
+			return
 		}
-		maxPort := agent.TtydConfig.BasePort + maxPorts
-		if endpoint.Port < agent.TtydConfig.BasePort || endpoint.Port >= maxPort {
-			slog.Warn("terminal endpoint port out of range",
+
+		if parsed.Scheme != "ws" && parsed.Scheme != "wss" {
+			slog.Warn("terminal endpoint has invalid scheme",
 				"agent", agentName,
-				"port", endpoint.Port,
-				"range_start", agent.TtydConfig.BasePort,
-				"range_end", maxPort,
+				"scheme", parsed.Scheme,
+			)
+			writeJSONError(w, http.StatusBadGateway, "invalid terminal endpoint URL")
+			return
+		}
+
+		// Compare hostname (without port) against the registered advertise
+		// address. AdvertiseAddress may be a bare IP or host:port; extract
+		// just the IP for comparison.
+		expectedHost := agent.TtydConfig.AdvertiseAddress
+		if h, _, err := net.SplitHostPort(expectedHost); err == nil {
+			expectedHost = h
+		}
+		if parsed.Hostname() != expectedHost {
+			slog.Warn("terminal endpoint host mismatch",
+				"agent", agentName,
+				"expected_host", agent.TtydConfig.AdvertiseAddress,
+				"actual_host", parsed.Hostname(),
 			)
 			writeJSONError(w, http.StatusBadGateway, "terminal endpoint mismatch")
 			return
 		}
 
-		// Dial agentd's ttyd WebSocket.
-		ttydURL := fmt.Sprintf("ws://%s:%d/ws", endpoint.Address, endpoint.Port)
+		// Dial agentd's terminal WebSocket.
+		ttydURL := endpoint.URL
 		ttydConn, _, err := websocket.Dial(r.Context(), ttydURL, &websocket.DialOptions{
 			Subprotocols: []string{"tty"},
 		})
