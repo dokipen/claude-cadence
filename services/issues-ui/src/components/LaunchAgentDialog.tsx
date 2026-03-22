@@ -37,23 +37,25 @@ export function LaunchAgentDialog({
     if (open && !el.open) {
       el.showModal();
       if (anchorRect) {
-        el.style.position = 'fixed';
-        el.style.margin = '0';
-        const gap = 8;
-        let top = anchorRect.bottom + gap;
-        let left = anchorRect.left;
-        const dialogWidth = el.offsetWidth;
-        const dialogHeight = el.offsetHeight;
-        if (left + dialogWidth > window.innerWidth - gap) {
-          left = window.innerWidth - dialogWidth - gap;
-        }
-        if (left < gap) left = gap;
-        if (top + dialogHeight > window.innerHeight - gap) {
-          top = anchorRect.top - dialogHeight - gap;
-        }
-        if (top < gap) top = gap;
-        el.style.top = `${top}px`;
-        el.style.left = `${left}px`;
+        requestAnimationFrame(() => {
+          el.style.position = 'fixed';
+          el.style.margin = '0';
+          const gap = 8;
+          let top = anchorRect.bottom + gap;
+          let left = anchorRect.left;
+          const dialogWidth = el.offsetWidth;
+          const dialogHeight = el.offsetHeight;
+          if (left + dialogWidth > window.innerWidth - gap) {
+            left = window.innerWidth - dialogWidth - gap;
+          }
+          if (left < gap) left = gap;
+          if (top + dialogHeight > window.innerHeight - gap) {
+            top = anchorRect.top - dialogHeight - gap;
+          }
+          if (top < gap) top = gap;
+          el.style.top = `${top}px`;
+          el.style.left = `${left}px`;
+        });
       }
     } else if (!open && el.open) {
       el.style.position = '';
