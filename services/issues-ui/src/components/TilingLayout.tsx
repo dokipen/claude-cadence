@@ -64,6 +64,17 @@ function buildVerticalStack(keys: string[]): LayoutNode {
   };
 }
 
+function getNodeRatio(root: LayoutNode | null, path: string): number {
+  if (!root || root.type === "leaf") return 0.5;
+  const segments = path.split(".").slice(1); // drop "root"
+  let node: LayoutNode = root;
+  for (const seg of segments) {
+    if (node.type === "leaf") return 0.5;
+    node = seg === "0" ? node.first : node.second;
+  }
+  return node.type === "split" ? node.ratio : 0.5;
+}
+
 export function TilingLayout({ windows, onMinimize, onTerminated, onReorder, onReorderAll }: TilingLayoutProps) {
   // All hooks first
   const [maximizedKey, setMaximizedKey] = useState<string | null>(null);
@@ -130,7 +141,7 @@ export function TilingLayout({ windows, onMinimize, onTerminated, onReorder, onR
     const rect = container.getBoundingClientRect();
     const startPos = direction === "horizontal" ? e.clientX : e.clientY;
     const containerSize = direction === "horizontal" ? rect.width : rect.height;
-    const currentRatio = ratios.get(path) ?? 0.5;
+    const currentRatio = ratios.get(path) ?? getNodeRatio(layout, path);
 
     draggingRef.current = { path, direction, startPos, startRatio: currentRatio, containerSize };
 
