@@ -14,8 +14,24 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// rateLimiterMaxEntries is the hard cap on the number of entries in the
-// per-IP rate limiter map. Eviction fires when this limit is reached.
+// rateLimiterMaxEntries is the hard cap on the number of per-CIDR prefix
+// entries in the rate limiter map (IPv4 /24 or IPv6 /48). Eviction fires
+// when this limit is reached.
+//
+// Sizing rationale: keys are IPv4 /24 (or IPv6 /48) prefixes, so each
+// entry covers up to 256 IPs. 300 entries ≈ 76,800 IPs of concurrent
+// coverage — well above any realistic concurrent legitimate-client
+// population (observed deployments use single-digit to low-tens of
+// distinct /24 prefixes).
+//
+// The value was deliberately lowered from 1,000 (per-IP) to 300
+// (per-/24) as a security hardening measure: with CIDR bucketing an
+// attacker needs 300 distinct subnets (76,800+ individual IPs) to
+// exhaust the map, vs. only 1,000 individual IPs under the old scheme.
+//
+// Formula: expected_concurrent_prefixes × 3 (headroom factor) = cap.
+// If traffic analysis ever shows more than ~100 distinct prefixes active
+// concurrently, scale up by the same factor (e.g. 200 prefixes → 600).
 const rateLimiterMaxEntries = 300
 
 // rateLimiterDeniedProtectionWindow is how long a denied entry is protected
