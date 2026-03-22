@@ -2,7 +2,9 @@ package tmux
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -105,6 +107,43 @@ func (c *Client) CapturePane(name string) (string, error) {
 		return "", fmt.Errorf("tmux capture-pane: %w: %s", err, string(output))
 	}
 	return string(output), nil
+}
+
+// CleanupStaleSocket removes the tmux socket file if no server is responding on it.
+// This handles the case where a previous agentd process left a stale socket behind.
+// The socket path is resolved using the same logic tmux uses internally.
+func (c *Client) CleanupStaleSocket() error {
+	// Resolve socket path: tmux uses $TMUX_TMPDIR if set, otherwise os.TempDir().
+	tmpdir := os.Getenv("TMUX_TMPDIR")
+	if tmpdir == "" {
+		tmpdir = os.TempDir()
+	}
+	socketPath := filepath.Join(tmpdir, fmt.Sprintf("tmux-%d", os.Getuid()), c.socketName)
+
+	// If socket doesn't exist, nothing to clean.
+	if _, err := os.Stat(socketPath); os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("stat tmux socket %s: %w", socketPath, err)
+	}
+
+	// Probe whether a tmux server is responding on this socket.
+	cmd := exec.Command("tmux", append(c.baseArgs(), "list-sessions")...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		outStr := string(output)
+		if strings.Contains(outStr, "no server running") || strings.Contains(outStr, "error connecting") {
+			// Socket is stale — no server behind it.
+			if removeErr := os.Remove(socketPath); removeErr != nil {
+				return fmt.Errorf("remove stale tmux socket %s: %w", socketPath, removeErr)
+			}
+			return nil
+		}
+		return fmt.Errorf("probe tmux server: %w: %s", err, string(output))
+	}
+
+	// Server is responding — leave the socket alone.
+	return nil
 }
 
 // ListSessions returns names of all tmux sessions on this socket.
