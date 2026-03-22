@@ -160,6 +160,8 @@ issues ticket transition TICKET_ID --to IN_PROGRESS --json
 
 ## Labels
 
+> **Labels are global** — they are not scoped to a project. `issues label list` takes no `--project` flag. Label IDs are the same across all projects.
+
 ### List labels
 
 ```bash
