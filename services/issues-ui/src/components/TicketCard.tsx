@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import type { Ticket } from "../types";
+import type { AgentSession } from "../hooks/useAllSessions";
 import { PriorityBadge } from "./PriorityBadge";
 import { LabelBadge } from "./LabelBadge";
 import { LaunchAgentDialog } from "./LaunchAgentDialog";
@@ -11,11 +12,14 @@ import agentStyles from "../styles/agents.module.css";
 export function TicketCard({
   ticket,
   repoUrl,
+  activeSession,
 }: {
   ticket: Ticket;
   repoUrl?: string;
+  activeSession?: AgentSession;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const navigate = useNavigate();
 
   const launchButtonLabel = getLaunchConfig(ticket.state).buttonLabel;
 
@@ -26,6 +30,15 @@ export function TicketCard({
       setDialogOpen(true);
     },
     [],
+  );
+
+  const handleAgentClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      navigate("/agents");
+    },
+    [navigate],
   );
 
   return (
@@ -62,6 +75,16 @@ export function TicketCard({
             </span>
           )}
           <span className={styles.cardActions}>
+            {activeSession && (
+              <button
+                className={styles.agentRunningButton}
+                onClick={handleAgentClick}
+                title={activeSession.agentName}
+                data-testid="agent-running-indicator"
+              >
+                <span className={styles.agentRunningDot} />
+              </button>
+            )}
             <button
               className={agentStyles.cardLaunchButton}
               onClick={handleLaunchClick}

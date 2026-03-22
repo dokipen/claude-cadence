@@ -172,7 +172,7 @@ function AppShell() {
           <Route path="/docs/*" element={<DocsPage />} />
           <Route
             path="/projects/:projectId/*"
-            element={<KanbanBoard projectId={projectId} filters={filters} repoUrl={repoUrl} />}
+            element={<KanbanBoard projectId={projectId} filters={filters} repoUrl={repoUrl} sessions={sessions} />}
           />
           <Route path="/ticket/:id" element={<TicketDetail />} />
           <Route path="/*" element={<ProjectRedirect />} />
