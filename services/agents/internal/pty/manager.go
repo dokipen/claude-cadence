@@ -16,10 +16,14 @@ import (
 
 const defaultBufferSize = 1 << 20 // 1 MB
 
+const maxResizeDimension uint16 = 500
+
 // PTYConfig holds configuration for PTYManager.
 type PTYConfig struct {
 	// BufferSize is the ring buffer capacity in bytes. Defaults to 1 MB.
 	BufferSize int
+	// MaxSessions is the maximum number of concurrent sessions. Zero means unlimited.
+	MaxSessions int
 }
 
 // session holds per-session PTY state.
@@ -60,6 +64,12 @@ func (m *PTYManager) Create(id, workdir string, command []string, env []string, 
 	if rows == 0 {
 		rows = 24
 	}
+	if cols > maxResizeDimension {
+		cols = maxResizeDimension
+	}
+	if rows > maxResizeDimension {
+		rows = maxResizeDimension
+	}
 	if len(command) == 0 {
 		return errors.New("pty: command must not be empty")
 	}
@@ -69,6 +79,9 @@ func (m *PTYManager) Create(id, workdir string, command []string, env []string, 
 
 	if _, exists := m.sessions[id]; exists {
 		return fmt.Errorf("pty: session %q already exists", id)
+	}
+	if m.cfg.MaxSessions > 0 && len(m.sessions) >= m.cfg.MaxSessions {
+		return fmt.Errorf("pty: max sessions reached (%d)", m.cfg.MaxSessions)
 	}
 
 	cmd := exec.Command(command[0], command[1:]...)
@@ -246,6 +259,12 @@ func (m *PTYManager) ServeTerminal(ctx context.Context, id string, conn *websock
 			var resize resizeMsg
 			if jsonErr := json.Unmarshal(data[1:], &resize); jsonErr == nil {
 				if resize.Columns > 0 && resize.Rows > 0 {
+					if resize.Columns > maxResizeDimension {
+						resize.Columns = maxResizeDimension
+					}
+					if resize.Rows > maxResizeDimension {
+						resize.Rows = maxResizeDimension
+					}
 					_ = pty.Setsize(sess.master, &pty.Winsize{
 						Rows: resize.Rows,
 						Cols: resize.Columns,
