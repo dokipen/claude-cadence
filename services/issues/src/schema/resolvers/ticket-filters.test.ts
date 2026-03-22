@@ -159,14 +159,15 @@ describe("tickets filter — combined filters", () => {
 // Negation filter tests — excludeLabelName and excludePriority (issue #206)
 // ---------------------------------------------------------------------------
 describe("tickets filter — excludeLabelName", () => {
-  it("produces where.labels = { none: ... } when excludeLabelName is provided", async () => {
+  it("produces where.AND with exclude clause when only excludeLabelName is provided", async () => {
     const ctx = makeMockContext([]);
     await tickets(undefined, { excludeLabelName: "bug" }, ctx);
 
     const call = ctx.prisma.ticket.findMany.mock.calls[0][0];
-    expect(call.where.labels).toEqual({
-      none: { label: { name: "bug" } },
-    });
+    expect(call.where.labels).toBeUndefined();
+    expect(call.where.AND).toEqual([
+      { labels: { none: { label: { name: "bug" } } } },
+    ]);
     expect(call.where.state).toBeUndefined();
   });
 
@@ -176,20 +177,38 @@ describe("tickets filter — excludeLabelName", () => {
 
     const call = ctx.prisma.ticket.findMany.mock.calls[0][0];
     expect(call.where.state).toBe("BACKLOG");
-    expect(call.where.labels).toEqual({
-      none: { label: { name: "wontfix" } },
-    });
+    expect(call.where.labels).toBeUndefined();
+    expect(call.where.AND).toEqual([
+      { labels: { none: { label: { name: "wontfix" } } } },
+    ]);
   });
 
-  it("does not override where.labels set by labelName when excludeLabelName is also provided", async () => {
+  it("composes excludeLabelName into where.AND when labelName is also provided", async () => {
     const ctx = makeMockContext([]);
     await tickets(undefined, { labelName: "feature", excludeLabelName: "bug" }, ctx);
 
     const call = ctx.prisma.ticket.findMany.mock.calls[0][0];
-    // labelName takes precedence; excludeLabelName is ignored when labels already set
+    // labelName sets where.labels; excludeLabelName is composed via AND
     expect(call.where.labels).toEqual({
       some: { label: { name: "feature" } },
     });
+    expect(call.where.AND).toEqual([
+      { labels: { none: { label: { name: "bug" } } } },
+    ]);
+  });
+
+  it("composes excludeLabelName into where.AND when labelNames is also provided", async () => {
+    const ctx = makeMockContext([]);
+    await tickets(undefined, { labelNames: ["feature", "enhancement"], excludeLabelName: "wontfix" }, ctx);
+
+    const call = ctx.prisma.ticket.findMany.mock.calls[0][0];
+    // labelNames sets where.labels; excludeLabelName is composed via AND
+    expect(call.where.labels).toEqual({
+      some: { label: { name: { in: ["feature", "enhancement"] } } },
+    });
+    expect(call.where.AND).toEqual([
+      { labels: { none: { label: { name: "wontfix" } } } },
+    ]);
   });
 });
 

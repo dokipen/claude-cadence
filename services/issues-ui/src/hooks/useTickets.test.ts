@@ -184,3 +184,32 @@ describe("useTickets — variables when projectId is null", () => {
     );
   });
 });
+
+describe("useTickets — empty string coercion", () => {
+  it("coerces excludeLabelName empty string to undefined in variables", () => {
+    renderHook(() =>
+      useTickets("BACKLOG", "project-1", 50, { excludeLabelName: "" }),
+    );
+
+    const call = mockUsePollingQuery.mock.calls[0][0];
+    expect(call.variables?.excludeLabelName).toBeUndefined();
+  });
+});
+
+describe("useTickets — hasNextPage passthrough", () => {
+  it("returns hasNextPage: true when server response includes hasNextPage: true", () => {
+    const tickets = [makeTicket({ id: "t1" }), makeTicket({ id: "t2" })];
+
+    mockUsePollingQuery.mockReturnValue({
+      data: { tickets, totalCount: 5, hasNextPage: true },
+      loading: false,
+      error: null,
+    });
+
+    const { result } = renderHook(() =>
+      useTickets("BACKLOG", "project-1", 2, {}),
+    );
+
+    expect(result.current.hasNextPage).toBe(true);
+  });
+});

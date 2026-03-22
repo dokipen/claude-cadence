@@ -107,8 +107,15 @@ export const ticketResolvers = {
         };
       }
 
-      if (excludeLabelName && !where.labels) {
-        where.labels = { none: { label: { name: excludeLabelName } } };
+      if (excludeLabelName) {
+        const trimmedExclude = excludeLabelName.trim();
+        if (trimmedExclude.length > MAX_LABEL_LENGTH) {
+          throw new GraphQLError(`excludeLabelName exceeds maximum length of ${MAX_LABEL_LENGTH}`, { extensions: { code: "BAD_USER_INPUT" } });
+        }
+        const excludeClause = { labels: { none: { label: { name: trimmedExclude } } } };
+        where.AND = where.AND
+          ? [...(Array.isArray(where.AND) ? where.AND : [where.AND]), excludeClause]
+          : [excludeClause];
       }
 
       if (projectId) {
