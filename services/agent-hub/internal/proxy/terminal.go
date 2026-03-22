@@ -77,6 +77,8 @@ func HandleTerminalProxy(h *hub.Hub, allowedOrigins []string) http.HandlerFunc {
 			if len(allowedOrigins) > 0 {
 				acceptOpts.OriginPatterns = allowedOrigins
 			} else {
+				// Safe for loopback/internal connections where a reverse proxy
+				// (e.g. Caddy) handles origin validation before reaching the hub.
 				acceptOpts.InsecureSkipVerify = true
 			}
 			browserConn, err := websocket.Accept(w, r, acceptOpts)

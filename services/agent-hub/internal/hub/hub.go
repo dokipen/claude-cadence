@@ -285,6 +285,7 @@ func (h *Hub) HandleAgentConnection(ctx context.Context, agent *ConnectedAgent) 
 		msgType, data, err := agent.Conn().Read(ctx)
 		if err != nil {
 			slog.Info("agent connection closed", "agent", agent.Name, "error", err)
+			agent.CloseTerminalChannels()
 			h.markOfflineIfCurrent(agent.Name, agent)
 			return
 		}

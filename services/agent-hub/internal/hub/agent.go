@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"log/slog"
 	"sync"
 	"time"
 
@@ -131,6 +132,23 @@ func (a *ConnectedAgent) DeliverTerminalFrame(sessionID uuid.UUID, payload []byt
 		return true
 	default:
 		// Channel full — drop the frame rather than blocking the read loop.
+		slog.Warn("terminal relay channel full, dropping frame",
+			"session_id", sessionID,
+			"payload_len", len(payload),
+		)
 		return false
+	}
+}
+
+// CloseTerminalChannels closes all terminal relay channels and clears the map.
+// This unblocks any relay goroutines waiting on the channels, causing them to
+// see ok=false and clean up.
+func (a *ConnectedAgent) CloseTerminalChannels() {
+	a.terminalMu.Lock()
+	defer a.terminalMu.Unlock()
+
+	for id, ch := range a.terminalChannels {
+		close(ch)
+		delete(a.terminalChannels, id)
 	}
 }

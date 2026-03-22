@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	"github.com/google/uuid"
 
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
 	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
@@ -151,8 +150,14 @@ func (c *Client) connect(ctx context.Context) error {
 
 	slog.Info("connected to hub", "url", c.cfg.URL, "name", c.cfg.Name)
 
+	// Create a per-connection context that is cancelled when readLoop returns.
+	// This ensures relay goroutines spawned on this connection are torn down
+	// before a reconnect attempt reuses the client.
+	connCtx, connCancel := context.WithCancel(ctx)
+	defer connCancel()
+
 	// Read messages until disconnected.
-	return c.readLoop(ctx, conn)
+	return c.readLoop(connCtx, conn)
 }
 
 func (c *Client) register(ctx context.Context, conn *websocket.Conn) error {
@@ -246,7 +251,7 @@ func (c *Client) readLoop(ctx context.Context, conn *websocket.Conn) error {
 func (c *Client) dispatchBinaryFrame(data []byte) {
 	sessionUUID, payload, err := decodeTerminalFrame(data)
 	if err != nil {
-		slog.Debug("relay: dropping malformed binary frame", "error", err)
+		slog.Warn("relay: dropping malformed binary frame", "error", err)
 		return
 	}
 	sessID := sessionUUID.String()
@@ -343,27 +348,6 @@ func (c *Client) RegisterRelaySession(sessionID string, relayCancel context.Canc
 		})
 	}
 	return ch, cleanup
-}
-
-// WriteRelayFrame encodes a binary terminal relay frame and writes it to the
-// hub WebSocket. It is safe to call from multiple goroutines.
-func (c *Client) WriteRelayFrame(ctx context.Context, sessionID string, payload []byte) error {
-	parsed, err := uuid.Parse(sessionID)
-	if err != nil {
-		return fmt.Errorf("relay: invalid session UUID %q: %w", sessionID, err)
-	}
-	frame := encodeTerminalFrame(parsed, payload)
-	// Acquire mu first to read conn (consistent with closeConn lock order),
-	// then release mu before acquiring writeMu for the write.
-	c.mu.Lock()
-	conn := c.conn
-	c.mu.Unlock()
-	if conn == nil {
-		return fmt.Errorf("relay: not connected")
-	}
-	c.writeMu.Lock()
-	defer c.writeMu.Unlock()
-	return conn.Write(ctx, websocket.MessageBinary, frame)
 }
 
 // dispatchSession calls a SessionDispatcher method and wraps the result in a response.

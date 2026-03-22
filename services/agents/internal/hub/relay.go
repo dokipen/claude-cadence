@@ -53,6 +53,10 @@ func decodeTerminalFrame(frame []byte) (uuid.UUID, []byte, error) {
 // *websocket.Conn requirement, then pumps frames between that connection and the
 // hub WebSocket binary channel.
 //
+// A loopback HTTP server is used because coder/websocket requires a real HTTP
+// upgrade handshake to produce a *websocket.Conn — there is no API to create
+// one from a raw net.Conn. The TCP overhead on localhost is negligible.
+//
 // ptySessID is the string session UUID. The hub connection write mutex (writeMu)
 // is used to protect concurrent writes on hubConn.
 //
