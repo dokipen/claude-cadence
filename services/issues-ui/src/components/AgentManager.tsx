@@ -58,7 +58,7 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
       // Re-add to open windows if not already there
       setOpenWindows((prev) => {
         if (prev.some((w) => w.key === key)) return prev;
-        return [...prev, { key, session: as.session, agentName: as.agentName }];
+        return [...prev, { key, session: as.session, agentName: as.agentName, projectId: selectedProject?.id }];
       });
       return;
     }
@@ -69,9 +69,9 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
     // Open new window
     setOpenWindows((prev) => [
       ...prev,
-      { key, session: as.session, agentName: as.agentName },
+      { key, session: as.session, agentName: as.agentName, projectId: selectedProject?.id },
     ]);
-  }, [openWindows, minimizedKeys]);
+  }, [openWindows, minimizedKeys, selectedProject]);
 
   const handleMinimize = useCallback((key: string) => {
     setMinimizedKeys((prev) => new Set(prev).add(key));

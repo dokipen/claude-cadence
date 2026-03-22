@@ -12,6 +12,13 @@ vi.mock("./Terminal", () => ({
 // Mock CSS modules
 vi.mock("../styles/agents.module.css", () => ({ default: {} }));
 
+// Mock useTicketByNumber to avoid AuthProvider dependency
+const mockUseTicketByNumber = vi.fn();
+mockUseTicketByNumber.mockReturnValue({ ticket: null, loading: false, error: null });
+vi.mock("../hooks/useTicketByNumber", () => ({
+  useTicketByNumber: (...args: unknown[]) => mockUseTicketByNumber(...args),
+}));
+
 // Mock hubFetch
 const mockHubFetch = vi.fn();
 vi.mock("../api/agentHubClient", () => ({
@@ -295,3 +302,104 @@ describe("keyboard accessibility", () => {
     expect(onHeaderKeyDown).toHaveBeenCalledOnce();
   });
 });
+
+describe("ticket title in header", () => {
+  beforeEach(() => {
+    mockHubFetch.mockReset();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  const leadSession = create(SessionSchema, {
+    id: "sess-lead",
+    name: "lead-42",
+    state: "running",
+    agentProfile: "default",
+    tmuxSession: "tmux-lead",
+    createdAt: "2026-01-01T00:00:00Z",
+    agentPid: 9000,
+    baseRef: "main",
+    waitingForInput: false,
+  });
+
+  it("shows ticket title as link with CUID href when hook returns ticket", () => {
+    mockUseTicketByNumber.mockReturnValue({
+      ticket: { id: "cuid-abc", number: 42, title: "My ticket title" },
+      loading: false,
+      error: null,
+    });
+
+    render(
+      <TerminalWindow
+        session={leadSession}
+        agentName="agent-1"
+        projectId="proj-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    const link = document.querySelector('a[href="/ticket/cuid-abc"]');
+    expect(link).not.toBeNull();
+    expect(link?.textContent).toBe("My ticket title");
+    expect(document.querySelector('a[href="/ticket/42"]')).toBeNull();
+  });
+
+  it("shows plain #N span (no link) while ticket is loading (null)", () => {
+    mockUseTicketByNumber.mockReturnValue({
+      ticket: null,
+      loading: true,
+      error: null,
+    });
+
+    render(
+      <TerminalWindow
+        session={leadSession}
+        agentName="agent-1"
+        projectId="proj-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("#42")).toBeDefined();
+    expect(document.querySelector('a[href*="/ticket/"]')).toBeNull();
+  });
+
+  it("shows no ticket link for session without lead-N name pattern", () => {
+    mockUseTicketByNumber.mockReturnValue({
+      ticket: null,
+      loading: false,
+      error: null,
+    });
+
+    const workSession = create(SessionSchema, {
+      id: "sess-work",
+      name: "work-session",
+      state: "running",
+      agentProfile: "default",
+      tmuxSession: "tmux-work",
+      createdAt: "2026-01-01T00:00:00Z",
+      agentPid: 1111,
+      baseRef: "main",
+      waitingForInput: false,
+    });
+
+    render(
+      <TerminalWindow
+        session={workSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    expect(document.querySelector('a[href*="/ticket/"]')).toBeNull();
+    // No #N text in the tile header (the header contains session name "work-session")
+    const header = screen.getByTestId("tile-header");
+    expect(header.textContent).not.toMatch(/#\d+/);
+  });
+});
+

@@ -190,3 +190,13 @@ export const TRANSITION_TICKET_MUTATION = gql`
     }
   }
 `;
+
+export const TICKET_BY_NUMBER_QUERY = gql`
+  query TicketByNumber($projectId: ID!, $number: Int!) {
+    ticketByNumber(projectId: $projectId, number: $number) {
+      id
+      number
+      title
+    }
+  }
+`;

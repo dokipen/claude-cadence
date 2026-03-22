@@ -8,6 +8,7 @@ export interface TiledWindow {
   key: string;
   session: Session;
   agentName: string;
+  projectId?: string;
 }
 
 interface TilingLayoutProps {
@@ -235,6 +236,7 @@ export function TilingLayout({ windows, onMinimize, onTerminated, onReorder, onR
           key={win.key}
           session={win.session}
           agentName={win.agentName}
+          projectId={win.projectId}
           onMinimize={() => onMinimize(win.key)}
           onTerminated={() => onTerminated(win.key)}
           onDragStart={() => { dragKeyRef.current = win.key; }}

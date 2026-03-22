@@ -1,11 +1,13 @@
 import { Terminal } from "./Terminal";
 import { hubFetch, HubError } from "../api/agentHubClient";
+import { useTicketByNumber } from "../hooks/useTicketByNumber";
 import type { Session } from "../types";
 import styles from "../styles/agents.module.css";
 
 interface TerminalWindowProps {
   session: Session;
   agentName: string;
+  projectId?: string;
   onMinimize: () => void;
   onTerminated: () => void;
   onDragStart?: () => void;
@@ -25,6 +27,7 @@ interface TerminalWindowProps {
 export function TerminalWindow({
   session,
   agentName,
+  projectId,
   onMinimize,
   onTerminated,
   onDragStart,
@@ -41,6 +44,8 @@ export function TerminalWindow({
   onMaximize,
 }: TerminalWindowProps) {
   const ticketMatch = session.name.match(/^lead-(\d+)$/);
+  const ticketNumber = ticketMatch ? Number(ticketMatch[1]) : undefined;
+  const { ticket } = useTicketByNumber(projectId, ticketNumber);
 
   const handleTerminate = async () => {
     try {
@@ -50,11 +55,9 @@ export function TerminalWindow({
       );
       onTerminated();
     } catch (err) {
-      // 404 means session is already gone — treat as success
       if (err instanceof HubError && err.status === 404) {
         onTerminated();
       }
-      // Other errors: leave window in place so user can retry
     }
   };
 
@@ -84,15 +87,17 @@ export function TerminalWindow({
         <span className={styles.tileTitle}>
           {session.name}
           <span className={styles.tileAgent}> on {agentName}</span>
-          {ticketMatch && (
+          {ticket ? (
             <a
-              href={`/ticket/${ticketMatch[1]}`}
+              href={`/ticket/${ticket.id}`}
               className={styles.tileTicketLink}
               onClick={(e) => e.stopPropagation()}
             >
-              #{ticketMatch[1]}
+              {ticket.title}
             </a>
-          )}
+          ) : ticketMatch ? (
+            <span className={styles.tileTicketLink}>#{ticketMatch[1]}</span>
+          ) : null}
         </span>
         <div className={styles.tileControls}>
           <button
