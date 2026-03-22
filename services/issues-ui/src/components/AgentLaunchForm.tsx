@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { hubFetch } from "../api/agentHubClient";
+import { createSession } from "../api/agentHubClient";
 import type { Agent, Session } from "../types";
 import styles from "../styles/agents.module.css";
 
@@ -44,16 +44,7 @@ export function AgentLaunchForm({ agents, onLaunched }: AgentLaunchFormProps) {
       setError(null);
 
       try {
-        const session = await hubFetch<Session>(
-          `/agents/${encodeURIComponent(selectedHost)}/sessions`,
-          {
-            method: "POST",
-            body: JSON.stringify({
-              agent_profile: selectedProfile,
-              session_name: name.trim(),
-            }),
-          },
-        );
+        const session = await createSession(selectedHost, selectedProfile, name.trim());
         onLaunched(session, selectedHost);
         setSelectedHost("");
         setSelectedProfile("");

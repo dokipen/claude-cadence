@@ -1,4 +1,4 @@
-import type { Agent, AgentProfile, AgentStatus } from "../types";
+import type { Agent, AgentProfile, AgentStatus, Session } from "../types";
 
 const BASE_PATH = "/api/v1";
 
@@ -109,4 +109,41 @@ function validateAgentsResponse(data: unknown): { agents: Agent[] } {
 
 export async function fetchAgents(): Promise<{ agents: Agent[] }> {
   return hubFetch("/agents", undefined, validateAgentsResponse);
+}
+
+function validateSessionResponse(data: unknown): Session {
+  if (!isRecord(data)) {
+    throw new HubError(502, "Invalid session response: expected object");
+  }
+  if (!isString(data.id)) {
+    throw new HubError(502, 'Invalid session response: missing or invalid "id"');
+  }
+  if (!isString(data.name)) {
+    throw new HubError(502, 'Invalid session response: missing or invalid "name"');
+  }
+  if (!isString(data.state)) {
+    throw new HubError(502, 'Invalid session response: missing or invalid "state"');
+  }
+  if (!isString(data.agent_profile)) {
+    throw new HubError(502, 'Invalid session response: missing or invalid "agent_profile"');
+  }
+  return data as Session;
+}
+
+export async function createSession(
+  agentName: string,
+  profile: string,
+  sessionName: string,
+  extraArgs?: string[],
+): Promise<Session> {
+  const body: Record<string, unknown> = {
+    agent_profile: profile,
+    session_name: sessionName,
+    ...(extraArgs ? { extra_args: extraArgs } : {}),
+  };
+  return hubFetch(
+    `/agents/${encodeURIComponent(agentName)}/sessions`,
+    { method: "POST", body: JSON.stringify(body) },
+    validateSessionResponse,
+  );
 }
