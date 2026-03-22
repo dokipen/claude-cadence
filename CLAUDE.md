@@ -7,6 +7,7 @@ An issue-driven, multi-agent development workflow plugin for Claude Code.
 ### Commands (user-invoked slash commands)
 - `/lead N` — Coordinate implementation through structured phases with specialist agents
 - `/refine N` — Refine GitHub issues to quality standards
+- `/create-ticket` — Create a ticket in the project's issue tracker and stop (no implementation)
 
 ### Skills (model-invoked)
 - `new-work` — Create git worktrees for isolated feature development
@@ -88,7 +89,7 @@ Each command has a specific intent — do not conflate them:
 
 - `/lead N` — **Implement** issue N end-to-end through all workflow phases
 - `/refine N` — **Refine** issue N to quality standards; do not start implementation
-- "create a ticket for X" / "open an issue for X" — **Create the ticket only**; do not start implementation unless explicitly asked
+- `/create-ticket` — **Create the ticket only**; do not start implementation unless explicitly asked
 
 ### Target Project Confirmation
 
