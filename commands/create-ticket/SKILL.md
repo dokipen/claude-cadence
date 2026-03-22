@@ -47,9 +47,9 @@ Gather the following — infer from arguments where possible, otherwise ask the 
 
 If the user provided a title as an argument, use it. Ask for anything missing in a single prompt — do not ping-pong with one question at a time.
 
-### 2. Show Summary and Create
+### 2. Show Summary
 
-Present a summary of what will be created, then immediately create the ticket without asking for confirmation:
+Present a summary of what will be created. Do not ask for confirmation — proceed directly to step 3 to create the ticket:
 
 ```
 Creating ticket:
