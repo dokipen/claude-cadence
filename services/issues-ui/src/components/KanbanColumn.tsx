@@ -1,6 +1,5 @@
-import type { Ticket, TicketState } from "../types";
+import type { Ticket, TicketState, ActiveSessionInfo } from "../types";
 import { TicketCard } from "./TicketCard";
-import type { AgentSession } from "../hooks/useAllSessions";
 import styles from "../styles/board.module.css";
 
 const STATE_LABELS: Record<TicketState, string> = {
@@ -18,7 +17,7 @@ interface KanbanColumnProps {
   loading: boolean;
   error: string | null;
   repoUrl?: string;
-  sessions?: AgentSession[];
+  sessions?: ActiveSessionInfo[];
 }
 
 export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading, error, repoUrl, sessions }: KanbanColumnProps) {

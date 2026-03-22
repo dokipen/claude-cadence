@@ -66,18 +66,34 @@ func rateLimiterInternal(cfg config.RateLimitConfig, now func() time.Time) (lenF
 
 		t := now()
 
-		// Evict stale entries older than 5 minutes.
-		if len(limiters) >= 1000 {
-			for k, e := range limiters {
-				if t.Sub(e.lastSeen) > 5*time.Minute {
-					delete(limiters, k)
-				}
-			}
-		}
-
+		// Fast path: returning client, no eviction needed.
 		if entry, ok := limiters[ip]; ok {
 			entry.lastSeen = t
 			return entry.limiter
+		}
+
+		// New IP: evict before inserting to enforce the hard cap.
+		// Stale sweep first; if nothing is evicted (all entries fresh),
+		// fall back to evicting the single oldest entry (LRU hard cap).
+		if len(limiters) >= 1000 {
+			evicted := 0
+			for k, e := range limiters {
+				if t.Sub(e.lastSeen) > 5*time.Minute {
+					delete(limiters, k)
+					evicted++
+				}
+			}
+			if evicted == 0 {
+				var oldestKey string
+				var oldestTime time.Time
+				for k, e := range limiters {
+					if oldestKey == "" || e.lastSeen.Before(oldestTime) {
+						oldestKey = k
+						oldestTime = e.lastSeen
+					}
+				}
+				delete(limiters, oldestKey)
+			}
 		}
 		lim := rate.NewLimiter(rate.Limit(cfg.RequestsPerSecond), cfg.Burst)
 		limiters[ip] = &rateLimiterEntry{limiter: lim, lastSeen: t}

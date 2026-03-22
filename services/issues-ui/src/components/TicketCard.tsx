@@ -1,18 +1,18 @@
 import { useState, useCallback } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import type { Ticket } from "../types";
 import { PriorityBadge } from "./PriorityBadge";
 import { LabelBadge } from "./LabelBadge";
 import { LaunchAgentDialog } from "./LaunchAgentDialog";
 import { getLaunchConfig } from "./launchConfig";
-import type { AgentSession } from "../hooks/useAllSessions";
+import type { ActiveSessionInfo } from "../types";
 import styles from "../styles/card.module.css";
 import agentStyles from "../styles/agents.module.css";
 
-export function hasActiveSession(sessions: AgentSession[], ticketNumber: number): boolean {
+export function hasActiveSession(sessions: ActiveSessionInfo[], ticketNumber: number): boolean {
   const prefixes = [`lead-${ticketNumber}`, `refine-${ticketNumber}`, `discuss-${ticketNumber}`];
   return sessions.some(
-    (s) => prefixes.includes(s.session.name) && (s.session.state === "running" || s.session.state === "creating" || s.session.state === "destroying")
+    (s) => prefixes.includes(s.name) && (s.state === "running" || s.state === "creating" || s.state === "destroying")
   );
 }
 
@@ -23,11 +23,21 @@ export function TicketCard({
 }: {
   ticket: Ticket;
   repoUrl?: string;
-  sessions?: AgentSession[];
+  sessions?: ActiveSessionInfo[];
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const navigate = useNavigate();
 
   const launchButtonLabel = getLaunchConfig(ticket.state).buttonLabel;
+
+  const handleActiveSessionClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      navigate(`/ticket/${ticket.id}?tab=agent`);
+    },
+    [navigate, ticket.id],
+  );
 
   const handleLaunchClick = useCallback(
     (e: React.MouseEvent) => {
@@ -75,9 +85,16 @@ export function TicketCard({
           )}
           <span className={styles.cardActions}>
             {activeSession ? (
-              <span className={styles.activeSessionLogo} data-testid="active-session-logo" aria-label="Session in progress">
+              <button
+                type="button"
+                className={styles.activeSessionLogo}
+                data-testid="active-session-logo"
+                aria-label="Session in progress"
+                onClick={handleActiveSessionClick}
+                style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+              >
                 <img src="/cadence-icon-light.svg" alt="" width={18} height={18} className={styles.spinningLogo} />
-              </span>
+              </button>
             ) : (
               <button
                 className={agentStyles.cardLaunchButton}
@@ -96,7 +113,6 @@ export function TicketCard({
         </div>
       </Link>
       <LaunchAgentDialog
-        ticketId={ticket.id}
         ticketNumber={ticket.number}
         ticketState={ticket.state}
         ticketTitle={ticket.title}

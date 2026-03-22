@@ -79,17 +79,41 @@ function buildVerticalSplit(keys: string[]): LayoutNode {
 }
 
 export function TilingLayout({ windows, onMinimize, onTerminated, onReorder, onReorderAll }: TilingLayoutProps) {
-  const windowMap = new Map(windows.map((w) => [w.key, w]));
-  const keys = windows.map((w) => w.key);
-  const layout = buildLayout(keys);
+  // All hooks first
+  const [maximizedKey, setMaximizedKey] = useState<string | null>(null);
   const [ratios, setRatios] = useState<Map<string, number>>(new Map());
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const draggingRef = useRef<{ path: string; direction: "horizontal" | "vertical"; startPos: number; startRatio: number; containerSize: number } | null>(null);
   const dragKeyRef = useRef<string | null>(null);
-  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const [keyboardGrabKey, setKeyboardGrabKey] = useState<string | null>(null);
   const originalIndexRef = useRef<number | null>(null);
   const originalWindowKeysRef = useRef<string[]>([]);
   const [announceText, setAnnounceText] = useState('');
+
+  // Derived values (not hooks)
+  const visibleWindows = maximizedKey !== null
+    ? windows.filter((w) => w.key === maximizedKey)
+    : windows;
+  const windowMap = new Map(windows.map((w) => [w.key, w]));
+  const keys = visibleWindows.map((w) => w.key);
+  const layout = buildLayout(keys);
+
+  // Clear stale maximizedKey when its window is removed
+  useEffect(() => {
+    if (maximizedKey !== null && !windows.some((w) => w.key === maximizedKey)) {
+      setMaximizedKey(null);
+    }
+  }, [windows, maximizedKey]);
+
+  // ESC key exits maximized mode
+  useEffect(() => {
+    if (!maximizedKey) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMaximizedKey(null);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [maximizedKey]);
 
   // Prune stale ratio entries when layout changes
   const keysJson = JSON.stringify(keys);
@@ -226,6 +250,8 @@ export function TilingLayout({ windows, onMinimize, onTerminated, onReorder, onR
           onHeaderKeyDown={(e) => handleKeyboardReorder(win.key, e)}
           windowIndex={windows.findIndex((w) => w.key === win.key)}
           windowCount={windows.length}
+          isMaximized={maximizedKey === win.key}
+          onMaximize={() => setMaximizedKey((prev) => (prev === win.key ? null : win.key))}
         />
       );
     }

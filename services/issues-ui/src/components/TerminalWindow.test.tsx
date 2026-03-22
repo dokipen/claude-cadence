@@ -109,6 +109,53 @@ describe("TerminalWindow", () => {
     await waitFor(() => expect(mockHubFetch).toHaveBeenCalled());
     expect(onTerminated).not.toHaveBeenCalled();
   });
+
+  it("renders maximize button with data-testid and title 'Maximize' by default", () => {
+    render(
+      <TerminalWindow
+        session={baseSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    const btn = screen.getByTestId("tile-maximize");
+    expect(btn).toBeDefined();
+    expect(btn.title).toBe("Maximize");
+  });
+
+  it("renders maximize button with title 'Restore' when isMaximized is true", () => {
+    render(
+      <TerminalWindow
+        session={baseSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+        isMaximized={true}
+      />,
+    );
+
+    const btn = screen.getByTestId("tile-maximize");
+    expect(btn.title).toBe("Restore");
+  });
+
+  it("calls onMaximize callback when maximize button is clicked", () => {
+    const onMaximize = vi.fn();
+
+    render(
+      <TerminalWindow
+        session={baseSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+        onMaximize={onMaximize}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("tile-maximize"));
+    expect(onMaximize).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("keyboard accessibility", () => {

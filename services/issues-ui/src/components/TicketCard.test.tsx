@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
-import type { AgentSession } from "../hooks/useAllSessions";
-import type { Session, Ticket } from "../types";
+import type { ActiveSessionInfo, SessionState, Ticket } from "../types";
 
 // Mock CSS modules
 vi.mock("../styles/card.module.css", () => ({ default: {} }));
@@ -36,20 +35,9 @@ afterEach(() => {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const makeSession = (name: string, state: Session["state"]): AgentSession => ({
-  agentName: "agent-1",
-  session: {
-    id: `id-${name}`,
-    name,
-    agent_profile: "default",
-    state,
-    tmux_session: `tmux-${name}`,
-    created_at: "2024-01-01T00:00:00Z",
-    agent_pid: 1234,
-    worktree_path: "/tmp/worktree",
-    repo_url: "https://github.com/example/repo",
-    base_ref: "main",
-  } satisfies Session,
+const makeSession = (name: string, state: SessionState): ActiveSessionInfo => ({
+  name,
+  state,
 });
 
 const makeTicket = (overrides: Partial<Ticket> = {}): Ticket => ({

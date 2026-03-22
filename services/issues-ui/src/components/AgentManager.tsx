@@ -125,7 +125,7 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
         <SessionList
           agents={agents}
           sessions={filteredSessions}
-          openKeys={new Set([...openKeys, ...minimizedKeys])}
+          openKeys={openKeys}
           onSessionClick={handleSessionClick}
           isCollapsed={isCollapsed}
           onToggle={toggleSidebar}

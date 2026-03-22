@@ -33,8 +33,8 @@ export function SessionList({ agents, sessions, openKeys, onSessionClick, isColl
             {agents.length === 0 && (
               <p className={styles.sidebarEmpty}>No agents registered.</p>
             )}
-            {agents.map((agent) => {
-              const agentSessions = sessionsByAgent.get(agent.name) || [];
+            {[...agents].sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())).map((agent) => {
+              const agentSessions = (sessionsByAgent.get(agent.name) || []).slice().sort((a, b) => a.session.created_at.localeCompare(b.session.created_at));
               return (
                 <div key={agent.name} className={styles.sidebarAgent} data-testid="sidebar-agent">
                   <div className={styles.sidebarAgentHeader}>

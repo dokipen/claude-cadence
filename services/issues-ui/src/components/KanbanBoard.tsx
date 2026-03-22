@@ -1,7 +1,6 @@
-import type { TicketState } from "../types";
+import type { TicketState, ActiveSessionInfo } from "../types";
 import { useTickets, type TicketFilters } from "../hooks/useTickets";
 import { KanbanColumn } from "./KanbanColumn";
-import type { AgentSession } from "../hooks/useAllSessions";
 import styles from "../styles/board.module.css";
 
 const COLUMNS: { state: TicketState; first: number }[] = [
@@ -24,7 +23,7 @@ function ColumnFetcher({
   first: number;
   filters?: TicketFilters;
   repoUrl?: string;
-  sessions?: AgentSession[];
+  sessions?: ActiveSessionInfo[];
 }) {
   const { tickets, totalCount, hasNextPage, loading, error } = useTickets(state, projectId, first, filters);
   return (
@@ -50,7 +49,7 @@ export function KanbanBoard({
   projectId: string | null;
   filters?: TicketFilters;
   repoUrl?: string;
-  sessions?: AgentSession[];
+  sessions?: ActiveSessionInfo[];
 }) {
   if (!projectId) {
     return (
