@@ -11,7 +11,7 @@ You are now acting as the technical lead, coordinating specialist agents on this
 **Autonomy principle:** Drive through all phases without pausing for confirmation. Only interrupt the user when:
 - Acceptance criteria are ambiguous and you cannot resolve them from context
 - A decision requires user judgement (e.g., breaking down a large issue, choosing between approaches)
-- Manual QA is needed (Phase 6, visual changes only)
+- Manual QA is needed (Phase 6, visual changes or agent-service changes)
 - A phase is blocked and you cannot unblock it yourself
 
 ## Issue-First Workflow
@@ -325,7 +325,7 @@ For each task from the Phase 1 breakdown, delegate to an agent:
 2. Collect all findings, then triage by severity (Critical/Warning block merge, Suggestions don't)
 3. Fix-review loop: assign fixes, push, re-review (max 3 cycles before escalation)
 4. Handle deferred findings using the convention below
-5. Once all blocking findings are resolved, proceed directly to Phase 7 (skip Phase 6 unless the PR contains visual/UI changes)
+5. Once all blocking findings are resolved, proceed directly to Phase 7 (skip Phase 6 unless the PR contains visual/UI changes or touches `services/agents/` or `services/agent-hub/`)
 
 #### Deferred Findings Convention
 
@@ -344,9 +344,17 @@ In both cases:
 - Link back to the originating review: include "Discovered in #[PR-NUMBER] review" in the finding description
 - Review agents should recommend a target (existing ticket or new issue) and a priority in their review output — the lead makes the final call
 
-### Phase 6: Manual QA (visual changes only — skip for non-visual PRs)
+### Phase 6: Manual QA (visual changes or agent-service changes)
 
-> **This phase only applies when the PR contains visual/UI changes.** For all other PRs, proceed directly from Phase 5 to Phase 7.
+> **This phase applies when the PR contains visual/UI changes OR touches agent-related code (`services/agents/`, `services/agent-hub/`).** For all other PRs, proceed directly from Phase 5 to Phase 7.
+
+Detect the PR type before directing the user:
+```bash
+# Check if the PR touches agent-related code
+git diff origin/main...HEAD --name-only | grep -qE '^services/(agents|agent-hub)/' && echo "agent-service" || echo "visual"
+```
+
+#### Visual/UI changes
 
 1. **Direct the user to spin up the dev environment** (see `docs/dev-environment.md`):
    ```bash
@@ -365,6 +373,30 @@ In both cases:
      ```
 2. Wait for user feedback (user intervention required)
 3. Address issues if reported, return to Phase 5 after fixes
+
+#### Agent-service changes (`services/agents/`, `services/agent-hub/`)
+
+These services have hard host dependencies (tmux, the `claude` CLI, OS service integration) that make them impractical to containerize. Run them on the host alongside the compose stack.
+
+1. **Direct the user to build and install the host services:**
+   ```bash
+   # Build and install agentd
+   cd services/agents && make build
+   ./install/install.sh
+
+   # Build agent-hub
+   cd services/agent-hub && make build
+   ./agent-hub --config <your-config.yaml>
+   ```
+   See [`docs/dev-environment.md`](docs/dev-environment.md) and [`services/agents/docs/INSTALL.md`](services/agents/docs/INSTALL.md) for full configuration details.
+
+2. **Then start the compose stack with the `--profile agents` flag:**
+   ```bash
+   docker compose -f docker-compose.dev.yml --profile agents up --build
+   ```
+
+3. Wait for user feedback (user intervention required)
+4. Address issues if reported, return to Phase 5 after fixes
 
 ### Phase 7: Merge and Cleanup
 
