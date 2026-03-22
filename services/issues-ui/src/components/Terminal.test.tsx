@@ -235,7 +235,7 @@ describe("Terminal", () => {
   });
 
   // 7. xterm.js Terminal must be constructed with scroll-related options (issue #248)
-  it("constructs xterm.js Terminal with scrollback >= 1000 and mouseWheelScrollSensitivity >= 1", () => {
+  it("constructs xterm.js Terminal with scrollback >= 1000 and scrollSensitivity >= 1", () => {
     render(<Terminal agentName="agent-1" sessionId="sess-1" />);
 
     const ws = MockWebSocket.instances[0];
@@ -245,7 +245,7 @@ describe("Terminal", () => {
     const opts = xtermInstances[0].options;
     expect(typeof opts.scrollback).toBe("number");
     expect(opts.scrollback as number).toBeGreaterThanOrEqual(1000);
-    expect(typeof opts.mouseWheelScrollSensitivity).toBe("number");
-    expect(opts.mouseWheelScrollSensitivity as number).toBeGreaterThanOrEqual(1);
+    expect(typeof opts.scrollSensitivity).toBe("number");
+    expect(opts.scrollSensitivity as number).toBeGreaterThanOrEqual(1);
   });
 });
