@@ -56,13 +56,15 @@ export const ticketResolvers = {
         assigneeLogin?: string;
         isBlocked?: boolean;
         priority?: string;
+        excludeLabelName?: string;
+        excludePriority?: string;
         projectId?: string;
         first?: number;
         after?: string;
       },
       { prisma }: Context
     ) => {
-      const { state, labelName, labelNames, assigneeLogin, isBlocked, priority, projectId, after } = args;
+      const { state, labelName, labelNames, assigneeLogin, isBlocked, priority, excludeLabelName, excludePriority, projectId, after } = args;
       const rawFirst = args.first ?? MAX_PAGE_SIZE;
       const first = Number.isFinite(rawFirst) ? Math.min(Math.max(1, rawFirst), MAX_PAGE_SIZE) : MAX_PAGE_SIZE;
 
@@ -72,8 +74,12 @@ export const ticketResolvers = {
         where.state = state;
       }
 
-      if (priority) {
+      if (priority && excludePriority) {
+        where.priority = { equals: priority, not: excludePriority };
+      } else if (priority) {
         where.priority = priority;
+      } else if (excludePriority) {
+        where.priority = { not: excludePriority };
       }
 
       if (labelNames && labelNames.length > 0) {
@@ -99,6 +105,10 @@ export const ticketResolvers = {
             label: { name: labelName },
           },
         };
+      }
+
+      if (excludeLabelName && !where.labels) {
+        where.labels = { none: { label: { name: excludeLabelName } } };
       }
 
       if (projectId) {

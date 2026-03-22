@@ -156,6 +156,63 @@ describe("tickets filter — combined filters", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Negation filter tests — excludeLabelName and excludePriority (issue #206)
+// ---------------------------------------------------------------------------
+describe("tickets filter — excludeLabelName", () => {
+  it("produces where.labels = { none: ... } when excludeLabelName is provided", async () => {
+    const ctx = makeMockContext([]);
+    await tickets(undefined, { excludeLabelName: "bug" }, ctx);
+
+    const call = ctx.prisma.ticket.findMany.mock.calls[0][0];
+    expect(call.where.labels).toEqual({
+      none: { label: { name: "bug" } },
+    });
+    expect(call.where.state).toBeUndefined();
+  });
+
+  it("produces correct combined where clause when excludeLabelName and state are both provided", async () => {
+    const ctx = makeMockContext([]);
+    await tickets(undefined, { excludeLabelName: "wontfix", state: "BACKLOG" }, ctx);
+
+    const call = ctx.prisma.ticket.findMany.mock.calls[0][0];
+    expect(call.where.state).toBe("BACKLOG");
+    expect(call.where.labels).toEqual({
+      none: { label: { name: "wontfix" } },
+    });
+  });
+
+  it("does not override where.labels set by labelName when excludeLabelName is also provided", async () => {
+    const ctx = makeMockContext([]);
+    await tickets(undefined, { labelName: "feature", excludeLabelName: "bug" }, ctx);
+
+    const call = ctx.prisma.ticket.findMany.mock.calls[0][0];
+    // labelName takes precedence; excludeLabelName is ignored when labels already set
+    expect(call.where.labels).toEqual({
+      some: { label: { name: "feature" } },
+    });
+  });
+});
+
+describe("tickets filter — excludePriority", () => {
+  it("produces where.priority = { not: 'LOW' } when excludePriority is provided", async () => {
+    const ctx = makeMockContext([]);
+    await tickets(undefined, { excludePriority: "LOW" }, ctx);
+
+    const call = ctx.prisma.ticket.findMany.mock.calls[0][0];
+    expect(call.where.priority).toEqual({ not: "LOW" });
+    expect(call.where.state).toBeUndefined();
+  });
+
+  it("produces where.priority = { equals, not } when both priority and excludePriority are provided", async () => {
+    const ctx = makeMockContext([]);
+    await tickets(undefined, { priority: "HIGH", excludePriority: "LOW" }, ctx);
+
+    const call = ctx.prisma.ticket.findMany.mock.calls[0][0];
+    expect(call.where.priority).toEqual({ equals: "HIGH", not: "LOW" });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Sort order — CLOSED tickets should be sorted newest-first (issue #95)
 // ---------------------------------------------------------------------------
 describe("tickets — sort order by state", () => {

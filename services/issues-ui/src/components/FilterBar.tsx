@@ -27,7 +27,7 @@ interface FilterBarProps {
 }
 
 function hasActiveFilters(filters: TicketFilters): boolean {
-  return !!(filters.labelName || filters.isBlocked !== undefined || filters.priority);
+  return !!(filters.labelName || filters.isBlocked !== undefined || filters.priority || filters.excludeLabelName || filters.excludePriority);
 }
 
 export function FilterBar({ filters, onChange }: FilterBarProps) {

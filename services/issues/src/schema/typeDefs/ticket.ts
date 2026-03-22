@@ -108,6 +108,8 @@ export const ticketTypeDefs = `
       assigneeLogin: String
       isBlocked: Boolean
       priority: Priority
+      excludeLabelName: String
+      excludePriority: Priority
       projectId: ID
       "Maximum number of tickets to return. Server-side cap: 100."
       first: Int
