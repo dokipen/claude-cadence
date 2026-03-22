@@ -24,10 +24,9 @@ const (
 	maxRelayMessageSize = 1024 * 1024
 )
 
-// pingInterval is how often the proxy sends keepalive pings to both WebSocket
-// connections to prevent idle connection drops by OS/NAT firewalls.
-// Exposed as a var (not const) so tests can override it.
-var pingInterval = 10 * time.Second
+// defaultPingInterval is how often the proxy sends keepalive pings to both
+// WebSocket connections to prevent idle connection drops by OS/NAT firewalls.
+const defaultPingInterval = 10 * time.Second
 
 // HandleTerminalProxy returns an HTTP handler that proxies WebSocket connections
 // from the browser to an agentd's ttyd instance via the hub.
@@ -36,6 +35,12 @@ var pingInterval = 10 * time.Second
 // accepted — suitable for development or when the reverse proxy enforces access
 // control. When non-empty, only the listed origin patterns are allowed.
 func HandleTerminalProxy(h *hub.Hub, allowedOrigins []string) http.HandlerFunc {
+	return handleTerminalProxy(h, allowedOrigins, defaultPingInterval)
+}
+
+// handleTerminalProxy is the testable implementation that accepts an explicit
+// pingInterval, avoiding the data race caused by tests mutating a package-level var.
+func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.Duration) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		agentName := r.PathValue("agent_name")
 		sessionID := r.PathValue("session_id")
@@ -162,8 +167,8 @@ func HandleTerminalProxy(h *hub.Hub, allowedOrigins []string) http.HandlerFunc {
 		errc := make(chan error, 4)
 		go func() { errc <- relay(ctx, browserConn, ttydConn) }()
 		go func() { errc <- relay(ctx, ttydConn, browserConn) }()
-		go func() { errc <- pingKeepalive(ctx, browserConn) }()
-		go func() { errc <- pingKeepalive(ctx, ttydConn) }()
+		go func() { errc <- pingKeepalive(ctx, browserConn, pingInterval) }()
+		go func() { errc <- pingKeepalive(ctx, ttydConn, pingInterval) }()
 
 		// Wait for any goroutine to finish, then cancel the rest.
 		<-errc
@@ -205,7 +210,7 @@ func relay(ctx context.Context, dst, src *websocket.Conn) error {
 //     calls browserConn.Read in a sibling goroutine.
 //   - pinging ttydConn is safe because relay(ctx, browserConn, ttydConn)
 //     calls ttydConn.Read in a sibling goroutine.
-func pingKeepalive(ctx context.Context, conn *websocket.Conn) error {
+func pingKeepalive(ctx context.Context, conn *websocket.Conn, pingInterval time.Duration) error {
 	ticker := time.NewTicker(pingInterval)
 	defer ticker.Stop()
 	for {
@@ -219,11 +224,6 @@ func pingKeepalive(ctx context.Context, conn *websocket.Conn) error {
 			if err != nil {
 				if ctx.Err() != nil {
 					return ctx.Err()
-				}
-				// If the ping timed out due to its own deadline (slow pong),
-				// skip this round and try again next interval.
-				if errors.Is(err, context.DeadlineExceeded) {
-					continue
 				}
 				return err
 			}

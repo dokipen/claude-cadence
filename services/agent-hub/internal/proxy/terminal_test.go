@@ -517,19 +517,17 @@ func (l *idleClosingListener) Accept() (net.Conn, error) {
 // periodic keepalive pings that prevent idle OS/NAT connection drops.
 //
 // The mock ttyd server's listener is wrapped in an idleClosingListener that
-// forcibly closes any connection that is idle for more than 80ms. Without
+// forcibly closes any connection that is idle for more than 300ms. Without
 // keepalive pings from the hub to the ttyd connection the relay silently dies
 // and the browser sees an error when it tries to send after the idle period.
 //
-// This test FAILS with the current code (no keepalive) and will PASS once
-// periodic pings are implemented using pingInterval.
+// pingInterval (100ms) is chosen to be well within the idle timeout (300ms) so
+// that pings reliably reset the idle timer on localhost. The pong must arrive
+// within pingInterval; 100ms is ample for loopback.
 func TestHandleTerminalProxy_KeepalivePreventsDrop(t *testing.T) {
-	const idleTimeout = 80 * time.Millisecond
+	const idleTimeout = 300 * time.Millisecond
 
-	// Override pingInterval so the keepalive (once implemented) fires well
-	// before the idle timeout expires.
-	pingInterval = 30 * time.Millisecond
-	t.Cleanup(func() { pingInterval = 10 * time.Second })
+	// Use a ping interval well within the idle timeout.
 
 	// Create the underlying TCP listener manually so we can wrap it.
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -575,9 +573,10 @@ func TestHandleTerminalProxy_KeepalivePreventsDrop(t *testing.T) {
 	connectAgent(t, hubURL, "keepalive-agent", ttydHost, ttydAddr)
 	waitForAgent(t, h, "keepalive-agent")
 
-	// Start the proxy server.
+	// Start the proxy server with a 100ms ping interval — well within the 300ms
+	// idle timeout and long enough for loopback pong roundtrips.
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", handleTerminalProxy(h, nil, 100*time.Millisecond))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -592,13 +591,28 @@ func TestHandleTerminalProxy_KeepalivePreventsDrop(t *testing.T) {
 	}
 	defer browserConn.Close(websocket.StatusNormalClosure, "done")
 
+	// The coder/websocket library requires Read to be called concurrently so
+	// that it can process incoming control frames (Ping) and auto-respond with
+	// Pong. Without this, the proxy's pingKeepalive targeting browserConn would
+	// time out waiting for the pong and tear down the connection.
+	type readResult struct {
+		msgType websocket.MessageType
+		data    []byte
+		err     error
+	}
+	readCh := make(chan readResult, 1)
+	go func() {
+		msgType, data, err := browserConn.Read(ctx)
+		readCh <- readResult{msgType, data, err}
+	}()
+
 	// Hold idle for longer than the idle timeout.
-	// WITHOUT keepalive: the idle timer fires at 80ms, drops the hub→ttyd TCP
+	// WITHOUT keepalive: the idle timer fires at 300ms, drops the hub→ttyd TCP
 	// connection, and the relay goroutine terminates. When the browser sends a
 	// message it either gets a write error or reads a close frame.
-	// WITH keepalive: pings every 30ms reset the idle timer, so the connection
-	// survives the 200ms idle period.
-	time.Sleep(200 * time.Millisecond)
+	// WITH keepalive: pings every 100ms reset the idle timer, so the connection
+	// survives the 600ms idle period.
+	time.Sleep(600 * time.Millisecond)
 
 	// Try to send a message — should succeed only if the connection survived.
 	msg := []byte("hello after idle")
@@ -606,13 +620,14 @@ func TestHandleTerminalProxy_KeepalivePreventsDrop(t *testing.T) {
 		t.Fatalf("browser write after idle period: %v (connection was dropped — keepalive missing)", err)
 	}
 
-	_, data, err := browserConn.Read(ctx)
-	if err != nil {
-		t.Fatalf("browser read after idle period: %v (connection was dropped — keepalive missing)", err)
+	// Read the echo response via the background goroutine.
+	result := <-readCh
+	if result.err != nil {
+		t.Fatalf("browser read after idle period: %v (connection was dropped — keepalive missing)", result.err)
 	}
 
 	expected := "echo:hello after idle"
-	if string(data) != expected {
-		t.Errorf("expected %q, got %q", expected, string(data))
+	if string(result.data) != expected {
+		t.Errorf("expected %q, got %q", expected, string(result.data))
 	}
 }
