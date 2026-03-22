@@ -70,8 +70,25 @@ export const ticketResolvers = {
 
       const where: Prisma.TicketWhereInput = {};
 
+      if (state && !VALID_STATES.has(state)) {
+        throw new GraphQLError(`Invalid state: ${state}. Must be one of: ${[...VALID_STATES].join(", ")}`, {
+          extensions: { code: "BAD_USER_INPUT" },
+        });
+      }
+
       if (state) {
         where.state = state;
+      }
+
+      if (priority && !VALID_PRIORITIES.has(priority)) {
+        throw new GraphQLError(`Invalid priority: ${priority}. Must be one of: ${[...VALID_PRIORITIES].join(", ")}`, {
+          extensions: { code: "BAD_USER_INPUT" },
+        });
+      }
+      if (excludePriority && !VALID_PRIORITIES.has(excludePriority)) {
+        throw new GraphQLError(`Invalid priority: ${excludePriority}. Must be one of: ${[...VALID_PRIORITIES].join(", ")}`, {
+          extensions: { code: "BAD_USER_INPUT" },
+        });
       }
 
       if (priority && excludePriority) {
