@@ -102,15 +102,26 @@ describe("SessionList", () => {
     expect(rendered[2]).toContain("zebra-agent");
   });
 
-  it("renders agents in alphabetical order when input order changes between renders", () => {
-    const agents = [
+  it("maintains alphabetical order when agent array is re-rendered with different input order", () => {
+    const initialAgents = [
+      makeAgent("zebra-agent"),
+      makeAgent("mango-agent"),
+      makeAgent("alpha-agent"),
+    ];
+    const { getAllByTestId, rerender } = render(
+      <SessionList {...defaultProps} agents={initialAgents} isCollapsed={false} />,
+    );
+
+    // Simulate a poll returning agents in a different order
+    const reorderedAgents = [
       makeAgent("mango-agent"),
       makeAgent("alpha-agent"),
       makeAgent("zebra-agent"),
     ];
-    const { getAllByTestId } = render(
-      <SessionList {...defaultProps} agents={agents} isCollapsed={false} />,
+    rerender(
+      <SessionList {...defaultProps} agents={reorderedAgents} isCollapsed={false} />,
     );
+
     const rendered = getAllByTestId("sidebar-agent").map((el) => el.textContent);
     expect(rendered[0]).toContain("alpha-agent");
     expect(rendered[1]).toContain("mango-agent");
