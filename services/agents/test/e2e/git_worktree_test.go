@@ -353,14 +353,14 @@ func TestGitDetachedHead_RecoveredOnNextSession(t *testing.T) {
 		})
 	})
 
-	// Verify HEAD is now attached to the default branch.
+	// Verify HEAD is now attached to the default branch (main).
 	headRef, err := exec.Command("git", "-C", cloneDir, "symbolic-ref", "HEAD").Output()
 	if err != nil {
 		t.Fatalf("expected HEAD to be attached after second session, but got error: %v", err)
 	}
 	ref := strings.TrimSpace(string(headRef))
-	if !strings.HasPrefix(ref, "refs/heads/") {
-		t.Errorf("expected HEAD to point to a branch, got %q", ref)
+	if ref != "refs/heads/main" {
+		t.Errorf("expected HEAD to point to %q, got %q", "refs/heads/main", ref)
 	}
 }
 
