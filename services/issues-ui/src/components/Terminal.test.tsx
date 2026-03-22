@@ -300,4 +300,22 @@ describe("Terminal", () => {
       expect(fitAddonInstances[0].fit).toHaveBeenCalled();
     });
   });
+
+  // 8. Right-click on terminal container must suppress the browser's native context menu
+  //    so the tmux mouse context menu is not obscured (issue #266).
+  it("suppresses the browser native context menu on right-click (contextmenu event default prevented)", () => {
+    render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+
+    const container = screen.getByTestId("terminal-container");
+
+    let defaultPrevented = false;
+    container.addEventListener("contextmenu", (e) => {
+      defaultPrevented = e.defaultPrevented;
+    });
+
+    fireEvent.contextMenu(container);
+
+    expect(defaultPrevented).toBe(true);
+  });
+
 });
