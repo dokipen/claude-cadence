@@ -7,8 +7,10 @@ export function DocsPage() {
   const { files, loading: filesLoading, error: filesError } = useDocFiles();
   const params = useParams<{ "*": string }>();
   const navigate = useNavigate();
-  const selectedPath = params["*"] || null;
-  const { content, loading: contentLoading, error: contentError } = useDocContent(selectedPath);
+  const selectedPath = params["*"] || null; // empty string when at /docs with no sub-path
+  // Reject paths with traversal segments
+  const safePath = selectedPath && !selectedPath.split("/").some(seg => seg === ".." || seg === ".") ? selectedPath : null;
+  const { content, loading: contentLoading, error: contentError } = useDocContent(safePath);
 
   return (
     <div className={styles.container}>
@@ -29,8 +31,8 @@ export function DocsPage() {
             {files.map((file) => (
               <li key={file.path}>
                 <button
-                  className={`${styles.fileItem}${selectedPath === file.path ? ` ${styles.fileItemSelected}` : ""}`}
-                  onClick={() => navigate(`/docs/${file.path}`)}
+                  className={`${styles.fileItem}${safePath === file.path ? ` ${styles.fileItemSelected}` : ""}`}
+                  onClick={() => navigate(`/docs/${file.path.split("/").map(encodeURIComponent).join("/")}`)}
                   title={file.path}
                 >
                   {file.path}
@@ -41,7 +43,7 @@ export function DocsPage() {
         )}
       </nav>
       <div className={styles.content}>
-        {selectedPath === null ? (
+        {safePath === null ? (
           <div className={styles.emptyState}>Select a document to preview</div>
         ) : contentLoading ? (
           <p className={styles.statusText}>Loading…</p>

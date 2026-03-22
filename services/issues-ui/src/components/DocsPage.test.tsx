@@ -33,7 +33,7 @@ const mockUseParams = useParams as ReturnType<typeof vi.fn>;
 const mockUseNavigate = useNavigate as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-  vi.restoreAllMocks();
+  vi.clearAllMocks();
   mockNavigate.mockClear();
 
   // Default: no file selected, files loaded
