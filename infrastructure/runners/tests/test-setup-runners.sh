@@ -69,13 +69,14 @@ fi
 #
 # Test strategy: runtime integration test.
 #   - Pre-populate a runner dir with .runner (+ config.sh and svc.sh stubs)
-#   - Inject stubs for gh, sha256sum, sudo, curl, tar, id, systemctl, useradd, chown
+#   - Inject stubs for gh, sha256sum, shasum, sudo, curl, tar, id, systemctl, useradd, chown
 #   - Run setup-runners.sh without --dry-run
 #   - Verify config.sh remove appears in the call log before --unattended
 # ---------------------------------------------------------------------------
 echo "--- Bug 1 (Integration): config.sh remove called before --unattended at runtime ---"
 
 TMPDIR_B1="$(mktemp -d)"
+CLEANUP_DIRS+=("$TMPDIR_B1")
 STUB_DIR_B1="$TMPDIR_B1/stubs"
 mkdir -p "$STUB_DIR_B1"
 
@@ -130,12 +131,18 @@ esac
 GH_EOF
 chmod +x "$STUB_DIR_B1/gh"
 
-# sha256sum stub: returns fixed hash matching gh stub (checksum always passes)
+# sha256sum/shasum stub: returns fixed hash matching gh stub (checksum always passes)
+# sha256sum is used on Linux; shasum -a 256 is used on macOS (verify_checksum branches on OS)
 cat > "$STUB_DIR_B1/sha256sum" << SHAEOF
 #!/usr/bin/env bash
 echo "${FAKE_HASH}  \$1"
 SHAEOF
 chmod +x "$STUB_DIR_B1/sha256sum"
+cat > "$STUB_DIR_B1/shasum" << SHASUMEOF
+#!/usr/bin/env bash
+echo "${FAKE_HASH}  \$1"
+SHASUMEOF
+chmod +x "$STUB_DIR_B1/shasum"
 
 # sudo stub: strips -u USER and --preserve-env=... flags, executes remaining args
 cat > "$STUB_DIR_B1/sudo" << 'SUDOEOF'
@@ -162,8 +169,7 @@ for _stub in curl tar id systemctl useradd chown; do
 done
 
 # Run the script without --dry-run to trigger the idempotency/re-provision path
-b1_integration_output=$(
-    CALL_LOG="$CALL_LOG" \
+CALL_LOG="$CALL_LOG" \
     PATH="$STUB_DIR_B1:$PATH" \
     GH_TOKEN=fake \
     bash "$SCRIPT" \
@@ -172,7 +178,7 @@ b1_integration_output=$(
         --base-dir "$BASE_DIR_B1" \
         --user github-runner \
         --runner-version "$RUNNER_VERSION_STUB" \
-        2>&1) || true
+        >/dev/null 2>&1 || true
 
 # Verify config.sh remove was called (deregister_runner was triggered)
 if grep -q "^remove$" "$CALL_LOG" 2>/dev/null; then
@@ -196,9 +202,6 @@ if [[ -n "${_remove_line:-}" && -n "${_unattended_line:-}" && "$_remove_line" -l
 else
     fail "Bug1(integration): call order wrong — remove not before --unattended (remove=${_remove_line:-missing} unattended=${_unattended_line:-missing})"
 fi
-
-rm -rf "$TMPDIR_B1"
-
 
 # ---------------------------------------------------------------------------
 # Bug 2 — Tarball downloaded per-runner (not cached)
