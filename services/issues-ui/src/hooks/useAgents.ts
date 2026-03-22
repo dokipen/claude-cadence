@@ -93,7 +93,8 @@ export interface AgentProfileEntry {
  *   .git) for other inputs. Do not render the return value as HTML or use it
  *   as a URL without further validation.
  */
-export function normalizeRepo(repo: string): string {
+export function normalizeRepo(repo: string | undefined): string {
+  if (!repo) return "";
   return repo
     .replace(/^git@github\.com:/, "") // SSH: git@github.com:owner/repo
     .replace(/^https?:\/\/github\.com\//, "") // HTTPS/HTTP: https://github.com/owner/repo
