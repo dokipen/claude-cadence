@@ -18,4 +18,5 @@ ttyd:
   advertise_address: "agentd:4142"
 profiles:
   claude:
+    repo: "https://github.com/dokipen/claude-cadence.git"
     command: claude
