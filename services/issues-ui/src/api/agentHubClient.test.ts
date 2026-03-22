@@ -340,6 +340,13 @@ describe("createSession", () => {
     });
   });
 
+  it("omits extra_args from request body when not provided", async () => {
+    const fn = mockFetch({ json: () => Promise.resolve(validSession) });
+    await createSession("my-agent", "default", "my-session");
+    const sentBody = JSON.parse(fn.mock.calls[0][1].body as string);
+    expect(sentBody).not.toHaveProperty("extra_args");
+  });
+
   it("URL encodes agent names with special characters", async () => {
     const fn = mockFetch({ json: () => Promise.resolve(validSession) });
     await createSession("my agent/v2", "default", "my-session");
@@ -354,11 +361,11 @@ describe("createSession", () => {
       statusText: "Service Unavailable",
       json: () => Promise.resolve({ error: "agent offline" }),
     });
-    await expect(createSession("my-agent", "default", "my-session")).rejects.toMatchObject({
-      status: 503,
-      message: "agent offline",
-    });
-    await expect(createSession("my-agent", "default", "my-session")).rejects.toBeInstanceOf(HubError);
+    const err = await createSession("my-agent", "default", "my-session").catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(HubError);
+    expect(err).toMatchObject({ status: 503, message: "agent offline" });
   });
 
   it("throws HubError with status 502 when response is missing required field id", async () => {
