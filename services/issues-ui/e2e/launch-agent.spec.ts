@@ -175,7 +175,7 @@ test.describe("launch agent dialog", () => {
     await expect(dialog.getByTestId("profile-select")).not.toBeVisible();
   });
 
-  test("session is created and navigates to agent tab", async ({ page }) => {
+  test("session is created and stays on kanban (no navigation)", async ({ page }) => {
     await page.goto("/projects/e2e-test-project");
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
@@ -186,10 +186,10 @@ test.describe("launch agent dialog", () => {
     await expect(dialog).toBeVisible();
     await dialog.getByTestId("launch-submit").click();
 
-    // Should navigate to ticket detail with agent tab
-    await expect(page).toHaveURL(/\/ticket\/.*\?tab=agent/);
-    await expect(page.getByTestId("ticket-detail")).toBeVisible();
-    await expect(page.getByTestId("agent-tab-content")).toBeVisible();
+    // Should close the dialog and stay on the kanban page
+    await expect(dialog).not.toBeVisible();
+    await expect(page).toHaveURL(/\/projects\//);
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
   });
 
   test("POST body contains /lead command as extra_args", async ({ page }) => {
