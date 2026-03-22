@@ -24,7 +24,7 @@ async function main() {
 
   await prisma.project.upsert({
     where: { name: "claude-cadence" },
-    update: {},
+    update: { repository: "dokipen/claude-cadence" },
     create: {
       name: "claude-cadence",
       repository: "dokipen/claude-cadence",

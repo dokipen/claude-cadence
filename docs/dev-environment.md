@@ -92,36 +92,29 @@ See [services/agents/docs/INSTALL.md](../services/agents/docs/INSTALL.md) and
 
 ### Quick Start: Agent Sessions
 
-Minimal steps to get a visible agent session in the UI:
+After completing the base stack setup above (including `.env.dev` with agent tokens):
 
-1. Start the base stack first:
-   ```bash
-   docker compose -f docker-compose.dev.yml up
-   ```
-
-2. Copy `.env.dev.example` to `.env.dev` if you haven't already, and fill in
-   `HUB_API_TOKEN`, `HUB_AGENT_TOKEN`, and `AGENTD_TOKEN`.
-
-3. Build and install agentd on the host:
+1. Build and install agentd on the host:
    ```bash
    cd services/agents && make build && ./install/install.sh
    ```
 
-4. Configure agentd with hub URL `http://localhost/api/v1` and the `HUB_AGENT_TOKEN`
-   value from `.env.dev` as the bearer token.
+2. Configure agentd (`~/.config/agentd/config.yaml`) with hub URL `http://localhost/api/v1`
+   and the `HUB_AGENT_TOKEN` value from `.env.dev` as the bearer token.
+   See [services/agents/docs/INSTALL.md](../services/agents/docs/INSTALL.md) for the full config reference.
 
-5. Build and run agent-hub:
+3. Build and run agent-hub:
    ```bash
    cd services/agent-hub && make build
    ./agent-hub --config <config.yaml>
    ```
 
-6. Restart compose with the agents profile:
+4. Restart compose with the agents profile:
    ```bash
    docker compose -f docker-compose.dev.yml --profile agents up --build
    ```
 
-7. Start a Claude Code session — it will register with agentd and appear in the UI.
+5. Start a Claude Code session — it will register with agentd and appear in the UI.
 
 ## Teardown
 
