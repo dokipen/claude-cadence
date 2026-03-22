@@ -1,6 +1,0 @@
-# Shellcheck configuration for claude-cadence
-#
-# SC2006: Use $(...) notation instead of legacy backticks `...`
-# This check is enabled by default. It is listed here to make the
-# project's enforcement of $() command substitution explicit.
-# See: https://www.shellcheck.net/wiki/SC2006
