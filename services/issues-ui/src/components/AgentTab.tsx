@@ -3,11 +3,14 @@ import { AgentLauncher } from "./AgentLauncher";
 import { Terminal } from "./Terminal";
 import { hubFetch } from "../api/agentHubClient";
 import { useAgents } from "../hooks/useAgents";
-import type { Session } from "../types";
+import { getLaunchConfig } from "./launchConfig";
+import type { Session, TicketState } from "../types";
 import styles from "../styles/agents.module.css";
 
 interface AgentTabProps {
   ticketNumber: number;
+  ticketTitle: string;
+  ticketState: TicketState;
   repoUrl: string | undefined;
 }
 
@@ -18,12 +21,16 @@ interface ActiveSession {
 
 const SESSION_POLL_MS = 3_000;
 
-export function AgentTab({ ticketNumber, repoUrl }: AgentTabProps) {
+export function AgentTab({ ticketNumber, ticketTitle, ticketState, repoUrl }: AgentTabProps) {
   const [active, setActive] = useState<ActiveSession | null>(null);
   const [discovering, setDiscovering] = useState(true);
   const [destroying, setDestroying] = useState(false);
   const { agents, loading: agentsLoading } = useAgents();
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const launchConfig = getLaunchConfig(ticketState);
+  const sessionName = launchConfig.sessionName(ticketNumber);
+  const command = launchConfig.command(ticketNumber, ticketTitle);
 
   // Discover existing sessions for this ticket on mount
   useEffect(() => {
@@ -31,7 +38,6 @@ export function AgentTab({ ticketNumber, repoUrl }: AgentTabProps) {
     if (agentsLoading) return;
 
     let cancelled = false;
-    const sessionName = `lead-${ticketNumber}`;
 
     async function discover() {
       const onlineAgents = agents.filter((a) => a.status === "online");
@@ -60,7 +66,7 @@ export function AgentTab({ ticketNumber, repoUrl }: AgentTabProps) {
     return () => {
       cancelled = true;
     };
-  }, [agents, agentsLoading, ticketNumber]);
+  }, [agents, agentsLoading, ticketNumber, sessionName]);
 
   // Poll for session state transition (creating -> running)
   const activeSessionId = active?.session.id;
@@ -143,6 +149,9 @@ export function AgentTab({ ticketNumber, repoUrl }: AgentTabProps) {
           ticketNumber={ticketNumber}
           repoUrl={repoUrl}
           onLaunched={handleLaunched}
+          sessionName={sessionName}
+          command={command}
+          buttonLabel={launchConfig.buttonLabel}
           inline
         />
       </div>

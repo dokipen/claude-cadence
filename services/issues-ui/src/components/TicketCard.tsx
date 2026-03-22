@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import type { Ticket } from "../types";
 import { PriorityBadge } from "./PriorityBadge";
 import { LabelBadge } from "./LabelBadge";
@@ -26,8 +26,18 @@ export function TicketCard({
   sessions?: ActiveSessionInfo[];
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const navigate = useNavigate();
 
   const launchButtonLabel = getLaunchConfig(ticket.state).buttonLabel;
+
+  const handleActiveSessionClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      navigate(`/ticket/${ticket.id}?tab=agent`);
+    },
+    [navigate, ticket.id],
+  );
 
   const handleLaunchClick = useCallback(
     (e: React.MouseEvent) => {
@@ -75,9 +85,16 @@ export function TicketCard({
           )}
           <span className={styles.cardActions}>
             {activeSession ? (
-              <span className={styles.activeSessionLogo} data-testid="active-session-logo" aria-label="Session in progress">
+              <button
+                type="button"
+                className={styles.activeSessionLogo}
+                data-testid="active-session-logo"
+                aria-label="Session in progress"
+                onClick={handleActiveSessionClick}
+                style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+              >
                 <img src="/cadence-icon-light.svg" alt="" width={18} height={18} className={styles.spinningLogo} />
-              </span>
+              </button>
             ) : (
               <button
                 className={agentStyles.cardLaunchButton}
@@ -96,7 +113,6 @@ export function TicketCard({
         </div>
       </Link>
       <LaunchAgentDialog
-        ticketId={ticket.id}
         ticketNumber={ticket.number}
         ticketState={ticket.state}
         ticketTitle={ticket.title}
