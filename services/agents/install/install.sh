@@ -174,7 +174,7 @@ is_lan_url() {
     local url="$1"
     # RFC 1918 address ranges
     [[ "$url" =~ ://10\.[0-9]+\.[0-9]+\.[0-9]+ ]]          && return 0
-    [[ "$url" =~ ://172\.(1[6-9]|2[0-9]|3[01])\.[0-9]+ ]]  && return 0
+    [[ "$url" =~ ://172\.(1[6-9]|2[0-9]|3[01])\.[0-9]+\.[0-9]+ ]] && return 0
     [[ "$url" =~ ://192\.168\.[0-9]+\.[0-9]+ ]]             && return 0
     # Common internal/private TLD suffixes
     [[ "$url" =~ \.(local|internal|lan|home|localdomain|corp)(/|:|$) ]] && return 0

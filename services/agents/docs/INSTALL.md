@@ -537,5 +537,5 @@ even though the host is otherwise reachable on the LAN.
 After granting permission, restart the service:
 
 ```bash
-launchctl kickstart -k gui/$(id -u)/com.cadence.agentd
+launchctl kickstart -k "gui/$(id -u)/com.cadence.agentd"
 ```
