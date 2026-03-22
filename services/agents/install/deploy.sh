@@ -32,6 +32,13 @@ sed_escape() {
     printf '%s' "$1" | sed 's/[&/|\\]/\\&/g'
 }
 
+validate_yaml_string() {
+    local value="$1" field="$2"
+    if [[ "$value" == *'"'* || "$value" == *$'\n'* ]]; then
+        error "$field must not contain double-quotes or newlines"
+    fi
+}
+
 # --- Argument parsing ---
 
 while [[ $# -gt 0 ]]; do
@@ -64,6 +71,8 @@ else
     MODE="local"
     [[ -z "$HUB_URL" ]] && HUB_URL="wss://cadence.bootsy.internal/ws/agent"
 fi
+
+validate_yaml_string "$HUB_URL" "hub-url"
 
 info "Deploying agentd '$NAME' ($MODE)..."
 
