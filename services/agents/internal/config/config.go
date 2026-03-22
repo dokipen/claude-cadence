@@ -316,8 +316,8 @@ func validate(cfg *Config) error {
 
 	// Validate PTY config.
 	switch cfg.PTY.WebSocketScheme {
-	case "ws", "wss", "":
-		// ok; empty string is defaulted to "ws" by applyDefaults
+	case "ws", "wss":
+		// ok
 	default:
 		return fmt.Errorf("invalid pty.websocket_scheme %q: must be \"ws\" or \"wss\"", cfg.PTY.WebSocketScheme)
 	}

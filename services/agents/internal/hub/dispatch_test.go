@@ -2,7 +2,6 @@ package hub
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
@@ -151,9 +150,6 @@ func TestDispatcher_GetTerminalEndpoint_WSSScheme(t *testing.T) {
 	var out terminalEndpointResult
 	if err := json.Unmarshal(result, &out); err != nil {
 		t.Fatalf("unmarshal result: %v", err)
-	}
-	if !strings.HasPrefix(out.URL, "wss://") {
-		t.Errorf("expected URL to start with wss://, got: %s", out.URL)
 	}
 	if out.URL != "wss://example.com/ws/terminal/s2" {
 		t.Errorf("unexpected URL: %s", out.URL)
