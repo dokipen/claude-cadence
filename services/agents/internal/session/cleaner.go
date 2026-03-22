@@ -76,12 +76,18 @@ func (c *Cleaner) cleanup() {
 
 		switch {
 		case (originalState == StateRunning || originalState == StateCreating) && sess.State == StateStopped:
-			// Process just exited — destroy immediately without waiting for TTL.
-			slog.Info("auto-destroying session: process no longer alive",
-				"id", sess.ID,
-				"name", sess.Name,
-				"pid", sess.AgentPID,
-			)
+			// Process just exited — log exit code then destroy immediately.
+			logArgs := []any{"id", sess.ID, "name", sess.Name, "pid", sess.AgentPID}
+			if c.manager.pty != nil {
+				if waitErr, err := c.manager.pty.WaitError(sess.ID); err == nil {
+					if waitErr != nil {
+						logArgs = append(logArgs, "exit_error", waitErr)
+					} else {
+						logArgs = append(logArgs, "exit_code", 0)
+					}
+				}
+			}
+			slog.Info("auto-destroying session: process no longer alive", logArgs...)
 			if err := c.manager.Destroy(sess.ID, true); err != nil {
 				slog.Warn("failed to auto-destroy session",
 					"id", sess.ID,

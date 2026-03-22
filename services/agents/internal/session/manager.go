@@ -238,6 +238,8 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	// correctly.
 	command := []string{"bash", "-c", cmdStr}
 
+	slog.Debug("launching session command", "session", sessionID, "name", req.SessionName, "command", cmdStr, "cwd", workdir)
+
 	// Create PTY session. Use sessionID (UUID) as the PTY key so all
 	// subsequent lookups (Destroy, PID, Has) resolve to the same entry.
 	if err := m.pty.Create(sessionID, workdir, command, envSlice, 0, 0); err != nil {
@@ -254,6 +256,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	// session may already be gone. Mark as stopped in that case.
 	pid, err := m.pty.PID(sessionID)
 	if err != nil {
+		slog.Debug("session command exited immediately after launch", "session", sessionID, "name", req.SessionName, "command", cmdStr, "cwd", workdir)
 		slog.Info("session command exited immediately", "session", sessionID, "error", err)
 		_ = m.pty.Destroy(sessionID)
 		m.store.Update(sessionID, func(s *Session) {
@@ -262,6 +265,8 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		})
 		return m.mustGet(sessionID), nil
 	}
+
+	slog.Debug("session command running", "session", sessionID, "name", req.SessionName, "pid", pid)
 
 	m.store.Update(sessionID, func(s *Session) {
 		s.State = StateRunning
