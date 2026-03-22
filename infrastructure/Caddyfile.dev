@@ -1,0 +1,41 @@
+# Caddyfile for local dev (no TLS, no domain requirement)
+#
+# Usage:
+#   Served by the caddy container in docker-compose.dev.yml.
+#   Access the stack at http://localhost
+#
+# Service routing:
+#   /graphql        → issues (GraphQL API, port 4000)
+#   /api/v1/*       → agent-hub (REST API, port 4200)
+#   /ws/agent       → agent-hub (agent WebSocket registration, port 4200)
+#   /ws/terminal/*  → agent-hub (terminal WebSocket proxy, port 4200)
+#   everything else → issues-ui (Vite dev server, port 5173)
+
+localhost:80 {
+	# Issues service — GraphQL API
+	handle /graphql {
+		reverse_proxy issues:4000
+	}
+
+	# Agent Hub — REST API
+	handle /api/v1/* {
+		reverse_proxy agent-hub:4200
+	}
+
+	# Agent Hub — agent WebSocket registration
+	handle /ws/agent {
+		reverse_proxy agent-hub:4200
+	}
+
+	# Agent Hub — terminal WebSocket proxy
+	handle /ws/terminal/* {
+		reverse_proxy agent-hub:4200
+	}
+
+	# Issues UI — Vite dev server with HMR
+	# Proxying to Vite rather than serving static files gives us hot module
+	# replacement through Caddy in the dev environment.
+	handle {
+		reverse_proxy issues-ui:5173
+	}
+}

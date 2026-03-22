@@ -127,6 +127,17 @@ Issues must be refined (`/refine`) before implementation — this covers estimat
 
 ## Services
 
+### Dev Environment
+
+Bring up the full local stack for manual PR QA with a single command:
+
+```bash
+cp .env.dev.example .env.dev  # fill in your secrets
+docker compose -f docker-compose.dev.yml up --build
+```
+
+Then open **http://localhost**. See [docs/dev-environment.md](docs/dev-environment.md) for full setup instructions, GitHub OAuth configuration, and how to test a specific PR branch.
+
 ### Issue Microservice
 
 A GraphQL-based ticket tracking service with CLI client. See the [Issue Microservice Documentation](services/issues/docs/INDEX.md) for setup, deployment, and usage.
