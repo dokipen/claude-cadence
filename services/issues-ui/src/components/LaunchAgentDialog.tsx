@@ -5,7 +5,6 @@ import type { Session, TicketState } from "../types";
 import styles from "../styles/dialog.module.css";
 
 interface LaunchAgentDialogProps {
-  ticketId: string;
   ticketNumber: number;
   repoUrl: string | undefined;
   open: boolean;
@@ -15,7 +14,6 @@ interface LaunchAgentDialogProps {
 }
 
 export function LaunchAgentDialog({
-  ticketId,
   ticketNumber,
   repoUrl,
   open,

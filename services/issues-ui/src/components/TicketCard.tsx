@@ -85,15 +85,16 @@ export function TicketCard({
           )}
           <span className={styles.cardActions}>
             {activeSession ? (
-              <span
+              <button
+                type="button"
                 className={styles.activeSessionLogo}
                 data-testid="active-session-logo"
                 aria-label="Session in progress"
                 onClick={handleActiveSessionClick}
-                style={{ cursor: "pointer" }}
+                style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
               >
                 <img src="/cadence-icon-light.svg" alt="" width={18} height={18} className={styles.spinningLogo} />
-              </span>
+              </button>
             ) : (
               <button
                 className={agentStyles.cardLaunchButton}
@@ -112,7 +113,6 @@ export function TicketCard({
         </div>
       </Link>
       <LaunchAgentDialog
-        ticketId={ticket.id}
         ticketNumber={ticket.number}
         ticketState={ticket.state}
         ticketTitle={ticket.title}
