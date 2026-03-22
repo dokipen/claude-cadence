@@ -17,6 +17,6 @@ pty:
 ttyd:
   advertise_address: "agentd:4142"
 profiles:
-  claude:
+  bash:
     repo: "https://github.com/dokipen/claude-cadence.git"
-    command: claude
+    command: bash

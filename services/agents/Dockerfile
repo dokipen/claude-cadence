@@ -10,13 +10,9 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o agentd ./cmd/agentd
 
 # Runtime stage
-FROM node:22-alpine
+FROM alpine:3.21
 
-RUN apk add --no-cache git ca-certificates
-
-# Pin to exact version — the CLI has write access to the mounted ~/.claude
-# credential directory, so floating versions are a supply-chain risk.
-RUN npm install -g @anthropic-ai/claude-code@2.1.81
+RUN apk add --no-cache git ca-certificates bash
 
 RUN addgroup -S agentd && adduser -S agentd -G agentd
 
