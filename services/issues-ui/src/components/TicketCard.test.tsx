@@ -7,6 +7,7 @@ import type { ActiveSessionInfo, SessionState, Ticket } from "../types";
 // Mock CSS modules
 vi.mock("../styles/card.module.css", () => ({ default: {} }));
 vi.mock("../styles/agents.module.css", () => ({ default: {} }));
+vi.mock("../styles/animated-icon.module.css", () => ({ default: {} }));
 
 // Mock child components to keep tests focused
 vi.mock("./LaunchAgentDialog", () => ({
@@ -181,6 +182,16 @@ describe("TicketCard", () => {
       <TicketCard ticket={ticket} sessions={sessions} />,
     );
     expect(queryByTestId("card-launch-button")).toBeNull();
+  });
+
+  it("active-session-logo button contains an SVG element", () => {
+    const ticket = makeTicket({ number: 5 });
+    const sessions = [makeSession("lead-5", "running")];
+    const { getByTestId } = render(
+      <TicketCard ticket={ticket} sessions={sessions} />,
+    );
+    const button = getByTestId("active-session-logo");
+    expect(button.querySelector("svg")).not.toBeNull();
   });
 });
 

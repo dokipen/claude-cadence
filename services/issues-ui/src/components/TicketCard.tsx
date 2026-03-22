@@ -8,6 +8,7 @@ import { getLaunchConfig } from "./launchConfig";
 import type { ActiveSessionInfo } from "../types";
 import styles from "../styles/card.module.css";
 import agentStyles from "../styles/agents.module.css";
+import { AnimatedCadenceIcon } from "./AnimatedCadenceIcon";
 
 export function hasActiveSession(sessions: ActiveSessionInfo[], ticketNumber: number): boolean {
   const prefixes = [`lead-${ticketNumber}`, `refine-${ticketNumber}`, `discuss-${ticketNumber}`];
@@ -99,7 +100,7 @@ export function TicketCard({
               onClick={handleActiveSessionClick}
               style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
             >
-              <img src="/cadence-icon-light.svg" alt="" width={18} height={18} className={styles.spinningLogo} />
+              <AnimatedCadenceIcon />
             </button>
           ) : (
             <button
