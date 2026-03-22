@@ -164,9 +164,9 @@ func (c *Client) pullDefaultBranch(cloneDir string, creds *Credentials) error {
 		return fmt.Errorf("git fetch: %w: %s", err, string(output))
 	}
 
-	update := exec.Command("git", "-C", cloneDir, "update-ref", "refs/heads/"+branch, "refs/remotes/origin/"+branch)
-	if output, err := update.CombinedOutput(); err != nil {
-		return fmt.Errorf("git update-ref: %w: %s", err, string(output))
+	checkout := exec.Command("git", "-C", cloneDir, "checkout", "-f", branch)
+	if output, err := checkout.CombinedOutput(); err != nil {
+		return fmt.Errorf("git checkout: %w: %s", err, string(output))
 	}
 
 	// Update the working tree so sessions starting in cloneDir see the latest
