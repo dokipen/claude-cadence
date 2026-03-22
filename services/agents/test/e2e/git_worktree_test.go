@@ -289,6 +289,81 @@ func TestGitRepoUpdate_PullsLatest(t *testing.T) {
 	}
 }
 
+func TestGitDetachedHead_RecoveredOnNextSession(t *testing.T) {
+	env := setupGitTestEnv(t)
+	client := env.newClient(t)
+	ctx := context.Background()
+
+	// Create first session to trigger initial clone.
+	name1 := uniqueSessionName(t)
+	resp1, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+		AgentProfile: "git-sleeper",
+		SessionName:  name1,
+	})
+	if err != nil {
+		t.Fatalf("CreateSession 1: %v", err)
+	}
+	t.Cleanup(func() {
+		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
+			SessionId: resp1.GetSession().GetId(),
+			Force:     true,
+		})
+	})
+
+	// Detach HEAD in the clone root to simulate a session that ran
+	// "git checkout <commit>" before calling /new-work.
+	reposDir := filepath.Join(env.rootDir, "repos")
+	entries, err := os.ReadDir(reposDir)
+	if err != nil {
+		t.Fatalf("reading repos dir: %v", err)
+	}
+	var cloneDir string
+	for _, ownerEntry := range entries {
+		ownerPath := filepath.Join(reposDir, ownerEntry.Name())
+		repoEntries, _ := os.ReadDir(ownerPath)
+		for _, repoEntry := range repoEntries {
+			cloneDir = filepath.Join(ownerPath, repoEntry.Name())
+		}
+	}
+	if cloneDir == "" {
+		t.Fatal("could not find clone directory")
+	}
+	// Detach HEAD by checking out the current commit directly.
+	run(t, "git", "-C", cloneDir, "checkout", "--detach", "HEAD")
+
+	// Verify HEAD is detached.
+	headOut, err := exec.Command("git", "-C", cloneDir, "symbolic-ref", "--quiet", "HEAD").Output()
+	if err == nil {
+		t.Fatalf("expected detached HEAD, but HEAD points to %s", strings.TrimSpace(string(headOut)))
+	}
+
+	// Creating a second session should recover from detached HEAD via pullDefaultBranch.
+	name2 := uniqueSessionName(t)
+	resp2, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+		AgentProfile: "git-sleeper",
+		SessionName:  name2,
+	})
+	if err != nil {
+		t.Fatalf("CreateSession 2 (after detached HEAD): %v", err)
+	}
+	t.Cleanup(func() {
+		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
+			SessionId: resp2.GetSession().GetId(),
+			Force:     true,
+		})
+	})
+
+	// Verify HEAD is now attached to the default branch (main).
+	headRef, err := exec.Command("git", "-C", cloneDir, "symbolic-ref", "HEAD").Output()
+	if err != nil {
+		t.Fatalf("expected HEAD to be attached after second session, but got error: %v", err)
+	}
+	ref := strings.TrimSpace(string(headRef))
+	if ref != "refs/heads/main" {
+		t.Errorf("expected HEAD to point to %q, got %q", "refs/heads/main", ref)
+	}
+}
+
 // run executes a command and fails the test on error.
 func run(t *testing.T, name string, args ...string) {
 	t.Helper()
