@@ -77,13 +77,27 @@ function buildVerticalSplit(keys: string[]): LayoutNode {
 }
 
 export function TilingLayout({ windows, onMinimize, onTerminated, onReorder }: TilingLayoutProps) {
+  const [maximizedKey, setMaximizedKey] = useState<string | null>(null);
+  const visibleWindows = maximizedKey !== null
+    ? windows.filter((w) => w.key === maximizedKey)
+    : windows;
   const windowMap = new Map(windows.map((w) => [w.key, w]));
-  const keys = windows.map((w) => w.key);
+  const keys = visibleWindows.map((w) => w.key);
   const layout = buildLayout(keys);
   const [ratios, setRatios] = useState<Map<string, number>>(new Map());
   const draggingRef = useRef<{ path: string; direction: "horizontal" | "vertical"; startPos: number; startRatio: number; containerSize: number } | null>(null);
   const dragKeyRef = useRef<string | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+
+  // ESC key exits maximized mode
+  useEffect(() => {
+    if (!maximizedKey) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMaximizedKey(null);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [maximizedKey]);
 
   // Prune stale ratio entries when layout changes
   const keysJson = JSON.stringify(keys);
@@ -166,6 +180,8 @@ export function TilingLayout({ windows, onMinimize, onTerminated, onReorder }: T
           onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOverKey(null); }}
           onDrop={(e) => { e.preventDefault(); if (dragKeyRef.current && dragKeyRef.current !== win.key && onReorder) { onReorder(dragKeyRef.current, win.key); } dragKeyRef.current = null; setDragOverKey(null); }}
           isDragOver={dragOverKey === win.key}
+          isMaximized={maximizedKey === win.key}
+          onMaximize={() => setMaximizedKey((prev) => (prev === win.key ? null : win.key))}
         />
       );
     }
