@@ -64,8 +64,8 @@ func New(h *hub.Hub, cfg *config.Config) *Server {
 		httpServer: &http.Server{
 			Addr:         addr,
 			Handler:      mux,
-			ReadTimeout:  10 * time.Second,
-			WriteTimeout: 35 * time.Second, // Must exceed rpcCallTimeout (30s)
+			ReadHeaderTimeout: 10 * time.Second,
+			WriteTimeout:      35 * time.Second, // Must exceed rpcCallTimeout (30s)
 		},
 	}
 	s.addr.Store(addr)
