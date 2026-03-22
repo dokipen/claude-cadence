@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, act, cleanup } from "@testing-library/react";
+import { create } from "@bufbuild/protobuf";
+import { SessionSchema } from "../gen/hub/v1/hub_pb";
 import type { AgentSession } from "../hooks/useAllSessions";
 
 // Mock CSS modules
@@ -19,7 +21,7 @@ vi.mock("../hooks/useAgents", () => ({
         name: "test-agent",
         profiles: {},
         status: "online",
-        last_seen: "2024-01-01T00:00:00Z",
+        lastSeen: "2024-01-01T00:00:00Z",
       },
     ],
     loading: false,
@@ -50,17 +52,18 @@ afterEach(() => {
 
 const makeSession = (id: string, agentName: string): AgentSession => ({
   agentName,
-  session: {
+  session: create(SessionSchema, {
     id,
     name: `session-${id}`,
-    agent_profile: "default",
+    agentProfile: "default",
     state: "running",
-    tmux_session: `tmux-${id}`,
-    created_at: "2024-01-01T00:00:00Z",
-    agent_pid: 1234,
-    repo_url: "https://github.com/example/repo",
-    base_ref: "main",
-  },
+    tmuxSession: `tmux-${id}`,
+    createdAt: "2024-01-01T00:00:00Z",
+    agentPid: 1234,
+    repoUrl: "https://github.com/example/repo",
+    baseRef: "main",
+    waitingForInput: false,
+  }),
 });
 
 describe("AgentManager", () => {

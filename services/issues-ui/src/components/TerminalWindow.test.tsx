@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { create } from "@bufbuild/protobuf";
+import { SessionSchema } from "../gen/hub/v1/hub_pb";
 
 // Mock Terminal to avoid xterm dependency
 vi.mock("./Terminal", () => ({
@@ -27,18 +29,18 @@ vi.mock("../api/agentHubClient", () => ({
 import { TerminalWindow } from "./TerminalWindow";
 import { HubError } from "../api/agentHubClient";
 
-const baseSession = {
+const baseSession = create(SessionSchema, {
   id: "sess-abc",
   name: "lead-42",
-  state: "running" as const,
-  agent_profile: "default",
-  tmux_session: "tmux-abc",
-  created_at: "2026-01-01T00:00:00Z",
-  agent_pid: 1234,
-  repo_url: "https://github.com/test/repo",
-  base_ref: "main",
-  waiting_for_input: false,
-};
+  state: "running",
+  agentProfile: "default",
+  tmuxSession: "tmux-abc",
+  createdAt: "2026-01-01T00:00:00Z",
+  agentPid: 1234,
+  repoUrl: "https://github.com/test/repo",
+  baseRef: "main",
+  waitingForInput: false,
+});
 
 describe("TerminalWindow", () => {
   beforeEach(() => {
@@ -166,17 +168,17 @@ describe("keyboard accessibility", () => {
     cleanup();
   });
 
-  const accessibleSession = {
+  const accessibleSession = create(SessionSchema, {
     id: "sess-1",
     name: "test-session",
-    state: "running" as const,
-    agent_profile: "default",
-    tmux_session: "tmux-1",
-    created_at: "2026-01-01T00:00:00Z",
-    agent_pid: 5678,
-    base_ref: "main",
-    waiting_for_input: false,
-  };
+    state: "running",
+    agentProfile: "default",
+    tmuxSession: "tmux-1",
+    createdAt: "2026-01-01T00:00:00Z",
+    agentPid: 5678,
+    baseRef: "main",
+    waitingForInput: false,
+  });
 
   it("tile header has tabIndex={0} and role='button'", () => {
     render(

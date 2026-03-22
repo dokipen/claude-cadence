@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
+import { create } from "@bufbuild/protobuf";
+import { SessionSchema } from "../gen/hub/v1/hub_pb";
 
 // Mock TerminalWindow to avoid xterm and other heavy deps.
 // Renders a div with data-testid="terminal-window-{key}" and a button that
@@ -30,16 +32,18 @@ vi.mock("../styles/agents.module.css", () => ({ default: {} }));
 
 import { TilingLayout } from "./TilingLayout";
 
-const makeSession = (id: string) => ({
-  id,
-  name: `session-${id}`,
-  state: "running" as const,
-  agent_profile: "default",
-  tmux_session: `tmux-${id}`,
-  created_at: "2026-01-01T00:00:00Z",
-  agent_pid: 1234,
-  base_ref: "main",
-});
+const makeSession = (id: string) =>
+  create(SessionSchema, {
+    id,
+    name: `session-${id}`,
+    state: "running",
+    agentProfile: "default",
+    tmuxSession: `tmux-${id}`,
+    createdAt: "2026-01-01T00:00:00Z",
+    agentPid: 1234,
+    baseRef: "main",
+    waitingForInput: false,
+  });
 
 const makeWindows = (ids: string[]) =>
   ids.map((id) => ({ key: id, session: makeSession(id), agentName: "agent-1" }));

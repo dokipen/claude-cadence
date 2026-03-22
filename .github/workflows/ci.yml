@@ -41,6 +41,7 @@ jobs:
               - 'services/issues-cli/**'
             issues-ui:
               - 'services/issues-ui/**'
+              - 'services/agent-hub/proto/**'
             agent-service:
               - 'services/agents/**'
       - name: Cleanup workspace
@@ -154,8 +155,14 @@ jobs:
         run: cd services/issues && npm ci && npx prisma generate && npm run build
       - name: Install issues-ui dependencies
         run: cd services/issues-ui && npm ci
+      - name: Generate buf types
+        run: cd services/issues-ui && npm run generate
+      - name: Check for uncommitted generated changes
+        run: git diff --exit-code services/issues-ui/src/gen/
       - name: Typecheck
         run: cd services/issues-ui && npm run typecheck
+      - name: Unit tests
+        run: cd services/issues-ui && npm run test
       - name: Install Playwright browsers
         run: cd services/issues-ui && npx playwright install chromium
       - name: Install Playwright system deps
