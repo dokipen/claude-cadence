@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -136,6 +138,44 @@ func (c *Client) Stop(sessionID string) {
 	}
 
 	slog.Info("ttyd stopped", "session", sessionID, "pid", info.pid)
+}
+
+// CleanupOrphans finds and kills ttyd processes that reference the given tmux
+// socket name from a previous agentd lifecycle. Returns the number of processes
+// killed.
+func (c *Client) CleanupOrphans(socketName string) int {
+	out, err := exec.Command("pgrep", "-f", "ttyd.*-L "+socketName).Output()
+	if err != nil {
+		// pgrep exits 1 when no processes match — not an error.
+		return 0
+	}
+
+	self := os.Getpid()
+	killed := 0
+
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
+			continue
+		}
+		pid, err := strconv.Atoi(line)
+		if err != nil {
+			continue
+		}
+		if pid == self {
+			continue
+		}
+		proc, err := os.FindProcess(pid)
+		if err != nil {
+			continue
+		}
+		if err := proc.Signal(os.Interrupt); err != nil {
+			continue
+		}
+		slog.Info("killed orphaned ttyd process", "pid", pid)
+		killed++
+	}
+
+	return killed
 }
 
 // Port returns the port assigned to a session, or 0 if not found.

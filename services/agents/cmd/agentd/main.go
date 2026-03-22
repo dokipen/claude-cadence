@@ -63,6 +63,9 @@ func main() {
 	// Create components.
 	tmuxClient := tmux.NewClient(cfg.Tmux.SocketName)
 	ttydClient := ttyd.NewClient(cfg.Ttyd.Enabled, cfg.Ttyd.BasePort, cfg.Ttyd.MaxPorts, cfg.Ttyd.BindAddress, cfg.Ttyd.AdvertiseAddress)
+	if killed := ttydClient.CleanupOrphans(cfg.Tmux.SocketName); killed > 0 {
+		slog.Info("cleaned up orphaned ttyd processes", "count", killed)
+	}
 	store := session.NewStore()
 	var gitClient *git.Client
 	if cfg.RootDir != "" {

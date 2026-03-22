@@ -275,7 +275,13 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	// Get PID (now returns agent process PID directly).
 	pid, err := m.tmux.GetPanePID(sessionName)
 	if err != nil {
-		slog.Warn("failed to get pane PID", "error", err)
+		errMsg := fmt.Sprintf("tmux session exited immediately: %v", err)
+		slog.Warn("session creation failed", "session", sessionName, "error", err)
+		m.store.Update(sessionID, func(s *Session) {
+			s.State = StateError
+			s.ErrorMessage = errMsg
+		})
+		return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
 	}
 
 	// Start ttyd if enabled.
