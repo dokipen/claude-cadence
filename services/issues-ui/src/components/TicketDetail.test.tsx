@@ -17,6 +17,7 @@ const mockNavigateFn = vi.fn();
 vi.mock("react-router", () => ({
   useParams: vi.fn(),
   useSearchParams: vi.fn(),
+  useNavigate: () => vi.fn(),
   Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
     <a href={to}>{children}</a>
   ),
@@ -24,6 +25,18 @@ vi.mock("react-router", () => ({
     mockNavigateFn(to);
     return <div data-testid="navigate" data-to={to} />;
   },
+}));
+
+vi.mock("./ConfirmDialog", () => ({
+  ConfirmDialog: () => null,
+}));
+
+vi.mock("../hooks/useTransitionTicket", () => ({
+  useTransitionTicket: () => ({
+    transition: vi.fn().mockResolvedValue(undefined),
+    loading: false,
+    error: null,
+  }),
 }));
 
 // Mock child components that have complex dependencies
