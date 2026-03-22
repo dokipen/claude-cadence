@@ -1,0 +1,18 @@
+# Dev Dockerfile for the issues-ui Vite dev server.
+#
+# Source code is bind-mounted at runtime (see docker-compose.dev.yml),
+# so only package.json + node_modules are baked into this image.
+# Changes to source files trigger Vite's HMR without a container rebuild.
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+
+RUN npm ci
+
+EXPOSE 5173
+
+# --host 0.0.0.0 makes Vite listen on all interfaces so Docker port-forwarding works
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

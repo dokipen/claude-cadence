@@ -1,0 +1,108 @@
+# Dev/QA stack for Claude Cadence
+#
+# Default tier (issues + issues-ui + Caddy):
+#   docker compose -f docker-compose.dev.yml up
+#
+# Full stack including agent services:
+#   docker compose -f docker-compose.dev.yml --profile agents up
+#
+# Prerequisites:
+#   cp .env.dev.example .env.dev
+#   # Fill in .env.dev with real secrets before starting
+
+services:
+  issues:
+    build:
+      context: services/issues
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4000:4000"
+    volumes:
+      - issues-data:/app/data
+    env_file: .env.dev
+    environment:
+      - DATABASE_URL=file:/app/data/issues.db
+      - PORT=4000
+    healthcheck:
+      # Use node (available in the Node.js image) to avoid BusyBox wget
+      # limitations with --header/--post-data flags.
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4000/graphql', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      start_period: 60s
+      retries: 5
+
+  issues-ui:
+    build:
+      context: services/issues-ui
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5173:5173"
+    volumes:
+      # Bind-mount source for hot reload; anonymous volume preserves node_modules
+      - ./services/issues-ui:/app
+      - /app/node_modules
+    env_file: .env.dev
+    depends_on:
+      issues:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./infrastructure/Caddyfile.dev:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - issues
+      - issues-ui
+
+  # Agent services — opt-in via --profile agents
+  #
+  # agentd and agent-hub have complex host dependencies (tmux, claude CLI, Go
+  # binary, macOS/Linux service integration) that make them poor fits for
+  # containerisation. They are defined here for completeness and documented
+  # network connectivity, but they run on the host and connect back to the
+  # Docker network via host networking.
+  #
+  # To use the agents profile:
+  #   1. Build and install agentd: cd services/agents && make build && ./install/install.sh
+  #   2. Build and install agent-hub: cd services/agent-hub && make build
+  #   3. Configure both services with tokens matching .env.dev
+  #   4. Start agent-hub: agent-hub --config <your-config>
+  #   5. Start agentd with hub.url pointing at agent-hub
+  #   6. Then run: docker compose -f docker-compose.dev.yml --profile agents up
+  #
+  # The placeholder services below use network_mode: host so the containerised
+  # Caddy can reach agentd (4141) and agent-hub (4200) bound to the host loopback.
+
+  agentd:
+    profiles: [agents]
+    # No Dockerfile — agentd requires tmux, claude CLI, and host service
+    # integration. Build from source: cd services/agents && make build
+    # Then run on the host: agentd --config ~/.config/agentd/config.yaml
+    image: busybox
+    command: >
+      sh -c 'echo "agentd placeholder: run agentd on the host (see docker-compose.dev.yml comments)" && sleep infinity'
+    network_mode: host
+    restart: unless-stopped
+
+  agent-hub:
+    profiles: [agents]
+    # No Dockerfile — agent-hub is a Go binary that must run on the host
+    # alongside agentd. Build from source: cd services/agent-hub && make build
+    # Then run: agent-hub --config <your-config.yaml>
+    image: busybox
+    command: >
+      sh -c 'echo "agent-hub placeholder: run agent-hub on the host (see docker-compose.dev.yml comments)" && sleep infinity'
+    network_mode: host
+    restart: unless-stopped
+
+volumes:
+  issues-data:
+  caddy-data:
+  caddy-config:
