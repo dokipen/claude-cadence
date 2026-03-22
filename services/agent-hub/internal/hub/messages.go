@@ -103,8 +103,7 @@ type GetTerminalEndpointParams struct {
 
 // GetTerminalEndpointResult contains the ttyd endpoint for a session.
 type GetTerminalEndpointResult struct {
-	Address string `json:"address"`
-	Port    int    `json:"port"`
+	URL string `json:"url"`
 }
 
 // NewErrorResponse creates a JSON-RPC 2.0 error response.
