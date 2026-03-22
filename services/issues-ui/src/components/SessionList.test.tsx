@@ -76,9 +76,11 @@ describe("SessionList", () => {
     const { getByText } = render(
       <SessionList {...defaultProps} agents={agents} isCollapsed={true} />,
     );
-    // Content stays in DOM but is aria-hidden (CSS-based visibility)
+    // Content stays in DOM but is aria-hidden and inert (CSS-based visibility)
     const heading = getByText("Agents");
-    expect(heading.closest('[aria-hidden="true"]')).not.toBeNull();
+    const contentWrapper = heading.closest('[aria-hidden="true"]');
+    expect(contentWrapper).not.toBeNull();
+    expect(contentWrapper?.hasAttribute("inert")).toBe(true);
     expect(getByText("my-agent")).toBeTruthy();
   });
 

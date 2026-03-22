@@ -36,7 +36,7 @@ export function SessionList({ agents, sessions, openKeys, onSessionClick, isColl
     }
 
     const handleTransitionEnd = (e: TransitionEvent) => {
-      if (e.propertyName === "width") {
+      if (e.target === sidebar && e.propertyName === "width") {
         content.removeAttribute("inert");
       }
     };
