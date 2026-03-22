@@ -19,7 +19,8 @@ import (
 )
 
 var (
-	envKeyRe = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+	envKeyRe      = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+	sessionNameRe = regexp.MustCompile(`^[a-zA-Z0-9._~-]+$`)
 )
 
 // Manager orchestrates session lifecycle using Store and pty.PTYManager.
@@ -100,6 +101,11 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	// Validate name length.
 	if len(sessionName) > 200 {
 		return nil, &Error{Code: ErrInvalidArgument, Message: "session name must be 200 characters or fewer"}
+	}
+
+	// Validate name characters (URL path-safe: alphanumeric, dot, tilde, hyphen, underscore).
+	if !sessionNameRe.MatchString(sessionName) {
+		return nil, &Error{Code: ErrInvalidArgument, Message: "session name contains invalid characters: must match [a-zA-Z0-9._~-]+"}
 	}
 
 	// Validate name is unique in store.
@@ -365,7 +371,7 @@ func (m *Manager) mustGet(id string) *Session {
 
 type templateData struct {
 	SessionID    string // Shell-escaped in renderCommand.
-	SessionName  string // Safe without escaping: validated to [a-zA-Z0-9_-] by tmuxNameRe.
+	SessionName  string // Safe without escaping: validated to [a-zA-Z0-9._~-] by sessionNameRe.
 	ExtraArgs    string // Shell-escaped via shellJoinArgs in renderCommand.
 	WorktreePath string // Shell-escaped in renderCommand when non-empty; empty string when unset.
 	PluginDir    string // Shell-escaped in renderCommand when non-empty; empty string when unset.

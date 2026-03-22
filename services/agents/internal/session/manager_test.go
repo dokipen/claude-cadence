@@ -2,7 +2,92 @@ package session
 
 import (
 	"testing"
+
+	"github.com/dokipen/claude-cadence/services/agents/internal/config"
 )
+
+func newCreateTestManager(profiles map[string]config.Profile) *Manager {
+	return &Manager{
+		store:         NewStore(),
+		profiles:      profiles,
+		ptyHasSession: func(id string) bool { return false },
+		processAlive:  func(pid int) bool { return false },
+	}
+}
+
+func TestSessionNameRe(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  bool
+	}{
+		{"alphanumeric only", "myagent123", true},
+		{"with hyphens", "my-agent-session", true},
+		{"with underscores", "my_agent_session", true},
+		{"with dots", "my.agent.1", true},
+		{"with tilde", "~my-session", true},
+		{"mixed allowed chars", "agent_1.0~beta-2", true},
+		{"space", "my session", false},
+		{"forward slash", "my/session", false},
+		{"backslash", `my\session`, false},
+		{"null byte", "sess\x00ion", false},
+		{"newline", "sess\nion", false},
+		{"unicode letter", "séssion", false},
+		{"unicode emoji", "agent🚀", false},
+		{"at sign", "user@host", false},
+		{"semicolon", "sess;ion", false},
+		{"empty string", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := sessionNameRe.MatchString(tt.input)
+			if got != tt.want {
+				t.Errorf("sessionNameRe.MatchString(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCreate_SessionNameInvalidCharsReturnErrInvalidArgument(t *testing.T) {
+	profiles := map[string]config.Profile{
+		"default": {Command: "echo {{.SessionName}}"},
+	}
+
+	tests := []struct {
+		name        string
+		sessionName string
+	}{
+		{"space in name", "my session"},
+		{"leading space", " session"},
+		{"trailing space", "session "},
+		{"forward slash", "my/session"},
+		{"backslash", `my\session`},
+		{"null byte", "sess\x00ion"},
+		{"newline", "sess\nion"},
+		{"tab", "sess\tion"},
+		{"unicode letter", "séssion"},
+		{"unicode emoji", "agent🚀"},
+		{"at sign", "user@host"},
+		{"semicolon", "sess;ion"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newCreateTestManager(profiles)
+			_, err := m.Create(CreateRequest{
+				AgentProfile: "default",
+				SessionName:  tt.sessionName,
+			})
+			if err == nil {
+				t.Fatalf("expected error for name %q, got nil", tt.sessionName)
+			}
+			sesErr, ok := err.(*Error)
+			if !ok || sesErr.Code != ErrInvalidArgument {
+				t.Errorf("expected ErrInvalidArgument for name %q, got %v", tt.sessionName, err)
+			}
+		})
+	}
+}
 
 func TestShellEscapeArg(t *testing.T) {
 	tests := []struct {
