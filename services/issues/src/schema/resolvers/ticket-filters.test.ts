@@ -73,6 +73,20 @@ describe("tickets filter — individual filters", () => {
     });
   });
 
+  it("does not set where.labels when labelName is all whitespace", async () => {
+    const ctx = makeMockContext([]);
+    await tickets(undefined, { labelName: "   " }, ctx);
+
+    const call = ctx.prisma.ticket.findMany.mock.calls[0][0];
+    expect(call.where.labels).toBeUndefined();
+  });
+
+  it("throws BAD_USER_INPUT when labelName exceeds max length", async () => {
+    const ctx = makeMockContext([]);
+    const longName = "a".repeat(101);
+    await expect(tickets(undefined, { labelName: longName }, ctx)).rejects.toThrow("labelName exceeds maximum length");
+  });
+
   it("sets where.priority when priority arg is provided", async () => {
     const ctx = makeMockContext([]);
     await tickets(undefined, { priority: "HIGH" }, ctx);
