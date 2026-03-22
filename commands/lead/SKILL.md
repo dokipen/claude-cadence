@@ -477,7 +477,7 @@ For example, issue #42 with slug `add-sound-effects` → `milestone:42-add-sound
 ```bash
 # Create or update the label (--force is idempotent: creates if missing, updates color/desc if present)
 gh label create "milestone:[N]-[slug]" \
-  --color "#8B5CF6" \
+  --color "8B5CF6" \
   --description "Plan milestone #[N]" \
   --force
 
@@ -500,11 +500,11 @@ if [ -z "$EXISTING_ID" ]; then
 fi
 
 # Apply to plan ticket
-issues label add PLAN_TICKET_ID --label "$MILESTONE_LABEL_NAME" --json
+issues label add [PLAN-TICKET-ID] --label "$MILESTONE_LABEL_NAME" --json
 
 # Apply to each child ticket
-issues label add CHILD_TICKET_ID_1 --label "$MILESTONE_LABEL_NAME" --json
-issues label add CHILD_TICKET_ID_2 --label "$MILESTONE_LABEL_NAME" --json
+issues label add [CHILD-TICKET-ID-1] --label "$MILESTONE_LABEL_NAME" --json
+issues label add [CHILD-TICKET-ID-2] --label "$MILESTONE_LABEL_NAME" --json
 # ... repeat for all child tickets
 ```
 
