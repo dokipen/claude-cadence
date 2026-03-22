@@ -67,16 +67,27 @@ func HandleTerminalProxy(h *hub.Hub, allowedOrigins []string) http.HandlerFunc {
 		}
 
 		parsed, err := url.Parse(endpoint.URL)
-		if err != nil {
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 			writeJSONError(w, http.StatusBadGateway, "invalid terminal endpoint URL")
 			return
 		}
 
-		if parsed.Host != agent.TtydConfig.AdvertiseAddress {
+		if parsed.Scheme != "ws" && parsed.Scheme != "wss" {
+			slog.Warn("terminal endpoint has invalid scheme",
+				"agent", agentName,
+				"scheme", parsed.Scheme,
+			)
+			writeJSONError(w, http.StatusBadGateway, "invalid terminal endpoint URL")
+			return
+		}
+
+		// Compare hostname (without port) against the registered advertise
+		// address, which is validated as a bare IP at registration time.
+		if parsed.Hostname() != agent.TtydConfig.AdvertiseAddress {
 			slog.Warn("terminal endpoint host mismatch",
 				"agent", agentName,
 				"expected_host", agent.TtydConfig.AdvertiseAddress,
-				"actual_host", parsed.Host,
+				"actual_host", parsed.Hostname(),
 			)
 			writeJSONError(w, http.StatusBadGateway, "terminal endpoint mismatch")
 			return
