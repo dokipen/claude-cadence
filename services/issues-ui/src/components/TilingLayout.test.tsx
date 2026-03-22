@@ -38,7 +38,6 @@ const makeSession = (id: string) => ({
   tmux_session: `tmux-${id}`,
   created_at: "2026-01-01T00:00:00Z",
   agent_pid: 1234,
-  worktree_path: "/tmp/worktree",
   base_ref: "main",
 });
 

@@ -29,7 +29,6 @@ const makeSession = (id: string, agentName: string): AgentSession => ({
     tmux_session: `tmux-${id}`,
     created_at: "2024-01-01T00:00:00Z",
     agent_pid: 1234,
-    worktree_path: "/tmp/worktree",
     repo_url: "https://github.com/example/repo",
     base_ref: "main",
   } satisfies Session,

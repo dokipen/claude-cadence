@@ -138,9 +138,6 @@ function validateSessionResponse(data: unknown): Session {
   if (typeof data.agent_pid !== "number") {
     throw new HubError(502, 'Invalid session response: missing or invalid "agent_pid"');
   }
-  if (!isString(data.worktree_path)) {
-    throw new HubError(502, 'Invalid session response: missing or invalid "worktree_path"');
-  }
   if (!isString(data.base_ref)) {
     throw new HubError(502, 'Invalid session response: missing or invalid "base_ref"');
   }
@@ -152,7 +149,6 @@ function validateSessionResponse(data: unknown): Session {
     tmux_session: data.tmux_session,
     created_at: data.created_at,
     agent_pid: data.agent_pid,
-    worktree_path: data.worktree_path,
     base_ref: data.base_ref,
     ...(isString(data.stopped_at) ? { stopped_at: data.stopped_at } : {}),
     ...(isString(data.error_message) ? { error_message: data.error_message } : {}),
