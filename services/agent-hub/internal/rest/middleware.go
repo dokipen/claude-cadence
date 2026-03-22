@@ -81,13 +81,14 @@ func cidrKey(ip string) string {
 // a trusted reverse proxy (Caddy), the proxy's own rate limiting should
 // be used for client-IP-based throttling.
 func rateLimiter(cfg config.RateLimitConfig) func(http.Handler) http.Handler {
-	_, handler := rateLimiterInternal(cfg, time.Now)
+	_, _, handler := rateLimiterInternal(cfg, time.Now)
 	return handler
 }
 
 // rateLimiterInternal is the testable implementation; it returns both the
-// middleware handler and a function that returns the current map length.
-func rateLimiterInternal(cfg config.RateLimitConfig, nowFn func() time.Time) (lenFunc func() int, handler func(http.Handler) http.Handler) {
+// middleware handler and a function that returns the current map length, and
+// a containsFunc for introspecting map membership in tests.
+func rateLimiterInternal(cfg config.RateLimitConfig, nowFn func() time.Time) (lenFunc func() int, containsFunc func(key string) bool, handler func(http.Handler) http.Handler) {
 	var mu sync.Mutex
 	limiters := make(map[string]*lruEntry)
 	lruList := list.New()
@@ -161,6 +162,12 @@ func rateLimiterInternal(cfg config.RateLimitConfig, nowFn func() time.Time) (le
 		return len(limiters)
 	}
 
+	containsFunc = func(key string) bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return limiters[key] != nil
+	}
+
 	handler = func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip, _, err := net.SplitHostPort(r.RemoteAddr)
@@ -178,7 +185,7 @@ func rateLimiterInternal(cfg config.RateLimitConfig, nowFn func() time.Time) (le
 		})
 	}
 
-	return lenFunc, handler
+	return lenFunc, containsFunc, handler
 }
 
 type lruEntry struct {

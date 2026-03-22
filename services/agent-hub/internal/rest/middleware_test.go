@@ -193,7 +193,7 @@ func TestRateLimiterEviction(t *testing.T) {
 	fixedTime := time.Now()
 	nowFn := func() time.Time { return fixedTime }
 
-	lenFunc, middlewareFn := rateLimiterInternal(cfg, nowFn)
+	lenFunc, _, middlewareFn := rateLimiterInternal(cfg, nowFn)
 
 	// Wrap a no-op handler with the rate limiter middleware.
 	noop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
@@ -248,7 +248,7 @@ func TestRateLimiterHardCap(t *testing.T) {
 	fixedTime := time.Now()
 	nowFn := func() time.Time { return fixedTime }
 
-	lenFunc, middlewareFn := rateLimiterInternal(cfg, nowFn)
+	lenFunc, _, middlewareFn := rateLimiterInternal(cfg, nowFn)
 
 	noop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 	h := middlewareFn(noop)
@@ -288,7 +288,7 @@ func TestVictimEvictionAttack(t *testing.T) {
 	currentTime := baseTime
 	nowFn := func() time.Time { return currentTime }
 
-	_, middlewareFn := rateLimiterInternal(cfg, nowFn)
+	_, _, middlewareFn := rateLimiterInternal(cfg, nowFn)
 
 	noop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 	h := middlewareFn(noop)
@@ -396,7 +396,7 @@ func TestRateLimiterCidrBucketing(t *testing.T) {
 	fixedTime := time.Now()
 	nowFn := func() time.Time { return fixedTime }
 
-	lenFunc, middlewareFn := rateLimiterInternal(cfg, nowFn)
+	lenFunc, _, middlewareFn := rateLimiterInternal(cfg, nowFn)
 
 	noop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 	h := middlewareFn(noop)
@@ -435,7 +435,7 @@ func BenchmarkRateLimiter(b *testing.B) {
 	fixedTime := time.Now()
 	nowFn := func() time.Time { return fixedTime }
 
-	_, middlewareFn := rateLimiterInternal(cfg, nowFn)
+	_, _, middlewareFn := rateLimiterInternal(cfg, nowFn)
 
 	noop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 	h := middlewareFn(noop)
@@ -469,7 +469,7 @@ func TestRateLimiterLRUOrder(t *testing.T) {
 	fixedTime := time.Now()
 	nowFn := func() time.Time { return fixedTime }
 
-	lenFunc, middlewareFn := rateLimiterInternal(cfg, nowFn)
+	lenFunc, containsFunc, middlewareFn := rateLimiterInternal(cfg, nowFn)
 
 	noop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 	h := middlewareFn(noop)
@@ -514,17 +514,14 @@ func TestRateLimiterLRUOrder(t *testing.T) {
 		t.Fatalf("after eviction: map size = %d, want %d", got, rateLimiterMaxEntries)
 	}
 
-	// Step 4: Re-touch the re-touched IP again. If it survived eviction, this
-	// is a cache hit and does NOT change the map size. If it was wrongly
-	// evicted, getLimiter inserts a new entry, which triggers another eviction
-	// and keeps the map at cap — but the map size would still equal
-	// rateLimiterMaxEntries. Instead, verify via a second independent request:
-	// after the re-touch the map must remain exactly at cap (no growth, no
-	// spurious shrink). A second hit on the same IP cannot change the size.
-	preSurviveLen := lenFunc()
-	sendRequest(retouchedIP) // must be a hit
-	if got := lenFunc(); got != preSurviveLen {
-		t.Fatalf("second re-touch changed map size from %d to %d; entry was evicted when it should have survived", preSurviveLen, got)
+	// Step 4: Assert the re-touched entry is still present in the map.
+	// containsFunc checks map membership directly, so this fails for the right
+	// reason if the re-touched entry was wrongly chosen as the eviction victim.
+	// (A size-only check would be vacuously true because getLimiter silently
+	// re-inserts an evicted entry, triggering a second eviction to keep the cap.)
+	const retouchedCIDR = "10.0.0.0" // cidrKey("10.0.0.1") → /24 prefix
+	if !containsFunc(retouchedCIDR) {
+		t.Fatalf("re-touched entry %q was evicted; it should have survived because it was moved to the LRU front", retouchedCIDR)
 	}
 }
 
@@ -540,7 +537,7 @@ func TestRateLimiterConcurrentEviction(t *testing.T) {
 	fixedTime := time.Now()
 	nowFn := func() time.Time { return fixedTime }
 
-	lenFunc, middlewareFn := rateLimiterInternal(cfg, nowFn)
+	lenFunc, _, middlewareFn := rateLimiterInternal(cfg, nowFn)
 
 	noop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 	h := middlewareFn(noop)
@@ -583,7 +580,7 @@ func BenchmarkRateLimiterEvictionPath(b *testing.B) {
 	fixedTime := time.Now()
 	nowFn := func() time.Time { return fixedTime }
 
-	_, middlewareFn := rateLimiterInternal(cfg, nowFn)
+	_, _, middlewareFn := rateLimiterInternal(cfg, nowFn)
 
 	noop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 	h := middlewareFn(noop)
