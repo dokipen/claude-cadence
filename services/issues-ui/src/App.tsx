@@ -119,6 +119,7 @@ function AppShell() {
   const repoUrl = selectedProject?.repository;
 
   const isOnBoard = !!boardMatch;
+  const activeSessions = sessions?.map((s): ActiveSessionInfo => ({ name: s.session.name, state: s.session.state }));
   const handleProjectChange = useCallback((id: string) => {
     if (!projects.some((p) => p.id === id)) return;
     setGlobalProjectId(id);
@@ -173,7 +174,7 @@ function AppShell() {
           <Route path="/docs/*" element={<DocsPage />} />
           <Route
             path="/projects/:projectId/*"
-            element={<KanbanBoard projectId={projectId} filters={filters} repoUrl={repoUrl} sessions={sessions?.map((s): ActiveSessionInfo => ({ name: s.session.name, state: s.session.state }))} />}
+            element={<KanbanBoard projectId={projectId} filters={filters} repoUrl={repoUrl} sessions={activeSessions} />}
           />
           <Route path="/ticket/:id" element={<TicketDetail />} />
           <Route path="/*" element={<ProjectRedirect />} />
