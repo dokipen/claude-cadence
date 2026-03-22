@@ -14,6 +14,10 @@ interface TerminalWindowProps {
   onDragLeave?: (e: React.DragEvent<HTMLDivElement>) => void;
   onDrop?: (e: React.DragEvent<HTMLDivElement>) => void;
   isDragOver?: boolean;
+  isKeyboardGrabbed?: boolean;
+  onHeaderKeyDown?: (e: React.KeyboardEvent<HTMLDivElement>) => void;
+  windowIndex?: number;
+  windowCount?: number;
 }
 
 export function TerminalWindow({
@@ -27,6 +31,10 @@ export function TerminalWindow({
   onDragLeave,
   onDrop,
   isDragOver,
+  isKeyboardGrabbed,
+  onHeaderKeyDown,
+  windowIndex,
+  windowCount,
 }: TerminalWindowProps) {
   const ticketMatch = session.name.match(/^lead-(\d+)$/);
 
@@ -46,20 +54,28 @@ export function TerminalWindow({
     }
   };
 
+  const title = session.name;
+
   return (
     <div
       className={`${styles.tileWindow}${isDragOver ? ` ${styles.tileWindowDragOver}` : ""}`}
       data-testid="terminal-window"
+      aria-label={`${title} window, position ${(windowIndex ?? 0) + 1} of ${windowCount ?? 1}`}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
       <div
-        className={`${styles.tileHeader}${onDragStart ? ` ${styles.tileHeaderDraggable}` : ""}`}
+        className={`${styles.tileHeader}${onDragStart ? ` ${styles.tileHeaderDraggable}` : ""}${isKeyboardGrabbed ? ` ${styles.tileHeaderKeyboardGrabbed}` : ""}`}
         data-testid="tile-header"
         draggable={!!onDragStart}
+        tabIndex={0}
+        role="button"
+        aria-pressed={isKeyboardGrabbed ?? false}
+        aria-label={isKeyboardGrabbed ? `Moving: ${title}. Use arrow keys to reposition, Space to confirm, Escape to cancel` : `Rearrange window: ${title}. Press Space to start moving.`}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
+        onKeyDown={onHeaderKeyDown}
       >
         <span className={styles.tileTitle}>
           {session.name}

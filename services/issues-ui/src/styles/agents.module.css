@@ -652,6 +652,18 @@
   cursor: grabbing;
 }
 
+.tileHeaderDraggable:focus-visible {
+  outline: 2px solid var(--primary-light);
+  outline-offset: -2px;
+}
+
+.tileHeaderKeyboardGrabbed {
+  outline: 2px solid var(--primary-light);
+  outline-offset: -2px;
+  cursor: grabbing;
+  background-color: var(--surface-hover, rgba(255,255,255,0.1));
+}
+
 .tileWindowDragOver {
   outline: 2px solid var(--primary-light);
   outline-offset: -2px;
