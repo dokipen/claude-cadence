@@ -186,6 +186,14 @@ func validate(cfg *Config) error {
 	if cfg.AgentTTL <= 0 {
 		return fmt.Errorf("agent_ttl must be positive")
 	}
+	// Note: zero values are already replaced by applyDefaults, so a negative
+	// value here means the user explicitly set a nonsensical config.
+	if cfg.RateLimit.RequestsPerSecond < 0 {
+		return fmt.Errorf("rate_limit.requests_per_second must not be negative")
+	}
+	if cfg.RateLimit.Burst < 0 {
+		return fmt.Errorf("rate_limit.burst must not be negative")
+	}
 
 	return nil
 }

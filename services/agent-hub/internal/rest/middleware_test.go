@@ -567,6 +567,79 @@ func TestRateLimiterConcurrentEviction(t *testing.T) {
 	}
 }
 
+// TestRateLimiterProtectionWindowDerivedFromRefillTime verifies that the
+// denied-entry protection window is derived from the token-bucket refill time
+// (burst / rps), not a fixed 2-minute constant.
+//
+// Scenario: Burst=5, RPS=1 → refill window = 5s (old fixed window = 2 min).
+// At t=0 the victim is denied and is the LRU tail.
+// At t+10s (> 5s derived window, < 2 min fixed window) a new IP triggers eviction.
+//
+//   - Correct (derived 5s): victim's protection has expired → LRU walk evicts it.
+//   - Buggy (fixed 2 min):  victim is still protected → LRU walk skips it → a
+//     non-denied neighbour is evicted instead → victim stays in the map.
+func TestRateLimiterProtectionWindowDerivedFromRefillTime(t *testing.T) {
+	cfg := config.RateLimitConfig{
+		RequestsPerSecond: 1.0,
+		Burst:             5, // refill time = 5s
+	}
+
+	baseTime := time.Now()
+	currentTime := baseTime
+	nowFn := func() time.Time { return currentTime }
+
+	_, containsFunc, middlewareFn := rateLimiterInternal(cfg, nowFn)
+	noop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	h := middlewareFn(noop)
+
+	sendRequest := func(ip string) int {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = ip + ":9999"
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	// Step 1: Insert the victim first so it becomes the LRU tail.
+	// Exhaust its token bucket (5 tokens) then trigger a denial.
+	const victimIP = "10.0.0.1"
+	for i := 0; i < cfg.Burst; i++ {
+		if code := sendRequest(victimIP); code != http.StatusOK {
+			t.Fatalf("victim request %d should succeed, got %d", i+1, code)
+		}
+	}
+	if code := sendRequest(victimIP); code != http.StatusTooManyRequests {
+		t.Fatalf("victim should be rate-limited after exhausting burst, got %d", code)
+	}
+
+	// Step 2: Fill the rest of the map with non-denied IPs (distinct /24 subnets).
+	// Each new insert goes to the LRU front, so after this the victim is the LRU tail.
+	for i := 1; i < rateLimiterMaxEntries; i++ {
+		ip := fmt.Sprintf("192.%d.%d.1", i/256, i%256)
+		if code := sendRequest(ip); code != http.StatusOK {
+			t.Fatalf("filler request %d got %d, want 200", i, code)
+		}
+	}
+
+	// Step 3: Advance clock to t+10s — past the derived 5s window but inside
+	// the old 2-minute constant.
+	currentTime = baseTime.Add(10 * time.Second)
+
+	// Step 4: Insert a new IP to trigger eviction. The LRU walk scans from tail:
+	//   Derived window (5s): victim at tail, denied but 10s > 5s → NOT protected → evict victim.
+	//   Fixed window (2min): victim at tail, denied and 10s < 120s → protected → skip →
+	//     next non-denied neighbour evicted instead → victim remains.
+	sendRequest("172.16.0.1")
+
+	victimCIDR := "10.0.0.0" // cidrKey("10.0.0.1")
+	if containsFunc(victimCIDR) {
+		t.Errorf("denied victim %q is still in the map 10s after denial; "+
+			"protection window should have expired (Burst=%d / RPS=%.0f = %ds) "+
+			"but appears to be using a fixed longer window",
+			victimCIDR, cfg.Burst, cfg.RequestsPerSecond, cfg.Burst/int(cfg.RequestsPerSecond))
+	}
+}
+
 // BenchmarkRateLimiterEvictionPath measures throughput on the eviction code
 // path: every iteration inserts a new IP from a pool larger than the cap,
 // forcing an LRU eviction each time. Compare with BenchmarkRateLimiter which

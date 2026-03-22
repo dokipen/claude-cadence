@@ -414,6 +414,47 @@ func TestValidate_ZeroDurations(t *testing.T) {
 	}
 }
 
+func TestValidate_NegativeRateLimitFields(t *testing.T) {
+	base := func() *Config {
+		return &Config{
+			Host:    "127.0.0.1",
+			Auth:    AuthConfig{Mode: "token", Token: "secret"},
+			HubAuth: HubAuthConfig{Token: "hub-secret"},
+			Heartbeat: HeartbeatConfig{
+				Interval: 30 * time.Second,
+				Timeout:  10 * time.Second,
+			},
+			AgentTTL: 5 * time.Minute,
+		}
+	}
+
+	t.Run("negative requests_per_second", func(t *testing.T) {
+		cfg := base()
+		cfg.RateLimit = RateLimitConfig{RequestsPerSecond: -1, Burst: 10}
+		err := validate(cfg)
+		if err == nil {
+			t.Fatal("expected error for negative requests_per_second")
+		}
+		want := "rate_limit.requests_per_second must not be negative"
+		if err.Error() != want {
+			t.Errorf("expected %q, got %q", want, err.Error())
+		}
+	})
+
+	t.Run("negative burst", func(t *testing.T) {
+		cfg := base()
+		cfg.RateLimit = RateLimitConfig{RequestsPerSecond: 10, Burst: -1}
+		err := validate(cfg)
+		if err == nil {
+			t.Fatal("expected error for negative burst")
+		}
+		want := "rate_limit.burst must not be negative"
+		if err.Error() != want {
+			t.Errorf("expected %q, got %q", want, err.Error())
+		}
+	})
+}
+
 // --- AuthConfig.ResolveToken ---
 
 func TestAuthConfig_ResolveToken_InlineToken(t *testing.T) {
