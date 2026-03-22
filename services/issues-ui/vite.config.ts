@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+const apiHost = process.env.VITE_API_HOST || "localhost";
 const apiPort = process.env.VITE_API_PORT || "4000";
 const agentHubPort = Number(process.env.VITE_AGENT_HUB_PORT ?? "4200");
 if (!Number.isInteger(agentHubPort) || agentHubPort < 1 || agentHubPort > 65535) {
@@ -15,7 +16,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/graphql": `http://localhost:${apiPort}`,
+      "/graphql": `http://${apiHost}:${apiPort}`,
       "/api/v1": {
         target: `http://localhost:${agentHubPort}`,
         configure: (proxy) => {
