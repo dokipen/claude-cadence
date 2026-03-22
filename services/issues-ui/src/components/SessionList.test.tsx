@@ -86,4 +86,34 @@ describe("SessionList", () => {
     fireEvent.click(getByTestId("sidebar-toggle"));
     expect(onToggle).toHaveBeenCalledTimes(1);
   });
+
+  it("renders agents in alphabetical order regardless of input order", () => {
+    const agents = [
+      makeAgent("zebra-agent"),
+      makeAgent("mango-agent"),
+      makeAgent("alpha-agent"),
+    ];
+    const { getAllByTestId } = render(
+      <SessionList {...defaultProps} agents={agents} isCollapsed={false} />,
+    );
+    const rendered = getAllByTestId("sidebar-agent").map((el) => el.textContent);
+    expect(rendered[0]).toContain("alpha-agent");
+    expect(rendered[1]).toContain("mango-agent");
+    expect(rendered[2]).toContain("zebra-agent");
+  });
+
+  it("renders agents in alphabetical order when input order changes between renders", () => {
+    const agents = [
+      makeAgent("mango-agent"),
+      makeAgent("alpha-agent"),
+      makeAgent("zebra-agent"),
+    ];
+    const { getAllByTestId } = render(
+      <SessionList {...defaultProps} agents={agents} isCollapsed={false} />,
+    );
+    const rendered = getAllByTestId("sidebar-agent").map((el) => el.textContent);
+    expect(rendered[0]).toContain("alpha-agent");
+    expect(rendered[1]).toContain("mango-agent");
+    expect(rendered[2]).toContain("zebra-agent");
+  });
 });
