@@ -59,24 +59,7 @@ VERIFY_CMD=""
 
 # Look for verification command in CLAUDE.md (skipping headings inside fenced code blocks)
 if [ -f "CLAUDE.md" ]; then
-<<<<<<< Updated upstream
   VERIFY_CMD=$(awk 'BEGIN{fence=0} /^```/{fence=!fence; next} !fence && /^## Verification[[:space:]]*$/{while ((getline line) > 0 && (line ~ /^[[:space:]]*$/ || line ~ /^[[:space:]]*#/)) {}; print line; exit}' CLAUDE.md)
-=======
-  # Extract the line after "## Verification", skipping fenced code blocks
-  VERIFY_CMD=$(awk '
-    /^```/ { in_fence = !in_fence; next }
-    in_fence { next }
-    /^## Verification/ {
-      getline
-      # Skip blank lines
-      while (/^[[:space:]]*$/) getline
-      # Skip fenced code block opener
-      if (/^```/) getline
-      print
-      exit
-    }
-  ' CLAUDE.md)
->>>>>>> Stashed changes
 fi
 
 if [ -n "$VERIFY_CMD" ]; then
