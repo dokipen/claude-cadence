@@ -12,7 +12,7 @@ import agentStyles from "../styles/agents.module.css";
 export function hasActiveSession(sessions: AgentSession[], ticketNumber: number): boolean {
   const prefixes = [`lead-${ticketNumber}`, `refine-${ticketNumber}`, `discuss-${ticketNumber}`];
   return sessions.some(
-    (s) => prefixes.includes(s.session.name) && (s.session.state === "running" || s.session.state === "creating")
+    (s) => prefixes.includes(s.session.name) && (s.session.state === "running" || s.session.state === "creating" || s.session.state === "destroying")
   );
 }
 

@@ -115,6 +115,10 @@ describe("hasActiveSession", () => {
     const sessions = [makeSession("lead-12", "running")];
     expect(hasActiveSession(sessions, 1)).toBe(false);
   });
+
+  it("returns true for matching name with state 'destroying'", () => {
+    expect(hasActiveSession([makeSession("lead-5", "destroying")], 5)).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -127,6 +131,12 @@ describe("TicketCard", () => {
     const { getByTestId } = render(
       <TicketCard ticket={ticket} sessions={[]} />,
     );
+    expect(getByTestId("card-launch-button")).toBeTruthy();
+  });
+
+  it("shows card-launch-button when sessions prop is omitted", () => {
+    const ticket = makeTicket();
+    const { getByTestId } = render(<TicketCard ticket={ticket} />);
     expect(getByTestId("card-launch-button")).toBeTruthy();
   });
 
