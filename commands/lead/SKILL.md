@@ -348,7 +348,21 @@ In both cases:
 
 > **This phase only applies when the PR contains visual/UI changes.** For all other PRs, proceed directly from Phase 5 to Phase 7.
 
-1. Present to user for manual testing
+1. **Direct the user to spin up the dev environment** (see `docs/dev-environment.md`):
+   ```bash
+   # If .env.dev doesn't exist yet, copy the example and fill in secrets first
+   cp .env.dev.example .env.dev
+   # Then start the stack
+   docker compose -f docker-compose.dev.yml up --build
+   ```
+   Then open **http://localhost** in a browser.
+
+   **What requires a rebuild vs. what picks up automatically:**
+   - Changes to `services/issues-ui/` (frontend) are reflected immediately via Vite HMR — no rebuild needed.
+   - Changes to `services/issues/` (backend) require a container rebuild:
+     ```bash
+     docker compose -f docker-compose.dev.yml up --build issues
+     ```
 2. Wait for user feedback (user intervention required)
 3. Address issues if reported, return to Phase 5 after fixes
 
