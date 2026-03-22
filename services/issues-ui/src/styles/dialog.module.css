@@ -46,10 +46,3 @@
 .dialogClose:hover {
   color: var(--text);
 }
-
-.truncationNote {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  margin: 0;
-  text-align: center;
-}
