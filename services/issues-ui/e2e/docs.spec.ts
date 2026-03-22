@@ -94,4 +94,26 @@ test.describe("docs page", () => {
     await page.goto("/docs");
     await expect(page.getByText("Failed to fetch documents")).toBeVisible();
   });
+
+  test("clicking a file updates the URL to /docs/<file-path>", async ({ page }) => {
+    await page.goto("/docs");
+    await page.getByText("getting-started.md").click();
+    await expect(page).toHaveURL(/\/docs\/getting-started\.md$/);
+  });
+
+  test("navigating directly to /docs/<file-path> renders the file content", async ({ page }) => {
+    await page.goto("/docs/api-reference.md");
+    await expect(page.getByText("API Reference")).toBeVisible();
+    await expect(page.getByText("Endpoints and schemas.")).toBeVisible();
+  });
+
+  test("back navigation restores the previously selected file", async ({ page }) => {
+    await page.goto("/docs");
+    await page.getByText("getting-started.md").click();
+    await expect(page.getByText("Welcome to the documentation.")).toBeVisible();
+    await page.getByText("api-reference.md").click();
+    await expect(page.getByText("Endpoints and schemas.")).toBeVisible();
+    await page.goBack();
+    await expect(page.getByText("Welcome to the documentation.")).toBeVisible();
+  });
 });

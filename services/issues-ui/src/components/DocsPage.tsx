@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useParams, useNavigate } from "react-router";
 import { useDocFiles, useDocContent } from "../hooks/useDocs";
 import { Markdown } from "./Markdown";
 import styles from "../styles/docs.module.css";
 
 export function DocsPage() {
   const { files, loading: filesLoading, error: filesError } = useDocFiles();
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const params = useParams<{ "*": string }>();
+  const navigate = useNavigate();
+  const selectedPath = params["*"] || null;
   const { content, loading: contentLoading, error: contentError } = useDocContent(selectedPath);
 
   return (
@@ -28,7 +30,7 @@ export function DocsPage() {
               <li key={file.path}>
                 <button
                   className={`${styles.fileItem}${selectedPath === file.path ? ` ${styles.fileItemSelected}` : ""}`}
-                  onClick={() => setSelectedPath(file.path)}
+                  onClick={() => navigate(`/docs/${file.path}`)}
                   title={file.path}
                 >
                   {file.path}
