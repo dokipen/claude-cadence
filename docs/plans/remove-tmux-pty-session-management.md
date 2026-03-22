@@ -301,29 +301,103 @@ ttyd is fundamentally coupled to tmux. `ttyd.Start` (line 82–88) launches: `tt
 
 ```go
 // internal/pty/manager.go
+
+// Session represents a running PTY process managed by the PTYManager.
 type Session struct {
-    ID       string
-    PID      int
-    master   *os.File
-    buf      *RingBuffer
-    mu       sync.Mutex
-    // ...
+    ID     string
+    PID    int
+    master *os.File
+    buf    *RingBuffer
+    mu     sync.Mutex
+    // done is closed by the cmd.Wait() goroutine when the child process exits.
+    // Unexported: accessed via the exported Done() method (receive-only).
+    done chan struct{}
+    // writers is a fan-out slice for active WebSocket connections.
+    // Guarded by mu. Single-viewer semantics: at most one entry in Phase 3.
+    writers []io.Writer
 }
 
+func (s *Session) Done() <-chan struct{} { return s.done }
+// Done returns a channel that is closed when the child process exits.
+// Callers in other packages (e.g. internal/session.Cleaner) select on Done()
+// instead of polling via syscall.Kill.
+
+// Manager holds all active PTY sessions.
 type Manager struct {
     sessions map[string]*Session
     mu       sync.RWMutex
 }
 
-func (m *Manager) Create(id, workdir, command string, env []string, cols, rows uint16) (*Session, error)
+func (m *Manager) Create(id, workdir string, args []string, env []string, cols, rows uint16) (*Session, error)
+// Create starts a new PTY session:
+//   - Allocates PTY master/slave pair via creack/pty
+//   - env []string: passed verbatim to exec.Cmd.Env. Callers must pass only a minimal,
+//     scrubbed environment. Vault secrets must NOT appear in env — they are readable
+//     via /proc/<pid>/environ by any process with ptrace access. Use the planned agentd
+//     debug endpoint for tooling visibility instead (see Phase 4 audit table).
+//   - Launches the process via creack/pty's pty.StartWithSize (which sets Setsid and Ctty
+//     automatically); do NOT set SysProcAttr.Setsid manually — pty.StartWithSize handles
+//     both Setsid and the controlling terminal (Ctty) assignment required on Linux.
+//   - Sets initial window size (cols, rows); uses 80x24 if both are zero
+//   - Starts the PTY read goroutine: reads master → writes to RingBuffer + fan-out writers
+//   - Starts cmd.Wait() goroutine: closes Session.done on process exit
+//   - Returns error on duplicate ID
+
 func (m *Manager) Get(id string) (*Session, bool)
+// Get returns the session for the given ID, or false if not found.
+
+func (m *Manager) Has(id string) bool
+// Has reports whether a session with the given ID exists.
+
 func (m *Manager) Destroy(id string) error
-func (m *Manager) ServeTerminal(id string, ws *websocket.Conn) error // replay buf, then bidirectional relay
+// Destroy closes the PTY master fd (sending SIGHUP to the child) and removes the session.
+
+func (m *Manager) ServeTerminal(id string, ws *websocket.Conn) error
+// ServeTerminal:
+//   1. Gets the session by id (returns error if not found)
+//   1a. Authorization check: the caller (HTTP handler) must verify that the requesting
+//       client holds a valid credential scoped to this session before calling ServeTerminal.
+//       Viewer displacement is logged at INFO level (old connection closed, new connection ID).
+//   2. Under session.mu: takes session.buf.Snapshot() and registers ws in session.writers
+//      (displacing any previous active connection — single-viewer semantics).
+//      The snapshot and writer registration are atomic to prevent the PTY read goroutine
+//      from delivering live bytes before the replay is complete.
+//   3. Writes the snapshot bytes to ws (outside the lock — avoids holding mu during I/O).
+//   4. Enters bidirectional relay loop:
+//        - WS → PTY master: forward input bytes; decode JSON resize frames and call pty.Setsize
+//        - PTY master → WS: handled by the session's read goroutine via the writers fan-out
+//   5. On WS close, removes ws from session.writers
+
+func (m *Manager) ReadBuffer(id string) ([]byte, error)
+// ReadBuffer returns a snapshot of the ring buffer for the given session.
+// Used by session.Monitor as a drop-in replacement for tmux.CapturePane.
+```
+
+```go
+// internal/pty/ringbuffer.go
+
+// RingBuffer is a fixed-size circular byte buffer.
+// Concurrency model: Write is called only from the PTY read goroutine (single writer).
+// Snapshot is called from multiple goroutines (Monitor ticker, ServeTerminal at connect time).
+// A sync.Mutex guards all access.
+type RingBuffer struct {
+    buf  []byte
+    head int // write position (next byte to overwrite)
+    size int // total bytes written (capped at len(buf))
+    mu   sync.Mutex
+}
+
+func NewRingBuffer(capacity int) *RingBuffer
+func (r *RingBuffer) Write(p []byte) (int, error) // implements io.Writer; safe for concurrent use
+func (r *RingBuffer) Snapshot() []byte            // returns a copy of the current contents in order
 ```
 
 **Key implementation notes:**
-- Use `github.com/creack/pty` (already a common dependency in Go terminal projects) or raw `posix_openpt` syscalls for PTY allocation
+- Use `github.com/creack/pty` — mature, cross-platform, reduces maintenance burden vs raw syscalls
+- Use `args []string` (not a single `command string`) for process launch — avoids shell invocation and shell injection risk
 - `RingBuffer.Snapshot()` returns a `[]byte` copy for replay — called once at WS connect time before entering the live relay loop
+- Ring buffer default size: **1 MB** (configurable via `PTYConfig`). Rationale: Phase 5 recommends `scrollback: 5000` lines at ~80 chars/line ≈ 400 KB minimum; 1 MB provides headroom for dense agent output.
+- Initial terminal size: `Create` uses cols=80, rows=24 when both parameters are zero (e.g., session created via API before a terminal connects)
 - The WebSocket endpoint speaks the same ttyd binary framing (`"0"`-prefixed output, `"1"`-prefixed resize) so the existing `Terminal.tsx` frontend code requires no changes during this phase
 - Resize: decode `CMD_RESIZE` JSON from the WS, call `pty.Setsize(master, &pty.Winsize{Rows: r, Cols: c})`
 
@@ -341,6 +415,12 @@ func (m *Manager) ServeTerminal(id string, ws *websocket.Conn) error // replay b
 ### Phase 4: Update Session Init to Remove tmux
 
 **Goal:** Swap `tmux.Client` out of `session.Manager` and replace each call site.
+
+**Prerequisite (Step 0) — `omitempty` migration must land before zeroing `TmuxSession`:**
+
+> Before zeroing `TmuxSession`: remove `omitempty` from the hub JSON struct tag for `TmuxSession` AND update the frontend `agentHubClient.ts` to treat `tmux_session` as optional (no error if absent or empty string). This must be deployed before the field is zeroed to avoid frontend `HubError(502)` responses.
+
+Concretely: (1) remove `omitempty` from the `json:"tmux_session,omitempty"` tag in the hub dispatch struct so that an empty string is serialized as `"tmux_session": ""` rather than being omitted; (2) update `agentHubClient.ts` `validateSessionResponse` to accept `tmux_session` as an optional field (present, absent, or empty string are all valid). Only after both changes are deployed can the field be zeroed in the Go session manager.
 
 **Changes by file:**
 
@@ -465,3 +545,23 @@ Phases 3–6 must run sequentially. Phases 1 and 2 can overlap.
 6. **`tmux_session` in the hub protocol**: The field is validated as required by the frontend. When and how should it be removed? This should be coordinated as a breaking protocol change with a migration path for consuming hub agents that may inspect the field.
 
 7. **ttyd removal timeline**: Should ttyd support be removed in the same release as tmux, or kept as a disabled/deprecated option for one release? Given that ttyd is only meaningful when tmux is present, removing both together is cleaner.
+
+---
+
+## Design Decisions
+
+The following decisions resolve the open questions above. Implementers should treat these as settled; do not re-open them without a separate design discussion.
+
+**Q1 — WebSocket endpoint ownership:** Option A — agentd serves the terminal WebSocket directly. The issues-ui proxy path (`/ws/terminal/<agent>/<session>`) continues to work, but now proxies to a single agentd WS endpoint rather than per-process ttyd ports. This replaces the 7681–7780 port range with a single agentd endpoint, reducing the exposed attack surface compared to the current per-process ttyd model.
+
+**Q2 — PTY library:** Use `github.com/creack/pty`. It is mature, widely used, and handles Linux/macOS platform differences cleanly. Raw `syscall`/`unix` calls are feasible but increase maintenance burden for no production benefit.
+
+**Q3 — Ring buffer size default:** **1 MB** (not 256 KB). Rationale: Phase 5 recommends increasing xterm.js scrollback to `scrollback: 5000` lines. At ~80 chars/line that is ~400 KB of terminal bytes minimum for a full-history replay. 1 MB provides adequate headroom for agent sessions with dense output. The value is configurable via `PTYConfig`.
+
+**Q4 — Multiple WS connections per session:** Single-viewer semantics for the initial release — a new connection displaces the existing active connection. The `Session` struct stubs a `writers []io.Writer` fan-out slice (even if only one entry is ever used in Phase 3) so the I/O goroutine does not need structural changes when broadcasting is added later.
+
+**Q5 — Daemon restart session persistence:** Option A — daemon restarts terminate sessions. This matches the current behavior when the tmux server also dies and is significantly simpler to implement. File a separate low-priority issue for Option B (fd passing via `SCM_RIGHTS`) if operators later require zero-downtime restarts.
+
+**Q6 — `tmux_session` field removal timeline:** Three-step migration: (1) remove `omitempty` from the hub JSON struct tag and update the frontend to treat the field as optional — this is the prerequisite described in Phase 4 Step 0; (2) zero the field in Phase 4; (3) remove the field entirely in Phase 6. The Phase 4 and Phase 6 timelines already reflect this sequencing.
+
+**Q7 — ttyd removal timeline:** Remove both tmux and ttyd in the same release. ttyd has no meaningful role without tmux (its only command is `tmux attach-session`); keeping a disabled ttyd adds dead code with no operator benefit. Simultaneous removal is cleaner.
