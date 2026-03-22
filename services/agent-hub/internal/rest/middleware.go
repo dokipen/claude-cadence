@@ -50,6 +50,13 @@ func metricsMiddleware(next http.Handler) http.Handler {
 // a trusted reverse proxy (Caddy), the proxy's own rate limiting should
 // be used for client-IP-based throttling.
 func rateLimiter(cfg config.RateLimitConfig) func(http.Handler) http.Handler {
+	_, handler := rateLimiterInternal(cfg, time.Now)
+	return handler
+}
+
+// rateLimiterInternal is the testable implementation; it returns both the
+// middleware handler and a function that returns the current map length.
+func rateLimiterInternal(cfg config.RateLimitConfig, now func() time.Time) (lenFunc func() int, handler func(http.Handler) http.Handler) {
 	var mu sync.Mutex
 	limiters := make(map[string]*rateLimiterEntry)
 
@@ -57,27 +64,33 @@ func rateLimiter(cfg config.RateLimitConfig) func(http.Handler) http.Handler {
 		mu.Lock()
 		defer mu.Unlock()
 
-		now := time.Now()
+		t := now()
 
 		// Evict stale entries older than 5 minutes.
-		if len(limiters) > 1000 {
+		if len(limiters) >= 1000 {
 			for k, e := range limiters {
-				if now.Sub(e.lastSeen) > 5*time.Minute {
+				if t.Sub(e.lastSeen) > 5*time.Minute {
 					delete(limiters, k)
 				}
 			}
 		}
 
 		if entry, ok := limiters[ip]; ok {
-			entry.lastSeen = now
+			entry.lastSeen = t
 			return entry.limiter
 		}
 		lim := rate.NewLimiter(rate.Limit(cfg.RequestsPerSecond), cfg.Burst)
-		limiters[ip] = &rateLimiterEntry{limiter: lim, lastSeen: now}
+		limiters[ip] = &rateLimiterEntry{limiter: lim, lastSeen: t}
 		return lim
 	}
 
-	return func(next http.Handler) http.Handler {
+	lenFunc = func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(limiters)
+	}
+
+	handler = func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip, _, err := net.SplitHostPort(r.RemoteAddr)
 			if err != nil {
@@ -91,6 +104,8 @@ func rateLimiter(cfg config.RateLimitConfig) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+
+	return lenFunc, handler
 }
 
 type rateLimiterEntry struct {

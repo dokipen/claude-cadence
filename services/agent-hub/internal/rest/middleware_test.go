@@ -3,6 +3,7 @@ package rest
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/dokipen/claude-cadence/services/agent-hub/internal/config"
 	"github.com/dokipen/claude-cadence/services/agent-hub/internal/hub"
 )
 
@@ -174,4 +176,63 @@ func TestHandleListAgents(t *testing.T) {
 			t.Errorf("profile repo = %q, want https://github.com/test/repo.git", profile.Repo)
 		}
 	})
+}
+
+// TestRateLimiterEviction verifies that eviction fires when the map reaches
+// exactly 1000 entries (>= 1000) and that stale entries (> 5 min old) are
+// removed during eviction.
+func TestRateLimiterEviction(t *testing.T) {
+	cfg := config.RateLimitConfig{
+		RequestsPerSecond: 1_000_000.0,
+		Burst:             1_000_000,
+	}
+
+	baseTime := time.Now().Add(-10 * time.Minute)
+	currentTime := baseTime
+	nowFn := func() time.Time { return currentTime }
+
+	lenFunc, middlewareFn := rateLimiterInternal(cfg, nowFn)
+
+	// Wrap a no-op handler with the rate limiter middleware.
+	noop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	h := middlewareFn(noop)
+
+	sendRequest := func(ip string) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = ip + ":1234"
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+	}
+
+	// Step 1: Add 999 distinct IPs with the old (stale) timestamp.
+	// All entries get lastSeen = baseTime (10 minutes ago).
+	for i := 0; i < 999; i++ {
+		sendRequest(fmt.Sprintf("10.0.%d.%d", i/256, i%256))
+	}
+
+	if got := lenFunc(); got != 999 {
+		t.Fatalf("after 999 IPs: map size = %d, want 999", got)
+	}
+
+	// Step 2: Advance the clock to now so new entries are fresh.
+	currentTime = time.Now()
+
+	// Step 3: Add the 1000th distinct IP.
+	// len(limiters) is 999 before this call; 999 >= 1000 is false → no eviction → insert → len = 1000.
+	sendRequest("10.1.0.0")
+
+	if got := lenFunc(); got != 1000 {
+		t.Fatalf("after 1000th IP: map size = %d, want 1000", got)
+	}
+
+	// Step 4: Add the 1001st distinct IP.
+	// len(limiters) is 1000 before this call; 1000 >= 1000 is true → eviction runs.
+	// The first 999 entries have lastSeen = baseTime (10 min ago), so they are evicted.
+	// Entry 1000 ("10.1.0.0") has lastSeen = currentTime, so it survives.
+	// After eviction, the 1001st IP is inserted → map size = 2.
+	sendRequest("10.1.0.1")
+
+	if got := lenFunc(); got != 2 {
+		t.Fatalf("after eviction triggered by 1001st IP: map size = %d, want 2 (eviction should have removed 999 stale entries)", got)
+	}
 }
