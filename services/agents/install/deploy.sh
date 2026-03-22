@@ -287,7 +287,7 @@ SCRIPT
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
-    <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:$HOME/bin</string>
+    <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:$HOME/.local/bin:$HOME/bin</string>
     <key>HOME</key>
     <string>$HOME</string>
   </dict>
