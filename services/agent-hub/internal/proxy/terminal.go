@@ -62,8 +62,87 @@ func HandleTerminalProxy(h *hub.Hub, allowedOrigins []string) http.HandlerFunc {
 			return
 		}
 
+		if endpoint.Relay {
+			// Relay path: tunnel PTY frames through the agent's existing hub WebSocket.
+			sessionUUID, err := uuid.Parse(sessionID)
+			if err != nil {
+				writeJSONError(w, http.StatusBadRequest, "invalid session ID")
+				return
+			}
+
+			// Accept the browser's WebSocket upgrade before opening the relay.
+			acceptOpts := &websocket.AcceptOptions{
+				Subprotocols: []string{"tty"},
+			}
+			if len(allowedOrigins) > 0 {
+				acceptOpts.OriginPatterns = allowedOrigins
+			} else {
+				// Safe for loopback/internal connections where a reverse proxy
+				// (e.g. Caddy) handles origin validation before reaching the hub.
+				acceptOpts.InsecureSkipVerify = true
+			}
+			browserConn, err := websocket.Accept(w, r, acceptOpts)
+			if err != nil {
+				slog.Error("failed to accept browser websocket", "error", err)
+				return
+			}
+			defer browserConn.Close(websocket.StatusGoingAway, "proxy closing")
+
+			// Clear the server's WriteTimeout so idle terminal sessions aren't killed.
+			rc := http.NewResponseController(w)
+			rc.SetWriteDeadline(time.Time{})
+
+			browserConn.SetReadLimit(maxRelayMessageSize)
+
+			ctx, ctxCancel := context.WithCancel(r.Context())
+			defer ctxCancel()
+
+			// Track this terminal session for graceful shutdown.
+			sessionTrackID := uuid.NewString()
+			h.TrackTerminalSession(sessionTrackID, ctxCancel)
+			defer h.UntrackTerminalSession(sessionTrackID)
+
+			relayCh, cleanup, err := h.OpenTerminalRelay(ctx, agentName, sessionUUID)
+			if err != nil {
+				slog.Error("failed to open terminal relay", "agent", agentName, "session", sessionID, "error", err)
+				browserConn.Close(websocket.StatusInternalError, "relay unavailable")
+				return
+			}
+			defer cleanup()
+
+			// PTY → Browser goroutine.
+			go func() {
+				defer ctxCancel()
+				for {
+					select {
+					case payload, ok := <-relayCh:
+						if !ok {
+							return
+						}
+						if err := browserConn.Write(ctx, websocket.MessageBinary, payload); err != nil {
+							return
+						}
+					case <-ctx.Done():
+						return
+					}
+				}
+			}()
+
+			// Browser → PTY (main goroutine).
+			for {
+				_, payload, err := browserConn.Read(ctx)
+				if err != nil {
+					break
+				}
+				if err := h.WriteTerminalFrame(ctx, agentName, sessionUUID, payload); err != nil {
+					break
+				}
+			}
+			return
+		}
+
 		if endpoint.URL == "" {
-			writeJSONError(w, http.StatusBadGateway, "empty terminal endpoint URL")
+			writeJSONError(w, http.StatusBadGateway, "no terminal endpoint available")
 			return
 		}
 

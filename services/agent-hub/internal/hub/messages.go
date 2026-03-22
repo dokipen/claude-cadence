@@ -103,7 +103,8 @@ type GetTerminalEndpointParams struct {
 
 // GetTerminalEndpointResult contains the ttyd endpoint for a session.
 type GetTerminalEndpointResult struct {
-	URL string `json:"url"`
+	URL   string `json:"url,omitempty"`   // legacy direct-dial
+	Relay bool   `json:"relay,omitempty"` // relay through hub WS
 }
 
 // NewErrorResponse creates a JSON-RPC 2.0 error response.

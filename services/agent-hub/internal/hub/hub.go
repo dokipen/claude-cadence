@@ -17,8 +17,12 @@ import (
 // to change its AdvertiseAddress.
 var ErrAdvertiseAddressChanged = errors.New("advertise address changed on re-registration")
 
-// MaxMessageSize is the maximum allowed WebSocket message size (64 KiB).
-const MaxMessageSize = 64 * 1024
+// MaxMessageSize is the maximum allowed WebSocket message size (1 MiB).
+// Increased from the coder/websocket default of 64 KiB to support terminal
+// relay frames, which can carry large PTY output bursts. This limit applies
+// only to authenticated agent connections — browser WebSocket connections use
+// a separate, smaller limit configured in the proxy handler.
+const MaxMessageSize = 1 << 20
 
 // Hub manages registered agentd connections.
 type Hub struct {
@@ -270,35 +274,51 @@ func (h *Hub) Call(ctx context.Context, agent *ConnectedAgent, method string, pa
 
 // HandleAgentConnection processes messages from a connected agent.
 // It blocks until the connection is closed or an error occurs.
+// Text frames are dispatched as JSON-RPC responses; binary frames are decoded
+// as terminal relay frames and delivered to the registered session channel.
 func (h *Hub) HandleAgentConnection(ctx context.Context, agent *ConnectedAgent) {
 	agent.Conn().SetReadLimit(MaxMessageSize)
 
 	go h.heartbeatLoop(ctx, agent)
 
 	for {
-		_, data, err := agent.Conn().Read(ctx)
+		msgType, data, err := agent.Conn().Read(ctx)
 		if err != nil {
 			slog.Info("agent connection closed", "agent", agent.Name, "error", err)
+			agent.CloseTerminalChannels()
 			h.markOfflineIfCurrent(agent.Name, agent)
 			return
 		}
 
 		agent.Touch()
 
-		var msg Response
-		if err := json.Unmarshal(data, &msg); err != nil {
-			slog.Warn("invalid message from agent", "agent", agent.Name, "error", err)
-			continue
-		}
-
-		// Route responses to pending request channels.
-		if msg.ID != "" {
-			agent.mu.Lock()
-			if ch, ok := agent.pending[msg.ID]; ok {
-				ch <- &msg
-				delete(agent.pending, msg.ID)
+		switch msgType {
+		case websocket.MessageBinary:
+			sessionID, payload, err := DecodeTerminalFrame(data)
+			if err != nil {
+				slog.Warn("invalid binary frame from agent", "agent", agent.Name, "error", err)
+				continue
 			}
-			agent.mu.Unlock()
+			if !agent.DeliverTerminalFrame(sessionID, payload) {
+				slog.Debug("no relay registered for session", "agent", agent.Name, "session_id", sessionID)
+			}
+
+		case websocket.MessageText:
+			var msg Response
+			if err := json.Unmarshal(data, &msg); err != nil {
+				slog.Warn("invalid message from agent", "agent", agent.Name, "error", err)
+				continue
+			}
+
+			// Route responses to pending request channels.
+			if msg.ID != "" {
+				agent.mu.Lock()
+				if ch, ok := agent.pending[msg.ID]; ok {
+					ch <- &msg
+					delete(agent.pending, msg.ID)
+				}
+				agent.mu.Unlock()
+			}
 		}
 	}
 }
@@ -390,4 +410,54 @@ func (h *Hub) reaper(ctx context.Context) {
 			h.mu.Unlock()
 		}
 	}
+}
+
+// OpenTerminalRelay registers a relay channel for the given session on the
+// named agent. It returns a receive-only channel that delivers PTY output
+// frames (already decoded payloads) and a cleanup function that must be
+// called when the session ends.
+//
+// Returns an error if the agent is not found or is offline.
+func (h *Hub) OpenTerminalRelay(ctx context.Context, agentName string, sessionID uuid.UUID) (<-chan []byte, func(), error) {
+	h.mu.RLock()
+	agent, ok := h.agents[agentName]
+	h.mu.RUnlock()
+
+	if !ok {
+		return nil, nil, fmt.Errorf("agent not found: %s", agentName)
+	}
+	if agent.Status() != StatusOnline {
+		return nil, nil, fmt.Errorf("agent offline: %s", agentName)
+	}
+
+	ch, cleanup := agent.RegisterTerminalRelay(sessionID)
+	return ch, cleanup, nil
+}
+
+// WriteTerminalFrame encodes payload as a terminal relay binary frame for
+// sessionID and writes it to the named agent's WebSocket connection.
+//
+// Concurrent write safety: coder/websocket serializes concurrent Write calls
+// internally via its own mutex, so no additional per-agent write mutex is
+// required here. heartbeatLoop also writes to the same connection; both callers
+// rely on coder/websocket's internal serialization to avoid interleaving.
+//
+// Returns an error if the agent is not found, offline, or the write fails.
+func (h *Hub) WriteTerminalFrame(ctx context.Context, agentName string, sessionID uuid.UUID, payload []byte) error {
+	h.mu.RLock()
+	agent, ok := h.agents[agentName]
+	h.mu.RUnlock()
+
+	if !ok {
+		return fmt.Errorf("agent not found: %s", agentName)
+	}
+	if agent.Status() != StatusOnline {
+		return fmt.Errorf("agent offline: %s", agentName)
+	}
+
+	frame := EncodeTerminalFrame(sessionID, payload)
+
+	writeCtx, cancel := context.WithTimeout(ctx, h.heartbeatTimeout)
+	defer cancel()
+	return agent.Conn().Write(writeCtx, websocket.MessageBinary, frame)
 }

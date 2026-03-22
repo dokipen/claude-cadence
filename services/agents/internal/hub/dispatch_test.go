@@ -96,19 +96,28 @@ func TestDispatcher_GetTerminalEndpoint_SessionNotFound(t *testing.T) {
 	}
 }
 
-func TestDispatcher_GetTerminalEndpoint_NoAdvertiseAddress(t *testing.T) {
-	// Session exists but no advertise address configured.
+func TestDispatcher_GetTerminalEndpoint_RelayWhenNoAdvertiseAddress(t *testing.T) {
+	// When no advertise_address is configured, the dispatcher returns {relay: true}
+	// so the Client can start a relay pump over the hub WebSocket.
 	store := session.NewStore()
 	store.Add(&session.Session{ID: "s1", State: session.StateStopped})
 	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{})
-	d := NewDispatcher(mgr, "", "ws") // empty advertise address
+	d := NewDispatcher(mgr, "", "ws") // empty advertise address → relay path
 
-	_, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"s1"}`))
-	if rpcErr == nil {
-		t.Fatal("expected rpcError when no advertise address configured")
+	result, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"s1"}`))
+	if rpcErr != nil {
+		t.Fatalf("unexpected rpcError: code=%d msg=%s", rpcErr.Code, rpcErr.Message)
 	}
-	if rpcErr.Code != rpcErrInternal {
-		t.Errorf("expected code %d, got %d", rpcErrInternal, rpcErr.Code)
+
+	var out terminalEndpointResult
+	if err := json.Unmarshal(result, &out); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	if !out.Relay {
+		t.Error("expected relay: true when no advertise_address configured")
+	}
+	if out.URL != "" {
+		t.Errorf("expected empty URL for relay response, got: %s", out.URL)
 	}
 }
 
