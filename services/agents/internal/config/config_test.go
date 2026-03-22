@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -334,5 +335,76 @@ func TestHubResolveToken_FallsBackToTokenWhenEnvVarEmpty(t *testing.T) {
 	h := &HubConfig{Token: "fallback", TokenEnvVar: "TEST_HUB_TOKEN"}
 	if got := h.ResolveToken(); got != "fallback" {
 		t.Errorf("expected %q, got %q", "fallback", got)
+	}
+}
+
+// --- TtydConfig.AdvertiseAddress validation ---
+
+func advertiseAddressCfg(addr string) *Config {
+	return &Config{
+		Host:     "127.0.0.1",
+		Auth:     AuthConfig{Mode: "none"},
+		Profiles: validProfiles(),
+		Cleanup:  validCleanup(),
+		PTY:      validPTY(),
+		Ttyd:     TtydConfig{AdvertiseAddress: addr},
+	}
+}
+
+func TestValidate_AdvertiseAddressValidBareHost(t *testing.T) {
+	if err := validate(advertiseAddressCfg("example.com")); err != nil {
+		t.Errorf("expected no error for bare host advertise_address, got: %v", err)
+	}
+}
+
+func TestValidate_AdvertiseAddressValidHostPort(t *testing.T) {
+	if err := validate(advertiseAddressCfg("example.com:8080")); err != nil {
+		t.Errorf("expected no error for host:port advertise_address, got: %v", err)
+	}
+}
+
+func TestValidate_AdvertiseAddressPathInjection(t *testing.T) {
+	err := validate(advertiseAddressCfg("example.com/path"))
+	if err == nil {
+		t.Fatal("expected error for advertise_address with path component")
+	}
+	if !strings.Contains(err.Error(), "ttyd.advertise_address") {
+		t.Errorf("expected error to contain %q, got %q", "ttyd.advertise_address", err.Error())
+	}
+}
+
+func TestValidate_AdvertiseAddressQueryInjection(t *testing.T) {
+	err := validate(advertiseAddressCfg("example.com?query=1"))
+	if err == nil {
+		t.Fatal("expected error for advertise_address with query component")
+	}
+	if !strings.Contains(err.Error(), "ttyd.advertise_address") {
+		t.Errorf("expected error to contain %q, got %q", "ttyd.advertise_address", err.Error())
+	}
+}
+
+func TestValidate_AdvertiseAddressFragmentInjection(t *testing.T) {
+	err := validate(advertiseAddressCfg("example.com#fragment"))
+	if err == nil {
+		t.Fatal("expected error for advertise_address with fragment component")
+	}
+	if !strings.Contains(err.Error(), "ttyd.advertise_address") {
+		t.Errorf("expected error to contain %q, got %q", "ttyd.advertise_address", err.Error())
+	}
+}
+
+func TestValidate_AdvertiseAddressUserinfoInjection(t *testing.T) {
+	err := validate(advertiseAddressCfg("attacker.com@legit.internal:8080"))
+	if err == nil {
+		t.Fatal("expected error for advertise_address with userinfo component")
+	}
+	if !strings.Contains(err.Error(), "ttyd.advertise_address") {
+		t.Errorf("expected error to contain %q, got %q", "ttyd.advertise_address", err.Error())
+	}
+}
+
+func TestValidate_AdvertiseAddressEmptyAllowed(t *testing.T) {
+	if err := validate(advertiseAddressCfg("")); err != nil {
+		t.Errorf("expected no error for empty advertise_address, got: %v", err)
 	}
 }

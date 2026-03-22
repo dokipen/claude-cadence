@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -235,6 +236,11 @@ func validate(cfg *Config) error {
 		if p.Command == "" {
 			return fmt.Errorf("profile %q: command is required", name)
 		}
+	}
+
+	// Validate ttyd.advertise_address format to prevent URL injection.
+	if addr := cfg.Ttyd.AdvertiseAddress; addr != "" && strings.ContainsAny(addr, "/?#@") {
+		return fmt.Errorf("ttyd.advertise_address: %q is not a valid host or host:port value", addr)
 	}
 
 	// Require authentication for non-loopback bindings.
