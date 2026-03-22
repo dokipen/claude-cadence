@@ -6,6 +6,7 @@ on:
     paths:
       - 'services/issues/**'
       - 'services/issues-cli/**'
+  workflow_dispatch:
 
 concurrency:
   group: build-issues
@@ -30,13 +31,10 @@ jobs:
       - name: Build Docker image
         env:
           COMMIT_SHA: ${{ github.sha }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          GITHUB_CLIENT_SECRET: ${{ secrets.OAUTH_SECRET }}
         run: |
           IMAGE_TAG="sha-${COMMIT_SHA:0:7}"
-          export IMAGE_TAG
           echo "==> Building image issues-service:${IMAGE_TAG}..."
-          docker compose build --pull
+          docker build --pull -t "issues-service:${IMAGE_TAG}" .
           echo "==> Tagging as issues-service:latest..."
           docker tag "issues-service:${IMAGE_TAG}" issues-service:latest
           echo "==> Build complete"
