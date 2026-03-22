@@ -116,7 +116,12 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
     fitRef.current = fit;
 
     // Close any previous WebSocket before creating a new one.
-    wsRef.current?.close();
+    // Null out its handlers first so a late onclose doesn't schedule a spurious retry.
+    if (wsRef.current) {
+      wsRef.current.onclose = null;
+      wsRef.current.onerror = null;
+      wsRef.current.close();
+    }
 
     const url = buildWsUrl(agentName, sessionId);
     // Request the "tty" subprotocol required by ttyd.
@@ -283,7 +288,7 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
       {connState === "disconnected" && (
         <div className={styles.terminalOverlay} data-testid="terminal-disconnected">
           <span>Connection lost.</span>
-          <button className={styles.reconnectButton} onClick={connect}>
+          <button className={styles.reconnectButton} onClick={manualConnect}>
             Reconnect
           </button>
         </div>
@@ -291,7 +296,7 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
       {connState === "error" && (
         <div className={styles.terminalOverlay} data-testid="terminal-error">
           <span>Failed to connect.</span>
-          <button className={styles.reconnectButton} onClick={connect}>
+          <button className={styles.reconnectButton} onClick={manualConnect}>
             Retry
           </button>
         </div>
