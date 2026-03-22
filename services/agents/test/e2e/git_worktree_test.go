@@ -5,27 +5,25 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	agentsv1 "github.com/dokipen/claude-cadence/services/agents/gen/agents/v1"
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
 	"github.com/dokipen/claude-cadence/services/agents/internal/git"
+	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
 	"github.com/dokipen/claude-cadence/services/agents/internal/server"
 	"github.com/dokipen/claude-cadence/services/agents/internal/service"
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
-	"github.com/dokipen/claude-cadence/services/agents/internal/tmux"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 // gitTestEnv holds a standalone server wired with a git.Client.
 type gitTestEnv struct {
-	addr      string
-	srv       *server.Server
-	bareRepo  string
-	rootDir   string
-	socketName string
+	addr     string
+	srv      *server.Server
+	bareRepo string
+	rootDir  string
 }
 
 // setupGitTestEnv creates a bare git repo, starts a server with git support,
@@ -57,8 +55,6 @@ func setupGitTestEnv(t *testing.T) *gitTestEnv {
 	// Set HEAD to point to main in the bare repo.
 	run(t, "git", "-C", bareRepo, "symbolic-ref", "HEAD", "refs/heads/main")
 
-	socketName := "agentd-git-test"
-
 	profiles := map[string]config.Profile{
 		"git-sleeper": {
 			Repo:    bareRepo,
@@ -66,10 +62,10 @@ func setupGitTestEnv(t *testing.T) *gitTestEnv {
 		},
 	}
 
-	tmuxClient := tmux.NewClient(socketName)
+	ptyManager := pty.NewPTYManager(pty.PTYConfig{})
 	store := session.NewStore()
 	gitClient := git.NewClient(rootDir)
-	mgr := session.NewManager(store, tmuxClient, nil, gitClient, nil, profiles)
+	mgr := session.NewManager(store, ptyManager, gitClient, nil, profiles)
 	svc := service.NewAgentService(mgr)
 
 	gitTestCfg := &config.Config{
@@ -90,21 +86,13 @@ func setupGitTestEnv(t *testing.T) *gitTestEnv {
 
 	t.Cleanup(func() {
 		srv.Stop()
-		// Kill any leftover tmux sessions.
-		out, err := exec.Command("tmux", "-L", socketName, "list-sessions", "-F", "#{session_name}").Output()
-		if err == nil {
-			for _, name := range splitLines(string(out)) {
-				exec.Command("tmux", "-L", socketName, "kill-session", "-t", name).Run()
-			}
-		}
 	})
 
 	return &gitTestEnv{
-		addr:       srv.Addr(),
-		srv:        srv,
-		bareRepo:   bareRepo,
-		rootDir:    rootDir,
-		socketName: socketName,
+		addr:     srv.Addr(),
+		srv:      srv,
+		bareRepo: bareRepo,
+		rootDir:  rootDir,
 	}
 }
 
@@ -371,15 +359,4 @@ func run(t *testing.T, name string, args ...string) {
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("%s %v: %v: %s", name, args, err, string(output))
 	}
-}
-
-// splitLines splits a string into non-empty lines.
-func splitLines(s string) []string {
-	var result []string
-	for _, line := range strings.Split(strings.TrimSpace(s), "\n") {
-		if line = strings.TrimSpace(line); line != "" {
-			result = append(result, line)
-		}
-	}
-	return result
 }

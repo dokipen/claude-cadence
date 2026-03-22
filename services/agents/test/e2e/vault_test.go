@@ -7,19 +7,17 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	agentsv1 "github.com/dokipen/claude-cadence/services/agents/gen/agents/v1"
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
 	"github.com/dokipen/claude-cadence/services/agents/internal/git"
+	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
 	"github.com/dokipen/claude-cadence/services/agents/internal/server"
 	"github.com/dokipen/claude-cadence/services/agents/internal/service"
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
-	"github.com/dokipen/claude-cadence/services/agents/internal/tmux"
 	"github.com/dokipen/claude-cadence/services/agents/internal/vault"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -72,7 +70,6 @@ type vaultTestEnv struct {
 	srv         *server.Server
 	bareRepo    string
 	rootDir     string
-	socketName  string
 	vaultServer *httptest.Server
 }
 
@@ -115,8 +112,6 @@ func setupVaultTestEnv(t *testing.T, secrets map[string]map[string]interface{}, 
 		t.Fatalf("creating vault client: %v", err)
 	}
 
-	socketName := "agentd-vault-test"
-
 	profiles := map[string]config.Profile{
 		"vault-sleeper": {
 			Repo:        bareRepo,
@@ -129,10 +124,10 @@ func setupVaultTestEnv(t *testing.T, secrets map[string]map[string]interface{}, 
 		},
 	}
 
-	tmuxClient := tmux.NewClient(socketName)
+	ptyManager := pty.NewPTYManager(pty.PTYConfig{})
 	store := session.NewStore()
 	gitClient := git.NewClient(rootDir)
-	mgr := session.NewManager(store, tmuxClient, nil, gitClient, vaultClient, profiles)
+	mgr := session.NewManager(store, ptyManager, gitClient, vaultClient, profiles)
 	svc := service.NewAgentService(mgr)
 
 	srv, err := server.New(svc, &config.Config{
@@ -151,12 +146,6 @@ func setupVaultTestEnv(t *testing.T, secrets map[string]map[string]interface{}, 
 
 	t.Cleanup(func() {
 		srv.Stop()
-		out, err := exec.Command("tmux", "-L", socketName, "list-sessions", "-F", "#{session_name}").Output()
-		if err == nil {
-			for _, name := range splitLines(string(out)) {
-				exec.Command("tmux", "-L", socketName, "kill-session", "-t", name).Run()
-			}
-		}
 	})
 
 	return &vaultTestEnv{
@@ -164,7 +153,6 @@ func setupVaultTestEnv(t *testing.T, secrets map[string]map[string]interface{}, 
 		srv:         srv,
 		bareRepo:    bareRepo,
 		rootDir:     rootDir,
-		socketName:  socketName,
 		vaultServer: vs,
 	}
 }
@@ -218,8 +206,8 @@ func TestVault_EnvInjection(t *testing.T) {
 	vaultToken := "test-vault-token-456"
 	secrets := map[string]map[string]interface{}{
 		"secret/data/agentd/test-repo": {
-			"token":      "github-token-xyz",
-			"api_key":    "secret-api-key-123",
+			"token":       "github-token-xyz",
+			"api_key":     "secret-api-key-123",
 			"db_password": "super-secret-pw",
 		},
 	}
@@ -243,22 +231,12 @@ func TestVault_EnvInjection(t *testing.T) {
 		})
 	})
 
-	// Wait briefly for tmux session to be fully up.
-	time.Sleep(500 * time.Millisecond)
-
-	// Check that vault secrets were injected as env vars in the tmux session.
-	// tmux show-environment returns KEY=VALUE lines.
-	for _, envKey := range []string{"TOKEN", "API_KEY", "DB_PASSWORD"} {
-		out, err := exec.Command("tmux", "-L", env.socketName, "show-environment", "-t", name, envKey).Output()
-		if err != nil {
-			t.Errorf("expected env var %s to be set, got error: %v", envKey, err)
-			continue
-		}
-		line := strings.TrimSpace(string(out))
-		if !strings.Contains(line, "=") {
-			t.Errorf("expected %s=<value>, got %q", envKey, line)
-		}
+	sess := resp.GetSession()
+	if sess.GetState().String() != "SESSION_STATE_RUNNING" {
+		t.Errorf("expected STATE_RUNNING, got %s", sess.GetState().String())
 	}
+
+	// Vault secrets are now passed via exec.Cmd.Env — verified via process-level env inspection in unit tests.
 }
 
 func TestVault_NoSecret_PublicRepo(t *testing.T) {
@@ -341,13 +319,5 @@ func TestVault_SecretRetrieval(t *testing.T) {
 		t.Error("expected README.md in clone directory")
 	}
 
-	// Verify vault secrets are available as env vars.
-	time.Sleep(500 * time.Millisecond)
-	out, err := exec.Command("tmux", "-L", env.socketName, "show-environment", "-t", name, "TOKEN").Output()
-	if err != nil {
-		t.Fatalf("expected TOKEN env var to be set: %v", err)
-	}
-	if !strings.Contains(string(out), "github-pat-for-clone") {
-		t.Errorf("expected TOKEN=github-pat-for-clone, got %q", string(out))
-	}
+	// Vault secrets are now passed via exec.Cmd.Env — verified via process-level env inspection in unit tests.
 }
