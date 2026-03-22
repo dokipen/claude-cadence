@@ -75,6 +75,7 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
         foreground: "#e6edf3",
         cursor: "#00D4AF",
         selectionBackground: "rgba(61, 91, 200, 0.4)",
+        selectionForeground: "#e6edf3",
         black: "#484f58",
         red: "#f85149",        // cadence --error
         green: "#4ADE80",      // green-400, 9.9:1

@@ -212,6 +212,7 @@
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
+  background: rgba(13, 17, 23, 0.85); /* fallback for browsers without relative color syntax */
   background: rgb(from var(--bg) r g b / 0.85);
   color: var(--text);
   font-size: 0.9rem;
