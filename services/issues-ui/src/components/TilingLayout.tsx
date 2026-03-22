@@ -166,7 +166,7 @@ export function TilingLayout({ windows, onMinimize, onTerminated, onReorder, onR
     document.addEventListener("mouseup", handleMouseUp);
     document.body.style.cursor = direction === "horizontal" ? "col-resize" : "row-resize";
     document.body.style.userSelect = "none";
-  }, [ratios]);
+  }, [ratios, layout]);
 
   // Clear stale announcements after AT has had time to read them
   useEffect(() => {

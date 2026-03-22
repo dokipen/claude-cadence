@@ -220,7 +220,7 @@ describe("TilingLayout — master-stack structure", () => {
   });
 
   it("master window (first) is the left leaf of the root horizontal split", () => {
-    const { container } = render(
+    render(
       <TilingLayout
         windows={makeWindows(["master", "stack1", "stack2"])}
         onMinimize={vi.fn()}
@@ -240,9 +240,6 @@ describe("TilingLayout — master-stack structure", () => {
     expect(lastFlexChild.querySelector('[data-testid="terminal-window-master"]')).toBeNull();
     expect(lastFlexChild.querySelector('[data-testid="terminal-window-stack1"]')).not.toBeNull();
     expect(lastFlexChild.querySelector('[data-testid="terminal-window-stack2"]')).not.toBeNull();
-
-    // Suppress unused variable warning
-    void container;
   });
 
   it("root horizontal split uses 50/50 ratio by default", () => {
