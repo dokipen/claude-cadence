@@ -165,7 +165,7 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 
    **Stop condition A — Detached HEAD**: If `detached_head` is `true` (branch is empty string): **STOP immediately**. Report the diagnostic output (`git worktree list`, `git status`, `pwd`) to the user. Instruct them to check out a named branch before continuing (e.g., `git checkout <branch-name>`). Do not proceed to any further steps.
 
-   **Stop condition B — Wrong directory**: If `in_worktree` is `false` AND the output of `git worktree list` shows a worktree whose path or branch matches the target issue/branch: **STOP immediately**. Report the correct worktree path from `git worktree list` to the user. Instruct them to `cd` to that path (or re-invoke `/lead` from there). Do not proceed to any further steps.
+   **Stop condition B — Wrong directory**: If `in_worktree` is `false` AND the output of `git worktree list` shows a worktree whose branch name contains the issue number from the `/lead [N]` invocation argument: **STOP immediately**. Report the correct worktree path from `git worktree list` to the user. Instruct them to `cd` to that path (or re-invoke `/lead` from there). Do not proceed to any further steps.
 
    Only if neither stop condition is triggered, proceed to step 1.
 

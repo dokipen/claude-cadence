@@ -19,7 +19,7 @@ if [ "$_GIT_DIR" != "$_GIT_COMMON_DIR" ]; then
 fi
 
 DETACHED_HEAD=false
-if [ -z "$BRANCH" ]; then
+if [ -z "$BRANCH" ] && git rev-parse HEAD >/dev/null 2>&1; then
   DETACHED_HEAD=true
 fi
 
