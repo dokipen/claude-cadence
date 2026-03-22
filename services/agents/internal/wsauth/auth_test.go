@@ -157,3 +157,58 @@ func TestTokenAuth_HeaderWrongQueryParamCorrect_Returns401(t *testing.T) {
 		t.Errorf("expected status 401, got %d", rr.Code)
 	}
 }
+
+func TestTokenAuth_MalformedHeader_NoBearerPrefix_Returns401(t *testing.T) {
+	called := false
+	handler := TokenAuth("correct-token", nextOK(&called))
+
+	// Authorization header present but without "Bearer " prefix.
+	req := httptest.NewRequest(http.MethodGet, "/ws", nil)
+	req.Header.Set("Authorization", "correct-token")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if called {
+		t.Error("expected next handler NOT to be called when Authorization header lacks Bearer prefix")
+	}
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401, got %d", rr.Code)
+	}
+}
+
+func TestTokenAuth_MalformedHeader_EmptyAfterPrefix_Returns401(t *testing.T) {
+	called := false
+	handler := TokenAuth("correct-token", nextOK(&called))
+
+	// Authorization header is "Bearer " with no token value after the prefix.
+	// Must not fall through to the ?token= query param.
+	req := httptest.NewRequest(http.MethodGet, "/ws?token=correct-token", nil)
+	req.Header.Set("Authorization", "Bearer ")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if called {
+		t.Error("expected next handler NOT to be called; malformed header must not fall through to query param")
+	}
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401, got %d", rr.Code)
+	}
+}
+
+func TestTokenAuth_401_IncludesWWWAuthenticateHeader(t *testing.T) {
+	handler := TokenAuth("secret", nextOK(new(bool)))
+
+	req := httptest.NewRequest(http.MethodGet, "/ws", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rr.Code)
+	}
+	if got := rr.Header().Get("WWW-Authenticate"); got != "Bearer" {
+		t.Errorf("expected WWW-Authenticate: Bearer, got %q", got)
+	}
+}

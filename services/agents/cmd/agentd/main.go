@@ -101,6 +101,10 @@ func main() {
 	var expectedToken string
 	if cfg.Auth.Mode == "token" {
 		expectedToken = cfg.Auth.ResolveToken()
+		if expectedToken == "" {
+			slog.Error("auth.mode is \"token\" but no token is configured; set auth.token or auth.token_env_var")
+			os.Exit(1)
+		}
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/ws/terminal/", wsauth.TokenAuth(expectedToken, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
