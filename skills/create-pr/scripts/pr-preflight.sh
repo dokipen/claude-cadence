@@ -15,7 +15,25 @@
 # 2 - Verification command failed
 
 set -e
-shopt -s globstar  # enable ** globs for verification commands
+
+# Run a command with globstar (**) support for recursive glob expansion.
+# bash 4.0+ supports globstar natively; macOS ships /bin/bash 3.2 (no globstar).
+# Falls back to a newer bash (e.g., Homebrew) if available, then bare eval.
+run_with_globstar() {
+  local cmd="$1"
+  if shopt -s globstar 2>/dev/null; then
+    eval "$cmd"
+    return
+  fi
+  for try_bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+    if [ -x "$try_bash" ]; then
+      "$try_bash" -c "shopt -s globstar; $cmd"
+      return
+    fi
+  done
+  echo "   Warning: bash 4.0+ not found; ** glob patterns may not expand recursively" >&2
+  eval "$cmd"
+}
 
 echo "PR Pre-flight Checks"
 echo "===================="
@@ -45,7 +63,7 @@ fi
 
 if [ -n "$VERIFY_CMD" ]; then
   echo "   Running: ${VERIFY_CMD}"
-  if ! eval "$VERIFY_CMD"; then
+  if ! run_with_globstar "$VERIFY_CMD"; then
     echo "   ERROR: Verification failed"
     exit 2
   fi
