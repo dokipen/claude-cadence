@@ -143,7 +143,7 @@ test.describe("ticket detail page", () => {
     await expect(page.getByTestId("kanban-board")).toBeVisible();
 
     const card = page.getByTestId("column-REFINED").getByTestId("ticket-card");
-    const href = await card.getAttribute("href");
+    const href = await card.locator("a").getAttribute("href");
     expect(href).toBeTruthy();
 
     // Navigate directly to the detail URL

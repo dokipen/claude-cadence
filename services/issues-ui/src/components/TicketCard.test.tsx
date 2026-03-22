@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { render, cleanup, fireEvent } from "@testing-library/react";
+import React, { useEffect, useRef } from "react";
 import type { ActiveSessionInfo, SessionState, Ticket } from "../types";
 
 // Mock CSS modules
@@ -9,7 +10,8 @@ vi.mock("../styles/agents.module.css", () => ({ default: {} }));
 
 // Mock child components to keep tests focused
 vi.mock("./LaunchAgentDialog", () => ({
-  LaunchAgentDialog: () => null,
+  LaunchAgentDialog: ({ open }: { open: boolean }) =>
+    open ? <div data-testid="launch-dialog" /> : null,
 }));
 vi.mock("./PriorityBadge", () => ({
   PriorityBadge: () => null,
@@ -18,17 +20,52 @@ vi.mock("./LabelBadge", () => ({
   LabelBadge: () => null,
 }));
 
-// Mock react-router Link
+const mockNavigate = vi.fn();
+
+// Mock react-router.
+//
+// The Link mock registers a *native* (non-React) click listener in the capture
+// phase.  This mirrors real browser behaviour: an anchor tag activates its href
+// even when a descendant child calls e.stopPropagation() on the React synthetic
+// event, because stopPropagation() only stops the React synthetic-event bubbling
+// and does not cancel the native anchor activation.
 vi.mock("react-router", () => ({
-  Link: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => (
-    <a {...props}>{children}</a>
-  ),
+  Link: ({
+    children,
+    to,
+    ...props
+  }: React.PropsWithChildren<{ to: string } & Record<string, unknown>>) => {
+    const ref = useRef<HTMLAnchorElement>(null);
+
+    useEffect(() => {
+      const el = ref.current;
+      if (!el) return;
+      // Native capture-phase listener — fires before any React handlers and
+      // cannot be stopped by stopPropagation on a child React element.
+      const handler = () => {
+        mockNavigate(to);
+      };
+      el.addEventListener("click", handler, { capture: true });
+      return () => el.removeEventListener("click", handler, { capture: true });
+    }, [to]);
+
+    return (
+      <a ref={ref} href={to as string} {...props}>
+        {children}
+      </a>
+    );
+  },
+  useNavigate: () => mockNavigate,
 }));
 
 import { hasActiveSession, TicketCard } from "./TicketCard";
 
 afterEach(() => {
   cleanup();
+});
+
+beforeEach(() => {
+  mockNavigate.mockReset();
 });
 
 // ---------------------------------------------------------------------------
@@ -144,5 +181,32 @@ describe("TicketCard", () => {
       <TicketCard ticket={ticket} sessions={sessions} />,
     );
     expect(queryByTestId("card-launch-button")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TicketCard launch button — navigation and dialog behavior
+// ---------------------------------------------------------------------------
+
+describe("TicketCard launch button", () => {
+  it("clicking card-launch-button does not navigate", () => {
+    const ticket = makeTicket();
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={[]} />);
+    const button = getByTestId("card-launch-button");
+    fireEvent.click(button);
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it("clicking card-launch-button opens launch dialog", () => {
+    const ticket = makeTicket();
+    const { getByTestId, queryByTestId } = render(
+      <TicketCard ticket={ticket} sessions={[]} />,
+    );
+    expect(queryByTestId("launch-dialog")).toBeNull();
+    const button = getByTestId("card-launch-button");
+    fireEvent.click(button);
+    expect(getByTestId("launch-dialog")).toBeTruthy();
+    // Navigation must not occur when the launch dialog is opened
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 });
