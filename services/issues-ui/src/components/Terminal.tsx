@@ -69,6 +69,10 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
       cursorBlink: true,
       fontSize: 12,
       fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace",
+      scrollback: 1000,
+      mouseWheelScrollSensitivity: 1,
+      fastScrollModifier: "alt",
+      fastScrollSensitivity: 5,
       theme: {
         // Cadence dark palette — all foreground colors verified ≥ 4.5:1 contrast vs #0d1117
         background: "#0d1117",
