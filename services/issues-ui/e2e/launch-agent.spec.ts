@@ -79,7 +79,7 @@ function setupSessionMock(
       route.fulfill({
         status: 201,
         contentType: "application/json",
-        body: JSON.stringify(MOCK_SESSION),
+        body: JSON.stringify({ session: MOCK_SESSION }),
       });
     } else if (route.request().method() === "GET") {
       route.fulfill({
@@ -201,7 +201,7 @@ test.describe("launch agent dialog", () => {
         route.fulfill({
           status: 201,
           contentType: "application/json",
-          body: JSON.stringify(MOCK_SESSION),
+          body: JSON.stringify({ session: MOCK_SESSION }),
         });
       } else {
         route.continue();
@@ -271,7 +271,7 @@ test.describe("launch agent dialog", () => {
         route.fulfill({
           status: 201,
           contentType: "application/json",
-          body: JSON.stringify(MOCK_SESSION),
+          body: JSON.stringify({ session: MOCK_SESSION }),
         });
       } else {
         route.continue();
@@ -301,7 +301,7 @@ test.describe("launch agent dialog", () => {
         route.fulfill({
           status: 201,
           contentType: "application/json",
-          body: JSON.stringify(MOCK_SESSION),
+          body: JSON.stringify({ session: MOCK_SESSION }),
         });
       } else {
         route.continue();
