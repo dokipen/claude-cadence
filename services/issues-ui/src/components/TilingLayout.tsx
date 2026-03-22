@@ -34,47 +34,33 @@ interface LeafNode {
 
 type LayoutNode = SplitNode | LeafNode;
 
+// Master-stack layout: first window fills the left column (master),
+// all remaining windows stack vertically in the right column.
 function buildLayout(keys: string[]): LayoutNode | null {
   if (keys.length === 0) return null;
   if (keys.length === 1) return { type: "leaf", windowKey: keys[0] };
-  if (keys.length === 2) {
-    return {
-      type: "split",
-      direction: "horizontal",
-      ratio: 0.5,
-      first: { type: "leaf", windowKey: keys[0] },
-      second: { type: "leaf", windowKey: keys[1] },
-    };
-  }
-  // Split: first half on the left, second half on the right
-  // For 3: left gets 1, right gets 2 (stacked vertically)
-  // For 4: left gets 2 (stacked), right gets 2 (stacked)
-  const mid = Math.ceil(keys.length / 2);
-  const leftKeys = keys.slice(0, mid);
-  const rightKeys = keys.slice(mid);
+
+  const master: LayoutNode = { type: "leaf", windowKey: keys[0] };
+  const stackKeys = keys.slice(1);
+  const stack = buildVerticalStack(stackKeys);
 
   return {
     type: "split",
     direction: "horizontal",
     ratio: 0.5,
-    first: leftKeys.length === 1
-      ? { type: "leaf", windowKey: leftKeys[0] }
-      : buildVerticalSplit(leftKeys),
-    second: rightKeys.length === 1
-      ? { type: "leaf", windowKey: rightKeys[0] }
-      : buildVerticalSplit(rightKeys),
+    first: master,
+    second: stack,
   };
 }
 
-function buildVerticalSplit(keys: string[]): LayoutNode {
+function buildVerticalStack(keys: string[]): LayoutNode {
   if (keys.length === 1) return { type: "leaf", windowKey: keys[0] };
-  const mid = Math.ceil(keys.length / 2);
   return {
     type: "split",
     direction: "vertical",
-    ratio: 0.5,
-    first: buildVerticalSplit(keys.slice(0, mid)),
-    second: buildVerticalSplit(keys.slice(mid)),
+    ratio: 1 / keys.length,
+    first: { type: "leaf", windowKey: keys[0] },
+    second: buildVerticalStack(keys.slice(1)),
   };
 }
 
