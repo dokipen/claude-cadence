@@ -109,6 +109,13 @@ services:
       # Mount ~/.claude read-write: the claude CLI writes session data here.
       - ${HOME}/.claude:/home/agentd/.claude
     env_file: .env.dev
+    healthcheck:
+      # agentd is gRPC-only; verify the port is accepting connections.
+      test: ["CMD-SHELL", "nc -z localhost 4141 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 15s
+      retries: 3
     depends_on:
       agent-hub:
         condition: service_healthy
