@@ -34,8 +34,8 @@ sed_escape() {
 
 validate_yaml_string() {
     local value="$1" field="$2"
-    if [[ "$value" == *'"'* || "$value" == *$'\n'* ]]; then
-        error "$field must not contain double-quotes or newlines"
+    if [[ "$value" == *'"'* || "$value" == *$'\n'* || "$value" == *$'\r'* || "$value" == *'\'* ]]; then
+        error "$field must not contain double-quotes, newlines, carriage returns, or backslashes"
     fi
 }
 
