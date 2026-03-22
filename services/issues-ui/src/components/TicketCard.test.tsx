@@ -49,7 +49,7 @@ const ticket: Ticket = {
   priority: "MEDIUM",
   labels: [],
   blockedBy: [],
-  storyPoints: null,
+  storyPoints: undefined,
 };
 
 const activeSession: AgentSession = {
