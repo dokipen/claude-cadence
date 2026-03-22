@@ -228,6 +228,19 @@ jobs:
         if: always()
         run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
 
+  shellcheck:
+    # fork → ubuntu-latest; internal → self-hosted (see SECURITY comment above)
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: true
+      - name: Run shellcheck
+        run: shellcheck commands/**/*.sh skills/**/*.sh
+      - name: Cleanup workspace
+        if: always()
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
+
   ci-status:
     if: always()
     needs:
@@ -237,6 +250,7 @@ jobs:
       - issues-service-docker
       - issues-ui-ci
       - agent-service-test
+      - shellcheck
     runs-on: ubuntu-latest
     steps:
       - name: Check CI status
@@ -247,6 +261,7 @@ jobs:
           ISSUES_DOCKER: ${{ needs.issues-service-docker.result }}
           ISSUES_UI: ${{ needs.issues-ui-ci.result }}
           AGENT_TEST: ${{ needs.agent-service-test.result }}
+          SHELLCHECK: ${{ needs.shellcheck.result }}
         run: |
           echo "Changes:        $CHANGES"
           echo "Issues service: $ISSUES_TEST"
@@ -254,9 +269,10 @@ jobs:
           echo "Issues Docker:  $ISSUES_DOCKER"
           echo "Issues UI:      $ISSUES_UI"
           echo "Agent service:  $AGENT_TEST"
+          echo "Shellcheck:     $SHELLCHECK"
 
           # Fail if any job failed or was cancelled (skipped is OK — means path filter excluded it)
-          for result in "$CHANGES" "$ISSUES_TEST" "$ISSUES_CLI" "$ISSUES_DOCKER" "$ISSUES_UI" "$AGENT_TEST"; do
+          for result in "$CHANGES" "$ISSUES_TEST" "$ISSUES_CLI" "$ISSUES_DOCKER" "$ISSUES_UI" "$AGENT_TEST" "$SHELLCHECK"; do
             if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
               echo "::error::One or more CI jobs failed or were cancelled"
               exit 1
