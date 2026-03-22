@@ -631,3 +631,178 @@ func TestHandleTerminalProxy_KeepalivePreventsDrop(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, string(result.data))
 	}
 }
+
+// connectRelayAgent registers an agent that responds to getTerminalEndpoint
+// with {relay: true}. After sending that response it echoes every binary
+// frame it receives back to the hub as a binary frame using the same session
+// UUID — simulating a PTY that echoes its input.
+func connectRelayAgent(t *testing.T, hubURL, name string) {
+	t.Helper()
+	wsURL := "ws" + strings.TrimPrefix(hubURL, "http")
+	conn, _, err := websocket.Dial(context.Background(), wsURL, nil)
+	if err != nil {
+		t.Fatalf("connectRelayAgent dial: %v", err)
+	}
+
+	regReq, _ := hub.NewRequest("reg-1", "register", &hub.RegisterParams{
+		Name:     name,
+		Profiles: map[string]hub.ProfileInfo{"default": {Description: "relay-test"}},
+		Ttyd:     hub.TtydInfo{AdvertiseAddress: ""},
+	})
+	data, _ := json.Marshal(regReq)
+	conn.Write(context.Background(), websocket.MessageText, data)
+	conn.Read(context.Background()) // consume ack
+
+	go func() {
+		for {
+			msgType, data, err := conn.Read(context.Background())
+			if err != nil {
+				return
+			}
+
+			// Binary frames are browser→PTY relay frames: decode, echo back.
+			if msgType == websocket.MessageBinary {
+				sessionID, payload, err := hub.DecodeTerminalFrame(data)
+				if err != nil {
+					continue
+				}
+				echoed := hub.EncodeTerminalFrame(sessionID, append([]byte("echo:"), payload...))
+				conn.Write(context.Background(), websocket.MessageBinary, echoed)
+				continue
+			}
+
+			// Text frames are JSON-RPC requests from the hub.
+			var req hub.Request
+			if err := json.Unmarshal(data, &req); err != nil {
+				continue
+			}
+
+			var resp *hub.Response
+			switch req.Method {
+			case "getTerminalEndpoint":
+				result, _ := json.Marshal(hub.GetTerminalEndpointResult{Relay: true})
+				resp = &hub.Response{
+					JSONRPC: "2.0",
+					ID:      req.ID,
+					Result:  result,
+				}
+			case "ping":
+				result, _ := json.Marshal(hub.PongResult{Pong: true})
+				resp = &hub.Response{
+					JSONRPC: "2.0",
+					ID:      req.ID,
+					Result:  result,
+				}
+			default:
+				resp = hub.NewErrorResponse(req.ID, hub.RPCErrNotFound, "unknown method")
+			}
+
+			respData, _ := json.Marshal(resp)
+			conn.Write(context.Background(), websocket.MessageText, respData)
+		}
+	}()
+}
+
+// TestHandleTerminalProxy_RelayMode verifies the hub relay path end-to-end:
+// the agent responds with {relay: true}, the browser sends a binary frame,
+// the hub forwards it to the agent as a binary relay frame, the mock agent
+// echoes it back, and the browser receives the echoed data.
+func TestHandleTerminalProxy_RelayMode(t *testing.T) {
+	// startTestHub already handles the register + HandleAgentConnection lifecycle.
+	h, hubURL := startTestHub(t, "")
+	connectRelayAgent(t, hubURL, "relay-agent")
+	waitForAgent(t, h, "relay-agent")
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
+	proxySrv := httptest.NewServer(mux)
+	defer proxySrv.Close()
+
+	sessionID := "11111111-2222-3333-4444-555555555555"
+	proxyWSURL := "ws" + strings.TrimPrefix(proxySrv.URL, "http") + "/ws/terminal/relay-agent/" + sessionID
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	browserConn, _, err := websocket.Dial(ctx, proxyWSURL, nil)
+	if err != nil {
+		t.Fatalf("browser dial: %v", err)
+	}
+	defer browserConn.Close(websocket.StatusNormalClosure, "done")
+
+	msg := []byte("relay input")
+	if err := browserConn.Write(ctx, websocket.MessageBinary, msg); err != nil {
+		t.Fatalf("browser write: %v", err)
+	}
+
+	_, data, err := browserConn.Read(ctx)
+	if err != nil {
+		t.Fatalf("browser read: %v", err)
+	}
+
+	expected := "echo:relay input"
+	if string(data) != expected {
+		t.Errorf("expected %q, got %q", expected, string(data))
+	}
+}
+
+// TestHandleTerminalProxy_BackwardCompat_DirectDial verifies that the legacy
+// direct-dial path still works when the agent returns a URL instead of
+// {relay: true}. This exercises the same code path as the existing
+// TestHandleTerminalProxy_Relay test (which is confusingly named).
+func TestHandleTerminalProxy_BackwardCompat_DirectDial(t *testing.T) {
+	// Mock ttyd that echoes messages.
+	mockTtyd := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+		if err != nil {
+			t.Errorf("mock ttyd accept: %v", err)
+			return
+		}
+		defer conn.Close(websocket.StatusNormalClosure, "done")
+		for {
+			msgType, data, err := conn.Read(r.Context())
+			if err != nil {
+				return
+			}
+			_ = conn.Write(r.Context(), msgType, append([]byte("direct:"), data...))
+		}
+	}))
+	defer mockTtyd.Close()
+
+	mockAddr := strings.TrimPrefix(mockTtyd.URL, "http://")
+	mockHost := strings.SplitN(mockAddr, ":", 2)[0]
+
+	h, hubURL := startTestHub(t, mockTtyd.URL)
+	connectAgent(t, hubURL, "direct-agent", mockHost, mockAddr)
+	waitForAgent(t, h, "direct-agent")
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
+	proxySrv := httptest.NewServer(mux)
+	defer proxySrv.Close()
+
+	proxyWSURL := "ws" + strings.TrimPrefix(proxySrv.URL, "http") + "/ws/terminal/direct-agent/sess-direct"
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	browserConn, _, err := websocket.Dial(ctx, proxyWSURL, nil)
+	if err != nil {
+		t.Fatalf("browser dial: %v", err)
+	}
+	defer browserConn.Close(websocket.StatusNormalClosure, "done")
+
+	msg := []byte("direct input")
+	if err := browserConn.Write(ctx, websocket.MessageBinary, msg); err != nil {
+		t.Fatalf("browser write: %v", err)
+	}
+
+	_, data, err := browserConn.Read(ctx)
+	if err != nil {
+		t.Fatalf("browser read: %v", err)
+	}
+
+	expected := "direct:direct input"
+	if string(data) != expected {
+		t.Errorf("expected %q, got %q", expected, string(data))
+	}
+}

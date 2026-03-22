@@ -100,42 +100,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Register WebSocket terminal handler.
-	var expectedToken string
-	if cfg.Auth.Mode == "token" {
-		expectedToken = cfg.Auth.ResolveToken()
-		if expectedToken == "" {
-			slog.Error("auth.mode is \"token\" but no token is configured; set auth.token or auth.token_env_var")
-			os.Exit(1)
-		}
-	}
-	mux := http.NewServeMux()
-	mux.Handle("/ws/terminal/", wsauth.TokenAuth(expectedToken, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Strip prefix and validate the session ID is a bare UUID with no
-		// path components, preventing path traversal.
-		sessionID := strings.TrimPrefix(r.URL.Path, "/ws/terminal/")
-		if sessionID == "" || strings.ContainsAny(sessionID, "/?#") {
-			http.Error(w, "missing or invalid session ID", http.StatusBadRequest)
-			return
-		}
-		// agentd sits behind the issues-ui reverse proxy; allow all origins.
-		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-			OriginPatterns: []string{"*"},
-		})
-		if err != nil {
-			slog.Warn("websocket accept failed", "error", err)
-			return
-		}
-		if err := ptyManager.ServeTerminal(r.Context(), sessionID, conn); err != nil {
-			slog.Warn("terminal session ended with error", "session_id", sessionID, "error", err)
-		}
-	})))
-
 	// Start hub client if configured.
 	var hubClient *hub.Client
 	if cfg.Hub != nil {
 		dispatcher := hub.NewDispatcher(manager, cfg.Ttyd.AdvertiseAddress, cfg.PTY.WebSocketScheme)
-		hubClient = hub.NewClient(*cfg.Hub, cfg.Profiles, cfg.Ttyd, dispatcher)
+		hubClient = hub.NewClient(*cfg.Hub, cfg.Profiles, cfg.Ttyd, dispatcher, ptyManager)
 		hubClient.Start()
 		slog.Info("hub client started", "url", cfg.Hub.URL, "name", cfg.Hub.Name)
 	}
@@ -147,8 +116,39 @@ func main() {
 		errCh <- srv.Start()
 	}()
 
-	// Start HTTP server for WebSocket terminal handler.
+	// Start HTTP terminal server only when advertise_address is set.
+	// When advertise_address is empty, agentd uses the relay path through the
+	// existing hub WebSocket connection instead.
 	if cfg.Ttyd.AdvertiseAddress != "" {
+		var expectedToken string
+		if cfg.Auth.Mode == "token" {
+			expectedToken = cfg.Auth.ResolveToken()
+			if expectedToken == "" {
+				slog.Error("auth.mode is \"token\" but no token is configured; set auth.token or auth.token_env_var")
+				os.Exit(1)
+			}
+		}
+		mux := http.NewServeMux()
+		mux.Handle("/ws/terminal/", wsauth.TokenAuth(expectedToken, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Strip prefix and validate the session ID is a bare UUID with no
+			// path components, preventing path traversal.
+			sessionID := strings.TrimPrefix(r.URL.Path, "/ws/terminal/")
+			if sessionID == "" || strings.ContainsAny(sessionID, "/?#") {
+				http.Error(w, "missing or invalid session ID", http.StatusBadRequest)
+				return
+			}
+			// agentd sits behind the issues-ui reverse proxy; allow all origins.
+			conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+				OriginPatterns: []string{"*"},
+			})
+			if err != nil {
+				slog.Warn("websocket accept failed", "error", err)
+				return
+			}
+			if err := ptyManager.ServeTerminal(r.Context(), sessionID, conn); err != nil {
+				slog.Warn("terminal session ended with error", "session_id", sessionID, "error", err)
+			}
+		})))
 		go func() {
 			slog.Info("starting HTTP terminal server", "addr", cfg.Ttyd.AdvertiseAddress)
 			if httpErr := http.ListenAndServe(cfg.Ttyd.AdvertiseAddress, mux); httpErr != nil {
