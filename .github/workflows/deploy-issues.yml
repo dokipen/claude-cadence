@@ -47,12 +47,14 @@ jobs:
 
       - name: Determine image tag
         id: tag
+        env:
+          INPUT_IMAGE_TAG: ${{ inputs.image_tag }}
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            IMAGE_TAG="${{ inputs.image_tag }}"
+            IMAGE_TAG="${INPUT_IMAGE_TAG}"
           else
-            FULL_SHA="${{ github.event.workflow_run.head_sha }}"
-            IMAGE_TAG="sha-${FULL_SHA:0:7}"
+            IMAGE_TAG="sha-${WORKFLOW_RUN_SHA:0:7}"
           fi
           echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
 
@@ -126,6 +128,8 @@ jobs:
     # Remind dev machines to rebuild the CLI after successful deploys.
     # The Bootsy CLI is rebuilt as part of install.sh via systemd on boot;
     # this notification is for other machines.
+    # Skip on workflow_dispatch (manual/rollback deploys — no CLI source change).
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Post CLI update notice

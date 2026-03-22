@@ -4,12 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       release_dir:
-        description: "Release directory name (e.g. 20260321-235959-abc1234) or full path"
+        description: "Release directory basename (e.g. 20260321-235959-abc1234)"
         required: true
         type: string
 
+# Share the concurrency group with the deploy workflow to prevent a rollback
+# and a deploy from racing on the current symlink.
 concurrency:
-  group: rollback-issues-ui
+  group: deploy-issues-ui
   cancel-in-progress: false
 
 permissions:
@@ -20,37 +22,56 @@ jobs:
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 5
     steps:
-      - name: Resolve release directory
+      - name: Validate and resolve release directory
         id: resolve
+        env:
+          INPUT_RELEASE_DIR: ${{ inputs.release_dir }}
         run: |
-          INPUT="${{ inputs.release_dir }}"
           DEPLOY_DIR="/srv/issues-ui"
-          # If input is just the basename, prepend the releases path
-          if [[ "$INPUT" != /* ]]; then
-            RELEASE_DIR="${DEPLOY_DIR}/releases/${INPUT}"
-          else
-            RELEASE_DIR="$INPUT"
+
+          # Accept basename only (e.g. 20260321-235959-abc1234).
+          # Reject anything containing path separators or traversal sequences.
+          if [[ "$INPUT_RELEASE_DIR" == */* ]] || [[ "$INPUT_RELEASE_DIR" == *.* ]]; then
+            echo "::error::release_dir must be a basename, not a path (no slashes or dots allowed)"
+            echo ""
+            echo "Available releases:"
+            ls -1t "${DEPLOY_DIR}/releases/" || echo "(none)"
+            exit 1
           fi
+
+          # Validate the basename matches the expected release name format.
+          if ! echo "$INPUT_RELEASE_DIR" | grep -qE '^[0-9]{8}-[0-9]{6}-[0-9a-f]{7}$'; then
+            echo "::error::release_dir must match the format YYYYMMDD-HHMMSS-<7hexchars> (e.g. 20260321-235959-abc1234)"
+            echo ""
+            echo "Available releases:"
+            ls -1t "${DEPLOY_DIR}/releases/" || echo "(none)"
+            exit 1
+          fi
+
+          RELEASE_DIR="${DEPLOY_DIR}/releases/${INPUT_RELEASE_DIR}"
           echo "release_dir=${RELEASE_DIR}" >> "$GITHUB_OUTPUT"
 
       - name: Validate release exists
+        env:
+          RELEASE_DIR: ${{ steps.resolve.outputs.release_dir }}
         run: |
-          if [ ! -d "${{ steps.resolve.outputs.release_dir }}" ]; then
-            echo "::error::Release directory ${{ steps.resolve.outputs.release_dir }} does not exist"
+          if [ ! -d "$RELEASE_DIR" ]; then
+            echo "::error::Release directory ${RELEASE_DIR} does not exist"
             echo ""
             echo "Available releases:"
             ls -1t /srv/issues-ui/releases/ || echo "(none)"
             exit 1
           fi
-          if [ ! -f "${{ steps.resolve.outputs.release_dir }}/index.html" ]; then
+          if [ ! -f "${RELEASE_DIR}/index.html" ]; then
             echo "::error::Release directory exists but index.html is missing — release may be corrupt"
             exit 1
           fi
 
       - name: Atomic symlink swap
+        env:
+          RELEASE_DIR: ${{ steps.resolve.outputs.release_dir }}
         run: |
           DEPLOY_DIR="/srv/issues-ui"
-          RELEASE_DIR="${{ steps.resolve.outputs.release_dir }}"
           ln -sfn "$RELEASE_DIR" "${DEPLOY_DIR}/next"
           mv -T "${DEPLOY_DIR}/next" "${DEPLOY_DIR}/current"
           echo "==> Rolled back to ${RELEASE_DIR}"
@@ -65,16 +86,20 @@ jobs:
 
       - name: Post success summary
         if: success()
+        env:
+          RELEASE_DIR: ${{ steps.resolve.outputs.release_dir }}
         run: |
           echo "### Issues UI rolled back successfully" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Release:** \`${{ steps.resolve.outputs.release_dir }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Release:** \`${RELEASE_DIR}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **URL:** https://cadence.bootsy.internal/" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Post failure summary
         if: failure()
+        env:
+          INPUT_RELEASE_DIR: ${{ inputs.release_dir }}
         run: |
           echo "### Issues UI rollback failed" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Attempted release:** \`${{ inputs.release_dir }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Attempted release:** \`${INPUT_RELEASE_DIR}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Check the logs above for details." >> "$GITHUB_STEP_SUMMARY"

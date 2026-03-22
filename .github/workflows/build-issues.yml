@@ -33,8 +33,10 @@ jobs:
         run: |
           IMAGE_TAG="sha-${COMMIT_SHA:0:7}"
           export IMAGE_TAG
-          echo "==> Building image issues-service:${IMAGE_TAG} (also tagged as issues-service:latest)..."
+          echo "==> Building image issues-service:${IMAGE_TAG}..."
           docker compose build --pull
+          echo "==> Tagging as issues-service:latest..."
+          docker tag "issues-service:${IMAGE_TAG}" issues-service:latest
           echo "==> Build complete"
 
       - name: Prune old images
