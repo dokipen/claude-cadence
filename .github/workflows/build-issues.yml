@@ -1,0 +1,64 @@
+name: Build Issues Service
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/issues/**'
+      - 'services/issues-cli/**'
+
+concurrency:
+  group: build-issues
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # Runs directly on Bootsy via self-hosted runner — no SSH needed.
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: services/issues
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: true
+
+      - name: Build Docker image
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          IMAGE_TAG="sha-${COMMIT_SHA:0:7}"
+          export IMAGE_TAG
+          echo "==> Building image issues-service:${IMAGE_TAG} (also tagged as issues-service:latest)..."
+          docker compose build --pull
+          echo "==> Build complete"
+
+      - name: Prune old images
+        run: |
+          echo "==> Pruning old issues-service:sha-* images (keeping 10 most recent)..."
+          docker images --format '{{.Repository}}:{{.Tag}} {{.CreatedAt}}' \
+            | grep '^issues-service:sha-' \
+            | sort -k2 -r \
+            | tail -n +11 \
+            | awk '{print $1}' \
+            | xargs -r docker rmi || true
+          echo "==> Prune complete"
+
+      - name: Post build summary
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          SHORT_SHA="${COMMIT_SHA:0:7}"
+          IMAGE_TAG="sha-${SHORT_SHA}"
+          echo "### Issues service image built successfully" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Image:** \`issues-service:${IMAGE_TAG}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Commit:** \`${COMMIT_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Cleanup workspace
+        if: always()
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
