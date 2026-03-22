@@ -65,7 +65,7 @@ export function SessionList({ agents, sessions, openKeys, onSessionClick, isColl
             <p className={styles.sidebarEmpty}>No agents registered.</p>
           )}
           {[...agents].sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())).map((agent) => {
-            const agentSessions = (sessionsByAgent.get(agent.name) || []).slice().sort((a, b) => a.session.created_at.localeCompare(b.session.created_at));
+            const agentSessions = (sessionsByAgent.get(agent.name) || []).slice().sort((a, b) => a.session.createdAt.localeCompare(b.session.createdAt));
             return (
               <div key={agent.name} className={styles.sidebarAgent} data-testid="sidebar-agent">
                 <div className={styles.sidebarAgentHeader}>
@@ -89,13 +89,13 @@ export function SessionList({ agents, sessions, openKeys, onSessionClick, isColl
                   return (
                     <button
                       key={as.session.id}
-                      className={`${styles.sidebarSession} ${isOpen ? styles.sidebarSessionOpen : ""} ${!isRunning ? styles.sidebarSessionStopped : ""} ${as.session.waiting_for_input ? styles.sidebarSessionWaiting : ""}`}
+                      className={`${styles.sidebarSession} ${isOpen ? styles.sidebarSessionOpen : ""} ${!isRunning ? styles.sidebarSessionStopped : ""} ${as.session.waitingForInput ? styles.sidebarSessionWaiting : ""}`}
                       onClick={() => onSessionClick(as)}
                       data-testid="sidebar-session"
                       title={`${as.session.name} (${as.session.state})`}
                     >
                       <span className={styles.sessionDot}>
-                        {as.session.waiting_for_input ? "◉" : isRunning ? "●" : "○"}
+                        {as.session.waitingForInput ? "◉" : isRunning ? "●" : "○"}
                       </span>
                       <span className={styles.sessionName}>{as.session.name}</span>
                     </button>

@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, cleanup } from "@testing-library/react";
+import { create } from "@bufbuild/protobuf";
+import { AgentSchema, SessionSchema } from "../gen/hub/v1/hub_pb";
 import { SessionList } from "./SessionList";
-import type { Agent, Session } from "../types";
+import type { Agent } from "../types";
 import type { AgentSession } from "../hooks/useAllSessions";
 
 // Mock CSS modules
@@ -12,26 +14,28 @@ afterEach(() => {
   cleanup();
 });
 
-const makeAgent = (name: string, status: "online" | "offline" = "online"): Agent => ({
-  name,
-  profiles: {},
-  status,
-  last_seen: "2024-01-01T00:00:00Z",
-});
+const makeAgent = (name: string, status: "online" | "offline" = "online"): Agent =>
+  create(AgentSchema, {
+    name,
+    profiles: {},
+    status,
+    lastSeen: "2024-01-01T00:00:00Z",
+  });
 
 const makeSession = (id: string, agentName: string): AgentSession => ({
   agentName,
-  session: {
+  session: create(SessionSchema, {
     id,
     name: `session-${id}`,
-    agent_profile: "default",
+    agentProfile: "default",
     state: "running",
-    tmux_session: `tmux-${id}`,
-    created_at: "2024-01-01T00:00:00Z",
-    agent_pid: 1234,
-    repo_url: "https://github.com/example/repo",
-    base_ref: "main",
-  } satisfies Session,
+    tmuxSession: `tmux-${id}`,
+    createdAt: "2024-01-01T00:00:00Z",
+    agentPid: 1234,
+    repoUrl: "https://github.com/example/repo",
+    baseRef: "main",
+    waitingForInput: false,
+  }),
 });
 
 const defaultProps = {
@@ -129,5 +133,19 @@ describe("SessionList", () => {
     expect(rendered[0]).toContain("alpha-agent");
     expect(rendered[1]).toContain("mango-agent");
     expect(rendered[2]).toContain("zebra-agent");
+  });
+
+  it("renders sessions for a given agent", () => {
+    const agents = [makeAgent("my-agent")];
+    const sessions = [makeSession("s1", "my-agent")];
+    const { getByText } = render(
+      <SessionList
+        {...defaultProps}
+        agents={agents}
+        sessions={sessions}
+        isCollapsed={false}
+      />,
+    );
+    expect(getByText("session-s1")).toBeTruthy();
   });
 });

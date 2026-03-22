@@ -76,9 +76,9 @@ export function NotificationDropdown({ waitingSessions }: NotificationDropdownPr
                 <span className={layoutStyles.notificationAgent}>
                   {ws.agentName}
                 </span>
-                {ws.session.idle_since && (
+                {ws.session.idleSince && (
                   <span className={layoutStyles.notificationIdle}>
-                    {formatIdleDuration(ws.session.idle_since)}
+                    {formatIdleDuration(ws.session.idleSince)}
                   </span>
                 )}
               </Link>

@@ -80,7 +80,7 @@ export function useAllSessions(): UseAllSessionsResult {
   }, [hidden]);
 
   const waitingSessions = useMemo(
-    () => sessions.filter((s) => s.session.waiting_for_input),
+    () => sessions.filter((s) => s.session.waitingForInput),
     [sessions],
   );
 

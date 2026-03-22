@@ -63,46 +63,12 @@ export interface Project {
   repository?: string;
 }
 
-// Agent Hub types
-
+// Agent Hub types — generated from services/agent-hub/proto/hub/v1/hub.proto
+export type { Agent, AgentProfile, Session, CreateSessionRequest } from "./gen/hub/v1/hub_pb";
 export type AgentStatus = "online" | "offline";
-
-export interface AgentProfile {
-  description: string;
-  repo: string;
-}
-
-export interface Agent {
-  name: string;
-  profiles: Record<string, AgentProfile>;
-  status: AgentStatus;
-  last_seen: string;
-}
-
-export type SessionState =
-  | "creating"
-  | "running"
-  | "stopped"
-  | "error"
-  | "destroying";
+export type SessionState = "creating" | "running" | "stopped" | "error" | "destroying";
 
 export interface ActiveSessionInfo {
   name: string;
   state: SessionState;
-}
-
-export interface Session {
-  id: string;
-  name: string;
-  agent_profile: string;
-  state: SessionState;
-  tmux_session: string;
-  created_at: string;
-  stopped_at?: string;
-  error_message?: string;
-  agent_pid: number;
-  repo_url?: string;
-  base_ref: string;
-  waiting_for_input?: boolean;
-  idle_since?: string;
 }

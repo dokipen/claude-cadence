@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { create } from "@bufbuild/protobuf";
 import { hubFetch, fetchAgents, createSession, HubError } from "./agentHubClient";
+import { AgentSchema, SessionSchema } from "../gen/hub/v1/hub_pb";
 
 function mockFetch(response: {
   ok?: boolean;
@@ -129,7 +131,9 @@ describe("hubFetch", () => {
 });
 
 describe("fetchAgents", () => {
-  const validAgent = {
+  // Mock response uses snake_case JSON field names (as the server sends them).
+  // fromJson maps them to camelCase on the parsed Agent object.
+  const validAgentJson = {
     name: "agent-1",
     status: "online",
     profiles: {
@@ -138,8 +142,18 @@ describe("fetchAgents", () => {
     last_seen: "2026-03-16T00:00:00Z",
   };
 
+  // Expected parsed Agent (camelCase, with $typeName)
+  const validAgent = create(AgentSchema, {
+    name: "agent-1",
+    status: "online",
+    profiles: {
+      default: { description: "A profile", repo: "https://github.com/test/repo" },
+    },
+    lastSeen: "2026-03-16T00:00:00Z",
+  });
+
   it("returns validated agents on valid response", async () => {
-    mockFetch({ json: () => Promise.resolve({ agents: [validAgent] }) });
+    mockFetch({ json: () => Promise.resolve({ agents: [validAgentJson] }) });
     const result = await fetchAgents();
     expect(result.agents).toHaveLength(1);
     expect(result.agents[0]).toEqual(validAgent);
@@ -151,12 +165,13 @@ describe("fetchAgents", () => {
     expect(result.agents).toEqual([]);
   });
 
-  it("strips extra fields from response", async () => {
-    const agentWithExtra = { ...validAgent, extraField: "should be stripped" };
+  it("throws HubError when extra fields are present in agent response", async () => {
+    // fromJson rejects unknown fields by default
+    const agentWithExtra = { ...validAgentJson, extraField: "should cause error" };
     mockFetch({ json: () => Promise.resolve({ agents: [agentWithExtra] }) });
-    const result = await fetchAgents();
-    expect(result.agents[0]).toEqual(validAgent);
-    expect((result.agents[0] as unknown as Record<string, unknown>).extraField).toBeUndefined();
+    const err = await fetchAgents().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HubError);
+    expect(err).toMatchObject({ status: 502 });
   });
 
   it("throws HubError when response is not an object", async () => {
@@ -185,87 +200,98 @@ describe("fetchAgents", () => {
 
   it("throws HubError when agent is not an object", async () => {
     mockFetch({ json: () => Promise.resolve({ agents: ["not an object"] }) });
-    await expect(fetchAgents()).rejects.toThrow(
-      "Invalid agent at index 0: expected object",
-    );
+    const err = await fetchAgents().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HubError);
+    expect(err).toMatchObject({ status: 502 });
+    expect((err as HubError).message).toContain("Invalid agent at index 0");
   });
 
   it("throws HubError when agent is null", async () => {
     mockFetch({ json: () => Promise.resolve({ agents: [null] }) });
-    await expect(fetchAgents()).rejects.toThrow(
-      "Invalid agent at index 0: expected object",
-    );
+    const err = await fetchAgents().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HubError);
+    expect(err).toMatchObject({ status: 502 });
+    expect((err as HubError).message).toContain("Invalid agent at index 0");
   });
 
   it("throws HubError when agent.name is missing", async () => {
     mockFetch({
-      json: () => Promise.resolve({ agents: [{ ...validAgent, name: undefined }] }),
+      json: () => Promise.resolve({ agents: [{ ...validAgentJson, name: undefined }] }),
     });
-    await expect(fetchAgents()).rejects.toThrow(
-      'Invalid agent at index 0: missing or invalid "name"',
-    );
+    const err = await fetchAgents().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HubError);
+    expect(err).toMatchObject({ status: 502 });
+    expect((err as HubError).message).toContain("Invalid agent at index 0");
   });
 
   it("throws HubError when agent.name is not a string", async () => {
     mockFetch({
-      json: () => Promise.resolve({ agents: [{ ...validAgent, name: 123 }] }),
+      json: () => Promise.resolve({ agents: [{ ...validAgentJson, name: 123 }] }),
     });
-    await expect(fetchAgents()).rejects.toThrow(
-      'Invalid agent at index 0: missing or invalid "name"',
-    );
+    const err = await fetchAgents().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HubError);
+    expect(err).toMatchObject({ status: 502 });
+    expect((err as HubError).message).toContain("Invalid agent at index 0");
   });
 
-  it("throws HubError when agent.status is invalid", async () => {
+  it("succeeds when agent.status has an unrecognized value (proto3 string field)", async () => {
+    // proto3 string fields accept any string value — no enum validation
     mockFetch({
-      json: () => Promise.resolve({ agents: [{ ...validAgent, status: "unknown" }] }),
+      json: () => Promise.resolve({ agents: [{ ...validAgentJson, status: "unknown" }] }),
     });
-    await expect(fetchAgents()).rejects.toThrow(
-      'Invalid agent at index 0: missing or invalid "status"',
-    );
+    const result = await fetchAgents();
+    expect(result.agents).toHaveLength(1);
+    expect(result.agents[0].status).toBe("unknown");
   });
 
-  it("throws HubError when agent.profiles is missing", async () => {
-    mockFetch({
-      json: () =>
-        Promise.resolve({ agents: [{ ...validAgent, profiles: undefined }] }),
-    });
-    await expect(fetchAgents()).rejects.toThrow(
-      'Invalid agent at index 0: missing or invalid "profiles"',
-    );
-  });
-
-  it("throws HubError when agent.last_seen is missing", async () => {
+  it("throws HubError (502) when agent.profiles field has an unexpected type", async () => {
+    // fromJson rejects 'undefined' as an explicit JSON value for a map field
     mockFetch({
       json: () =>
-        Promise.resolve({ agents: [{ ...validAgent, last_seen: undefined }] }),
+        Promise.resolve({ agents: [{ ...validAgentJson, profiles: undefined }] }),
     });
-    await expect(fetchAgents()).rejects.toThrow(
-      'Invalid agent at index 0: missing or invalid "last_seen"',
-    );
+    const err = await fetchAgents().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HubError);
+    expect(err).toMatchObject({ status: 502 });
+    expect((err as HubError).message).toContain("Invalid agent at index 0");
+  });
+
+  it("throws HubError (502) when agent.lastSeen field has an unexpected type", async () => {
+    // fromJson rejects 'undefined' as an explicit JSON value for a string field
+    mockFetch({
+      json: () =>
+        Promise.resolve({ agents: [{ ...validAgentJson, last_seen: undefined }] }),
+    });
+    const err = await fetchAgents().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HubError);
+    expect(err).toMatchObject({ status: 502 });
+    expect((err as HubError).message).toContain("Invalid agent at index 0");
   });
 
   it("throws HubError when profile value is not an object", async () => {
     mockFetch({
       json: () =>
         Promise.resolve({
-          agents: [{ ...validAgent, profiles: { bad: 42 } }],
+          agents: [{ ...validAgentJson, profiles: { bad: 42 } }],
         }),
     });
-    await expect(fetchAgents()).rejects.toThrow(
-      "Invalid agent profile at agents[0].profiles.bad: expected object",
-    );
+    const err = await fetchAgents().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HubError);
+    expect(err).toMatchObject({ status: 502 });
+    expect((err as HubError).message).toContain("Invalid agent at index 0");
   });
 
-  it("throws HubError when profile.description is missing", async () => {
+  it("accepts agent with profile missing description (defaults to empty string)", async () => {
+    // proto3 string fields default to "" — description is not required at proto level
     mockFetch({
       json: () =>
         Promise.resolve({
-          agents: [{ ...validAgent, profiles: { bad: { repo: "r" } } }],
+          agents: [{ ...validAgentJson, profiles: { ok: { repo: "r" } } }],
         }),
     });
-    await expect(fetchAgents()).rejects.toThrow(
-      'Invalid agent profile at agents[0].profiles.bad: missing or invalid "description"',
-    );
+    const result = await fetchAgents();
+    expect(result.agents[0].profiles["ok"].description).toBe("");
+    expect(result.agents[0].profiles["ok"].repo).toBe("r");
   });
 
   it("defaults repo to empty string when missing", async () => {
@@ -273,7 +299,7 @@ describe("fetchAgents", () => {
       json: () =>
         Promise.resolve({
           agents: [
-            { ...validAgent, profiles: { noRepo: { description: "d" } } },
+            { ...validAgentJson, profiles: { noRepo: { description: "d" } } },
           ],
         }),
     });
@@ -283,8 +309,8 @@ describe("fetchAgents", () => {
 
   it("validates multiple agents independently", async () => {
     const agents = [
-      validAgent,
-      { ...validAgent, name: "agent-2", status: "offline" },
+      validAgentJson,
+      { ...validAgentJson, name: "agent-2", status: "offline" },
     ];
     mockFetch({ json: () => Promise.resolve({ agents }) });
     const result = await fetchAgents();
@@ -302,7 +328,9 @@ describe("fetchAgents", () => {
 });
 
 describe("createSession", () => {
-  const validSession = {
+  // Mock response JSON uses snake_case (as the server sends).
+  // fromJson parses it into camelCase Session.
+  const validSessionJson = {
     id: "sess-1",
     name: "my-session",
     agent_profile: "default",
@@ -313,9 +341,22 @@ describe("createSession", () => {
     base_ref: "main",
   };
 
+  // Expected parsed Session (camelCase, with $typeName)
+  const validSession = create(SessionSchema, {
+    id: "sess-1",
+    name: "my-session",
+    agentProfile: "default",
+    state: "creating",
+    tmuxSession: "tmux-1",
+    createdAt: "2026-03-22T00:00:00Z",
+    agentPid: 42,
+    baseRef: "main",
+    waitingForInput: false,
+  });
+
   // Server wraps the session in a {session: {...}} envelope — fix for bug #269
   it("POSTs to correct URL with correct body and returns typed Session", async () => {
-    const fn = mockFetch({ json: () => Promise.resolve({ session: validSession }) });
+    const fn = mockFetch({ json: () => Promise.resolve({ session: validSessionJson }) });
     const result = await createSession("my-agent", "default", "my-session");
     expect(fn).toHaveBeenCalledWith(
       "/api/v1/agents/my-agent/sessions",
@@ -326,11 +367,11 @@ describe("createSession", () => {
     );
     expect(result).toEqual(validSession);
     expect(result.id).toBe("sess-1");
-    expect(result.agent_profile).toBe("default");
+    expect(result.agentProfile).toBe("default");
   });
 
   it("includes extra_args in request body when provided", async () => {
-    const fn = mockFetch({ json: () => Promise.resolve({ session: validSession }) });
+    const fn = mockFetch({ json: () => Promise.resolve({ session: validSessionJson }) });
     await createSession("my-agent", "default", "my-session", ["--foo", "--bar"]);
     const sentBody = JSON.parse(fn.mock.calls[0][1].body as string);
     expect(sentBody).toEqual({
@@ -341,14 +382,14 @@ describe("createSession", () => {
   });
 
   it("omits extra_args from request body when not provided", async () => {
-    const fn = mockFetch({ json: () => Promise.resolve({ session: validSession }) });
+    const fn = mockFetch({ json: () => Promise.resolve({ session: validSessionJson }) });
     await createSession("my-agent", "default", "my-session");
     const sentBody = JSON.parse(fn.mock.calls[0][1].body as string);
     expect(sentBody).not.toHaveProperty("extra_args");
   });
 
   it("URL encodes agent names with special characters", async () => {
-    const fn = mockFetch({ json: () => Promise.resolve({ session: validSession }) });
+    const fn = mockFetch({ json: () => Promise.resolve({ session: validSessionJson }) });
     await createSession("my agent/v2", "default", "my-session");
     const calledUrl = fn.mock.calls[0][0] as string;
     expect(calledUrl).toBe("/api/v1/agents/my%20agent%2Fv2/sessions");
@@ -368,18 +409,24 @@ describe("createSession", () => {
     expect(err).toMatchObject({ status: 503, message: "agent offline" });
   });
 
-  it("throws HubError with status 502 when response is missing required field id", async () => {
-    const { id: _id, ...withoutId } = validSession;
+  it("succeeds when optional proto3 field id is absent (defaults to empty string)", async () => {
+    // proto3 does not have required fields — missing 'id' defaults to empty string
+    const { id: _id, ...withoutId } = validSessionJson;
     mockFetch({ json: () => Promise.resolve({ session: withoutId }) });
-    const err = await createSession("my-agent", "default", "my-session").catch(
-      (e: unknown) => e,
-    );
-    expect(err).toBeInstanceOf(HubError);
-    expect(err).toMatchObject({ status: 502 });
+    const result = await createSession("my-agent", "default", "my-session");
+    expect(result.id).toBe("");
+  });
+
+  it("succeeds when optional field base_ref is absent from response", async () => {
+    const { base_ref: _baseRef, ...withoutBaseRef } = validSessionJson;
+    mockFetch({ json: () => Promise.resolve({ session: withoutBaseRef }) });
+    const result = await createSession("my-agent", "default", "my-session");
+    expect(result.id).toBe("sess-1");
+    expect(result.baseRef).toBeUndefined();
   });
 
   it("throws HubError with status 502 when response envelope is missing the session key", async () => {
-    mockFetch({ json: () => Promise.resolve({ notSession: validSession }) });
+    mockFetch({ json: () => Promise.resolve({ notSession: validSessionJson }) });
     const err = await createSession("my-agent", "default", "my-session").catch(
       (e: unknown) => e,
     );
@@ -396,4 +443,3 @@ describe("createSession", () => {
     expect(err).toMatchObject({ status: 502 });
   });
 });
-

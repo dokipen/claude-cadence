@@ -11,7 +11,7 @@ import { ProjectSelector } from "./components/ProjectSelector";
 import { useProjects } from "./hooks/useProjects";
 import type { TicketFilters } from "./hooks/useTickets";
 import { useAllSessions } from "./hooks/useAllSessions";
-import type { ActiveSessionInfo } from "./types";
+import type { ActiveSessionInfo, SessionState } from "./types";
 import { NotificationDropdown } from "./components/NotificationDropdown";
 import type { ReactNode } from "react";
 import layoutStyles from "./styles/layout.module.css";
@@ -118,7 +118,7 @@ function AppShell() {
   const repoUrl = selectedProject?.repository;
 
   const isOnBoard = !!boardMatch;
-  const activeSessions = sessions?.map((s): ActiveSessionInfo => ({ name: s.session.name, state: s.session.state }));
+  const activeSessions = sessions?.map((s): ActiveSessionInfo => ({ name: s.session.name, state: s.session.state as SessionState }));
   const handleProjectChange = useCallback((id: string) => {
     if (!projects.some((p) => p.id === id)) return;
     setGlobalProjectId(id);
