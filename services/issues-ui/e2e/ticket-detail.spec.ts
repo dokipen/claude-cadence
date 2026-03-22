@@ -154,8 +154,9 @@ test.describe("ticket detail page", () => {
 
   test("ticket with no comments shows empty state", async ({ page }) => {
     await page.goto("/projects/e2e-test-project");
-    // Backlog ticket has no comments — use first() since markdown ticket is also in BACKLOG
-    await page.getByTestId("column-BACKLOG").getByTestId("ticket-card").first().click();
+    // Newest-first ordering puts markdown ticket (#6, has a comment) first.
+    // Backlog ticket (#1, no comments) is last in the BACKLOG column.
+    await page.getByTestId("column-BACKLOG").getByTestId("ticket-card").last().click();
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
 
     await expect(page.getByTestId("no-comments")).toBeVisible();
