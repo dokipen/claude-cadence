@@ -236,7 +236,9 @@ jobs:
         with:
           clean: true
       - name: Run shellcheck
-        run: shellcheck commands/**/*.sh skills/**/*.sh
+        run: |
+          shopt -s globstar
+          shellcheck commands/**/*.sh skills/**/*.sh
       - name: Cleanup workspace
         if: always()
         run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
