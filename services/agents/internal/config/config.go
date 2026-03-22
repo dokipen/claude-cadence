@@ -123,7 +123,8 @@ type TtydConfig struct {
 
 // PTYConfig holds PTY manager settings.
 type PTYConfig struct {
-	BufferSize int `yaml:"buffer_size"` // ring buffer size in bytes; defaults to 1 MB
+	BufferSize      int    `yaml:"buffer_size"`       // ring buffer size in bytes; defaults to 1 MB
+	WebSocketScheme string `yaml:"websocket_scheme"`  // "ws" or "wss"; defaults to "ws"
 }
 
 // LogConfig holds logging settings.
@@ -210,6 +211,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.PTY.BufferSize == 0 {
 		cfg.PTY.BufferSize = 1048576
+	}
+	if cfg.PTY.WebSocketScheme == "" {
+		cfg.PTY.WebSocketScheme = "ws"
 	}
 }
 
@@ -308,6 +312,14 @@ func validate(cfg *Config) error {
 		if p.VaultSecret != "" && cfg.Vault == nil {
 			return fmt.Errorf("profile %q has vault_secret but no vault config", name)
 		}
+	}
+
+	// Validate PTY config.
+	switch cfg.PTY.WebSocketScheme {
+	case "ws", "wss":
+		// ok
+	default:
+		return fmt.Errorf("invalid pty.websocket_scheme %q: must be \"ws\" or \"wss\"", cfg.PTY.WebSocketScheme)
 	}
 
 	// Validate hub config.

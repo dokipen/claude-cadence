@@ -17,6 +17,10 @@ func validCleanup() CleanupConfig {
 	}
 }
 
+func validPTY() PTYConfig {
+	return PTYConfig{WebSocketScheme: "ws"}
+}
+
 func TestValidate_ZeroStaleSessionTTL(t *testing.T) {
 	cfg := &Config{
 		Host:     "127.0.0.1",
@@ -36,6 +40,7 @@ func TestValidate_ValidLocalhostNoAuth(t *testing.T) {
 		Auth:     AuthConfig{Mode: "none"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),
+		PTY:      validPTY(),
 	}
 	if err := validate(cfg); err != nil {
 		t.Errorf("expected no error, got: %v", err)
@@ -48,6 +53,7 @@ func TestValidate_ValidLocalhostIPv6(t *testing.T) {
 		Auth:     AuthConfig{Mode: "none"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),
+		PTY:      validPTY(),
 	}
 	if err := validate(cfg); err != nil {
 		t.Errorf("expected no error, got: %v", err)
@@ -60,6 +66,7 @@ func TestValidate_ValidTokenAuth(t *testing.T) {
 		Auth:     AuthConfig{Mode: "token", Token: "mysecret"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),
+		PTY:      validPTY(),
 	}
 	if err := validate(cfg); err != nil {
 		t.Errorf("expected no error, got: %v", err)
@@ -72,6 +79,7 @@ func TestValidate_ValidTokenAuthWithEnvVar(t *testing.T) {
 		Auth:     AuthConfig{Mode: "token", TokenEnvVar: "AGENTD_TOKEN"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),
+		PTY:      validPTY(),
 	}
 	if err := validate(cfg); err != nil {
 		t.Errorf("expected no error, got: %v", err)
@@ -114,6 +122,7 @@ func TestValidate_NonLocalhostWithTokenAuth(t *testing.T) {
 		Auth:     AuthConfig{Mode: "token", Token: "secret"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),
+		PTY:      validPTY(),
 	}
 	if err := validate(cfg); err != nil {
 		t.Errorf("expected no error, got: %v", err)
@@ -169,6 +178,7 @@ func TestValidate_Hub_Valid_WithToken(t *testing.T) {
 		Auth:     AuthConfig{Mode: "none"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),
+		PTY:      validPTY(),
 		Hub: &HubConfig{
 			URL:               "wss://hub.example.com/ws/agent",
 			Name:              "test-agent",
@@ -187,6 +197,7 @@ func TestValidate_Hub_Valid_WithTokenEnvVar(t *testing.T) {
 		Auth:     AuthConfig{Mode: "none"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),
+		PTY:      validPTY(),
 		Hub: &HubConfig{
 			URL:               "wss://hub.example.com/ws/agent",
 			Name:              "test-agent",
@@ -205,6 +216,7 @@ func TestValidate_Hub_MissingURL(t *testing.T) {
 		Auth:     AuthConfig{Mode: "none"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),
+		PTY:      validPTY(),
 		Hub: &HubConfig{
 			Name:              "test-agent",
 			Token:             "secret",
@@ -227,6 +239,7 @@ func TestValidate_Hub_MissingName(t *testing.T) {
 		Auth:     AuthConfig{Mode: "none"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),
+		PTY:      validPTY(),
 		Hub: &HubConfig{
 			URL:               "wss://hub.example.com/ws/agent",
 			Token:             "secret",
@@ -249,6 +262,7 @@ func TestValidate_Hub_MissingToken(t *testing.T) {
 		Auth:     AuthConfig{Mode: "none"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),
+		PTY:      validPTY(),
 		Hub: &HubConfig{
 			URL:               "wss://hub.example.com/ws/agent",
 			Name:              "test-agent",
@@ -285,6 +299,33 @@ func TestHubResolveToken_ReturnsEnvVarWhenSet(t *testing.T) {
 	h := &HubConfig{Token: "hardcoded", TokenEnvVar: "TEST_HUB_TOKEN"}
 	if got := h.ResolveToken(); got != "fromenv" {
 		t.Errorf("expected %q, got %q", "fromenv", got)
+	}
+}
+
+func TestValidate_PTY_WebSocketScheme_Invalid(t *testing.T) {
+	cfg := &Config{
+		Host:     "127.0.0.1",
+		Auth:     AuthConfig{Mode: "none"},
+		Profiles: validProfiles(),
+		Cleanup:  validCleanup(),
+		PTY:      PTYConfig{WebSocketScheme: "ftp"},
+	}
+	err := validate(cfg)
+	if err == nil {
+		t.Fatal("expected error for invalid websocket_scheme")
+	}
+}
+
+func TestValidate_PTY_WebSocketScheme_WSS(t *testing.T) {
+	cfg := &Config{
+		Host:     "127.0.0.1",
+		Auth:     AuthConfig{Mode: "none"},
+		Profiles: validProfiles(),
+		Cleanup:  validCleanup(),
+		PTY:      PTYConfig{WebSocketScheme: "wss"},
+	}
+	if err := validate(cfg); err != nil {
+		t.Errorf("expected no error for wss scheme, got: %v", err)
 	}
 }
 
