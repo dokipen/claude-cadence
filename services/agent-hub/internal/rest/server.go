@@ -38,7 +38,7 @@ func New(h *hub.Hub, cfg *config.Config) *Server {
 	apiMux.HandleFunc("GET /api/v1/agents/{name}/sessions", handleListSessions(h))
 	apiMux.HandleFunc("GET /api/v1/agents/{name}/sessions/{id}", handleGetSession(h))
 	apiMux.HandleFunc("DELETE /api/v1/agents/{name}/sessions/{id}", handleDestroySession(h))
-	apiMux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", proxy.HandleTerminalProxy(h))
+	apiMux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", proxy.HandleTerminalProxy(h, cfg.AllowedOrigins))
 
 	var apiHandler http.Handler = apiMux
 	if cfg.Auth.Mode == "token" {

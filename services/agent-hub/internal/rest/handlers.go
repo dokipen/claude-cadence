@@ -343,10 +343,9 @@ func handleAgentWebSocket(h *hub.Hub, agentToken string) http.HandlerFunc {
 			return
 		}
 
-		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-			// Agent connections come from agentd (not browsers), so skip origin check.
-			InsecureSkipVerify: true,
-		})
+		// Agent connections originate from agentd (a non-browser client) and
+		// do not include an Origin header, so origin validation is not needed.
+		conn, err := websocket.Accept(w, r, nil)
 		if err != nil {
 			slog.Error("failed to accept websocket", "error", err)
 			return

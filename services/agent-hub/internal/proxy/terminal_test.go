@@ -84,7 +84,7 @@ func TestHandleTerminalProxy_AgentNotFound(t *testing.T) {
 	defer h.Stop()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
@@ -154,7 +154,7 @@ func TestHandleTerminalProxy_Relay(t *testing.T) {
 
 	// Start proxy server.
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -251,7 +251,7 @@ func TestHandleTerminalProxy_AddressMismatch(t *testing.T) {
 	waitForAgent(t, h, "mismatch-agent")
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -272,7 +272,7 @@ func TestHandleTerminalProxy_EmptyAddress(t *testing.T) {
 	waitForAgent(t, h, "empty-addr-agent")
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -293,7 +293,7 @@ func TestHandleTerminalProxy_PortMismatch(t *testing.T) {
 	waitForAgent(t, h, "port-mismatch-agent")
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -305,5 +305,39 @@ func TestHandleTerminalProxy_PortMismatch(t *testing.T) {
 
 	if resp.StatusCode != http.StatusBadGateway {
 		t.Errorf("expected 502, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandleTerminalProxy_OriginRejected(t *testing.T) {
+	h := hub.New(30*time.Second, 5*time.Second, 5*time.Minute)
+	h.Start()
+	defer h.Stop()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, []string{"example.com"}))
+	proxySrv := httptest.NewServer(mux)
+	defer proxySrv.Close()
+
+	// Send a WebSocket upgrade request with a non-matching Origin header.
+	// The coder/websocket library enforces OriginPatterns before upgrading,
+	// so the response should not be 101 Switching Protocols.
+	req, err := http.NewRequest(http.MethodGet, proxySrv.URL+"/ws/terminal/some-agent/sess-1", nil)
+	if err != nil {
+		t.Fatalf("creating request: %v", err)
+	}
+	req.Header.Set("Connection", "Upgrade")
+	req.Header.Set("Upgrade", "websocket")
+	req.Header.Set("Sec-WebSocket-Version", "13")
+	req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+	req.Header.Set("Origin", "https://evil.com")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusSwitchingProtocols {
+		t.Errorf("expected origin to be rejected (non-101), got 101 Switching Protocols")
 	}
 }
