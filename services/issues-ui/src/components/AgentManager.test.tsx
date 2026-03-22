@@ -92,10 +92,39 @@ describe("AgentManager", () => {
       capturedOnMinimize!(expectedKey);
     });
 
-    // BUG: AgentManager passes `new Set([...openKeys, ...minimizedKeys])` to SessionList.
-    // This means the minimized session key stays in the set passed as openKeys, so
-    // the button retains the 'open' class even after minimizing.
-    // The correct behavior would be that the button no longer has the 'open' class.
+    // After minimizing, the session should no longer be highlighted
     expect(sessionBtn.className).not.toContain("open");
+  });
+
+  it("restoring a minimized session re-applies the open CSS class", async () => {
+    const agentName = "test-agent";
+    const sessionId = "sess-1";
+    const sessions = [makeSession(sessionId, agentName)];
+    const expectedKey = `${agentName}:${sessionId}`;
+
+    const { getAllByTestId } = render(
+      <AgentManager sessions={sessions} selectedProject={null} />,
+    );
+
+    const sessionButtons = getAllByTestId("sidebar-session");
+    const sessionBtn = sessionButtons[0];
+
+    // Open the session
+    await act(async () => {
+      fireEvent.click(sessionBtn);
+    });
+    expect(sessionBtn.className).toContain("open");
+
+    // Minimize it
+    await act(async () => {
+      capturedOnMinimize!(expectedKey);
+    });
+    expect(sessionBtn.className).not.toContain("open");
+
+    // Restore by clicking again
+    await act(async () => {
+      fireEvent.click(sessionBtn);
+    });
+    expect(sessionBtn.className).toContain("open");
   });
 });
