@@ -1,7 +1,7 @@
 # Plan: Remove tmux from Web Terminal — App-Layer PTY Session Management
 
 **Issue:** #276
-**Status:** Planning
+**Status:** Phase 1 Complete
 **Author:** Claude Cadence
 
 ---
@@ -98,9 +98,160 @@ Key changes:
 - Document what `TmuxSession` field in `Session` is used for in the hub protocol and frontend
 - Identify any E2E tests that assert on tmux session names or tmux-specific behavior
 
-**Deliverable:** Updated section in this document or a separate audit table committed alongside code changes.
+**Deliverable:** Audit complete — see tables below.
 
 **Dependencies:** None — can be done in parallel with Phase 2 design.
+
+---
+
+#### Audit Results (Issue #277)
+
+**Audit date:** 2026-03-22
+
+##### tmux Package API Surface (`internal/tmux/tmux.go`)
+
+All public methods belong to `tmux.Client`, constructed with `tmux.NewClient(socketName string)`. Every method shells out to the `tmux` CLI with flags `-L <socketName> -f /dev/null`.
+
+| Method | Signature | What it does |
+|--------|-----------|--------------|
+| `NewClient` | `NewClient(socketName string) *Client` | Constructor; stores socket name. |
+| `SocketName` | `() string` | Returns the socket name. Called by `ttyd.Start` to pass `-L` flag. |
+| `NewSession` | `(name, workdir, command string) error` | Runs `tmux new-session -d -s <name> -c <workdir> <command>; set-option -g mouse on`. Mouse mode chained into the same invocation. |
+| `HasSession` | `(name string) bool` | Runs `tmux has-session -t <name>`. Used for liveness checks. |
+| `KillSession` | `(name string) error` | Runs `tmux kill-session -t <name>`. |
+| `SendKeys` | `(name, keys string) error` | Runs `tmux send-keys`. **Unused in production** — present but not called from non-test code. |
+| `SetEnv` | `(name, key, value string) error` | Runs `tmux set-environment -t <name> <key> <value>`. Mirrors env vars into the session. |
+| `GetPanePID` | `(name string) (int, error)` | Runs `tmux list-panes -F #{pane_pid}`. Returns the shell process PID. |
+| `CapturePane` | `(name string) (string, error)` | Runs `tmux capture-pane -p`. Returns visible pane text as a string. |
+| `CleanupStaleSocket` | `() error` | Resolves the socket path, probes with `tmux list-sessions`, removes the socket file if no server responds. |
+| `ListSessions` | `() ([]string, error)` | Runs `tmux list-sessions -F #{session_name}`. Returns empty list if no server. |
+
+---
+
+##### Call Sites — `cmd/agentd/main.go`
+
+| Line | Call | Purpose | Frequency | Replacement |
+|------|------|---------|-----------|-------------|
+| 64 | `tmux.NewClient(cfg.Tmux.SocketName)` | Constructs tmux client with socket name (default `"agentd"`). | Startup-once | Remove; construct `PTYManager` instead. |
+| 65 | `ttyd.NewClient(...)` | Constructs ttyd client; references tmux socket name. | Startup-once | Remove; ttyd eliminated with tmux. |
+| 66 | `ttydClient.CleanupOrphans(cfg.Tmux.SocketName)` | Kills orphaned ttyd processes from a previous agentd run. | Startup-once | Remove; PTY children receive SIGHUP when master fd closes. |
+| 69 | `tmuxClient.CleanupStaleSocket()` | Removes stale tmux socket left by a crashed previous agentd. | Startup-once | Remove; PTY manager holds no socket files. |
+| 86 | `session.NewManager(..., tmuxClient, ttydClient, ...)` | Wires tmux and ttyd clients into the session manager. | Startup-once | Pass `PTYManager` instead; remove tmux/ttyd parameters. |
+| 89 | `manager.RecoverSessions()` | Calls `ListSessions` + `GetPanePID` to re-adopt orphaned sessions. | Startup-once | Remove (Option A: restarts terminate sessions). |
+| 101 | `session.NewMonitor(manager, tmuxClient, 5*time.Second)` | Passes tmux client to monitor for `CapturePane`. | Startup-once wiring | Pass PTY ring buffer accessor instead. |
+| 115 | `hub.NewDispatcher(manager, ttydClient, cfg.Ttyd.AdvertiseAddress)` | Wires ttyd port-lookup into hub dispatcher for `getTerminalEndpoint`. | Startup-once | Replace with PTY manager's WS endpoint resolver. |
+
+---
+
+##### Call Sites — `internal/session/manager.go`
+
+| Line | Call | Purpose | Frequency | Replacement |
+|------|------|---------|-----------|-------------|
+| 51 | `m.tmux.HasSession(name)` (closure) | Registers a closure for checking tmux session existence. | Startup-once | Closure replaced with `m.pty.Has(id)`. |
+| 104–115 | `tmuxNameRe` validation | Session names validated to `[a-zA-Z0-9_-]` for tmux compatibility. | Per-`Create` | Relax to safe-URL-path chars; remove tmux-specific constraint. |
+| 114 | `m.tmux.HasSession(sessionName)` | Guards against duplicate tmux sessions before creation. | Per-`Create` | Remove; PTY manager's `Create` returns error on duplicate IDs. |
+| 129 | `sess.TmuxSession = sessionName` | Populates `TmuxSession` on Session struct. | Per-`Create` | Remove population; keep field as `""` during transition. |
+| 245 | `m.tmux.NewSession(sessionName, workdir, fullCommand)` | Creates tmux session, launches agent command as its initial process. | Per-`Create` | Replace with `m.pty.Create(id, workdir, cmd, env, cols, rows)`. |
+| 257–268 | `m.tmux.SetEnv(...)` (vault secrets loop) | Mirrors vault secrets into tmux session environment. | Per-`Create`, per-secret | Remove; env vars already passed via `export` in the command string. |
+| 270–272 | `m.tmux.SetEnv(...)` (request env loop) | Mirrors request env vars into tmux session environment. | Per-`Create`, per-env-var | Remove; same reason. |
+| 279 | `m.tmux.GetPanePID(sessionName)` | Gets agent process PID after session creation. | Per-`Create` (once) | Remove; PID known from `cmd.Start()` via `pty.Session.PID`. |
+| 282 | `m.tmuxHasSession(sessionName)` | Guards `KillSession` when `GetPanePID` fails (fast-exit detection). | Per-`Create`, error path | Remove; PTY manager tracks liveness directly. |
+| 283 | `m.tmux.KillSession(sessionName)` | Cleans up fast-exiting tmux session. | Per-`Create`, error path | Remove; PTY child exits naturally; master fd closed by manager. |
+| 295 | `m.ttyd.Start(sessionID, m.tmux.SocketName(), sessionName)` | Launches per-session ttyd process. | Per-`Create` | Remove entirely; agentd serves WS terminal endpoint directly. |
+| 356 | `m.ttyd.Stop(id)` | Kills per-session ttyd process on destroy. | Per-`Destroy` | Remove. |
+| 360–363 | `m.tmuxHasSession` + `m.tmux.KillSession` | Kills tmux session during `Destroy`. | Per-`Destroy` | Replace with `m.pty.Destroy(id)`. |
+| 381 | `m.tmux.ListSessions()` | Lists all tmux sessions for recovery. | Startup-once (`RecoverSessions`) | Remove with `RecoverSessions`. |
+| 389 | `tracked[sess.TmuxSession]` | Builds set of already-tracked tmux session names. | Startup-once (`RecoverSessions`) | Remove with `RecoverSessions`. |
+| 408 | `m.tmux.GetPanePID(tmuxName)` | Gets PID of recovered session's process. | Startup-once, per-recovered-session | Remove with `RecoverSessions`. |
+| 448 | `m.tmuxHasSession(sess.TmuxSession)` | Liveness check in `reconcile`. | On-demand, per-Get/List | Replace with `m.pty.Has(id)` or `syscall.Kill(pid, 0)`. |
+| 471 | `m.tmux.HasSession(tmuxSession)` | Liveness guard in `cleanup` helper. | Error path during `Create` | Replace with PTY manager check. |
+| 472 | `m.tmux.KillSession(tmuxSession)` | Kills tmux session in `cleanup` helper. | Error path during `Create` | Replace with `m.pty.Destroy(id)`. |
+
+---
+
+##### Call Sites — `internal/session/monitor.go`
+
+| Line | Call | Purpose | Frequency | Replacement |
+|------|------|---------|-----------|-------------|
+| 41 | `NewMonitor(manager, tmuxClient, ...)` | Constructor accepts tmux client. | Startup-once | Change signature to accept ring buffer reader interface. |
+| 97 | `m.tmux.CapturePane(sess.TmuxSession)` | Captures visible pane text to detect idle input prompts. | **Periodic — every 5 seconds per running session** | Replace with `m.pty.ReadBuffer(sess.ID)` returning ring buffer snapshot. `promptPatterns` regex unchanged. |
+
+---
+
+##### Call Sites — `internal/ttyd/ttyd.go`
+
+ttyd is fundamentally coupled to tmux. `ttyd.Start` (line 82–88) launches: `ttyd ... tmux -L <socket> -f /dev/null attach-session -t <name>`. With tmux removed, ttyd has no role.
+
+| Method | Frequency | Replacement |
+|--------|-----------|-------------|
+| `Start(sessionID, tmuxSocketName, tmuxSessionName)` | Per-`Create` | Eliminated; agentd WS endpoint serves the terminal. |
+| `Stop(sessionID)` | Per-`Destroy` | Eliminated. |
+| `CleanupOrphans(socketName)` | Startup-once | Eliminated. |
+| `Port(sessionID)` | On-demand, per `GetTerminalEndpoint` | Replaced by PTY manager WS route lookup. |
+
+---
+
+##### `TmuxSession` Field Trace
+
+**Session struct** (`internal/session/store.go` line 25):
+- `TmuxSession string` — set equal to `sessionName` at creation (`manager.go` line 129). Used as the identifier for all tmux CLI calls and as the recovery key in `RecoverSessions`.
+
+**Hub JSON protocol** (`internal/hub/dispatch.go` lines 197–223):
+- Serialized as `tmux_session` (omitempty) in all session JSON responses (`CreateSession`, `GetSession`, `ListSessions`).
+
+**gRPC proto** (`proto/agents/v1/agents.proto` field 8):
+- `string tmux_session = 8;` — populated in `service/agent_service.go` line 91.
+
+**Frontend TypeScript** (`services/issues-ui/src/`):
+- `types.ts` line 99: `tmux_session: string` — required field in the `Session` interface.
+- `agentHubClient.ts` lines 132–133: `validateSessionResponse` throws `HubError(502)` if `data.tmux_session` is not a string. **An empty string `""` passes `isString("")`** — keeping the field as `""` during transition requires no frontend change.
+- No UI component renders or uses `tmux_session` for display or logic — it is carried through the type system but never referenced in component source.
+
+---
+
+##### E2E Tests with tmux-Specific Assertions
+
+| Test file | Assertion type | Migration path |
+|-----------|---------------|----------------|
+| `internal/tmux/tmux_test.go` | Integration tests against real tmux CLI | Delete entire file. |
+| `test/e2e/session_lifecycle_test.go` lines 46–47, 368–369 | `tmuxSessionExists(...)` and `tmuxMouseEnabled(...)` assertions | Remove assertions; replace with PTY process liveness checks. |
+| `test/e2e/helpers_test.go` lines 96–118 | `tmuxSessionExists`, `tmuxMouseEnabled`, tmux CLI helpers | Delete or replace with PTY-aware equivalents. |
+| `test/e2e/ttyd_test.go` | Tests ttyd process launch and WS URL | Rewrite for PTY WS endpoint. |
+| `internal/session/cleaner_test.go` | Uses `newTestManager` with fake `tmuxHasSession`; asserts on `TmuxSession` field | Replace `tmuxHasSession` closure with PTY liveness hook; remove `TmuxSession` field assertions. |
+| `internal/hub/dispatch_test.go` | Mock manager without real tmux; no tmux-specific logic | Minimal changes; `tmux_session` in JSON becomes `""`. |
+| `services/issues-ui/e2e/*.spec.ts` (4 files) | All mock session fixtures include `tmux_session: "lead-109"` etc. | Update fixtures to `tmux_session: ""` initially; remove field when protocol is cleaned up (Phase 6). |
+
+---
+
+##### Configuration Constants
+
+| Item | Value | Notes |
+|------|-------|-------|
+| Default socket name | `"agentd"` | Set in `config.go` `applyDefaults`. Config key: `tmux.socket_name`. |
+| Socket path | `$TMUX_TMPDIR/<uid>/agentd` or `os.TempDir()/<uid>/agentd` | Resolved by `CleanupStaleSocket`. |
+| Session name pattern | `^[a-zA-Z0-9_-]+$` | `tmuxNameRe` in `manager.go` line 22. Constraint can be relaxed. |
+| Auto-generated session name | `<agentProfile>-<unixNanoTimestamp>` | `manager.go` line 97. |
+| Max session name length | 200 characters | `manager.go` line 101. |
+| ttyd port range | `7681–7780` (base `7681`, max `100`) | Recycled on session destroy. Entire range is eliminated with ttyd. |
+| Monitor interval | `5 * time.Second` | Hard-coded in `main.go` line 101 (not in config). |
+
+---
+
+##### Replacement Summary
+
+| Current tmux mechanism | Replacement |
+|------------------------|-------------|
+| `NewSession` — process launch | `pty.Create(id, workdir, cmd, env, cols, rows)` via `creack/pty` |
+| `set-option -g mouse on` | Eliminated; never set. xterm.js handles mouse natively. |
+| `GetPanePID` — PID discovery | `pty.Session.PID` known at `cmd.Start()` time |
+| `CapturePane` — visible pane text | `pty.ReadBuffer(id)` — ring buffer snapshot |
+| `ListSessions` — recovery enumeration | No-op (Option A: restarts terminate sessions) |
+| `SetEnv` — environment mirroring | Removed; env already in command-line `export` prefix |
+| `HasSession` / `KillSession` — liveness/cleanup | `pty.Has(id)` / `pty.Destroy(id)` |
+| `CleanupStaleSocket` | Eliminated; no socket files |
+| `ttyd.Start/Stop/CleanupOrphans` | Eliminated; agentd serves WS terminal endpoint directly |
+| `TmuxSession` field | Keep as `""` during transition; remove in Phase 6 protocol cleanup |
+| `tmux_session` in hub JSON / gRPC | Populate with `""` initially; coordinate removal as breaking change |
 
 ---
 
