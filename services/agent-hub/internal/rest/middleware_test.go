@@ -684,3 +684,84 @@ func BenchmarkRateLimiterEvictionPath(b *testing.B) {
 		}
 	})
 }
+
+// TestRateLimiterAllProtectedFallback verifies the "all-protected fallback"
+// fix: when every entry in the map has denied=true within the protection
+// window, getLimiter must refuse admission (return allProtectedLimiter → 429)
+// rather than unconditionally evicting lruList.Back(), which may be a
+// recently-denied victim whose token bucket would then be reset.
+func TestRateLimiterAllProtectedFallback(t *testing.T) {
+	// Burst=1: first request 200 (consumes token), second request 429 (denied).
+	// This makes it trivial to exhaust each subnet's bucket and mark it denied.
+	cfg := config.RateLimitConfig{
+		RequestsPerSecond: 0.0001, // near-zero refill so no token refills during test
+		Burst:             1,
+	}
+
+	// Fixed clock: all deniedAt values are the same fixed time, so every
+	// entry is within the 2-minute protection window throughout the test.
+	fixedTime := time.Now()
+	nowFn := func() time.Time { return fixedTime }
+
+	_, _, middlewareFn := rateLimiterInternal(cfg, nowFn)
+
+	noop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	h := middlewareFn(noop)
+
+	sendRequest := func(ip string) int {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = ip + ":9999"
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	// Step 1: The victim is the FIRST entry inserted. It will end up at
+	// lruList.Back() after all subsequent inserts push it to the tail.
+	// We use subnet 10.0.0.x (/24 key: 10.0.0.0).
+	const victimIP = "10.0.0.1"
+	const victimCIDR = "10.0.0.0"
+
+	// Exhaust the victim's bucket: first request succeeds (burst=1),
+	// second request fails and marks the victim denied.
+	if code := sendRequest(victimIP); code != http.StatusOK {
+		t.Fatalf("victim first request: got %d, want 200", code)
+	}
+	if code := sendRequest(victimIP); code != http.StatusTooManyRequests {
+		t.Fatalf("victim second request: got %d, want 429 (bucket should be empty)", code)
+	}
+
+	// Step 2: Fill the remaining rateLimiterMaxEntries-1 slots with distinct
+	// /24 subnets, each exhausted and marked denied. Use 192.x.x.0/24 subnets
+	// (starting at index 0) to avoid overlapping with the victim's 10.0.0.0/24.
+	// Each entry: first request 200, second request 429 → denied=true.
+	for i := 0; i < rateLimiterMaxEntries-1; i++ {
+		fillerIP := fmt.Sprintf("192.%d.%d.1", i/256, i%256)
+		if code := sendRequest(fillerIP); code != http.StatusOK {
+			t.Fatalf("filler[%d] first request: got %d, want 200", i, code)
+		}
+		if code := sendRequest(fillerIP); code != http.StatusTooManyRequests {
+			t.Fatalf("filler[%d] second request: got %d, want 429", i, code)
+		}
+	}
+
+	// Step 3: Trigger the all-protected fallback. Send a request from a brand
+	// new IP not yet in the map. The map is at rateLimiterMaxEntries and every
+	// entry is denied+protected, so the normal victim-search loop finds nothing.
+	// The fixed implementation refuses admission (returns 429) rather than
+	// evicting a protected victim entry.
+	attackerIP := "172.16.0.1"
+	if code := sendRequest(attackerIP); code != http.StatusTooManyRequests {
+		t.Fatalf("attacker trigger request: got %d, want 429 — "+
+			"all slots occupied by protected entries; admission should be refused", code)
+	}
+
+	// Step 4: The victim's entry must still be in the map with its exhausted
+	// token bucket. Admission refusal means no eviction occurred, so the
+	// victim is still rate-limited.
+	code := sendRequest(victimIP)
+	if code != http.StatusTooManyRequests {
+		t.Errorf("victim request after all-protected fallback: got %d, want 429 — "+
+			"victim entry should not have been evicted", code)
+	}
+}

@@ -34,6 +34,17 @@ import (
 // concurrently, scale up by the same factor (e.g. 200 prefixes → 600).
 const rateLimiterMaxEntries = 300
 
+// allProtectedLimiter is a sentinel returned when the rate-limiter map is at
+// capacity and every entry is within the denied-protection window. Refusing
+// admission here is safer than evicting a protected victim: it prevents an
+// adversary with 300+ denied subnets from resetting a legitimate victim's
+// token bucket by forcing fallback eviction.
+//
+// Allow() always returns false (burst=0, limit=0), so the caller issues a 429
+// without inserting the new IP into the map or touching any existing entry.
+var allProtectedLimiter = rate.NewLimiter(0, 0)
+
+
 // tokenAuth returns middleware that validates Bearer token authentication.
 func tokenAuth(token string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -143,11 +154,10 @@ func rateLimiterInternal(cfg config.RateLimitConfig, nowFn func() time.Time) (le
 			}
 
 			if victimKey == "" {
-				// All entries are protected; fall back to unconditional LRU
-				// eviction of the tail to keep the map bounded.
-				if back := lruList.Back(); back != nil {
-					victimKey = back.Value.(*lruEntry).key
-				}
+				// All entries are within the denied-protection window. Admitting
+				// the new IP would require evicting a protected victim — refuse
+				// admission instead.
+				return allProtectedLimiter
 			}
 
 			if victimKey != "" {
