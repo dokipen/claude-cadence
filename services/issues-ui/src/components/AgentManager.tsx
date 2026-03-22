@@ -98,6 +98,20 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
     });
   }, []);
 
+  const handleReorderAll = useCallback((keys: string[]) => {
+    setOpenWindows((prev) => {
+      const byKey = new Map(prev.map((w) => [w.key, w]));
+      const restored = keys.flatMap((k) => {
+        const w = byKey.get(k);
+        return w ? [w] : [];
+      });
+      // Keep any windows not in keys (shouldn't happen, but be safe)
+      const inKeys = new Set(keys);
+      const extras = prev.filter((w) => !inKeys.has(w.key));
+      return [...restored, ...extras];
+    });
+  }, []);
+
   const handleLaunched = useCallback((_session: Session, _agentName: string) => {
     // The useAllSessions polling will pick up the new session automatically.
   }, []);
@@ -127,6 +141,7 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
               onMinimize={handleMinimize}
               onTerminated={handleTerminated}
               onReorder={handleReorder}
+              onReorderAll={handleReorderAll}
             />
           )}
         </div>

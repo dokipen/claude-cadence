@@ -157,3 +157,141 @@ describe("TerminalWindow", () => {
     expect(onMaximize).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("keyboard accessibility", () => {
+  beforeEach(() => {
+    mockHubFetch.mockReset();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  const accessibleSession = {
+    id: "sess-1",
+    name: "test-session",
+    state: "running" as const,
+    agent_profile: "default",
+    tmux_session: "tmux-1",
+    created_at: "2026-01-01T00:00:00Z",
+    agent_pid: 5678,
+    worktree_path: "/tmp/worktree",
+    base_ref: "main",
+    waiting_for_input: false,
+  };
+
+  it("tile header has tabIndex={0} and role='button'", () => {
+    render(
+      <TerminalWindow
+        session={accessibleSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    const header = screen.getByTestId("tile-header");
+    expect(header.getAttribute("tabindex")).toBe("0");
+    expect(header.getAttribute("role")).toBe("button");
+  });
+
+  it("tile header has aria-pressed='false' when isKeyboardGrabbed is false", () => {
+    render(
+      <TerminalWindow
+        session={accessibleSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+        isKeyboardGrabbed={false}
+      />,
+    );
+
+    const header = screen.getByTestId("tile-header");
+    expect(header.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("tile header has aria-pressed='true' when isKeyboardGrabbed is true", () => {
+    render(
+      <TerminalWindow
+        session={accessibleSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+        isKeyboardGrabbed={true}
+      />,
+    );
+
+    const header = screen.getByTestId("tile-header");
+    expect(header.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("tile header aria-label in idle state contains 'Rearrange window' and session name", () => {
+    render(
+      <TerminalWindow
+        session={accessibleSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+        isKeyboardGrabbed={false}
+      />,
+    );
+
+    const header = screen.getByTestId("tile-header");
+    const label = header.getAttribute("aria-label") ?? "";
+    expect(label).toContain("Rearrange window");
+    expect(label).toContain(accessibleSession.name);
+  });
+
+  it("tile header aria-label in moving state contains 'Moving:' and 'arrow keys'", () => {
+    render(
+      <TerminalWindow
+        session={accessibleSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+        isKeyboardGrabbed={true}
+      />,
+    );
+
+    const header = screen.getByTestId("tile-header");
+    const label = header.getAttribute("aria-label") ?? "";
+    expect(label).toContain("Moving:");
+    expect(label).toContain("arrow keys");
+  });
+
+  it("outer terminal-window aria-label contains position info", () => {
+    render(
+      <TerminalWindow
+        session={accessibleSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+        windowIndex={1}
+        windowCount={3}
+      />,
+    );
+
+    const window = screen.getByTestId("terminal-window");
+    const label = window.getAttribute("aria-label") ?? "";
+    expect(label).toContain("position 2 of 3");
+  });
+
+  it("calls onHeaderKeyDown when a key is pressed on the tile header", () => {
+    const onHeaderKeyDown = vi.fn();
+
+    render(
+      <TerminalWindow
+        session={accessibleSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+        onHeaderKeyDown={onHeaderKeyDown}
+      />,
+    );
+
+    const header = screen.getByTestId("tile-header");
+    fireEvent.keyDown(header, { key: " " });
+
+    expect(onHeaderKeyDown).toHaveBeenCalledOnce();
+  });
+});

@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { TerminalWindow } from "./TerminalWindow";
 import type { Session } from "../types";
 import styles from "../styles/agents.module.css";
@@ -14,6 +15,7 @@ interface TilingLayoutProps {
   onMinimize: (key: string) => void;
   onTerminated: (key: string) => void;
   onReorder?: (dragKey: string, dropKey: string) => void;
+  onReorderAll?: (keys: string[]) => void;
 }
 
 // Recursive binary split tree
@@ -76,13 +78,17 @@ function buildVerticalSplit(keys: string[]): LayoutNode {
   };
 }
 
-export function TilingLayout({ windows, onMinimize, onTerminated, onReorder }: TilingLayoutProps) {
+export function TilingLayout({ windows, onMinimize, onTerminated, onReorder, onReorderAll }: TilingLayoutProps) {
   // All hooks first
   const [maximizedKey, setMaximizedKey] = useState<string | null>(null);
   const [ratios, setRatios] = useState<Map<string, number>>(new Map());
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const draggingRef = useRef<{ path: string; direction: "horizontal" | "vertical"; startPos: number; startRatio: number; containerSize: number } | null>(null);
   const dragKeyRef = useRef<string | null>(null);
+  const [keyboardGrabKey, setKeyboardGrabKey] = useState<string | null>(null);
+  const originalIndexRef = useRef<number | null>(null);
+  const originalWindowKeysRef = useRef<string[]>([]);
+  const [announceText, setAnnounceText] = useState('');
 
   // Derived values (not hooks)
   const visibleWindows = maximizedKey !== null
@@ -165,6 +171,56 @@ export function TilingLayout({ windows, onMinimize, onTerminated, onReorder }: T
     document.body.style.userSelect = "none";
   }, [ratios]);
 
+  // Clear stale announcements after AT has had time to read them
+  useEffect(() => {
+    if (!announceText) return;
+    const timer = setTimeout(() => setAnnounceText(''), 1500);
+    return () => clearTimeout(timer);
+  }, [announceText]);
+
+  const handleKeyboardReorder = useCallback((key: string, e: React.KeyboardEvent) => {
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      if (keyboardGrabKey === key) {
+        // Confirm drop — clear grab state
+        setKeyboardGrabKey(null);
+        originalIndexRef.current = null;
+        originalWindowKeysRef.current = [];
+      } else {
+        // Start grab — record original order for cancel/restore
+        const idx = windows.findIndex((w) => w.key === key);
+        setKeyboardGrabKey(key);
+        originalIndexRef.current = idx;
+        originalWindowKeysRef.current = windows.map((w) => w.key);
+      }
+    } else if (e.key === 'Escape' && keyboardGrabKey === key) {
+      e.preventDefault();
+      // Restore full original ordering via onReorderAll (handles multi-step moves)
+      const currentIndex = windows.findIndex((w) => w.key === key);
+      const origIdx = originalIndexRef.current;
+      if (origIdx !== null && currentIndex !== origIdx && onReorderAll && originalWindowKeysRef.current.length > 0) {
+        onReorderAll(originalWindowKeysRef.current);
+      }
+      setKeyboardGrabKey(null);
+      originalIndexRef.current = null;
+      originalWindowKeysRef.current = [];
+    } else if ((e.key === 'ArrowLeft' || e.key === 'ArrowUp') && keyboardGrabKey === key) {
+      e.preventDefault();
+      const currentIndex = windows.findIndex((w) => w.key === key);
+      if (currentIndex > 0 && onReorder) {
+        onReorder(key, windows[currentIndex - 1].key);
+        setAnnounceText(`Window moved to position ${currentIndex} of ${windows.length}`);
+      }
+    } else if ((e.key === 'ArrowRight' || e.key === 'ArrowDown') && keyboardGrabKey === key) {
+      e.preventDefault();
+      const currentIndex = windows.findIndex((w) => w.key === key);
+      if (currentIndex < windows.length - 1 && onReorder) {
+        onReorder(key, windows[currentIndex + 1].key);
+        setAnnounceText(`Window moved to position ${currentIndex + 2} of ${windows.length}`);
+      }
+    }
+  }, [keyboardGrabKey, windows, onReorder, onReorderAll]);
+
   if (!layout) {
     return (
       <div className={styles.tilingEmpty} data-testid="tiling-area">
@@ -190,6 +246,10 @@ export function TilingLayout({ windows, onMinimize, onTerminated, onReorder }: T
           onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOverKey(null); }}
           onDrop={(e) => { e.preventDefault(); if (dragKeyRef.current && dragKeyRef.current !== win.key && onReorder) { onReorder(dragKeyRef.current, win.key); } dragKeyRef.current = null; setDragOverKey(null); }}
           isDragOver={dragOverKey === win.key}
+          isKeyboardGrabbed={keyboardGrabKey === win.key}
+          onHeaderKeyDown={(e) => handleKeyboardReorder(win.key, e)}
+          windowIndex={windows.findIndex((w) => w.key === win.key)}
+          windowCount={windows.length}
           isMaximized={maximizedKey === win.key}
           onMaximize={() => setMaximizedKey((prev) => (prev === win.key ? null : win.key))}
         />
@@ -221,6 +281,12 @@ export function TilingLayout({ windows, onMinimize, onTerminated, onReorder }: T
 
   return (
     <div className={styles.tilingArea} data-testid="tiling-area">
+      {createPortal(
+        <div aria-live="assertive" aria-atomic="true" style={{position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clipPath: 'inset(50%)', whiteSpace: 'nowrap', top: 0, left: 0}}>
+          {announceText}
+        </div>,
+        document.body
+      )}
       {/* Single-window leaf needs an explicit flex wrapper to fill tilingArea.
           Split nodes handle this themselves by wrapping each child in a flex div. */}
       {layout.type === "leaf" ? (
