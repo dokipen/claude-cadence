@@ -26,16 +26,20 @@ func TestServeTerminal_BufferReplay(t *testing.T) {
 	}
 	t.Cleanup(func() { m.Destroy("replay-test") })
 
-	// Give the shell time to print its output.
-	time.Sleep(150 * time.Millisecond)
-
-	// Verify the ring buffer already has data.
-	buf, err := m.ReadBuffer("replay-test")
-	if err != nil {
-		t.Fatalf("ReadBuffer failed: %v", err)
-	}
-	if !strings.Contains(string(buf), "REPLAY_MARKER") {
-		t.Fatalf("ring buffer does not yet contain REPLAY_MARKER: %q", string(buf))
+	// Poll until REPLAY_MARKER appears in the ring buffer.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		buf, err := m.ReadBuffer("replay-test")
+		if err != nil {
+			t.Fatalf("ReadBuffer failed: %v", err)
+		}
+		if strings.Contains(string(buf), "REPLAY_MARKER") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for REPLAY_MARKER in ring buffer; got: %q", string(buf))
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	// Start an HTTP server that serves the terminal WebSocket.

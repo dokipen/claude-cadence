@@ -154,8 +154,8 @@ func (m *PTYManager) Destroy(id string) error {
 		_ = sess.cmd.Process.Kill()
 	}
 	_ = sess.master.Close()
+	<-sess.done         // wait for read goroutine to exit before reaping
 	_ = sess.cmd.Wait() // reap the child
-	<-sess.done         // wait for read goroutine to exit
 	return nil
 }
 
@@ -203,18 +203,21 @@ func (m *PTYManager) ServeTerminal(ctx context.Context, id string, conn *websock
 		return conn.Write(ctx, websocket.MessageText, msg)
 	}
 
-	// Use a pointer to a writerFunc so we can compare by pointer identity later.
-	wp := new(writerFunc)
-	*wp = func(p []byte) (int, error) {
+	wf := writerFunc(func(p []byte) (int, error) {
 		if err := writeFrame(p); err != nil {
 			return 0, err
 		}
 		return len(p), nil
-	}
+	})
 
-	// Register this writer, displacing any prior active connection.
+	// Capture snapshot and register writer atomically under sess.mu.
+	// This prevents bytes written between snapshot capture and writer registration
+	// from being missed or duplicated: the PTY read goroutine blocks on sess.mu
+	// after writing to the ring buffer, so the snapshot and registration are
+	// seen atomically relative to the fan-out path.
 	sess.mu.Lock()
-	sess.writers = []io.Writer{wp}
+	snapshot := sess.rb.Snapshot()
+	sess.writers = []io.Writer{wf}
 	sess.mu.Unlock()
 	defer func() {
 		sess.mu.Lock()
@@ -222,8 +225,8 @@ func (m *PTYManager) ServeTerminal(ctx context.Context, id string, conn *websock
 		sess.mu.Unlock()
 	}()
 
-	// Replay ring buffer to give the client recent context.
-	if snapshot := sess.rb.Snapshot(); len(snapshot) > 0 {
+	// Replay buffered output to give the client recent context.
+	if len(snapshot) > 0 {
 		_ = writeFrame(snapshot) // best-effort
 	}
 

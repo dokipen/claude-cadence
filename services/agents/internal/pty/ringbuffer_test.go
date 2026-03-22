@@ -45,7 +45,7 @@ func TestRingBuffer_Empty(t *testing.T) {
 	}
 }
 
-func TestRingBuffer_ConcurrentWrites(t *testing.T) {
+func TestRingBuffer_ConcurrentSnapshot(t *testing.T) {
 	// Single-writer invariant: Write is called from one goroutine.
 	// But Snapshot is called concurrently. Test that concurrent Snapshots
 	// don't race with a single writer.

@@ -6,6 +6,25 @@ import (
 	"time"
 )
 
+// pollBuffer polls ReadBuffer until the output contains want or the deadline passes.
+func pollBuffer(t *testing.T, m *PTYManager, id, want string) string {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		buf, err := m.ReadBuffer(id)
+		if err != nil {
+			t.Fatalf("ReadBuffer failed: %v", err)
+		}
+		if strings.Contains(string(buf), want) {
+			return string(buf)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	buf, _ := m.ReadBuffer(id)
+	t.Fatalf("timed out waiting for %q in buffer; got: %q", want, string(buf))
+	return ""
+}
+
 func TestPTYManager_CreateAndDestroy(t *testing.T) {
 	m := NewPTYManager(PTYConfig{})
 
@@ -14,16 +33,7 @@ func TestPTYManager_CreateAndDestroy(t *testing.T) {
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	// Wait briefly for the echo to complete and output to be buffered.
-	time.Sleep(100 * time.Millisecond)
-
-	buf, err := m.ReadBuffer("sess1")
-	if err != nil {
-		t.Fatalf("ReadBuffer failed: %v", err)
-	}
-	if !strings.Contains(string(buf), "hello") {
-		t.Errorf("expected output to contain %q, got %q", "hello", string(buf))
-	}
+	pollBuffer(t, m, "sess1", "hello")
 
 	err = m.Destroy("sess1")
 	if err != nil {
