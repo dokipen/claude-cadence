@@ -92,6 +92,12 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		return nil, &Error{Code: ErrNotFound, Message: fmt.Sprintf("profile %q not found", req.AgentProfile)}
 	}
 
+	// Validate name characters (URL path-safe) for caller-supplied names.
+	// Auto-generated names ("<profile>-<nanoseconds>") are always URL-path-safe.
+	if req.SessionName != "" && !sessionNameRe.MatchString(req.SessionName) {
+		return nil, &Error{Code: ErrInvalidArgument, Message: "session name contains invalid characters: must match [a-zA-Z0-9._~-]+"}
+	}
+
 	// Auto-generate name if empty.
 	sessionName := req.SessionName
 	if sessionName == "" {
@@ -101,11 +107,6 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	// Validate name length.
 	if len(sessionName) > 200 {
 		return nil, &Error{Code: ErrInvalidArgument, Message: "session name must be 200 characters or fewer"}
-	}
-
-	// Validate name characters (URL path-safe: alphanumeric, dot, tilde, hyphen, underscore).
-	if !sessionNameRe.MatchString(sessionName) {
-		return nil, &Error{Code: ErrInvalidArgument, Message: "session name contains invalid characters: must match [a-zA-Z0-9._~-]+"}
 	}
 
 	// Validate name is unique in store.
