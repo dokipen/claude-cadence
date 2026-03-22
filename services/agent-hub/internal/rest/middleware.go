@@ -34,11 +34,6 @@ import (
 // concurrently, scale up by the same factor (e.g. 200 prefixes → 600).
 const rateLimiterMaxEntries = 300
 
-// rateLimiterDeniedProtectionWindow is how long a denied entry is protected
-// from LRU eviction after it was last rate-limited. After this window the
-// entry is evictable again (the token bucket will have partially refilled).
-const rateLimiterDeniedProtectionWindow = 2 * time.Minute
-
 // tokenAuth returns middleware that validates Bearer token authentication.
 func tokenAuth(token string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -105,6 +100,13 @@ func rateLimiter(cfg config.RateLimitConfig) func(http.Handler) http.Handler {
 // middleware handler and a function that returns the current map length, and
 // a containsFunc for introspecting map membership in tests.
 func rateLimiterInternal(cfg config.RateLimitConfig, nowFn func() time.Time) (lenFunc func() int, containsFunc func(key string) bool, handler func(http.Handler) http.Handler) {
+	// deniedProtectionWindow is how long a rate-limited entry is protected from
+	// LRU eviction. It equals the token-bucket full-refill time (burst / rps):
+	// once the burst has had time to fully replenish, the entry offers no
+	// stronger protection against a fresh connection than a brand-new entry
+	// would, so there is no reason to keep it pinned past that point.
+	deniedProtectionWindow := time.Duration(float64(cfg.Burst)/cfg.RequestsPerSecond * float64(time.Second))
+
 	var mu sync.Mutex
 	limiters := make(map[string]*lruEntry)
 	lruList := list.New()
@@ -132,7 +134,7 @@ func rateLimiterInternal(cfg config.RateLimitConfig, nowFn func() time.Time) (le
 			var victimKey string
 			for elem := lruList.Back(); elem != nil; elem = elem.Prev() {
 				e := elem.Value.(*lruEntry)
-				if e.denied && now.Sub(e.deniedAt) < rateLimiterDeniedProtectionWindow {
+				if e.denied && now.Sub(e.deniedAt) < deniedProtectionWindow {
 					// Protected: recently rate-limited, skip.
 					continue
 				}
