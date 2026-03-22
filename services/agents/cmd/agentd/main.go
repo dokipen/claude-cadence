@@ -19,6 +19,7 @@ import (
 	"github.com/dokipen/claude-cadence/services/agents/internal/service"
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
 	"github.com/dokipen/claude-cadence/services/agents/internal/vault"
+	"github.com/dokipen/claude-cadence/services/agents/internal/wsauth"
 )
 
 func main() {
@@ -97,8 +98,12 @@ func main() {
 	}
 
 	// Register WebSocket terminal handler.
+	var expectedToken string
+	if cfg.Auth.Mode == "token" {
+		expectedToken = cfg.Auth.ResolveToken()
+	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/ws/terminal/", func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/ws/terminal/", wsauth.TokenAuth(expectedToken, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Strip prefix and validate the session ID is a bare UUID with no
 		// path components, preventing path traversal.
 		sessionID := strings.TrimPrefix(r.URL.Path, "/ws/terminal/")
@@ -107,7 +112,6 @@ func main() {
 			return
 		}
 		// agentd sits behind the issues-ui reverse proxy; allow all origins.
-		// TODO(#443): add token-based auth to this endpoint.
 		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 			OriginPatterns: []string{"*"},
 		})
@@ -118,7 +122,7 @@ func main() {
 		if err := ptyManager.ServeTerminal(r.Context(), sessionID, conn); err != nil {
 			slog.Warn("terminal session ended with error", "session_id", sessionID, "error", err)
 		}
-	})
+	})))
 
 	// Start hub client if configured.
 	var hubClient *hub.Client
