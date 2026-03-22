@@ -2,14 +2,20 @@ import { test, expect } from "./fixtures/auth";
 
 const MOCK_DOC_FILES = {
   files: [
-    { path: "getting-started.md", name: "getting-started.md" },
-    { path: "api-reference.md", name: "api-reference.md" },
+    { path: "getting-started.md", name: "Getting Started" },
+    { path: "api-reference.md", name: "API Reference" },
   ],
 };
 
-const MOCK_DOC_CONTENT = {
-  path: "getting-started.md",
-  content: "# Getting Started\n\nWelcome to the documentation.",
+const MOCK_DOC_CONTENT: Record<string, { path: string; content: string }> = {
+  "getting-started.md": {
+    path: "getting-started.md",
+    content: "# Getting Started\n\nWelcome to the documentation.",
+  },
+  "api-reference.md": {
+    path: "api-reference.md",
+    content: "# API Reference\n\nEndpoints and schemas.",
+  },
 };
 
 function setupDocsMocks(page: import("@playwright/test").Page) {
@@ -27,10 +33,13 @@ function setupDocsMocks(page: import("@playwright/test").Page) {
     }),
     page.route("**/api/v1/docs/**", (route) => {
       if (route.request().method() === "GET") {
+        const url = route.request().url();
+        const fileName = url.split("/api/v1/docs/").pop() ?? "";
+        const doc = MOCK_DOC_CONTENT[fileName] ?? MOCK_DOC_CONTENT["getting-started.md"];
         route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify(MOCK_DOC_CONTENT),
+          body: JSON.stringify(doc),
         });
       } else {
         route.continue();
@@ -66,11 +75,16 @@ test.describe("docs page", () => {
     await expect(page.getByText("Select a document to preview")).toBeVisible();
   });
 
-  test("clicking a file renders its content", async ({ page }) => {
+  test("clicking a file renders its specific content", async ({ page }) => {
     await page.goto("/docs");
+
     await page.getByText("getting-started.md").click();
     await expect(page.getByText("Getting Started")).toBeVisible();
     await expect(page.getByText("Welcome to the documentation.")).toBeVisible();
+
+    await page.getByText("api-reference.md").click();
+    await expect(page.getByText("API Reference")).toBeVisible();
+    await expect(page.getByText("Endpoints and schemas.")).toBeVisible();
   });
 
   test("shows error when API is unavailable", async ({ page }) => {
