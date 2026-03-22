@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { hubFetch } from "../api/agentHubClient";
+import { fetchAllSessions } from "../api/agentHubClient";
 import { usePageVisibility } from "./usePageVisibility";
 import type { Session } from "../types";
 
@@ -36,15 +36,13 @@ export function useAllSessions(): UseAllSessionsResult {
       }
 
       try {
-        const data = await hubFetch<{
-          agents: { agent_name: string; sessions: Session[] }[];
-        }>("/sessions");
+        const agentSessions = await fetchAllSessions();
 
         if (!cancelled) {
           const results: AgentSession[] = [];
-          for (const agent of data.agents || []) {
-            for (const session of agent.sessions || []) {
-              results.push({ session, agentName: agent.agent_name });
+          for (const agent of agentSessions) {
+            for (const session of agent.sessions) {
+              results.push({ session, agentName: agent.agentName });
             }
           }
           setSessions(results);

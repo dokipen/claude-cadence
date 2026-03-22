@@ -88,6 +88,30 @@ function parseSession(data: unknown): Session {
   }
 }
 
+export interface AgentSessions {
+  agentName: string;
+  sessions: Session[];
+}
+
+function validateAllSessionsResponse(data: unknown): AgentSessions[] {
+  if (!isRecord(data) || !Array.isArray(data.agents)) {
+    throw new HubError(502, 'Invalid sessions response: missing "agents" array');
+  }
+  return (data.agents as unknown[]).map((entry, i) => {
+    if (!isRecord(entry) || typeof entry.agent_name !== "string") {
+      throw new HubError(502, `Invalid sessions response: entry ${i} missing agent_name`);
+    }
+    const sessions = Array.isArray(entry.sessions)
+      ? entry.sessions.map((s) => parseSession(s))
+      : [];
+    return { agentName: entry.agent_name, sessions };
+  });
+}
+
+export async function fetchAllSessions(): Promise<AgentSessions[]> {
+  return hubFetch("/sessions", undefined, validateAllSessionsResponse);
+}
+
 export async function createSession(
   agentName: string,
   profile: string,
