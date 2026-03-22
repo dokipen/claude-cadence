@@ -236,3 +236,37 @@ func TestRateLimiterEviction(t *testing.T) {
 		t.Fatalf("after eviction triggered by 1001st IP: map size = %d, want 2 (eviction should have removed 999 stale entries)", got)
 	}
 }
+
+// TestRateLimiterHardCap verifies that the map cannot grow beyond 1000 entries
+// even when all entries are permanently fresh (fixed clock, no stale eviction).
+// Guards against regression to the soft-eviction-only behavior where the map
+// would grow to the number of distinct IPs when none are stale.
+func TestRateLimiterHardCap(t *testing.T) {
+	cfg := config.RateLimitConfig{
+		RequestsPerSecond: 1_000_000.0,
+		Burst:             1_000_000,
+	}
+
+	// Fixed clock: all entries will always be fresh (never stale).
+	fixedTime := time.Now()
+	nowFn := func() time.Time { return fixedTime }
+
+	lenFunc, middlewareFn := rateLimiterInternal(cfg, nowFn)
+
+	noop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	h := middlewareFn(noop)
+
+	// Send requests from 1500 distinct IPs.
+	for i := 0; i < 1500; i++ {
+		ip := fmt.Sprintf("10.%d.%d.1:1234", i/256, i%256)
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = ip
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+	}
+
+	got := lenFunc()
+	if got != 1000 {
+		t.Fatalf("map size = %d after 1500 distinct fresh IPs; want 1000 (hard cap not enforced)", got)
+	}
+}
