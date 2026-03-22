@@ -66,9 +66,15 @@ func rateLimiterInternal(cfg config.RateLimitConfig, now func() time.Time) (lenF
 
 		t := now()
 
-		// Evict stale entries (> 5 min) when the map is at capacity.
-		// If nothing is stale, fall back to evicting the single oldest entry
-		// to enforce a hard cap and prevent unbounded growth.
+		// Fast path: returning client, no eviction needed.
+		if entry, ok := limiters[ip]; ok {
+			entry.lastSeen = t
+			return entry.limiter
+		}
+
+		// New IP: evict before inserting to enforce the hard cap.
+		// Stale sweep first; if nothing is evicted (all entries fresh),
+		// fall back to evicting the single oldest entry (LRU hard cap).
 		if len(limiters) >= 1000 {
 			evicted := 0
 			for k, e := range limiters {
@@ -88,11 +94,6 @@ func rateLimiterInternal(cfg config.RateLimitConfig, now func() time.Time) (lenF
 				}
 				delete(limiters, oldestKey)
 			}
-		}
-
-		if entry, ok := limiters[ip]; ok {
-			entry.lastSeen = t
-			return entry.limiter
 		}
 		lim := rate.NewLimiter(rate.Limit(cfg.RequestsPerSecond), cfg.Burst)
 		limiters[ip] = &rateLimiterEntry{limiter: lim, lastSeen: t}

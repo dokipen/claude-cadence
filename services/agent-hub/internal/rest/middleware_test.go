@@ -239,9 +239,8 @@ func TestRateLimiterEviction(t *testing.T) {
 
 // TestRateLimiterHardCap verifies that the map cannot grow beyond 1000 entries
 // even when all entries are permanently fresh (fixed clock, no stale eviction).
-// This test is expected to FAIL with the current soft-eviction implementation
-// because eviction removes nothing when all entries have a recent lastSeen, so
-// the map grows to 1500. The fix requires LRU hard-cap eviction.
+// Guards against regression to the soft-eviction-only behavior where the map
+// would grow to the number of distinct IPs when none are stale.
 func TestRateLimiterHardCap(t *testing.T) {
 	cfg := config.RateLimitConfig{
 		RequestsPerSecond: 1_000_000.0,
@@ -267,7 +266,7 @@ func TestRateLimiterHardCap(t *testing.T) {
 	}
 
 	got := lenFunc()
-	if got > 1000 {
-		t.Errorf("map size = %d after 1500 distinct fresh IPs; want <= 1000 (hard cap not enforced)", got)
+	if got != 1000 {
+		t.Fatalf("map size = %d after 1500 distinct fresh IPs; want 1000 (hard cap not enforced)", got)
 	}
 }
