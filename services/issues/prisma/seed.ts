@@ -21,6 +21,19 @@ async function main() {
   }
 
   console.log(`Seeded ${DEFAULT_LABELS.length} labels`);
+
+  if (process.env.DEV_SEED === "1") {
+    await prisma.project.upsert({
+      where: { name: "claude-cadence" },
+      update: { repository: "dokipen/claude-cadence" },
+      create: {
+        name: "claude-cadence",
+        repository: "dokipen/claude-cadence",
+      },
+    });
+
+    console.log("Seeded default project: claude-cadence");
+  }
 }
 
 main()
