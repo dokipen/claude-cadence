@@ -123,7 +123,7 @@ func main() {
 	// Start hub client if configured.
 	var hubClient *hub.Client
 	if cfg.Hub != nil {
-		dispatcher := hub.NewDispatcher(manager, cfg.Ttyd.AdvertiseAddress)
+		dispatcher := hub.NewDispatcher(manager, cfg.Ttyd.AdvertiseAddress, cfg.PTY.WebSocketScheme)
 		hubClient = hub.NewClient(*cfg.Hub, cfg.Profiles, cfg.Ttyd, dispatcher)
 		hubClient.Start()
 		slog.Info("hub client started", "url", cfg.Hub.URL, "name", cfg.Hub.Name)

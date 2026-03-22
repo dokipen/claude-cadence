@@ -21,12 +21,13 @@ const (
 type Dispatcher struct {
 	manager          *session.Manager
 	advertiseAddress string
+	webSocketScheme  string
 }
 
 // NewDispatcher creates a Dispatcher backed by the given session manager.
 // advertiseAddress enables the getTerminalEndpoint RPC method.
-func NewDispatcher(manager *session.Manager, advertiseAddress string) *Dispatcher {
-	return &Dispatcher{manager: manager, advertiseAddress: advertiseAddress}
+func NewDispatcher(manager *session.Manager, advertiseAddress string, webSocketScheme string) *Dispatcher {
+	return &Dispatcher{manager: manager, advertiseAddress: advertiseAddress, webSocketScheme: webSocketScheme}
 }
 
 // CreateSession handles the createSession JSON-RPC method.
@@ -138,7 +139,7 @@ func (d *Dispatcher) GetTerminalEndpoint(params json.RawMessage) (json.RawMessag
 	}
 
 	return marshalResult(terminalEndpointResult{
-		URL: "ws://" + d.advertiseAddress + "/ws/terminal/" + p.SessionID,
+		URL: d.webSocketScheme + "://" + d.advertiseAddress + "/ws/terminal/" + p.SessionID,
 	})
 }
 

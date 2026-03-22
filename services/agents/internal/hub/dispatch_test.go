@@ -2,6 +2,7 @@ package hub
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
@@ -16,7 +17,7 @@ func newFakeManager() *session.Manager {
 }
 
 func newTestDispatcher() *Dispatcher {
-	return NewDispatcher(newFakeManager(), "127.0.0.1")
+	return NewDispatcher(newFakeManager(), "127.0.0.1", "ws")
 }
 
 func TestDispatcher_CreateSession_InvalidParams(t *testing.T) {
@@ -101,7 +102,7 @@ func TestDispatcher_GetTerminalEndpoint_NoAdvertiseAddress(t *testing.T) {
 	store := session.NewStore()
 	store.Add(&session.Session{ID: "s1", State: session.StateStopped})
 	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{})
-	d := NewDispatcher(mgr, "") // empty advertise address
+	d := NewDispatcher(mgr, "", "ws") // empty advertise address
 
 	_, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"s1"}`))
 	if rpcErr == nil {
@@ -116,7 +117,7 @@ func TestDispatcher_GetTerminalEndpoint_Success(t *testing.T) {
 	store := session.NewStore()
 	store.Add(&session.Session{ID: "s1", State: session.StateStopped})
 	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{})
-	d := NewDispatcher(mgr, "192.168.1.10")
+	d := NewDispatcher(mgr, "192.168.1.10", "ws")
 
 	result, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"s1"}`))
 	if rpcErr != nil {
@@ -132,6 +133,29 @@ func TestDispatcher_GetTerminalEndpoint_Success(t *testing.T) {
 	}
 	// URL should contain the advertise address and session ID.
 	if out.URL != "ws://192.168.1.10/ws/terminal/s1" {
+		t.Errorf("unexpected URL: %s", out.URL)
+	}
+}
+
+func TestDispatcher_GetTerminalEndpoint_WSSScheme(t *testing.T) {
+	store := session.NewStore()
+	store.Add(&session.Session{ID: "s2", State: session.StateStopped})
+	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{})
+	d := NewDispatcher(mgr, "example.com", "wss")
+
+	result, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"s2"}`))
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: code=%d msg=%s", rpcErr.Code, rpcErr.Message)
+	}
+
+	var out terminalEndpointResult
+	if err := json.Unmarshal(result, &out); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	if !strings.HasPrefix(out.URL, "wss://") {
+		t.Errorf("expected URL to start with wss://, got: %s", out.URL)
+	}
+	if out.URL != "wss://example.com/ws/terminal/s2" {
 		t.Errorf("unexpected URL: %s", out.URL)
 	}
 }
