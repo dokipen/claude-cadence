@@ -52,10 +52,11 @@ describe("normalizeRepo", () => {
 
 describe("normalizeRepo - nullish inputs from recovered sessions", () => {
   it("returns empty string for undefined (recovered session with no repo_url)", () => {
-    expect(normalizeRepo(undefined as unknown as string)).toBe("");
+    expect(normalizeRepo(undefined)).toBe("");
   });
 
-  it("returns empty string for null (recovered session with null repo_url)", () => {
-    expect(normalizeRepo(null as unknown as string)).toBe("");
+  it("returns empty string for null (defensive: guard handles falsy values beyond undefined)", () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(normalizeRepo(null as any)).toBe("");
   });
 });
