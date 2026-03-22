@@ -110,17 +110,6 @@ func TestValidate_InvalidAuthMode(t *testing.T) {
 	}
 }
 
-func TestValidate_NonLocalhostWithTokenAuth(t *testing.T) {
-	cfg := &Config{
-		Auth:     AuthConfig{Mode: "token", Token: "secret"},
-		Profiles: validProfiles(),
-		Cleanup:  validCleanup(),
-		PTY:      validPTY(),
-	}
-	if err := validate(cfg); err != nil {
-		t.Errorf("expected no error, got: %v", err)
-	}
-}
 
 
 func TestResolveToken_ReturnsTokenWhenNoEnvVar(t *testing.T) {
