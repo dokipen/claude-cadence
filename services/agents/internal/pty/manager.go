@@ -64,6 +64,12 @@ func (m *PTYManager) Create(id, workdir string, command []string, env []string, 
 	if rows == 0 {
 		rows = 24
 	}
+	if cols > maxResizeDimension {
+		cols = maxResizeDimension
+	}
+	if rows > maxResizeDimension {
+		rows = maxResizeDimension
+	}
 	if len(command) == 0 {
 		return errors.New("pty: command must not be empty")
 	}

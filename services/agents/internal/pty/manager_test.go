@@ -137,6 +137,7 @@ func TestPTYManager_MaxSessions_Zero_Unlimited(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Create session %d (%s) failed: %v", i+1, id, err)
 		}
+		id := id
 		t.Cleanup(func() { m.Destroy(id) })
 	}
 }
