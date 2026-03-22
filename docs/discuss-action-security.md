@@ -22,7 +22,7 @@ External attackers without ticket-creation permissions cannot reach this vector.
 
 ## Existing Mitigations
 
-- **500-character length cap** (added in PR #349): The command string is truncated to 500 characters before being passed to the agent. This limits the payload size and prevents unbounded prompt content from reaching the model.
+- **500-character length cap** (added in PR #349): The command string is truncated to 500 characters in the UI before being passed to the agent. This limits the payload size for normal UI interactions. Note: this cap is enforced client-side in `AgentLauncher.tsx` and is not a hard security boundary — a direct API call bypasses it. Treat it as a UX guardrail rather than a security control.
 
 ## Recommended Mitigations
 
