@@ -35,6 +35,7 @@ type session struct {
 	writers []io.Writer  // active WS writers (stub for future broadcast)
 	done    chan struct{} // closed when PTY read goroutine exits AND cmd.Wait() has returned
 	waitOnce sync.Once   // ensures cmd.Wait() is called exactly once
+	waitErr  error       // result of cmd.Wait(), set by waitOnce
 	mu      sync.Mutex
 }
 
@@ -128,7 +129,7 @@ func (m *PTYManager) Create(id, workdir string, command []string, env []string, 
 			if readErr != nil {
 				// Reap the child before signalling done. waitOnce ensures
 				// Destroy's cmd.Wait() call is a harmless no-op if it races.
-				sess.waitOnce.Do(func() { _ = sess.cmd.Wait() })
+				sess.waitOnce.Do(func() { sess.waitErr = sess.cmd.Wait() })
 				return
 			}
 		}
@@ -176,8 +177,26 @@ func (m *PTYManager) Destroy(id string) error {
 	}
 	_ = sess.master.Close()
 	<-sess.done // wait for read goroutine to exit (it calls cmd.Wait via waitOnce)
-	sess.waitOnce.Do(func() { _ = sess.cmd.Wait() }) // no-op if goroutine already reaped
+	sess.waitOnce.Do(func() { sess.waitErr = sess.cmd.Wait() }) // no-op if goroutine already reaped
 	return nil
+}
+
+// WaitError returns the error from cmd.Wait() for the given session, or an
+// error if the session is not found or has not yet exited. Callers should
+// wait until the session is no longer running before calling this.
+func (m *PTYManager) WaitError(id string) (error, error) {
+	m.mu.RLock()
+	sess, ok := m.sessions[id]
+	m.mu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("pty: session %q not found", id)
+	}
+	select {
+	case <-sess.done:
+		return sess.waitErr, nil
+	default:
+		return nil, fmt.Errorf("pty: session %q has not exited", id)
+	}
 }
 
 // ReadBuffer returns a snapshot of the ring buffer for the given session.
