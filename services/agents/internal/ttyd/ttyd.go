@@ -144,7 +144,13 @@ func (c *Client) Stop(sessionID string) {
 // socket name from a previous agentd lifecycle. Returns the number of processes
 // killed.
 func (c *Client) CleanupOrphans(socketName string) int {
-	out, err := exec.Command("pgrep", "-f", "ttyd.*-L "+socketName).Output()
+	if !c.enabled {
+		return 0
+	}
+
+	// Use -x to match only processes named "ttyd" and -f to check the full
+	// command line for the socket flag. This avoids matching unrelated processes.
+	out, err := exec.Command("pgrep", "-x", "-f", "ttyd -.*-L "+socketName).Output()
 	if err != nil {
 		// pgrep exits 1 when no processes match — not an error.
 		return 0
@@ -164,12 +170,15 @@ func (c *Client) CleanupOrphans(socketName string) int {
 		if pid == self {
 			continue
 		}
+		// PID reuse between pgrep and signal is theoretically possible but
+		// acceptable at startup before any sessions are created.
 		proc, err := os.FindProcess(pid)
 		if err != nil {
 			continue
 		}
 		if err := proc.Signal(os.Interrupt); err != nil {
-			continue
+			slog.Warn("failed to signal orphaned ttyd, trying kill", "pid", pid, "error", err)
+			_ = proc.Kill()
 		}
 		slog.Info("killed orphaned ttyd process", "pid", pid)
 		killed++

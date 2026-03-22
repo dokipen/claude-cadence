@@ -277,6 +277,10 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	if err != nil {
 		errMsg := fmt.Sprintf("tmux session exited immediately: %v", err)
 		slog.Warn("session creation failed", "session", sessionName, "error", err)
+		// Clean up the tmux session if it still exists.
+		if m.tmuxHasSession(sessionName) {
+			_ = m.tmux.KillSession(sessionName)
+		}
 		m.store.Update(sessionID, func(s *Session) {
 			s.State = StateError
 			s.ErrorMessage = errMsg
