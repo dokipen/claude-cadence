@@ -11,7 +11,7 @@
 #   /ws/terminal/*  → agent-hub (terminal WebSocket proxy, port 4200)
 #   everything else → issues-ui (Vite dev server, port 5173)
 
-localhost:80 {
+:80 {
 	# Issues service — GraphQL API
 	handle /graphql {
 		reverse_proxy issues:4000

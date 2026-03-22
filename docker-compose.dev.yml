@@ -16,7 +16,7 @@ services:
       context: services/issues
     restart: unless-stopped
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
     volumes:
       - issues-data:/app/data
     env_file: .env.dev
@@ -24,7 +24,9 @@ services:
       - DATABASE_URL=file:/app/data/issues.db
       - PORT=4000
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:4000/graphql", "--header=Content-Type: application/json", "--post-data={\"query\":\"{ __typename }\"}"]
+      # Use node (available in the Node.js image) to avoid BusyBox wget
+      # limitations with --header/--post-data flags.
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4000/graphql', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
       interval: 10s
       timeout: 3s
       start_period: 60s
@@ -36,7 +38,7 @@ services:
       dockerfile: Dockerfile.dev
     restart: unless-stopped
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:5173"
     volumes:
       # Bind-mount source for hot reload; anonymous volume preserves node_modules
       - ./services/issues-ui:/app
@@ -51,12 +53,10 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
-      - "443:443"
     volumes:
       - ./infrastructure/Caddyfile.dev:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
-    env_file: .env.dev
     depends_on:
       - issues
       - issues-ui
@@ -89,7 +89,6 @@ services:
     command: >
       sh -c 'echo "agentd placeholder: run agentd on the host (see docker-compose.dev.yml comments)" && sleep infinity'
     network_mode: host
-    env_file: .env.dev
     restart: unless-stopped
 
   agent-hub:
@@ -101,7 +100,6 @@ services:
     command: >
       sh -c 'echo "agent-hub placeholder: run agent-hub on the host (see docker-compose.dev.yml comments)" && sleep infinity'
     network_mode: host
-    env_file: .env.dev
     restart: unless-stopped
 
 volumes:
