@@ -206,8 +206,8 @@ describe("Terminal", () => {
     expect(screen.queryByTestId("terminal-error")).toBeNull();
   });
 
-  // 5. Disconnected state when onopen fires then onclose fires
-  it("shows disconnected overlay with 'Connection lost.' after open then close", () => {
+  // 5. After open→close the component enters "reconnecting" state (auto-retry), NOT "disconnected"
+  it("shows reconnecting overlay with 'Reconnecting…' after open then close", () => {
     render(<Terminal agentName="agent-1" sessionId="sess-1" />);
 
     const ws = MockWebSocket.instances[0];
@@ -218,9 +218,9 @@ describe("Terminal", () => {
 
     act(() => { ws.simulateClose(); });
 
-    expect(screen.getByTestId("terminal-disconnected")).toBeDefined();
-    expect(screen.getByText("Connection lost.")).toBeDefined();
-    expect(screen.getByText("Reconnect")).toBeDefined();
+    expect(screen.getByTestId("terminal-reconnecting")).toBeDefined();
+    expect(screen.getByText("Reconnecting…")).toBeDefined();
+    expect(screen.queryByTestId("terminal-disconnected")).toBeNull();
     expect(screen.queryByTestId("terminal-error")).toBeNull();
     expect(screen.queryByTestId("terminal-connecting")).toBeNull();
   });
@@ -346,6 +346,124 @@ describe("Terminal", () => {
     fireEvent.contextMenu(container);
 
     expect(defaultPrevented).toBe(false);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Auto-reconnect after a dropped connection
+  // ---------------------------------------------------------------------------
+  describe("auto-reconnect after drop", () => {
+    // a. After open→close, shows "reconnecting" overlay
+    it("shows terminal-reconnecting overlay with 'Reconnecting…' text after open then close", () => {
+      render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+
+      act(() => { MockWebSocket.instances[0].simulateOpen(); });
+      expect(screen.queryByTestId("terminal-connecting")).toBeNull();
+
+      act(() => { MockWebSocket.instances[0].simulateClose(); });
+
+      expect(screen.getByTestId("terminal-reconnecting")).toBeDefined();
+      expect(screen.getByText("Reconnecting…")).toBeDefined();
+      expect(screen.queryByTestId("terminal-disconnected")).toBeNull();
+      expect(screen.queryByTestId("terminal-error")).toBeNull();
+    });
+
+    // b. Auto-retry creates a new WebSocket after first backoff delay (2000 ms)
+    it("creates a new WebSocket after the first reconnect backoff delay", () => {
+      render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+
+      act(() => { MockWebSocket.instances[0].simulateOpen(); });
+      act(() => { MockWebSocket.instances[0].simulateClose(); });
+
+      // Only 1 WS so far — the timer is pending
+      expect(MockWebSocket.instances).toHaveLength(1);
+
+      // Advance past the first reconnect delay (2000 ms)
+      act(() => { vi.advanceTimersByTime(2000); });
+
+      expect(MockWebSocket.instances).toHaveLength(2);
+    });
+
+    // c. After all 4 reconnect retries exhausted, shows "disconnected"
+    it("shows terminal-disconnected with 'Connection lost.' after all 4 reconnect retries are exhausted", () => {
+      render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+
+      // Initial connection succeeds
+      act(() => { MockWebSocket.instances[0].simulateOpen(); });
+
+      // Drop 1 → schedule reconnect after 2000 ms
+      act(() => { MockWebSocket.instances[0].simulateClose(); });
+      act(() => { vi.advanceTimersByTime(2000); });
+
+      // Reconnect attempt 1 fails → schedule after 4000 ms
+      act(() => { MockWebSocket.instances[1].simulateClose(); });
+      act(() => { vi.advanceTimersByTime(4000); });
+
+      // Reconnect attempt 2 fails → schedule after 8000 ms
+      act(() => { MockWebSocket.instances[2].simulateClose(); });
+      act(() => { vi.advanceTimersByTime(8000); });
+
+      // Reconnect attempt 3 fails → schedule after 16000 ms
+      act(() => { MockWebSocket.instances[3].simulateClose(); });
+      act(() => { vi.advanceTimersByTime(16000); });
+
+      // Reconnect attempt 4 fails → retries exhausted → disconnected
+      act(() => { MockWebSocket.instances[4].simulateClose(); });
+
+      expect(screen.getByTestId("terminal-disconnected")).toBeDefined();
+      expect(screen.getByText("Connection lost.")).toBeDefined();
+      expect(screen.getByText("Reconnect")).toBeDefined();
+      expect(screen.queryByTestId("terminal-reconnecting")).toBeNull();
+      expect(screen.queryByTestId("terminal-error")).toBeNull();
+    });
+
+    // d. "Connect now" button during reconnect resets and reconnects
+    it("'Connect now' button resets to connecting state and starts a fresh connection", () => {
+      render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+
+      // Establish then drop to enter reconnecting state
+      act(() => { MockWebSocket.instances[0].simulateOpen(); });
+      act(() => { MockWebSocket.instances[0].simulateClose(); });
+
+      expect(screen.getByTestId("terminal-reconnecting")).toBeDefined();
+      expect(MockWebSocket.instances).toHaveLength(1);
+
+      // Click "Connect now" — triggers an immediate manual connect
+      act(() => {
+        fireEvent.click(screen.getByText("Connect now"));
+      });
+
+      // Should be back in "connecting" (not "reconnecting") with a new WS
+      expect(screen.getByTestId("terminal-connecting")).toBeDefined();
+      expect(screen.queryByTestId("terminal-reconnecting")).toBeNull();
+      expect(MockWebSocket.instances).toHaveLength(2);
+
+      // If the new WS also closes without connecting, retry counter was reset
+      // so there are still retries remaining — stays "connecting", not "disconnected"
+      act(() => { MockWebSocket.instances[1].simulateClose(); });
+
+      expect(screen.getByTestId("terminal-connecting")).toBeDefined();
+      expect(screen.queryByTestId("terminal-disconnected")).toBeNull();
+      expect(screen.queryByTestId("terminal-error")).toBeNull();
+    });
+
+    // e. Unmount during pending reconnect cancels the timer
+    it("cancels the pending reconnect timer on unmount so no new WebSocket is created", () => {
+      const { unmount } = render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+
+      // Establish then drop — reconnect timer is now pending
+      act(() => { MockWebSocket.instances[0].simulateOpen(); });
+      act(() => { MockWebSocket.instances[0].simulateClose(); });
+
+      expect(MockWebSocket.instances).toHaveLength(1);
+
+      // Unmount before the timer fires
+      act(() => { unmount(); });
+
+      // Advance past the reconnect delay — the cleared timer must NOT fire
+      act(() => { vi.advanceTimersByTime(2000); });
+
+      expect(MockWebSocket.instances).toHaveLength(1);
+    });
   });
 
 });
