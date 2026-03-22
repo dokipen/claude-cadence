@@ -106,6 +106,16 @@ describe("FilterBar — localStorage persistence", () => {
     expect(getByTestId("cql-input")).toBeTruthy();
   });
 
+  it("falls back to form mode for an unrecognized localStorage value", () => {
+    mockLocalStorage.setItem("cadence_filter_mode", "unknown_value");
+    const onChange = vi.fn();
+    const { queryByTestId, getByText } = render(
+      <FilterBar filters={{}} onChange={onChange} />,
+    );
+    expect(queryByTestId("cql-input")).toBeNull();
+    expect(getByText("Form").getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("writes 'cql' to localStorage when switching to CQL mode", () => {
     const onChange = vi.fn();
     const setItemSpy = vi.spyOn(mockLocalStorage, "setItem");
@@ -177,6 +187,28 @@ describe("FilterBar — CQL input: valid queries", () => {
     onChange.mockClear();
     fireEvent.change(getByTestId("cql-input"), { target: { value: "   " } });
     expect(onChange).toHaveBeenCalledWith({});
+  });
+
+  it("calls onChange with excludeLabelName for negated label query", () => {
+    const onChange = vi.fn();
+    const { getByText, getByTestId } = render(
+      <FilterBar filters={{}} onChange={onChange} />,
+    );
+    fireEvent.click(getByText("CQL"));
+    onChange.mockClear();
+    fireEvent.change(getByTestId("cql-input"), { target: { value: "-label:bug" } });
+    expect(onChange).toHaveBeenCalledWith({ excludeLabelName: "bug" });
+  });
+
+  it("calls onChange with excludePriority for negated priority query", () => {
+    const onChange = vi.fn();
+    const { getByText, getByTestId } = render(
+      <FilterBar filters={{}} onChange={onChange} />,
+    );
+    fireEvent.click(getByText("CQL"));
+    onChange.mockClear();
+    fireEvent.change(getByTestId("cql-input"), { target: { value: "-priority:HIGH" } });
+    expect(onChange).toHaveBeenCalledWith({ excludePriority: "HIGH" });
   });
 
   it("does not show cql-errors for valid input", () => {
