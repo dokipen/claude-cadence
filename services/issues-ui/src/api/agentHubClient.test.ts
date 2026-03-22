@@ -310,7 +310,6 @@ describe("createSession", () => {
     tmux_session: "tmux-1",
     created_at: "2026-03-22T00:00:00Z",
     agent_pid: 42,
-    worktree_path: "/tmp/work",
     base_ref: "main",
   };
 

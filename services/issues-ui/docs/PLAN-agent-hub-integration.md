@@ -154,7 +154,6 @@ interface Session {
   stopped_at?: string;
   error_message?: string;
   agent_pid: number;
-  worktree_path: string;
   repo_url: string;
   base_ref: string;
 }

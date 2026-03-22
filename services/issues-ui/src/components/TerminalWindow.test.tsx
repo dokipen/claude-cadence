@@ -35,7 +35,6 @@ const baseSession = {
   tmux_session: "tmux-abc",
   created_at: "2026-01-01T00:00:00Z",
   agent_pid: 1234,
-  worktree_path: "/tmp/worktree",
   repo_url: "https://github.com/test/repo",
   base_ref: "main",
   waiting_for_input: false,
@@ -175,7 +174,6 @@ describe("keyboard accessibility", () => {
     tmux_session: "tmux-1",
     created_at: "2026-01-01T00:00:00Z",
     agent_pid: 5678,
-    worktree_path: "/tmp/worktree",
     base_ref: "main",
     waiting_for_input: false,
   };
