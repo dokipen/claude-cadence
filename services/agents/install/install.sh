@@ -65,8 +65,6 @@ check_prerequisites() {
     local missing=()
 
     command -v git >/dev/null 2>&1 || missing+=("git")
-    command -v tmux >/dev/null 2>&1 || missing+=("tmux")
-    command -v ttyd >/dev/null 2>&1 || missing+=("ttyd")
 
     if [[ ${#missing[@]} -gt 0 ]]; then
         error "Required tools not found: ${missing[*]}. Please install them and re-run."
@@ -202,13 +200,6 @@ host: "$AGENTD_HOST"
 port: $AGENTD_PORT
 
 root_dir: "$AGENTD_ROOT_DIR"
-
-tmux:
-  socket_name: "agentd"
-
-ttyd:
-  enabled: true
-  base_port: 7681
 
 log:
   level: "info"

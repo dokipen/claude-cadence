@@ -13,8 +13,6 @@ installation, configuration, and day-to-day operation.
 |---|---|---|
 | Go 1.21+ | Build only | Not needed if using a pre-built binary |
 | git | Yes | Worktree and repo management |
-| tmux | Yes | Session management |
-| ttyd | No | Web terminal access (only when `ttyd.enabled: true`) |
 | vault CLI | No | Secret injection for private repos |
 | grpcurl | No | Useful for health checks and manual API calls |
 
@@ -85,17 +83,6 @@ port: 4141           # default: 4141
 # Root directory for git clones and worktrees (required for git/worktree features)
 root_dir: "/var/lib/agentd"
 
-# tmux configuration
-tmux:
-  socket_name: "agentd"   # default: "agentd"
-
-# ttyd web terminal (optional)
-ttyd:
-  enabled: false      # default: false
-  base_port: 7681     # default: 7681 — first port in the allocation range
-  max_ports: 100      # default: 100  — maximum concurrent ttyd instances
-                      # ports used: base_port .. base_port+max_ports-1
-
 # Logging
 log:
   level: "info"    # default: "info"  — debug, info, warn, error
@@ -144,7 +131,6 @@ reflection: false   # default: false
 - Binding to a non-loopback address (`host` other than `127.0.0.1`, `localhost`, or
   `::1`) requires `auth.mode` to be `"token"`. The service will refuse to start if
   this constraint is violated.
-- `ttyd.base_port + ttyd.max_ports` must not exceed 65536.
 - At least one profile must be defined.
 - Every profile must have a non-empty `command`.
 - A profile with `vault_secret` set requires a `vault` block in the config.
@@ -461,16 +447,6 @@ Another process is using port 4141. Either stop the other process or change
 lsof -i :4141
 ```
 
-### tmux not found
-
-```
-exec: "tmux": executable file not found in $PATH
-```
-
-Install tmux:
-- macOS: `brew install tmux`
-- Ubuntu/Debian: `sudo apt install tmux`
-
 ### Permission errors on root_dir
 
 agentd needs read/write access to `root_dir` and its subdirectories. Check ownership:
@@ -484,20 +460,6 @@ sudo chown -R agentd:agentd /var/lib/agentd
 
 Verify the token matches what was configured and that the `Authorization` header
 is formatted correctly: `Bearer <token>` (case-sensitive).
-
-### Inspecting live tmux sessions
-
-agentd uses a named tmux socket. To list sessions outside of agentd:
-
-```bash
-tmux -L agentd list-sessions
-```
-
-To attach to a running agent session for debugging:
-
-```bash
-tmux -L agentd attach -t <session-name>
-```
 
 ### Enabling debug logging
 

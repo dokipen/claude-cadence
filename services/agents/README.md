@@ -1,13 +1,12 @@
 # agentd
 
-gRPC service for managing AI agent sessions in tmux.
+gRPC service for managing AI agent sessions.
 
 ## Quick Start
 
 ### Prerequisites
 
 - Go 1.23+
-- tmux
 - protoc + Go plugins (for proto regeneration only)
 
 ### Build

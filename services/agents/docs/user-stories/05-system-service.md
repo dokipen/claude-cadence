@@ -14,7 +14,7 @@ An interactive install script configures the agent service as a system daemon us
 - As a user, I'm prompted for the root directory (default: `/var/lib/agentd`)
 - As a user, I'm prompted for the host binding (default: `127.0.0.1`)
 - As a user, I'm prompted for the port (default: `4141`)
-- As a user, the installer verifies prerequisites (git, tmux) and warns about optional dependencies (vault, ttyd)
+- As a user, the installer verifies prerequisites (git) and warns about optional dependencies (vault)
 
 ### macOS (launchd)
 - As a user, the installer generates a launchd plist from a template
