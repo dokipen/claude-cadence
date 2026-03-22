@@ -66,6 +66,9 @@ func main() {
 	if killed := ttydClient.CleanupOrphans(cfg.Tmux.SocketName); killed > 0 {
 		slog.Info("cleaned up orphaned ttyd processes", "count", killed)
 	}
+	if err := tmuxClient.CleanupStaleSocket(); err != nil {
+		slog.Warn("failed to clean up stale tmux socket", "error", err)
+	}
 	store := session.NewStore()
 	var gitClient *git.Client
 	if cfg.RootDir != "" {

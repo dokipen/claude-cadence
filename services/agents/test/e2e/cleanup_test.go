@@ -1,6 +1,8 @@
 package e2e_test
 
 import (
+	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -216,5 +218,56 @@ func TestRecoverSessions_RediscoversStopped(t *testing.T) {
 	}
 	if sess.StoppedAt.IsZero() {
 		t.Error("expected non-zero StoppedAt for stopped recovered session")
+	}
+}
+
+func TestCleanupStaleSocket_SessionsWorkAfterCleanup(t *testing.T) {
+	// 1. Create a tmux session on testSocket to establish the socket file.
+	name := uniqueSessionName(t)
+	cmd := exec.Command("tmux", "-L", testSocket, "-f", "/dev/null", "new-session", "-d", "-s", name, "sleep", "30")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to create tmux session: %v: %s", err, out)
+	}
+
+	// 2. Kill the tmux server to leave a stale socket.
+	killCmd := exec.Command("tmux", "-L", testSocket, "-f", "/dev/null", "kill-server")
+	killCmd.Run()
+
+	// Give it a moment to clean up.
+	time.Sleep(200 * time.Millisecond)
+
+	// 3. Verify the socket file still exists (stale).
+	// Resolve socket path same way as the implementation.
+	tmpdir := os.Getenv("TMUX_TMPDIR")
+	if tmpdir == "" {
+		tmpdir = os.TempDir()
+	}
+	socketPath := fmt.Sprintf("%s/tmux-%d/%s", tmpdir, os.Getuid(), testSocket)
+	if _, err := os.Stat(socketPath); os.IsNotExist(err) {
+		t.Skip("socket file already cleaned up by OS; skipping")
+	}
+
+	// 4. Clean up the stale socket.
+	tmuxClient := tmux.NewClient(testSocket)
+	if err := tmuxClient.CleanupStaleSocket(); err != nil {
+		t.Fatalf("CleanupStaleSocket: %v", err)
+	}
+
+	// 5. Now create a session through the manager — should work.
+	mgr, _ := newTestManager(t)
+	sessName := uniqueSessionName(t)
+	sess, err := mgr.Create(session.CreateRequest{
+		AgentProfile: "sleeper",
+		SessionName:  sessName,
+	})
+	if err != nil {
+		t.Fatalf("Create after socket cleanup: %v", err)
+	}
+	t.Cleanup(func() {
+		mgr.Destroy(sess.ID, true)
+	})
+
+	if sess.State != session.StateRunning {
+		t.Errorf("expected RUNNING after socket cleanup, got %d", sess.State)
 	}
 }
