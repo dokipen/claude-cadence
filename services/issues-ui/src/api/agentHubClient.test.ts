@@ -165,13 +165,13 @@ describe("fetchAgents", () => {
     expect(result.agents).toEqual([]);
   });
 
-  it("throws HubError when extra fields are present in agent response", async () => {
-    // fromJson rejects unknown fields by default
-    const agentWithExtra = { ...validAgentJson, extraField: "should cause error" };
+  it("ignores extra fields in agent response (forward-compatible)", async () => {
+    // ignoreUnknownFields: true — server may add new fields before proto is updated
+    const agentWithExtra = { ...validAgentJson, extraField: "should be ignored" };
     mockFetch({ json: () => Promise.resolve({ agents: [agentWithExtra] }) });
-    const err = await fetchAgents().catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(HubError);
-    expect(err).toMatchObject({ status: 502 });
+    const result = await fetchAgents();
+    expect(result.agents).toHaveLength(1);
+    expect(result.agents[0].name).toBe(validAgent.name);
   });
 
   it("throws HubError when response is not an object", async () => {

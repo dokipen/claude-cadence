@@ -56,7 +56,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function parseAgent(data: unknown, index: number): Agent {
   try {
-    return fromJson(AgentSchema, data as JsonValue);
+    // ignoreUnknownFields: server may add new fields before proto is updated
+    return fromJson(AgentSchema, data as JsonValue, { ignoreUnknownFields: true });
   } catch (e) {
     throw new HubError(502, `Invalid agent at index ${index}: ${e instanceof Error ? e.message : String(e)}`);
   }
@@ -80,7 +81,8 @@ export const VALID_SESSION_STATES = ["creating", "running", "stopped", "error", 
 
 function parseSession(data: unknown): Session {
   try {
-    return fromJson(SessionSchema, data as JsonValue);
+    // ignoreUnknownFields: server may add new fields before proto is updated
+    return fromJson(SessionSchema, data as JsonValue, { ignoreUnknownFields: true });
   } catch (e) {
     throw new HubError(502, `Invalid session response: ${e instanceof Error ? e.message : String(e)}`);
   }
