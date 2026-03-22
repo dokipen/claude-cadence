@@ -21,6 +21,12 @@ docker compose -f docker-compose.dev.yml up --build
 The stack is ready when you see Caddy and the issues-ui start logging.
 Open **http://localhost** in your browser.
 
+## Dev Data Seeding
+
+The dev environment automatically seeds a `claude-cadence` project on startup via `prisma/seed.ts`.
+After `docker compose -f docker-compose.dev.yml up`, the `claude-cadence` project is immediately
+available in the UI — no manual database surgery needed for basic usage.
+
 ## GitHub OAuth App Setup
 
 Create a GitHub OAuth app at https://github.com/settings/developers:
@@ -83,6 +89,39 @@ docker compose -f docker-compose.dev.yml --profile agents up --build
 
 See [services/agents/docs/INSTALL.md](../services/agents/docs/INSTALL.md) and
 [infrastructure/README.md](../infrastructure/README.md) for detailed service configuration.
+
+### Quick Start: Agent Sessions
+
+Minimal steps to get a visible agent session in the UI:
+
+1. Start the base stack first:
+   ```bash
+   docker compose -f docker-compose.dev.yml up
+   ```
+
+2. Copy `.env.dev.example` to `.env.dev` if you haven't already, and fill in
+   `HUB_API_TOKEN`, `HUB_AGENT_TOKEN`, and `AGENTD_TOKEN`.
+
+3. Build and install agentd on the host:
+   ```bash
+   cd services/agents && make build && ./install/install.sh
+   ```
+
+4. Configure agentd with hub URL `http://localhost/api/v1` and the `HUB_AGENT_TOKEN`
+   value from `.env.dev` as the bearer token.
+
+5. Build and run agent-hub:
+   ```bash
+   cd services/agent-hub && make build
+   ./agent-hub --config <config.yaml>
+   ```
+
+6. Restart compose with the agents profile:
+   ```bash
+   docker compose -f docker-compose.dev.yml --profile agents up --build
+   ```
+
+7. Start a Claude Code session — it will register with agentd and appear in the UI.
 
 ## Teardown
 
