@@ -17,22 +17,16 @@ const (
 	rpcErrInternal           = -32000
 )
 
-// TerminalEndpointProvider returns the ttyd address for a session.
-type TerminalEndpointProvider interface {
-	Port(sessionID string) int
-}
-
 // Dispatcher implements SessionDispatcher by calling the session manager directly.
 type Dispatcher struct {
 	manager          *session.Manager
-	ttyd             TerminalEndpointProvider
 	advertiseAddress string
 }
 
 // NewDispatcher creates a Dispatcher backed by the given session manager.
-// ttyd and advertiseAddress enable the getTerminalEndpoint RPC method.
-func NewDispatcher(manager *session.Manager, ttyd TerminalEndpointProvider, advertiseAddress string) *Dispatcher {
-	return &Dispatcher{manager: manager, ttyd: ttyd, advertiseAddress: advertiseAddress}
+// advertiseAddress enables the getTerminalEndpoint RPC method.
+func NewDispatcher(manager *session.Manager, advertiseAddress string) *Dispatcher {
+	return &Dispatcher{manager: manager, advertiseAddress: advertiseAddress}
 }
 
 // CreateSession handles the createSession JSON-RPC method.
@@ -139,14 +133,12 @@ func (d *Dispatcher) GetTerminalEndpoint(params json.RawMessage) (json.RawMessag
 		return nil, mapSessionError(err)
 	}
 
-	port := d.ttyd.Port(p.SessionID)
-	if port == 0 {
-		return nil, &rpcError{Code: rpcErrNotFound, Message: "no ttyd process for session"}
+	if d.advertiseAddress == "" {
+		return nil, &rpcError{Code: rpcErrInternal, Message: "advertise address not configured"}
 	}
 
 	return marshalResult(terminalEndpointResult{
-		Address: d.advertiseAddress,
-		Port:    port,
+		URL: "ws://" + d.advertiseAddress + "/ws/terminal/" + p.SessionID,
 	})
 }
 
@@ -180,8 +172,7 @@ type getTerminalEndpointParams struct {
 }
 
 type terminalEndpointResult struct {
-	Address string `json:"address"`
-	Port    int    `json:"port"`
+	URL string `json:"url"`
 }
 
 // JSON response types.
@@ -194,7 +185,7 @@ type sessionInfo struct {
 	WorktreePath    string  `json:"worktree_path,omitempty"`
 	RepoURL         string  `json:"repo_url,omitempty"`
 	BaseRef         string  `json:"base_ref,omitempty"`
-	TmuxSession     string  `json:"tmux_session,omitempty"`
+	TmuxSession     string  `json:"tmux_session"`
 	CreatedAt       string  `json:"created_at"`
 	ErrorMessage    string  `json:"error_message,omitempty"`
 	AgentPID        int     `json:"agent_pid,omitempty"`

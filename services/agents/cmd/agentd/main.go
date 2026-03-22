@@ -3,19 +3,21 @@ package main
 import (
 	"flag"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/coder/websocket"
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
 	"github.com/dokipen/claude-cadence/services/agents/internal/git"
 	"github.com/dokipen/claude-cadence/services/agents/internal/hub"
+	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
 	"github.com/dokipen/claude-cadence/services/agents/internal/server"
 	"github.com/dokipen/claude-cadence/services/agents/internal/service"
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
-	"github.com/dokipen/claude-cadence/services/agents/internal/tmux"
-	"github.com/dokipen/claude-cadence/services/agents/internal/ttyd"
 	"github.com/dokipen/claude-cadence/services/agents/internal/vault"
 )
 
@@ -61,14 +63,7 @@ func main() {
 	slog.SetDefault(slog.New(handler))
 
 	// Create components.
-	tmuxClient := tmux.NewClient(cfg.Tmux.SocketName)
-	ttydClient := ttyd.NewClient(cfg.Ttyd.Enabled, cfg.Ttyd.BasePort, cfg.Ttyd.MaxPorts, cfg.Ttyd.BindAddress, cfg.Ttyd.AdvertiseAddress)
-	if killed := ttydClient.CleanupOrphans(cfg.Tmux.SocketName); killed > 0 {
-		slog.Info("cleaned up orphaned ttyd processes", "count", killed)
-	}
-	if err := tmuxClient.CleanupStaleSocket(); err != nil {
-		slog.Warn("failed to clean up stale tmux socket", "error", err)
-	}
+	ptyManager := pty.NewPTYManager(pty.PTYConfig{BufferSize: cfg.PTY.BufferSize})
 	store := session.NewStore()
 	var gitClient *git.Client
 	if cfg.RootDir != "" {
@@ -83,22 +78,14 @@ func main() {
 		}
 		vaultClient = vc
 	}
-	manager := session.NewManager(store, tmuxClient, ttydClient, gitClient, vaultClient, cfg.Profiles)
-
-	// Recover any orphaned tmux sessions from a previous run.
-	recovered, err := manager.RecoverSessions()
-	if err != nil {
-		slog.Warn("session recovery failed", "error", err)
-	} else if recovered > 0 {
-		slog.Info("recovered sessions from tmux", "count", recovered)
-	}
+	manager := session.NewManager(store, ptyManager, gitClient, vaultClient, cfg.Profiles)
 
 	// Start background stale session cleaner.
 	cleaner := session.NewCleaner(manager, cfg.Cleanup.StaleSessionTTL, cfg.Cleanup.ReapInterval)
 	cleaner.Start()
 
 	// Start background idle input monitor.
-	monitor := session.NewMonitor(manager, tmuxClient, 5*time.Second)
+	monitor := session.NewMonitor(manager, ptyManager, 5*time.Second)
 	monitor.Start()
 
 	agentService := service.NewAgentService(manager)
@@ -109,10 +96,30 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Register WebSocket terminal handler.
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws/terminal/", func(w http.ResponseWriter, r *http.Request) {
+		sessionID := strings.TrimPrefix(r.URL.Path, "/ws/terminal/")
+		if sessionID == "" {
+			http.Error(w, "missing session ID", http.StatusBadRequest)
+			return
+		}
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+			InsecureSkipVerify: true,
+		})
+		if err != nil {
+			slog.Warn("websocket accept failed", "error", err)
+			return
+		}
+		if err := ptyManager.ServeTerminal(r.Context(), sessionID, conn); err != nil {
+			slog.Warn("terminal session ended with error", "session_id", sessionID, "error", err)
+		}
+	})
+
 	// Start hub client if configured.
 	var hubClient *hub.Client
 	if cfg.Hub != nil {
-		dispatcher := hub.NewDispatcher(manager, ttydClient, cfg.Ttyd.AdvertiseAddress)
+		dispatcher := hub.NewDispatcher(manager, cfg.Ttyd.AdvertiseAddress)
 		hubClient = hub.NewClient(*cfg.Hub, cfg.Profiles, cfg.Ttyd, dispatcher)
 		hubClient.Start()
 		slog.Info("hub client started", "url", cfg.Hub.URL, "name", cfg.Hub.Name)
@@ -124,6 +131,16 @@ func main() {
 		slog.Info("starting agentd", "addr", srv.Addr())
 		errCh <- srv.Start()
 	}()
+
+	// Start HTTP server for WebSocket terminal handler.
+	if cfg.Ttyd.AdvertiseAddress != "" {
+		go func() {
+			slog.Info("starting HTTP terminal server", "addr", cfg.Ttyd.AdvertiseAddress)
+			if httpErr := http.ListenAndServe(cfg.Ttyd.AdvertiseAddress, mux); httpErr != nil {
+				slog.Warn("HTTP terminal server stopped", "error", httpErr)
+			}
+		}()
+	}
 
 	// Wait for signal or server error.
 	sigCh := make(chan os.Signal, 1)

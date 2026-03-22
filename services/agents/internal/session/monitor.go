@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dokipen/claude-cadence/services/agents/internal/tmux"
+	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
 )
 
 // promptPatterns matches common Claude Code input prompts.
@@ -29,7 +29,7 @@ type sessionSnapshot struct {
 // Monitor periodically checks running sessions for idle input prompts.
 type Monitor struct {
 	manager   *Manager
-	tmux      *tmux.Client
+	pty       *pty.PTYManager
 	interval  time.Duration
 	stopCh    chan struct{}
 	doneCh    chan struct{}
@@ -38,10 +38,10 @@ type Monitor struct {
 }
 
 // NewMonitor creates a Monitor that checks sessions every interval.
-func NewMonitor(manager *Manager, tmuxClient *tmux.Client, interval time.Duration) *Monitor {
+func NewMonitor(manager *Manager, ptyManager *pty.PTYManager, interval time.Duration) *Monitor {
 	return &Monitor{
 		manager:   manager,
-		tmux:      tmuxClient,
+		pty:       ptyManager,
 		interval:  interval,
 		stopCh:    make(chan struct{}),
 		doneCh:    make(chan struct{}),
@@ -78,8 +78,8 @@ func (m *Monitor) run() {
 
 func (m *Monitor) check() {
 	// Use store.List directly instead of Manager.List to avoid reconcile()
-	// calling tmux HasSession + isProcessAlive per session — the monitor
-	// already inspects tmux panes and only cares about running sessions.
+	// calling pty.PID + isProcessAlive per session — the monitor
+	// already inspects PTY buffers and only cares about running sessions.
 	// This method runs on a single goroutine so TOCTOU between the
 	// sess.WaitingForInput read and the subsequent store.Update is safe.
 	sessions := m.manager.store.List()
@@ -94,11 +94,12 @@ func (m *Monitor) check() {
 		}
 		activeIDs[sess.ID] = true
 
-		content, err := m.tmux.CapturePane(sess.TmuxSession)
+		buf, err := m.pty.ReadBuffer(sess.ID)
 		if err != nil {
-			slog.Debug("failed to capture pane", "session", sess.Name, "error", err)
+			slog.Debug("failed to read PTY buffer", "session", sess.Name, "error", err)
 			continue
 		}
+		content := string(buf)
 
 		contentHash := sha256.Sum256([]byte(content))
 		snap, exists := m.snapshots[sess.ID]

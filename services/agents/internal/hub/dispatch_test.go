@@ -8,27 +8,15 @@ import (
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
 )
 
-// noopTtyd implements TerminalEndpointProvider for tests.
-type noopTtyd struct {
-	ports map[string]int
-}
-
-func (n *noopTtyd) Port(sessionID string) int {
-	if n.ports == nil {
-		return 0
-	}
-	return n.ports[sessionID]
-}
-
 // newFakeManager creates a session.Manager backed by an in-memory store
-// with no external dependencies (no tmux, no git, no vault, no ttyd).
+// with no external dependencies (no pty, no git, no vault).
 func newFakeManager() *session.Manager {
 	store := session.NewStore()
-	return session.NewManager(store, nil, nil, nil, nil, map[string]config.Profile{})
+	return session.NewManager(store, nil, nil, nil, map[string]config.Profile{})
 }
 
 func newTestDispatcher() *Dispatcher {
-	return NewDispatcher(newFakeManager(), &noopTtyd{}, "127.0.0.1")
+	return NewDispatcher(newFakeManager(), "127.0.0.1")
 }
 
 func TestDispatcher_CreateSession_InvalidParams(t *testing.T) {
@@ -108,28 +96,27 @@ func TestDispatcher_GetTerminalEndpoint_SessionNotFound(t *testing.T) {
 	}
 }
 
-func TestDispatcher_GetTerminalEndpoint_NoTtyd(t *testing.T) {
-	// Session exists but no ttyd process running.
+func TestDispatcher_GetTerminalEndpoint_NoAdvertiseAddress(t *testing.T) {
+	// Session exists but no advertise address configured.
 	store := session.NewStore()
 	store.Add(&session.Session{ID: "s1", State: session.StateStopped})
-	mgr := session.NewManager(store, nil, nil, nil, nil, map[string]config.Profile{})
-	d := NewDispatcher(mgr, &noopTtyd{}, "192.168.1.10")
+	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{})
+	d := NewDispatcher(mgr, "") // empty advertise address
 
 	_, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"s1"}`))
 	if rpcErr == nil {
-		t.Fatal("expected rpcError when no ttyd process")
+		t.Fatal("expected rpcError when no advertise address configured")
 	}
-	if rpcErr.Code != rpcErrNotFound {
-		t.Errorf("expected code %d, got %d", rpcErrNotFound, rpcErr.Code)
+	if rpcErr.Code != rpcErrInternal {
+		t.Errorf("expected code %d, got %d", rpcErrInternal, rpcErr.Code)
 	}
 }
 
 func TestDispatcher_GetTerminalEndpoint_Success(t *testing.T) {
 	store := session.NewStore()
 	store.Add(&session.Session{ID: "s1", State: session.StateStopped})
-	mgr := session.NewManager(store, nil, nil, nil, nil, map[string]config.Profile{})
-	ttyd := &noopTtyd{ports: map[string]int{"s1": 7682}}
-	d := NewDispatcher(mgr, ttyd, "192.168.1.10")
+	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{})
+	d := NewDispatcher(mgr, "192.168.1.10")
 
 	result, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"s1"}`))
 	if rpcErr != nil {
@@ -140,11 +127,12 @@ func TestDispatcher_GetTerminalEndpoint_Success(t *testing.T) {
 	if err := json.Unmarshal(result, &out); err != nil {
 		t.Fatalf("unmarshal result: %v", err)
 	}
-	if out.Address != "192.168.1.10" {
-		t.Errorf("expected address 192.168.1.10, got %s", out.Address)
+	if out.URL == "" {
+		t.Error("expected non-empty URL")
 	}
-	if out.Port != 7682 {
-		t.Errorf("expected port 7682, got %d", out.Port)
+	// URL should contain the advertise address and session ID.
+	if out.URL != "ws://192.168.1.10/ws/terminal/s1" {
+		t.Errorf("unexpected URL: %s", out.URL)
 	}
 }
 
