@@ -4,7 +4,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import styles from "../styles/agents.module.css";
 
-type ConnectionState = "connecting" | "connected" | "disconnected" | "error";
+type ConnectionState = "connecting" | "connected" | "reconnecting" | "disconnected" | "error";
 
 interface TerminalProps {
   agentName: string;
@@ -36,6 +36,8 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const everConnectedRef = useRef(false);
   const isAutoRetryRef = useRef(false);
+  // true while auto-retrying after a drop (distinct from initial "connecting" text)
+  const reconnectingRef = useRef(false);
   const [connState, setConnState] = useState<ConnectionState>("connecting");
 
   const connect = useCallback(() => {
@@ -45,11 +47,12 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
       retryTimerRef.current = null;
     }
 
-    // Manual connect resets retry counter; auto-retry preserves it.
+    // Manual connect resets retry counter and reconnect mode; auto-retry preserves them.
     // everConnectedRef always resets: a manual Reconnect after a drop starts a
     // fresh retry cycle rather than immediately showing "Connection lost." again.
     if (!isAutoRetryRef.current) {
       retryCountRef.current = 0;
+      reconnectingRef.current = false;
     }
     isAutoRetryRef.current = false;
     everConnectedRef.current = false;
@@ -63,7 +66,11 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
       termRef.current = null;
     }
 
-    setConnState("connecting");
+    // During post-drop auto-reconnect, keep the "reconnecting" overlay active
+    // rather than flipping back to "Starting session…" between retry attempts.
+    if (!reconnectingRef.current) {
+      setConnState("connecting");
+    }
 
     const term = new XTerm({
       cursorBlink: true,
@@ -118,6 +125,7 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
     wsRef.current = ws;
 
     ws.onopen = () => {
+      reconnectingRef.current = false;
       everConnectedRef.current = true;
       retryCountRef.current = 0;
       setConnState("connected");
@@ -174,9 +182,21 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
     };
 
     ws.onclose = () => {
-      if (everConnectedRef.current) {
-        // Was connected, then lost the connection.
-        setConnState("disconnected");
+      if (everConnectedRef.current || reconnectingRef.current) {
+        // Was connected (or is currently in a post-drop reconnect sequence) —
+        // continue auto-retrying with exponential backoff.
+        if (retryCountRef.current < RETRY_DELAYS_MS.length) {
+          const delay = RETRY_DELAYS_MS[retryCountRef.current];
+          retryCountRef.current += 1;
+          reconnectingRef.current = true;
+          setConnState("reconnecting");
+          isAutoRetryRef.current = true;
+          retryTimerRef.current = setTimeout(connect, delay);
+        } else {
+          // All reconnect attempts exhausted — fall back to manual reconnect.
+          reconnectingRef.current = false;
+          setConnState("disconnected");
+        }
       } else if (retryCountRef.current < RETRY_DELAYS_MS.length) {
         // Never connected — schedule an auto-retry with backoff.
         const delay = RETRY_DELAYS_MS[retryCountRef.current];
@@ -190,6 +210,14 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
       }
     };
   }, [agentName, sessionId]);
+
+  // Manual connect: always resets the auto-retry flag before connecting, so
+  // user-initiated reconnects get a fresh retry cycle regardless of whether a
+  // timer-scheduled auto-retry is pending.
+  const manualConnect = useCallback(() => {
+    isAutoRetryRef.current = false;
+    connect();
+  }, [connect]);
 
   // Initial connection
   useEffect(() => {
@@ -241,6 +269,15 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
         <div className={styles.terminalOverlay} data-testid="terminal-connecting">
           <div className={styles.spinner} />
           <span>Starting session…</span>
+        </div>
+      )}
+      {connState === "reconnecting" && (
+        <div className={styles.terminalOverlay} data-testid="terminal-reconnecting">
+          <div className={styles.spinner} />
+          <span>Reconnecting…</span>
+          <button className={styles.reconnectButton} onClick={manualConnect}>
+            Connect now
+          </button>
         </div>
       )}
       {connState === "disconnected" && (
