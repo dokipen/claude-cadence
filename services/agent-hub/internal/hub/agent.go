@@ -17,8 +17,9 @@ const (
 )
 
 // terminalChannelBufSize is the buffer size for per-session terminal relay channels.
-// Sized to absorb bursts without blocking the read loop.
-const terminalChannelBufSize = 64
+// 256 entries absorbs larger PTY output bursts (e.g. cat of a large file) without
+// dropping frames or blocking the read loop.
+const terminalChannelBufSize = 256
 
 // ConnectedAgent represents a registered agentd instance.
 // All mutable fields (Status, LastSeen, conn, pending) are protected by mu.

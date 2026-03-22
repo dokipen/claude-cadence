@@ -19,6 +19,11 @@ import (
 	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
 )
 
+// terminalRelayChannelBufSize is the buffer size for per-session relay input channels.
+// 256 entries absorbs larger PTY output bursts (e.g. cat of a large file) without
+// dropping frames or blocking the hub read loop.
+const terminalRelayChannelBufSize = 256
+
 // SessionDispatcher handles session CRUD and terminal operations dispatched from the hub.
 type SessionDispatcher interface {
 	CreateSession(params json.RawMessage) (json.RawMessage, *rpcError)
@@ -285,12 +290,17 @@ func (c *Client) dispatchSessionAsync(ctx context.Context, conn *websocket.Conn,
 
 	// If this was a getTerminalEndpoint call that returned relay: true, start
 	// the relay pump now that the JSON-RPC response has been sent.
+	//
+	// A derived context is used (rather than the readLoop's ctx) so the relay
+	// goroutine can be torn down independently — e.g., on hub reconnect the old
+	// relay is cancelled without waiting for the top-level context to cancel.
 	if req.Method == "getTerminalEndpoint" && resp.Error == nil && c.ptyMgr != nil {
 		var result terminalEndpointResult
 		if err := json.Unmarshal(resp.Result, &result); err == nil && result.Relay {
 			var p getTerminalEndpointParams
 			if err := json.Unmarshal(req.Params, &p); err == nil {
-				go c.runTerminalRelay(ctx, conn, p.SessionID, c.ptyMgr)
+				relayCtx, relayCancel := context.WithCancel(ctx)
+				go c.runTerminalRelay(relayCtx, relayCancel, conn, p.SessionID, c.ptyMgr)
 			}
 		}
 	}
@@ -308,18 +318,29 @@ func (c *Client) writeResponse(ctx context.Context, conn *websocket.Conn, resp *
 }
 
 // RegisterRelaySession creates a buffered input channel for terminal relay
-// frames destined for sessionID. Returns the channel and a cleanup function
-// that removes the registration. The caller must invoke cleanup when the relay
-// session ends.
-func (c *Client) RegisterRelaySession(sessionID string) (<-chan []byte, func()) {
-	ch := make(chan []byte, 64)
+// frames destined for sessionID. relayCancel is the CancelFunc for the relay
+// goroutine's derived context; it is invoked from the cleanup alongside the
+// channel close so that hub reconnects tear down the old relay immediately.
+// Returns the channel and a cleanup function that removes the registration.
+// The caller must invoke cleanup when the relay session ends.
+func (c *Client) RegisterRelaySession(sessionID string, relayCancel context.CancelFunc) (<-chan []byte, func()) {
+	ch := make(chan []byte, terminalRelayChannelBufSize)
 	c.relayChMu.Lock()
 	c.relayCh[sessionID] = ch
 	c.relayChMu.Unlock()
+	var once sync.Once
 	cleanup := func() {
-		c.relayChMu.Lock()
-		delete(c.relayCh, sessionID)
-		c.relayChMu.Unlock()
+		once.Do(func() {
+			c.relayChMu.Lock()
+			delete(c.relayCh, sessionID)
+			c.relayChMu.Unlock()
+			// Cancel the relay goroutine's context so it stops attempting
+			// writes on a stale hub connection (e.g., after hub reconnect).
+			relayCancel()
+			// Close so the relay loop's `case payload, ok := <-ch` branch
+			// detects teardown via the !ok path instead of blocking forever.
+			close(ch)
+		})
 	}
 	return ch, cleanup
 }

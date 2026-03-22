@@ -18,8 +18,10 @@ import (
 var ErrAdvertiseAddressChanged = errors.New("advertise address changed on re-registration")
 
 // MaxMessageSize is the maximum allowed WebSocket message size (1 MiB).
-// Sized to match the proxy's maxRelayMessageSize so binary terminal frames
-// up to 1 MiB can transit the hub connection without being truncated.
+// Increased from the coder/websocket default of 64 KiB to support terminal
+// relay frames, which can carry large PTY output bursts. This limit applies
+// only to authenticated agent connections — browser WebSocket connections use
+// a separate, smaller limit configured in the proxy handler.
 const MaxMessageSize = 1 << 20
 
 // Hub manages registered agentd connections.
@@ -433,6 +435,11 @@ func (h *Hub) OpenTerminalRelay(ctx context.Context, agentName string, sessionID
 
 // WriteTerminalFrame encodes payload as a terminal relay binary frame for
 // sessionID and writes it to the named agent's WebSocket connection.
+//
+// Concurrent write safety: coder/websocket serializes concurrent Write calls
+// internally via its own mutex, so no additional per-agent write mutex is
+// required here. heartbeatLoop also writes to the same connection; both callers
+// rely on coder/websocket's internal serialization to avoid interleaving.
 //
 // Returns an error if the agent is not found, offline, or the write fails.
 func (h *Hub) WriteTerminalFrame(ctx context.Context, agentName string, sessionID uuid.UUID, payload []byte) error {

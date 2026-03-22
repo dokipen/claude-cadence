@@ -56,9 +56,14 @@ func decodeTerminalFrame(frame []byte) (uuid.UUID, []byte, error) {
 // ptySessID is the string session UUID. The hub connection write mutex (writeMu)
 // is used to protect concurrent writes on hubConn.
 //
+// relayCancel is the CancelFunc for ctx; it is called from the relay-channel
+// cleanup so that both the channel close and context cancellation happen
+// together when the session is unregistered (e.g. on hub reconnect).
+//
 // The relay runs until ctx is cancelled or the PTY session ends.
 func (c *Client) runTerminalRelay(
 	ctx context.Context,
+	relayCancel context.CancelFunc,
 	hubConn *websocket.Conn,
 	ptySessID string,
 	ptyMgr *pty.PTYManager,
@@ -70,7 +75,10 @@ func (c *Client) runTerminalRelay(
 	}
 
 	// Register an input channel so readLoop can deliver browser→PTY frames.
-	inputCh, cleanup := c.RegisterRelaySession(ptySessID)
+	// The cleanup closes the channel (unblocking the input select below) and
+	// also cancels relayCtx so that any writes referencing the old hub
+	// connection are torn down immediately on hub reconnect.
+	inputCh, cleanup := c.RegisterRelaySession(ptySessID, relayCancel)
 	defer cleanup()
 
 	// Spin up a local WebSocket server that calls ServeTerminal.
@@ -86,6 +94,10 @@ func (c *Client) runTerminalRelay(
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws/terminal", func(w http.ResponseWriter, r *http.Request) {
 		conn, acceptErr := websocket.Accept(w, r, &websocket.AcceptOptions{
+			// InsecureSkipVerify skips the Origin header check. This is safe
+			// because the listener is bound to 127.0.0.1:0 and dialed within
+			// the same process — it is not reachable from external hosts and
+			// carries no TLS, so there is no real TLS bypass here.
 			InsecureSkipVerify: true,
 		})
 		if acceptErr != nil {
