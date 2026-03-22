@@ -127,7 +127,12 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
       // fit() is called before onResize is registered to avoid a double-send.
       fit.fit();
       const { cols, rows } = term;
-      ws.send(CMD_RESIZE + JSON.stringify({ columns: cols, rows }));
+      // Guard: skip if the container has no rendered size yet (hidden tab,
+      // zero-height tile). The ResizeObserver will fire once the container
+      // becomes visible and term.onResize will send the correct frame then.
+      if (cols > 0 && rows > 0) {
+        ws.send(CMD_RESIZE + JSON.stringify({ columns: cols, rows }));
+      }
 
       // Forward terminal input to ttyd with the INPUT prefix.
       term.onData((data) => {
