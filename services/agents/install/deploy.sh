@@ -107,31 +107,6 @@ deploy_remote() {
     info "Writing env file..."
     printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" | ssh "$HOST" "sudo tee $remote_env > /dev/null && sudo chmod 600 $remote_env"
 
-    # Verify ttyd is installed
-    if ! ssh "$HOST" "command -v ttyd >/dev/null 2>&1"; then
-        error "ttyd not found on $HOST. Install ttyd first: https://github.com/nicedream/ttyd"
-    fi
-
-    # Enable ttyd and set advertise_address
-    info "Configuring ttyd..."
-    local remote_ip
-    remote_ip="$(ssh "$HOST" "ip -4 addr show | grep 'inet ' | grep -v 127.0.0.1 | awk '{print \$2}' | cut -d/ -f1 | head -1")"
-    [[ -z "$remote_ip" ]] && error "Could not determine remote IP for ttyd advertise_address"
-
-    ssh "$HOST" "sudo sed -i 's/^  enabled: false/  enabled: true/' $remote_config"
-    # Set bind_address to 0.0.0.0 so ttyd is reachable from the hub
-    if ssh "$HOST" "grep -q 'bind_address' $remote_config 2>/dev/null"; then
-        ssh "$HOST" "sudo sed -i 's/^  bind_address:.*/  bind_address: \"0.0.0.0\"/' $remote_config"
-    else
-        ssh "$HOST" "sudo sed -i '/base_port:/a\\  bind_address: \"0.0.0.0\"' $remote_config"
-    fi
-    if ssh "$HOST" "grep -q 'advertise_address' $remote_config 2>/dev/null"; then
-        ssh "$HOST" "sudo sed -i 's/^  advertise_address:.*/  advertise_address: \"$remote_ip\"/' $remote_config"
-    else
-        ssh "$HOST" "sudo sed -i '/bind_address:/a\\  advertise_address: \"$remote_ip\"' $remote_config"
-    fi
-    info "ttyd enabled: bind=0.0.0.0, advertise=$remote_ip"
-
     # Add hub section to config if missing
     if ssh "$HOST" "grep -q '^hub:' $remote_config 2>/dev/null"; then
         info "Hub config already present in $HOST:$remote_config"
