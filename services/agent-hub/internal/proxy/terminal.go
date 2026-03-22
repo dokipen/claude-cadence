@@ -24,6 +24,11 @@ const (
 	maxRelayMessageSize = 1024 * 1024
 )
 
+// pingInterval is how often the proxy sends keepalive pings to both WebSocket
+// connections to prevent idle connection drops by OS/NAT firewalls.
+// Exposed as a var (not const) so tests can override it.
+var pingInterval = 10 * time.Second
+
 // HandleTerminalProxy returns an HTTP handler that proxies WebSocket connections
 // from the browser to an agentd's ttyd instance via the hub.
 // allowedOrigins restricts which browser origins may connect via Origin header
@@ -154,13 +159,17 @@ func HandleTerminalProxy(h *hub.Hub, allowedOrigins []string) http.HandlerFunc {
 		h.TrackTerminalSession(sessionTrackID, ctxCancel)
 		defer h.UntrackTerminalSession(sessionTrackID)
 
-		errc := make(chan error, 2)
+		errc := make(chan error, 4)
 		go func() { errc <- relay(ctx, browserConn, ttydConn) }()
 		go func() { errc <- relay(ctx, ttydConn, browserConn) }()
+		go func() { errc <- pingKeepalive(ctx, browserConn) }()
+		go func() { errc <- pingKeepalive(ctx, ttydConn) }()
 
-		// Wait for either direction to finish, then cancel the other.
+		// Wait for any goroutine to finish, then cancel the rest.
 		<-errc
 		ctxCancel()
+		<-errc
+		<-errc
 		<-errc
 	}
 }
@@ -180,6 +189,44 @@ func relay(ctx context.Context, dst, src *websocket.Conn) error {
 				return ctx.Err()
 			}
 			return err
+		}
+	}
+}
+
+// pingKeepalive sends periodic WebSocket pings on conn to prevent idle
+// OS/NAT firewalls from dropping the connection. It fires every pingInterval
+// and uses a per-ping context with the same timeout so a slow pong times out
+// before the next ping is due. It returns ctx.Err() when the context is
+// cancelled, or the ping error on failure.
+//
+// Ping requires that Read is being called concurrently on conn so that the
+// pong frame can be received and processed:
+//   - pinging browserConn is safe because relay(ctx, ttydConn, browserConn)
+//     calls browserConn.Read in a sibling goroutine.
+//   - pinging ttydConn is safe because relay(ctx, browserConn, ttydConn)
+//     calls ttydConn.Read in a sibling goroutine.
+func pingKeepalive(ctx context.Context, conn *websocket.Conn) error {
+	ticker := time.NewTicker(pingInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			pingCtx, cancel := context.WithTimeout(ctx, pingInterval)
+			err := conn.Ping(pingCtx)
+			cancel()
+			if err != nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				// If the ping timed out due to its own deadline (slow pong),
+				// skip this round and try again next interval.
+				if errors.Is(err, context.DeadlineExceeded) {
+					continue
+				}
+				return err
+			}
 		}
 	}
 }

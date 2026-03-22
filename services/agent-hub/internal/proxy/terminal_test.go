@@ -3,9 +3,11 @@ package proxy
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -435,5 +437,182 @@ func TestHandleTerminalProxy_OriginRejected(t *testing.T) {
 
 	if resp.StatusCode == http.StatusSwitchingProtocols {
 		t.Errorf("expected origin to be rejected (non-101), got 101 Switching Protocols")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Idle-closing connection infrastructure
+// ---------------------------------------------------------------------------
+
+// idleClosingConn wraps a net.Conn and closes it if no data is transferred
+// within idleTimeout. The timer is reset on every Read/Write that moves bytes.
+// This simulates OS/NAT idle connection drops.
+type idleClosingConn struct {
+	net.Conn
+	idleTimeout time.Duration
+	timer       *time.Timer
+	mu          sync.Mutex
+}
+
+func newIdleClosingConn(c net.Conn, idleTimeout time.Duration) *idleClosingConn {
+	ic := &idleClosingConn{
+		Conn:        c,
+		idleTimeout: idleTimeout,
+	}
+	ic.timer = time.AfterFunc(idleTimeout, func() {
+		c.Close()
+	})
+	return ic
+}
+
+func (ic *idleClosingConn) resetTimer() {
+	ic.mu.Lock()
+	defer ic.mu.Unlock()
+	ic.timer.Reset(ic.idleTimeout)
+}
+
+func (ic *idleClosingConn) Read(b []byte) (int, error) {
+	n, err := ic.Conn.Read(b)
+	if n > 0 {
+		ic.resetTimer()
+	}
+	return n, err
+}
+
+func (ic *idleClosingConn) Write(b []byte) (int, error) {
+	n, err := ic.Conn.Write(b)
+	if n > 0 {
+		ic.resetTimer()
+	}
+	return n, err
+}
+
+func (ic *idleClosingConn) Close() error {
+	ic.mu.Lock()
+	ic.timer.Stop()
+	ic.mu.Unlock()
+	return ic.Conn.Close()
+}
+
+// idleClosingListener wraps a net.Listener and wraps every accepted connection
+// in an idleClosingConn so that idle connections are dropped.
+type idleClosingListener struct {
+	net.Listener
+	idleTimeout time.Duration
+}
+
+func (l *idleClosingListener) Accept() (net.Conn, error) {
+	c, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	return newIdleClosingConn(c, l.idleTimeout), nil
+}
+
+// ---------------------------------------------------------------------------
+// Keepalive test
+// ---------------------------------------------------------------------------
+
+// TestHandleTerminalProxy_KeepalivePreventsDrop verifies that the proxy sends
+// periodic keepalive pings that prevent idle OS/NAT connection drops.
+//
+// The mock ttyd server's listener is wrapped in an idleClosingListener that
+// forcibly closes any connection that is idle for more than 80ms. Without
+// keepalive pings from the hub to the ttyd connection the relay silently dies
+// and the browser sees an error when it tries to send after the idle period.
+//
+// This test FAILS with the current code (no keepalive) and will PASS once
+// periodic pings are implemented using pingInterval.
+func TestHandleTerminalProxy_KeepalivePreventsDrop(t *testing.T) {
+	const idleTimeout = 80 * time.Millisecond
+
+	// Override pingInterval so the keepalive (once implemented) fires well
+	// before the idle timeout expires.
+	pingInterval = 30 * time.Millisecond
+	t.Cleanup(func() { pingInterval = 10 * time.Second })
+
+	// Create the underlying TCP listener manually so we can wrap it.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	idleLn := &idleClosingListener{Listener: ln, idleTimeout: idleTimeout}
+
+	// Start the mock ttyd WebSocket server on the idle-closing listener.
+	ttydSrv := &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+				InsecureSkipVerify: true,
+				Subprotocols:       []string{"tty"},
+			})
+			if err != nil {
+				// Connection may have been killed by the idle wrapper — that is expected.
+				return
+			}
+			defer conn.Close(websocket.StatusNormalClosure, "done")
+
+			for {
+				msgType, data, err := conn.Read(r.Context())
+				if err != nil {
+					return
+				}
+				echo := append([]byte("echo:"), data...)
+				if err := conn.Write(r.Context(), msgType, echo); err != nil {
+					return
+				}
+			}
+		}),
+	}
+	go ttydSrv.Serve(idleLn) //nolint:errcheck
+	t.Cleanup(func() { ttydSrv.Close() })
+
+	// Determine the address for agent registration.
+	ttydAddr := idleLn.Addr().String() // host:port
+	ttydHost := strings.SplitN(ttydAddr, ":", 2)[0]
+
+	// Start hub and connect an agent that points at the mock ttyd.
+	h, hubURL := startTestHub(t, "http://"+ttydAddr)
+	connectAgent(t, hubURL, "keepalive-agent", ttydHost, ttydAddr)
+	waitForAgent(t, h, "keepalive-agent")
+
+	// Start the proxy server.
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
+	proxySrv := httptest.NewServer(mux)
+	defer proxySrv.Close()
+
+	// Connect a browser WebSocket through the proxy.
+	proxyWSURL := "ws" + strings.TrimPrefix(proxySrv.URL, "http") + "/ws/terminal/keepalive-agent/sess-1"
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	browserConn, _, err := websocket.Dial(ctx, proxyWSURL, nil)
+	if err != nil {
+		t.Fatalf("browser dial failed: %v", err)
+	}
+	defer browserConn.Close(websocket.StatusNormalClosure, "done")
+
+	// Hold idle for longer than the idle timeout.
+	// WITHOUT keepalive: the idle timer fires at 80ms, drops the hub→ttyd TCP
+	// connection, and the relay goroutine terminates. When the browser sends a
+	// message it either gets a write error or reads a close frame.
+	// WITH keepalive: pings every 30ms reset the idle timer, so the connection
+	// survives the 200ms idle period.
+	time.Sleep(200 * time.Millisecond)
+
+	// Try to send a message — should succeed only if the connection survived.
+	msg := []byte("hello after idle")
+	if err := browserConn.Write(ctx, websocket.MessageBinary, msg); err != nil {
+		t.Fatalf("browser write after idle period: %v (connection was dropped — keepalive missing)", err)
+	}
+
+	_, data, err := browserConn.Read(ctx)
+	if err != nil {
+		t.Fatalf("browser read after idle period: %v (connection was dropped — keepalive missing)", err)
+	}
+
+	expected := "echo:hello after idle"
+	if string(data) != expected {
+		t.Errorf("expected %q, got %q", expected, string(data))
 	}
 }
