@@ -256,7 +256,7 @@ export function TilingLayout({ windows, onMinimize, onTerminated, onReorder, onR
   return (
     <div className={styles.tilingArea} data-testid="tiling-area">
       {createPortal(
-        <div aria-live="assertive" aria-atomic="true" style={{position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', top: 0, left: 0}}>
+        <div aria-live="assertive" aria-atomic="true" style={{position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clipPath: 'inset(50%)', whiteSpace: 'nowrap', top: 0, left: 0}}>
           {announceText}
         </div>,
         document.body
