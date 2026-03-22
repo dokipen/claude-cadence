@@ -386,6 +386,10 @@ test.describe("agent manager page", () => {
     // Session content should be visible again
     await expect(page.getByTestId("sidebar-agent")).toHaveCount(3);
     await expect(page.getByTestId("sidebar-session")).toHaveCount(3, { timeout: 15000 });
+
+    // Verify session buttons are clickable after the collapse+expand cycle
+    await page.getByTestId("sidebar-session").first().click();
+    await expect(page.getByTestId("terminal-window")).toHaveCount(1);
   });
 
   test("collapsed state persists after navigating away and back", async ({ page }) => {

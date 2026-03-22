@@ -17,31 +17,17 @@ function sessionKey(s: AgentSession): string {
 }
 
 export function SessionList({ agents, sessions, openKeys, onSessionClick, isCollapsed, onToggle }: SessionListProps) {
-  const sidebarRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const content = contentRef.current;
-    const sidebar = sidebarRef.current;
     if (!content) return;
 
     if (isCollapsed) {
       content.setAttribute("inert", "");
-      return;
-    }
-
-    if (!sidebar) {
+    } else {
       content.removeAttribute("inert");
-      return;
     }
-
-    const handleTransitionEnd = (e: TransitionEvent) => {
-      if (e.target === sidebar && e.propertyName === "width") {
-        content.removeAttribute("inert");
-      }
-    };
-    sidebar.addEventListener("transitionend", handleTransitionEnd, { once: true });
-    return () => sidebar.removeEventListener("transitionend", handleTransitionEnd);
   }, [isCollapsed]);
 
   // Group sessions by agent
@@ -54,7 +40,7 @@ export function SessionList({ agents, sessions, openKeys, onSessionClick, isColl
 
   return (
     <div className={styles.sidebarWrapper} data-testid="session-list">
-      <div ref={sidebarRef} className={`${styles.sessionSidebar}${isCollapsed ? ` ${styles.collapsed}` : ""}`}>
+      <div className={`${styles.sessionSidebar}${isCollapsed ? ` ${styles.collapsed}` : ""}`}>
         <div
           ref={contentRef}
           aria-hidden={isCollapsed}

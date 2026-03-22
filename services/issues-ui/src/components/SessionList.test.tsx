@@ -148,4 +148,58 @@ describe("SessionList", () => {
     );
     expect(getByText("session-s1")).toBeTruthy();
   });
+
+  it("inert is removed from content after collapse then expand (bug repro: transitionend never fires in jsdom)", () => {
+    const onSessionClick = vi.fn();
+    const agents = [makeAgent("my-agent")];
+    const sessions = [makeSession("s1", "my-agent")];
+
+    const { rerender, getByTestId } = render(
+      <SessionList
+        {...defaultProps}
+        agents={agents}
+        sessions={sessions}
+        onSessionClick={onSessionClick}
+        isCollapsed={false}
+      />,
+    );
+
+    // Collapse: useEffect sets inert immediately
+    rerender(
+      <SessionList
+        {...defaultProps}
+        agents={agents}
+        sessions={sessions}
+        onSessionClick={onSessionClick}
+        isCollapsed={true}
+      />,
+    );
+
+    // Expand: useEffect registers a transitionend listener with { once: true }
+    // In jsdom, CSS transitions never fire, so transitionend never fires,
+    // which means inert is never removed — this is the bug.
+    rerender(
+      <SessionList
+        {...defaultProps}
+        agents={agents}
+        sessions={sessions}
+        onSessionClick={onSessionClick}
+        isCollapsed={false}
+      />,
+    );
+
+    // Find the content wrapper div (the one that has/had aria-hidden and inert)
+    const sessionList = getByTestId("session-list");
+    // The contentRef div is the direct child of sidebarRef div, which is the first
+    // child of the sidebarWrapper. We query for any element with inert still set.
+    const inertEl = sessionList.querySelector("[inert]");
+    // After expanding, inert should be gone — but the bug leaves it set permanently
+    // because transitionend never fires in jsdom.
+    expect(inertEl).toBeNull();
+
+    // Also verify that clicking the session button calls onSessionClick
+    const sessionBtn = getByTestId("sidebar-session");
+    fireEvent.click(sessionBtn);
+    expect(onSessionClick).toHaveBeenCalledTimes(1);
+  });
 });
