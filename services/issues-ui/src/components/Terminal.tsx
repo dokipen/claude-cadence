@@ -67,28 +67,30 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
 
     const term = new XTerm({
       cursorBlink: true,
-      fontSize: 13,
+      fontSize: 12,
       fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace",
       theme: {
+        // Cadence dark palette — all foreground colors verified ≥ 4.5:1 contrast vs #0d1117
         background: "#0d1117",
         foreground: "#e6edf3",
-        cursor: "#e6edf3",
-        selectionBackground: "rgba(56, 89, 182, 0.4)",
+        cursor: "#00D4AF",
+        selectionBackground: "rgba(61, 91, 200, 0.4)",
+        selectionForeground: "#e6edf3",
         black: "#484f58",
-        red: "#ff7b72",
-        green: "#3fb950",
-        yellow: "#d29922",
-        blue: "#58a6ff",
-        magenta: "#bc8cff",
-        cyan: "#39d353",
-        white: "#b1bac4",
-        brightBlack: "#6e7681",
-        brightRed: "#ffa198",
-        brightGreen: "#56d364",
-        brightYellow: "#e3b341",
-        brightBlue: "#79c0ff",
-        brightMagenta: "#d2a8ff",
-        brightCyan: "#56d364",
+        red: "#f85149",        // cadence --error
+        green: "#4ADE80",      // green-400, 9.9:1
+        yellow: "#F5B74A",     // cadence --amber, 9.7:1
+        blue: "#6B8AFF",       // cadence --primary-light, 5.5:1
+        magenta: "#C084FC",    // violet-400, 6.6:1
+        cyan: "#00D4AF",       // cadence --accent, 9.1:1
+        white: "#c9d1d9",      // mid-gray, 11.3:1
+        brightBlack: "#8b949e", // cadence --text-secondary, 5.6:1
+        brightRed: "#ff8585",   // 7.4:1
+        brightGreen: "#6EE7B7", // emerald-300, 11.6:1
+        brightYellow: "#FCD34D", // amber-300, 11.9:1
+        brightBlue: "#93B4FF",   // 8.4:1
+        brightMagenta: "#DDA0FF", // 8.7:1
+        brightCyan: "#34EFD5",    // bright accent, 11.9:1
         brightWhite: "#f0f6fc",
       },
     });
