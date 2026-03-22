@@ -350,9 +350,12 @@ In both cases:
 
 Detect the PR type before directing the user:
 ```bash
-# Check if the PR touches agent-related code
-git diff origin/main...HEAD --name-only | grep -qE '^services/(agents|agent-hub)/' && echo "agent-service" || echo "visual"
+# Check independently — a PR can trigger both paths
+git diff origin/main...HEAD --name-only | grep -qE '^services/(agents|agent-hub)/' && echo "agent-service changes detected"
+git diff origin/main...HEAD --name-only | grep -qE '^services/issues-ui/' && echo "visual changes detected"
 ```
+
+Run **both** applicable sub-sections below. A PR that touches both agent-service and UI code requires both setup paths.
 
 #### Visual/UI changes
 
@@ -378,7 +381,14 @@ git diff origin/main...HEAD --name-only | grep -qE '^services/(agents|agent-hub)
 
 These services have hard host dependencies (tmux, the `claude` CLI, OS service integration) that make them impractical to containerize. Run them on the host alongside the compose stack.
 
-1. **Direct the user to build and install the host services:**
+1. **Ensure `.env.dev` exists** with the agent-service secrets (`HUB_API_TOKEN`, `HUB_AGENT_TOKEN`, `AGENTD_TOKEN`):
+   ```bash
+   # If .env.dev doesn't exist yet, copy the example and fill in secrets first
+   cp .env.dev.example .env.dev
+   $EDITOR .env.dev
+   ```
+
+2. **Direct the user to build and install the host services:**
    ```bash
    # Build and install agentd
    cd services/agents && make build
@@ -390,13 +400,13 @@ These services have hard host dependencies (tmux, the `claude` CLI, OS service i
    ```
    See [`docs/dev-environment.md`](docs/dev-environment.md) and [`services/agents/docs/INSTALL.md`](services/agents/docs/INSTALL.md) for full configuration details.
 
-2. **Then start the compose stack with the `--profile agents` flag:**
+3. **Then start the compose stack with the `--profile agents` flag:**
    ```bash
    docker compose -f docker-compose.dev.yml --profile agents up --build
    ```
 
-3. Wait for user feedback (user intervention required)
-4. Address issues if reported, return to Phase 5 after fixes
+4. Wait for user feedback (user intervention required)
+5. Address issues if reported, return to Phase 5 after fixes
 
 ### Phase 7: Merge and Cleanup
 
