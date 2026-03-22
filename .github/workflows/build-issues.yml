@@ -30,6 +30,8 @@ jobs:
       - name: Build Docker image
         env:
           COMMIT_SHA: ${{ github.sha }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          GITHUB_CLIENT_SECRET: ${{ secrets.GITHUB_CLIENT_SECRET }}
         run: |
           IMAGE_TAG="sha-${COMMIT_SHA:0:7}"
           export IMAGE_TAG

@@ -5,6 +5,7 @@ import { render, screen, cleanup, fireEvent, act } from "@testing-library/react"
 // Mock @xterm/xterm — canvas APIs are not available in jsdom
 // Use vi.hoisted so the array is available inside the hoisted vi.mock factory
 const xtermInstances = vi.hoisted(() => [] as Array<{ focus: ReturnType<typeof vi.fn>; options: Record<string, unknown> }>);
+const fitAddonInstances = vi.hoisted(() => [] as Array<{ fit: ReturnType<typeof vi.fn> }>);
 
 vi.mock("@xterm/xterm", () => ({
   Terminal: class MockXTerm {
@@ -29,6 +30,9 @@ vi.mock("@xterm/xterm", () => ({
 vi.mock("@xterm/addon-fit", () => ({
   FitAddon: class MockFitAddon {
     fit = vi.fn();
+    constructor() {
+      fitAddonInstances.push(this as unknown as { fit: ReturnType<typeof vi.fn> });
+    }
   },
 }));
 
@@ -82,6 +86,7 @@ describe("Terminal", () => {
   beforeEach(() => {
     MockWebSocket.instances = [];
     xtermInstances.length = 0;
+    fitAddonInstances.length = 0;
     vi.stubGlobal("WebSocket", MockWebSocket);
     vi.stubGlobal("ResizeObserver", class {
       observe = vi.fn();
@@ -247,5 +252,52 @@ describe("Terminal", () => {
     expect(opts.scrollback as number).toBeGreaterThanOrEqual(1000);
     expect(typeof opts.scrollSensitivity).toBe("number");
     expect(opts.scrollSensitivity as number).toBeGreaterThanOrEqual(1);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Resize behavior: a window resize should only call fit(), not reconnect
+  // ---------------------------------------------------------------------------
+  describe("resize behavior", () => {
+    it("calls fit() on resize without creating a new WebSocket or XTerm instance", () => {
+      // Capture the ResizeObserver callback when the component registers it
+      let capturedResizeCallback: (() => void) | null = null;
+      vi.stubGlobal("ResizeObserver", class {
+        constructor(callback: () => void) {
+          capturedResizeCallback = callback;
+        }
+        observe = vi.fn();
+        unobserve = vi.fn();
+        disconnect = vi.fn();
+      });
+
+      render(<Terminal agentName="test-agent" sessionId="test-session" />);
+
+      // Simulate a successful WebSocket open so we are in "connected" state
+      act(() => {
+        MockWebSocket.instances[0].simulateOpen();
+      });
+
+      // Sanity: exactly 1 WebSocket and 1 XTerm created so far
+      expect(MockWebSocket.instances).toHaveLength(1);
+      expect(xtermInstances).toHaveLength(1);
+
+      // The ResizeObserver callback must have been captured
+      expect(capturedResizeCallback).not.toBeNull();
+
+      // Fire the resize callback (simulates a browser window resize)
+      act(() => {
+        capturedResizeCallback!();
+        vi.runAllTimers();
+      });
+
+      // Bug: if a reconnect happened, a 2nd WebSocket and 2nd XTerm would exist.
+      // The correct behavior is that ONLY fit() is called — no new connections.
+      expect(MockWebSocket.instances).toHaveLength(1);
+      expect(xtermInstances).toHaveLength(1);
+
+      // fit() should have been called (resize was handled)
+      expect(fitAddonInstances).toHaveLength(1);
+      expect(fitAddonInstances[0].fit).toHaveBeenCalled();
+    });
   });
 });

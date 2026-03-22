@@ -1,34 +1,40 @@
 import { useRef, useEffect, useCallback } from "react";
 import { AgentLauncher } from "./AgentLauncher";
-import { getLaunchConfig } from "./launchConfig";
-import type { Session, TicketState } from "../types";
+import type { Session } from "../types";
 import styles from "../styles/dialog.module.css";
 
-interface LaunchAgentDialogProps {
-  ticketNumber: number;
+interface RefineAllDialogProps {
+  ticketNumbers: number[];
   repoUrl: string | undefined;
   open: boolean;
   onClose: () => void;
-  ticketState: TicketState;
-  ticketTitle: string;
-  anchorRect?: DOMRect;
 }
 
-export function LaunchAgentDialog({
-  ticketNumber,
+export function RefineAllDialog({
+  ticketNumbers,
   repoUrl,
   open,
   onClose,
-  ticketState,
-  ticketTitle,
-  anchorRect,
-}: LaunchAgentDialogProps) {
+}: RefineAllDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
-  const config = getLaunchConfig(ticketState);
-  const command = config.command(ticketNumber, ticketTitle);
-  const sessionName = config.sessionName(ticketNumber);
-  const buttonLabel = config.buttonLabel;
+  const PREFIX = "Please run /refine on each of the following backlog tickets, one at a time: ";
+  const MAX_LEN = 500;
+
+  // Build the ticket refs that fit within the limit
+  const ticketRefs: string[] = [];
+  let length = PREFIX.length;
+  for (const n of ticketNumbers) {
+    const ref = ticketRefs.length === 0 ? `#${n}` : `, #${n}`;
+    if (length + ref.length > MAX_LEN) break;
+    ticketRefs.push(`#${n}`);
+    length += ref.length;
+  }
+
+  const command = PREFIX + ticketRefs.join(", ");
+  const sessionName = "refine-all";
+  const buttonLabel = "Refine All";
+  const truncated = ticketRefs.length < ticketNumbers.length;
 
   useEffect(() => {
     const el = dialogRef.current;
@@ -36,39 +42,14 @@ export function LaunchAgentDialog({
 
     if (open && !el.open) {
       el.showModal();
-      if (anchorRect) {
-        requestAnimationFrame(() => {
-          el.style.position = 'fixed';
-          el.style.margin = '0';
-          const gap = 8;
-          let top = anchorRect.bottom + gap;
-          let left = anchorRect.left;
-          const dialogWidth = el.offsetWidth;
-          const dialogHeight = el.offsetHeight;
-          if (left + dialogWidth > window.innerWidth - gap) {
-            left = window.innerWidth - dialogWidth - gap;
-          }
-          if (left < gap) left = gap;
-          if (top + dialogHeight > window.innerHeight - gap) {
-            top = anchorRect.top - dialogHeight - gap;
-          }
-          if (top < gap) top = gap;
-          el.style.top = `${top}px`;
-          el.style.left = `${left}px`;
-        });
-      }
     } else if (!open && el.open) {
-      el.style.position = '';
-      el.style.margin = '';
-      el.style.top = '';
-      el.style.left = '';
       el.close();
     }
 
     return () => {
       if (el.open) el.close();
     };
-  }, [open, anchorRect]);
+  }, [open]);
 
   const handleClose = useCallback(() => {
     dialogRef.current?.close();
@@ -98,11 +79,11 @@ export function LaunchAgentDialog({
       className={styles.dialog}
       onClick={handleDialogClick}
       onCancel={handleClose}
-      data-testid="launch-agent-dialog"
+      data-testid="refine-all-dialog"
     >
       <div className={styles.dialogContent}>
         <div className={styles.dialogHeader}>
-          <h2 className={styles.dialogTitle}>Launch Agent on #{ticketNumber}</h2>
+          <h2 className={styles.dialogTitle}>Refine All Backlog Tickets</h2>
           <button
             className={styles.dialogClose}
             onClick={handleClose}
@@ -114,13 +95,18 @@ export function LaunchAgentDialog({
         </div>
         {open && (
           <AgentLauncher
-            ticketNumber={ticketNumber}
+            ticketNumber={0}
             repoUrl={repoUrl}
             onLaunched={handleLaunched}
             command={command}
             sessionName={sessionName}
             buttonLabel={buttonLabel}
           />
+        )}
+        {truncated && (
+          <p className={styles.truncationNote}>
+            {ticketRefs.length} of {ticketNumbers.length} tickets fit in one session. Launch again for the remaining.
+          </p>
         )}
       </div>
     </dialog>

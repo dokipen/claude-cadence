@@ -55,6 +55,20 @@
   text-align: center;
 }
 
+.refineAllButton {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.65rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.refineAllButton:hover {
+  color: var(--primary);
+}
+
 .columnBody {
   flex: 1;
   overflow-y: auto;

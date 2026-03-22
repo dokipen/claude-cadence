@@ -370,9 +370,8 @@ test.describe("agent manager page", () => {
     // aria-expanded should now be false
     await expect(page.getByTestId("sidebar-toggle")).toHaveAttribute("aria-expanded", "false");
 
-    // Session content should no longer be rendered
-    await expect(page.getByTestId("sidebar-agent")).toHaveCount(0);
-    await expect(page.getByTestId("sidebar-session")).toHaveCount(0);
+    // Content wrapper is aria-hidden; elements stay in DOM but are inaccessible
+    await expect(page.getByTestId("session-list").locator('[aria-hidden="true"]')).toBeAttached();
   });
 
   test("click toggle again expands sidebar", async ({ page }) => {
@@ -381,7 +380,7 @@ test.describe("agent manager page", () => {
     // Collapse
     await page.getByTestId("sidebar-toggle").click();
     await expect(page.getByTestId("sidebar-toggle")).toHaveAttribute("aria-expanded", "false");
-    await expect(page.getByTestId("sidebar-agent")).toHaveCount(0);
+    await expect(page.getByTestId("session-list").locator('[aria-hidden="true"]')).toBeAttached();
 
     // Expand again
     await page.getByTestId("sidebar-toggle").click();

@@ -73,11 +73,15 @@ describe("SessionList", () => {
 
   it("session list content is hidden when isCollapsed=true", () => {
     const agents = [makeAgent("my-agent")];
-    const { queryByText } = render(
+    const { getByText } = render(
       <SessionList {...defaultProps} agents={agents} isCollapsed={true} />,
     );
-    expect(queryByText("Agents")).toBeNull();
-    expect(queryByText("my-agent")).toBeNull();
+    // Content stays in DOM but is aria-hidden and inert (CSS-based visibility)
+    const heading = getByText("Agents");
+    const contentWrapper = heading.closest('[aria-hidden="true"]');
+    expect(contentWrapper).not.toBeNull();
+    expect(contentWrapper?.hasAttribute("inert")).toBe(true);
+    expect(getByText("my-agent")).toBeTruthy();
   });
 
   it("clicking toggle button calls onToggle callback", () => {
