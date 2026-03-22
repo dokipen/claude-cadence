@@ -44,8 +44,8 @@ export const LABELS_QUERY = gql`
 
 export const BOARD_TICKETS_QUERY = gql`
   query BoardTickets(
-    $state: TicketState!
-    $projectId: ID!
+    $state: TicketState
+    $projectId: ID
     $first: Int
     $labelName: String
     $isBlocked: Boolean
