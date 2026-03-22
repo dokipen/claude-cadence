@@ -82,19 +82,30 @@ services:
     env_file: .env.dev
     depends_on:
       - issues
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4200/api/v1/agents || exit 1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
 
   agentd:
     profiles: [agents]
+    # hostname must match ttyd.advertise_address in config.container.yaml ("agentd:4142").
+    # Docker adds the hostname → container-IP mapping to /etc/hosts so Go's net.Listen
+    # resolves it for binding, and agent-hub resolves it via Docker DNS for proxying.
     hostname: agentd
     build:
       context: services/agents
     restart: unless-stopped
     volumes:
       - agentd-data:/var/lib/agentd
+      # Mount ~/.claude read-write: the claude CLI writes session data here.
       - ${HOME}/.claude:/home/agentd/.claude
     env_file: .env.dev
     depends_on:
-      - agent-hub
+      agent-hub:
+        condition: service_healthy
 
 volumes:
   issues-data:

@@ -12,12 +12,12 @@ FROM alpine:3.21
 
 RUN apk add --no-cache ca-certificates
 
+RUN addgroup -S agent-hub && adduser -S agent-hub -G agent-hub
+
 WORKDIR /app
 
 COPY --from=builder /build/agent-hub ./agent-hub
-COPY config.container.yaml /etc/agent-hub/config.yaml
-
-RUN addgroup -S agent-hub && adduser -S agent-hub -G agent-hub
+COPY --chown=agent-hub:agent-hub config.container.yaml /etc/agent-hub/config.yaml
 
 USER agent-hub
 

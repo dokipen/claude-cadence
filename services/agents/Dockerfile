@@ -14,7 +14,8 @@ FROM node:22-alpine
 
 RUN apk add --no-cache git ca-certificates
 
-RUN npm install -g @anthropic-ai/claude-code
+# Pin to major version for reproducible builds while still receiving patches.
+RUN npm install -g @anthropic-ai/claude-code@2
 
 RUN addgroup -S agentd && adduser -S agentd -G agentd
 
@@ -24,7 +25,7 @@ WORKDIR /app
 
 COPY --from=builder /build/agentd ./
 
-COPY config.container.yaml /etc/agentd/config.yaml
+COPY --chown=agentd:agentd config.container.yaml /etc/agentd/config.yaml
 
 ENV AGENTD_CONFIG=/etc/agentd/config.yaml
 
