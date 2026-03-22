@@ -25,12 +25,20 @@ if [[ ! -f "$PREFLIGHT" ]]; then
     exit 2
 fi
 
-# The awk one-liner that parses CLAUDE.md — hardcoded to match the fixed version
-AWK_CMD='BEGIN{fence=0} /^```/{fence=!fence; next} !fence && /^## Verification[[:space:]]*$/{while ((getline line) > 0 && (line ~ /^[[:space:]]*$/ || line ~ /^[[:space:]]*#/)) {}; print line; exit}'
-
-# Helper: run the awk command against a given file, return its output
+# Helper: run the live VERIFY_CMD extraction from pr-preflight.sh against a
+# given CLAUDE.md directory.  Grep-extracts the actual VERIFY_CMD=... line
+# from the script so that any future changes to the awk command are picked up
+# automatically by these tests.
 run_awk() {
-    awk "$AWK_CMD" "$1"
+    local claude_dir
+    claude_dir="$(dirname "$1")"
+    (
+        cd "$claude_dir" || exit 1
+        VERIFY_CMD=""
+        # shellcheck disable=SC2094,SC2016
+        eval "$(grep 'VERIFY_CMD=\$(awk' "$PREFLIGHT")"
+        echo "$VERIFY_CMD"
+    )
 }
 
 # ---------------------------------------------------------------------------
