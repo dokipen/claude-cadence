@@ -50,6 +50,8 @@ export const BOARD_TICKETS_QUERY = gql`
     $labelName: String
     $isBlocked: Boolean
     $priority: Priority
+    $excludeLabelName: String
+    $excludePriority: Priority
   ) {
     tickets(
       state: $state
@@ -58,6 +60,8 @@ export const BOARD_TICKETS_QUERY = gql`
       labelName: $labelName
       isBlocked: $isBlocked
       priority: $priority
+      excludeLabelName: $excludeLabelName
+      excludePriority: $excludePriority
     ) {
       edges {
         node {

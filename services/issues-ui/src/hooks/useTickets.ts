@@ -68,9 +68,11 @@ export function useTickets(
             labelName: labelName || undefined,
             isBlocked,
             priority: priority || undefined,
+            excludeLabelName: excludeLabelName || undefined,
+            excludePriority: excludePriority || undefined,
           }
         : null,
-    [state, projectId, first, labelName, isBlocked, priority],
+    [state, projectId, first, labelName, isBlocked, priority, excludeLabelName, excludePriority],
   );
 
   const { data, loading, error } = usePollingQuery<TicketsResponse, TransformedTickets>({
@@ -81,20 +83,5 @@ export function useTickets(
     errorMessage: "Failed to load tickets",
   });
 
-  const tickets = useMemo(() => {
-    let result = data.tickets;
-    if (excludeLabelName) {
-      result = result.filter(
-        (ticket) => !ticket.labels.some((label) => label.name === excludeLabelName),
-      );
-    }
-    if (excludePriority) {
-      result = result.filter((ticket) => ticket.priority !== excludePriority);
-    }
-    return result;
-  }, [data.tickets, excludeLabelName, excludePriority]);
-
-  const totalCount = (excludeLabelName || excludePriority) ? tickets.length : data.totalCount;
-
-  return { tickets, totalCount, hasNextPage: data.hasNextPage, loading, error };
+  return { tickets: data.tickets, totalCount: data.totalCount, hasNextPage: data.hasNextPage, loading, error };
 }
