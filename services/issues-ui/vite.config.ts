@@ -8,7 +8,7 @@ const agentHubPort = Number(process.env.VITE_AGENT_HUB_PORT ?? "4200");
 if (!Number.isInteger(agentHubPort) || agentHubPort < 1 || agentHubPort > 65535) {
   throw new Error("VITE_AGENT_HUB_PORT must be a valid port number");
 }
-const agentHubToken = process.env.AGENT_HUB_TOKEN || "";
+const agentHubToken = process.env.HUB_API_TOKEN || process.env.AGENT_HUB_TOKEN || "";
 
 export default defineConfig({
   plugins: [react()],
