@@ -267,6 +267,7 @@ sed_escape() {
 xml_encode() {
     # XML-encode all five predefined XML entities.
     # & must be encoded first to avoid double-encoding the ampersand in subsequent replacements.
+    # The '"'"' sequence embeds a literal single-quote inside a single-quoted sed expression.
     printf '%s' "$1" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/'"'"'/\&apos;/g; s/"/\&quot;/g'
 }
 
