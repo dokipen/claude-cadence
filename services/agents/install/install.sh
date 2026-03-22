@@ -264,6 +264,12 @@ sed_escape() {
     printf '%s' "$1" | sed 's/[&/|\\]/\\&/g'
 }
 
+xml_encode() {
+    # XML-encode characters that are special in XML attribute/text context.
+    # & must be encoded first to avoid double-encoding the ampersand in &lt;/&gt;.
+    printf '%s' "$1" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g'
+}
+
 render_template() {
     local template="$1" output="$2"
     sed \
@@ -273,7 +279,7 @@ render_template() {
         -e "s|__GROUP__|$(sed_escape "$AGENTD_GROUP")|g" \
         -e "s|__ROOT_DIR__|$(sed_escape "$AGENTD_ROOT_DIR")|g" \
         -e "s|__LOG_DIR__|$(sed_escape "$AGENTD_LOG_DIR")|g" \
-        -e "s|__HUB_AGENT_TOKEN__|$(sed_escape "${HUB_AGENT_TOKEN:-}")|g" \
+        -e "s|__HUB_AGENT_TOKEN__|$(sed_escape "$(xml_encode "${HUB_AGENT_TOKEN:-}")")|g" \
         "$template" > "$output"
 }
 
