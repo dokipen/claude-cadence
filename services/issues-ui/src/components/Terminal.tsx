@@ -196,17 +196,25 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
     };
   }, [connect]);
 
-  // Handle resize
+  // Handle resize — debounced with rAF to avoid flooding CMD_RESIZE on rapid window drag
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
+    let rafId: number | null = null;
     const observer = new ResizeObserver(() => {
-      fitRef.current?.fit();
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        fitRef.current?.fit();
+      });
     });
     observer.observe(container);
 
-    return () => observer.disconnect();
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      observer.disconnect();
+    };
   }, []);
 
   return (
