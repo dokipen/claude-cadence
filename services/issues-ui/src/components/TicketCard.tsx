@@ -52,8 +52,8 @@ export function TicketCard({
 
   return (
     <>
-      <div className={styles.cardWrapper}>
-        <Link to={`/ticket/${ticket.id}`} className={styles.cardLink} data-testid="ticket-card">
+      <div className={styles.cardWrapper} data-testid="ticket-card">
+        <Link to={`/ticket/${ticket.id}`} className={styles.cardLink}>
           <div className={styles.cardNumber} data-testid="card-number">#{ticket.number}</div>
           <div className={styles.cardTitle} data-testid="card-title">{ticket.title}</div>
           <div className={styles.cardMeta}>
