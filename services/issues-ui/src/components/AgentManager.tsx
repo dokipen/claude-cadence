@@ -71,7 +71,7 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
       ...prev,
       { key, session: as.session, agentName: as.agentName, projectId: selectedProject?.id },
     ]);
-  }, [openWindows, minimizedKeys]);
+  }, [openWindows, minimizedKeys, selectedProject]);
 
   const handleMinimize = useCallback((key: string) => {
     setMinimizedKeys((prev) => new Set(prev).add(key));
