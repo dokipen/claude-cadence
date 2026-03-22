@@ -10,6 +10,10 @@ FAIL=0
 ok()   { echo "PASS: $1"; ((PASS++)); }
 fail() { echo "FAIL: $1"; ((FAIL++)); }
 
+CLEANUP_DIRS=()
+cleanup() { for d in "${CLEANUP_DIRS[@]+"${CLEANUP_DIRS[@]}"}"; do rm -rf "$d"; done; }
+trap cleanup EXIT
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT="$SCRIPT_DIR/../setup-runners.sh"
 
@@ -65,7 +69,7 @@ fi
 echo "--- Bug 2: tarball downloaded per-runner (not cached) ---"
 
 TMPDIR_B2="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR_B2"' EXIT
+CLEANUP_DIRS+=("$TMPDIR_B2")
 
 # Stubs directory — must be on PATH before real tools
 STUB_DIR="$TMPDIR_B2/stubs"
@@ -178,7 +182,7 @@ fi
 echo "--- Stale tarball 1: dry-run prints rm for stale tarball ---"
 
 TMPDIR_ST1="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR_ST1"' EXIT
+CLEANUP_DIRS+=("$TMPDIR_ST1")
 
 STUB_DIR_ST1="$TMPDIR_ST1/stubs"
 mkdir -p "$STUB_DIR_ST1"
@@ -255,6 +259,13 @@ else
     fail "Stale1: expected [dry-run] rm line for stale tarball, got none"
 fi
 
+stale_path="${cache_dir}/actions-runner-${runner_os}-${runner_arch}-2.300.0.tar.gz"
+if [[ -f "$stale_path" ]]; then
+    ok "Stale1: dry-run did not delete the stale tarball (file still exists)"
+else
+    fail "Stale1: dry-run unexpectedly deleted the stale tarball"
+fi
+
 # ---------------------------------------------------------------------------
 # Stale tarball test 2 — stale rm calls use run_cmd / sudo_cmd (not bare rm)
 #
@@ -274,6 +285,18 @@ if [[ -z "$bare_rm" ]]; then
     ok "Stale2: all 'rm -f' calls in stale removal block go through run_cmd or sudo_cmd"
 else
     fail "Stale2: bare 'rm -f' found in stale removal block (not via run_cmd/sudo_cmd): $bare_rm"
+fi
+
+# Assert the darwin branch uses run_cmd and the else branch uses sudo_cmd
+darwin_uses_run_cmd=$(awk '/# Remove stale tarballs/,/# If cache file already exists/' "$SCRIPT" \
+    | awk '/darwin/,/else/' | grep -c 'run_cmd rm' || true)
+else_uses_sudo_cmd=$(awk '/# Remove stale tarballs/,/# If cache file already exists/' "$SCRIPT" \
+    | awk '/else/,/fi/' | grep -c 'sudo_cmd rm' || true)
+
+if [[ "$darwin_uses_run_cmd" -ge 1 ]] && [[ "$else_uses_sudo_cmd" -ge 1 ]]; then
+    ok "Stale2: darwin branch uses run_cmd, Linux else branch uses sudo_cmd"
+else
+    fail "Stale2: OS-to-wrapper mapping incorrect (darwin run_cmd=$darwin_uses_run_cmd, else sudo_cmd=$else_uses_sudo_cmd)"
 fi
 
 # ---------------------------------------------------------------------------
@@ -300,7 +323,7 @@ fi
 echo "--- Stale tarball 4: dry-run does not rm the current-version tarball ---"
 
 TMPDIR_ST4="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR_ST4"' EXIT
+CLEANUP_DIRS+=("$TMPDIR_ST4")
 
 STUB_DIR_ST4="$TMPDIR_ST4/stubs"
 mkdir -p "$STUB_DIR_ST4"

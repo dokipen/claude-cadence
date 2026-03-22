@@ -499,7 +499,7 @@ download_runner_tarball() {
 
     # Remove stale tarballs for other versions of this OS/arch
     for stale in "${cache_dir}/actions-runner-${RUNNER_OS}-${RUNNER_ARCH}-"*.tar.gz; do
-        [[ -e "$stale" ]] || continue
+        [[ -f "$stale" ]] || continue
         [[ "$stale" == "$RUNNER_TARBALL_CACHE" ]] && continue
         info "  Removing stale tarball: $stale"
         if [[ "$OS" == "darwin" ]]; then
