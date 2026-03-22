@@ -243,22 +243,22 @@ describe("tickets — sort order by state", () => {
     expect(call.orderBy).toEqual([{ updatedAt: "desc" }, { id: "asc" }]);
   });
 
-  it("uses createdAt asc for non-CLOSED states", async () => {
+  it("uses createdAt desc for non-CLOSED states", async () => {
     for (const state of ["BACKLOG", "REFINED", "IN_PROGRESS"]) {
       const ctx = makeMockContext([]);
       await tickets(undefined, { state }, ctx);
 
       const call = ctx.prisma.ticket.findMany.mock.calls[0][0];
-      expect(call.orderBy).toEqual({ createdAt: "asc" });
+      expect(call.orderBy).toEqual([{ createdAt: "desc" }, { id: "asc" }]);
     }
   });
 
-  it("uses createdAt asc when no state is specified", async () => {
+  it("uses createdAt desc when no state is specified", async () => {
     const ctx = makeMockContext([]);
     await tickets(undefined, {}, ctx);
 
     const call = ctx.prisma.ticket.findMany.mock.calls[0][0];
-    expect(call.orderBy).toEqual({ createdAt: "asc" });
+    expect(call.orderBy).toEqual([{ createdAt: "desc" }, { id: "asc" }]);
   });
 });
 
