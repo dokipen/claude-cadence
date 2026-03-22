@@ -133,10 +133,12 @@ func HandleTerminalProxy(h *hub.Hub, allowedOrigins []string) http.HandlerFunc {
 		}
 		defer browserConn.Close(websocket.StatusGoingAway, "proxy closing")
 
-		// Clear the server's WriteTimeout so idle terminal sessions aren't killed.
-		// coder/websocket extends the deadline on each write, but idle sessions
-		// with no writes would hit the server's 35s timeout.
+		// Clear connection deadlines so idle terminal sessions aren't killed.
+		// The HTTP server sets WriteTimeout (35s) which would close idle
+		// WebSocket connections. ReadHeaderTimeout doesn't affect post-upgrade
+		// connections, but we clear both as defense-in-depth.
 		rc := http.NewResponseController(w)
+		rc.SetReadDeadline(time.Time{})
 		rc.SetWriteDeadline(time.Time{})
 
 		// Apply read limits to prevent memory exhaustion.

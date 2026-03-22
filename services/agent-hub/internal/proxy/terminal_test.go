@@ -327,6 +327,83 @@ func TestHandleTerminalProxy_MalformedURL(t *testing.T) {
 	}
 }
 
+// TestHandleTerminalProxy_SurvivesReadTimeout verifies that WebSocket terminal
+// connections survive past the HTTP server's ReadTimeout. Before the fix, the
+// server's ReadTimeout (10s) set a deadline on the underlying TCP connection
+// that killed idle WebSocket sessions.
+func TestHandleTerminalProxy_SurvivesReadTimeout(t *testing.T) {
+	// Start a mock ttyd WebSocket server that echoes messages.
+	mockTtyd := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+			InsecureSkipVerify: true,
+		})
+		if err != nil {
+			t.Errorf("mock ttyd accept: %v", err)
+			return
+		}
+		defer conn.Close(websocket.StatusNormalClosure, "done")
+
+		for {
+			msgType, data, err := conn.Read(r.Context())
+			if err != nil {
+				return
+			}
+			echo := append([]byte("echo:"), data...)
+			if err := conn.Write(r.Context(), msgType, echo); err != nil {
+				return
+			}
+		}
+	}))
+	defer mockTtyd.Close()
+
+	mockAddr := strings.TrimPrefix(mockTtyd.URL, "http://")
+	mockHost := strings.SplitN(mockAddr, ":", 2)[0]
+
+	h, hubURL := startTestHub(t, mockTtyd.URL)
+	connectAgent(t, hubURL, "timeout-agent", mockHost, mockAddr)
+	waitForAgent(t, h, "timeout-agent")
+
+	// Use NewUnstartedServer so we can set a short ReadTimeout that would
+	// kill WebSocket connections without the fix.
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
+	proxySrv := httptest.NewUnstartedServer(mux)
+	proxySrv.Config.ReadTimeout = 150 * time.Millisecond
+	proxySrv.Config.WriteTimeout = 35 * time.Second
+	proxySrv.Start()
+	defer proxySrv.Close()
+
+	// Connect browser WebSocket.
+	proxyWSURL := "ws" + strings.TrimPrefix(proxySrv.URL, "http") + "/ws/terminal/timeout-agent/sess-1"
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	browserConn, _, err := websocket.Dial(ctx, proxyWSURL, nil)
+	if err != nil {
+		t.Fatalf("browser dial failed: %v", err)
+	}
+	defer browserConn.Close(websocket.StatusNormalClosure, "done")
+
+	// Wait longer than the ReadTimeout — without the fix this kills the connection.
+	time.Sleep(300 * time.Millisecond)
+
+	// Send a message — should still work if deadlines were properly cleared.
+	msg := []byte("still alive")
+	if err := browserConn.Write(ctx, websocket.MessageBinary, msg); err != nil {
+		t.Fatalf("browser write after ReadTimeout: %v", err)
+	}
+
+	_, data, err := browserConn.Read(ctx)
+	if err != nil {
+		t.Fatalf("browser read after ReadTimeout: %v (connection killed by server ReadTimeout)", err)
+	}
+
+	expected := "echo:still alive"
+	if string(data) != expected {
+		t.Errorf("expected %q, got %q", expected, string(data))
+	}
+}
+
 func TestHandleTerminalProxy_OriginRejected(t *testing.T) {
 	h := hub.New(30*time.Second, 5*time.Second, 5*time.Minute)
 	h.Start()
