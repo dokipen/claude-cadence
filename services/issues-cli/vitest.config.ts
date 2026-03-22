@@ -12,5 +12,13 @@ export default defineConfig({
     sequence: {
       concurrent: false,
     },
+    // Cap concurrent file workers to bound CI resource spike:
+    // 11 E2E files × (3 execSync Prisma calls + 1 live tsx server) = up to 33 blocking children + 11 servers.
+    // maxForks: 4 limits peak concurrency without eliminating the parallelism speedup.
+    poolOptions: {
+      forks: {
+        maxForks: 4,
+      },
+    },
   },
 });
