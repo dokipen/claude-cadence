@@ -56,6 +56,154 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Bug 1 (Integration) — Runtime: config.sh remove called before --unattended
+#
+# When a runner dir has a .runner file but no .service file (is_service_running
+# returns false because .service is absent), setup_runner must call
+# deregister_runner which calls config.sh remove BEFORE calling
+# config.sh --unattended to re-configure.
+#
+# The idempotency check is gated by [[ "$DRY_RUN" != "true" ]], so --dry-run
+# cannot be used. This test runs the script without --dry-run, using
+# PATH-injected stubs for all external tools.
+#
+# Test strategy: runtime integration test.
+#   - Pre-populate a runner dir with .runner (+ config.sh and svc.sh stubs)
+#   - Inject stubs for gh, sha256sum, shasum, sudo, curl, tar, id, systemctl, useradd, chown
+#   - Run setup-runners.sh without --dry-run
+#   - Verify config.sh remove appears in the call log before --unattended
+# ---------------------------------------------------------------------------
+echo "--- Bug 1 (Integration): config.sh remove called before --unattended at runtime ---"
+
+TMPDIR_B1="$(mktemp -d)"
+CLEANUP_DIRS+=("$TMPDIR_B1")
+STUB_DIR_B1="$TMPDIR_B1/stubs"
+mkdir -p "$STUB_DIR_B1"
+
+CALL_LOG="$TMPDIR_B1/config-calls.log"
+BASE_DIR_B1="$TMPDIR_B1/runners"
+RUNNER_VERSION_STUB="2.321.0"
+REPO_NAME_STUB="testrepo"
+FAKE_HASH="aaaa000000000000000000000000000000000000000000000000000000000000"
+
+# Platform detection for sha_tag used in verify_checksum
+_runner_os="linux"
+_runner_arch="x64"
+case "$(uname -s)" in Darwin) _runner_os="osx" ;; esac
+case "$(uname -m)" in aarch64 | arm64) _runner_arch="arm64" ;; esac
+SHA_TAG="${_runner_os}-${_runner_arch}"
+
+# Pre-populate runner dir: .runner triggers idempotency check;
+# no .service file => is_service_running returns false => re-provision path
+RUNNER_DIR="$BASE_DIR_B1/actions-runner-${REPO_NAME_STUB}-1"
+mkdir -p "$RUNNER_DIR"
+touch "$RUNNER_DIR/.runner"
+
+# config.sh stub: logs invocation arguments to CALL_LOG
+cat > "$RUNNER_DIR/config.sh" << 'CONFIG_EOF'
+#!/usr/bin/env bash
+echo "$*" >> "${CALL_LOG:?CALL_LOG not set}"
+exit 0
+CONFIG_EOF
+chmod +x "$RUNNER_DIR/config.sh"
+
+# svc.sh stub: no-op (service management not under test)
+cat > "$RUNNER_DIR/svc.sh" << 'SVCEOF'
+#!/usr/bin/env bash
+exit 0
+SVCEOF
+chmod +x "$RUNNER_DIR/svc.sh"
+
+# Pre-create tarball cache so download_runner_tarball skips curl download
+CACHE_DIR="$BASE_DIR_B1/actions-runner-cache"
+mkdir -p "$CACHE_DIR"
+touch "$CACHE_DIR/actions-runner-${_runner_os}-${_runner_arch}-${RUNNER_VERSION_STUB}.tar.gz"
+
+# gh stub: returns tokens and release body with fixed SHA256
+cat > "$STUB_DIR_B1/gh" << GH_EOF
+#!/usr/bin/env bash
+case "\$*" in
+    *registration-token*) echo 'fake-reg-token' ;;
+    *remove-token*)       echo 'fake-remove-token' ;;
+    *"release view"*)     echo '<!-- BEGIN SHA ${SHA_TAG} -->${FAKE_HASH}<!-- END SHA ${SHA_TAG} -->' ;;
+    *)                    exit 0 ;;
+esac
+GH_EOF
+chmod +x "$STUB_DIR_B1/gh"
+
+# sha256sum/shasum stub: returns fixed hash matching gh stub (checksum always passes)
+# sha256sum is used on Linux; shasum -a 256 is used on macOS (verify_checksum branches on OS)
+cat > "$STUB_DIR_B1/sha256sum" << SHAEOF
+#!/usr/bin/env bash
+echo "${FAKE_HASH}  \$1"
+SHAEOF
+chmod +x "$STUB_DIR_B1/sha256sum"
+cat > "$STUB_DIR_B1/shasum" << SHASUMEOF
+#!/usr/bin/env bash
+echo "${FAKE_HASH}  \$1"
+SHASUMEOF
+chmod +x "$STUB_DIR_B1/shasum"
+
+# sudo stub: strips -u USER and --preserve-env=... flags, executes remaining args
+cat > "$STUB_DIR_B1/sudo" << 'SUDOEOF'
+#!/usr/bin/env bash
+args=()
+skip=0
+for arg in "$@"; do
+    if [[ $skip -gt 0 ]]; then skip=$((skip - 1)); continue; fi
+    case "$arg" in
+        -u)              skip=1; continue ;;
+        --preserve-env=*) continue ;;
+        --)              continue ;;
+        *)               args+=("$arg") ;;
+    esac
+done
+exec "${args[@]}"
+SUDOEOF
+chmod +x "$STUB_DIR_B1/sudo"
+
+# Minimal stubs for remaining external tools
+for _stub in curl tar id systemctl useradd chown; do
+    printf '#!/usr/bin/env bash\nexit 0\n' > "$STUB_DIR_B1/$_stub"
+    chmod +x "$STUB_DIR_B1/$_stub"
+done
+
+# Run the script without --dry-run to trigger the idempotency/re-provision path
+CALL_LOG="$CALL_LOG" \
+    PATH="$STUB_DIR_B1:$PATH" \
+    GH_TOKEN=fake \
+    bash "$SCRIPT" \
+        --repo "testowner/${REPO_NAME_STUB}" \
+        --count 1 \
+        --base-dir "$BASE_DIR_B1" \
+        --user github-runner \
+        --runner-version "$RUNNER_VERSION_STUB" \
+        >/dev/null 2>&1 || true
+
+# Verify config.sh remove was called (deregister_runner was triggered)
+if grep -q "^remove$" "$CALL_LOG" 2>/dev/null; then
+    ok "Bug1(integration): config.sh remove was called during re-provision"
+else
+    fail "Bug1(integration): config.sh remove was NOT called — deregister path not triggered"
+fi
+
+# Verify config.sh --unattended was called (re-configure step ran)
+if grep -q -- "--unattended" "$CALL_LOG" 2>/dev/null; then
+    ok "Bug1(integration): config.sh --unattended was called for re-configuration"
+else
+    fail "Bug1(integration): config.sh --unattended was NOT called"
+fi
+
+# Verify ordering: config.sh remove must appear before config.sh --unattended
+_remove_line=$(grep -n "^remove$" "$CALL_LOG" 2>/dev/null | head -1 | cut -d: -f1)
+_unattended_line=$(grep -n -- "--unattended" "$CALL_LOG" 2>/dev/null | head -1 | cut -d: -f1)
+if [[ -n "${_remove_line:-}" && -n "${_unattended_line:-}" && "$_remove_line" -lt "$_unattended_line" ]]; then
+    ok "Bug1(integration): config.sh remove called BEFORE --unattended (correct order)"
+else
+    fail "Bug1(integration): call order wrong — remove not before --unattended (remove=${_remove_line:-missing} unattended=${_unattended_line:-missing})"
+fi
+
+# ---------------------------------------------------------------------------
 # Bug 2 — Tarball downloaded per-runner (not cached)
 #
 # setup_runner() downloads the tarball on every call, so --count 3 triggers
