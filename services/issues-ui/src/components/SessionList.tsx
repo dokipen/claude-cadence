@@ -1,4 +1,3 @@
-import { useRef, useEffect } from "react";
 import type { Agent } from "../types";
 import type { AgentSession } from "../hooks/useAllSessions";
 import styles from "../styles/agents.module.css";
@@ -17,33 +16,6 @@ function sessionKey(s: AgentSession): string {
 }
 
 export function SessionList({ agents, sessions, openKeys, onSessionClick, isCollapsed, onToggle }: SessionListProps) {
-  const sidebarRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const content = contentRef.current;
-    const sidebar = sidebarRef.current;
-    if (!content) return;
-
-    if (isCollapsed) {
-      content.setAttribute("inert", "");
-      return;
-    }
-
-    if (!sidebar) {
-      content.removeAttribute("inert");
-      return;
-    }
-
-    const handleTransitionEnd = (e: TransitionEvent) => {
-      if (e.target === sidebar && e.propertyName === "width") {
-        content.removeAttribute("inert");
-      }
-    };
-    sidebar.addEventListener("transitionend", handleTransitionEnd, { once: true });
-    return () => sidebar.removeEventListener("transitionend", handleTransitionEnd);
-  }, [isCollapsed]);
-
   // Group sessions by agent
   const sessionsByAgent = new Map<string, AgentSession[]>();
   for (const s of sessions) {
@@ -54,9 +26,9 @@ export function SessionList({ agents, sessions, openKeys, onSessionClick, isColl
 
   return (
     <div className={styles.sidebarWrapper} data-testid="session-list">
-      <div ref={sidebarRef} className={`${styles.sessionSidebar}${isCollapsed ? ` ${styles.collapsed}` : ""}`}>
+      <div className={`${styles.sessionSidebar}${isCollapsed ? ` ${styles.collapsed}` : ""}`}>
         <div
-          ref={contentRef}
+          inert={isCollapsed || undefined}
           aria-hidden={isCollapsed}
           className={`${styles.sidebarContent}${isCollapsed ? ` ${styles.sidebarContentHidden}` : ""}`}
         >
