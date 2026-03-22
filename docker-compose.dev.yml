@@ -23,6 +23,7 @@ services:
     environment:
       - DATABASE_URL=file:/app/data/issues.db
       - PORT=4000
+      - DEV_SEED=1
     healthcheck:
       # Use node (available in the Node.js image) to avoid BusyBox wget
       # limitations with --header/--post-data flags.

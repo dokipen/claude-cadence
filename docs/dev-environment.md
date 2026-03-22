@@ -23,7 +23,8 @@ Open **http://localhost** in your browser.
 
 ## Dev Data Seeding
 
-The dev environment automatically seeds a `claude-cadence` project on startup via `prisma/seed.ts`.
+The dev environment automatically seeds a `claude-cadence` project on startup via `prisma/seed.ts`
+(enabled by `DEV_SEED=1` set in `docker-compose.dev.yml`).
 After `docker compose -f docker-compose.dev.yml up`, the `claude-cadence` project is immediately
 available in the UI — no manual database surgery needed for basic usage.
 
