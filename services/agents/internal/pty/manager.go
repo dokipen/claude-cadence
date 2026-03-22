@@ -240,7 +240,7 @@ func (m *PTYManager) ServeTerminal(ctx context.Context, id string, conn *websock
 		msg := make([]byte, len(data)+1)
 		msg[0] = '0'
 		copy(msg[1:], data)
-		return conn.Write(ctx, websocket.MessageText, msg)
+		return conn.Write(ctx, websocket.MessageBinary, msg)
 	}
 
 	wf := writerFunc(func(p []byte) (int, error) {
