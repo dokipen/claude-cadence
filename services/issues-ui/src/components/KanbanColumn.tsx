@@ -11,10 +11,10 @@ const STATE_LABELS: Record<TicketState, string> = {
 };
 
 function findActiveSession(ticketNumber: number, sessions: AgentSession[]): AgentSession | undefined {
+  const pattern = new RegExp(`^(?:lead|refine|discuss)-${ticketNumber}$`);
   return sessions.find(
     ({ session }) =>
-      /^(lead|refine|discuss)-\d+$/.test(session.name) &&
-      session.name.endsWith(`-${ticketNumber}`) &&
+      pattern.test(session.name) &&
       (session.state === "running" || session.state === "creating"),
   );
 }

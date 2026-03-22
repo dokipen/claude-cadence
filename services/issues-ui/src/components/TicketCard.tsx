@@ -1,7 +1,6 @@
 import { useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router";
 import type { Ticket } from "../types";
-import type { AgentSession } from "../hooks/useAllSessions";
 import { PriorityBadge } from "./PriorityBadge";
 import { LabelBadge } from "./LabelBadge";
 import { LaunchAgentDialog } from "./LaunchAgentDialog";
@@ -16,7 +15,7 @@ export function TicketCard({
 }: {
   ticket: Ticket;
   repoUrl?: string;
-  activeSession?: AgentSession;
+  activeSession?: { agentName: string };
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const navigate = useNavigate();
