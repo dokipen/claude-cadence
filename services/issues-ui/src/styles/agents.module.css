@@ -318,6 +318,10 @@
   flex-direction: row;
   flex-shrink: 0;
   position: relative;
+  /* height: 100% is required to anchor the sidebar to the agentManagerBody height.
+     While align-items: stretch (the default) should achieve this, the sessionSidebar's
+     overflow-y: auto creates a scroll container that can cause the height to collapse
+     to content size in some browsers without an explicit anchor. */
   height: 100%;
 }
 
