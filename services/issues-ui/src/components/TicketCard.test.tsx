@@ -80,6 +80,8 @@ describe("TicketCard agent-running-indicator", () => {
       <TicketCard ticket={ticket} activeSession={activeSession} />,
     );
     expect(getByTestId("agent-running-indicator")).toBeTruthy();
+    const indicator = getByTestId("agent-running-indicator");
+    expect(indicator.querySelector("span")).toBeTruthy();
   });
 
   it("sets the title attribute to the agent name", () => {
@@ -96,5 +98,6 @@ describe("TicketCard agent-running-indicator", () => {
     );
     fireEvent.click(getByTestId("agent-running-indicator"));
     expect(mockNavigate).toHaveBeenCalledWith("/agents");
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
   });
 });
