@@ -23,3 +23,12 @@
   animation: chevronPulse 1.6s ease-in-out infinite;
   animation-delay: 0.6s;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron1,
+  .chevron2,
+  .chevron3,
+  .spark {
+    animation: none;
+  }
+}
