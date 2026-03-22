@@ -1,5 +1,4 @@
 import { useRef, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router";
 import { AgentLauncher } from "./AgentLauncher";
 import { getLaunchConfig } from "./launchConfig";
 import type { Session, TicketState } from "../types";
@@ -25,7 +24,6 @@ export function LaunchAgentDialog({
   ticketTitle,
 }: LaunchAgentDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const navigate = useNavigate();
 
   const config = getLaunchConfig(ticketState);
   const command = config.command(ticketNumber, ticketTitle);
@@ -55,9 +53,8 @@ export function LaunchAgentDialog({
   const handleLaunched = useCallback(
     (_session: Session, _agentName: string) => {
       handleClose();
-      navigate(`/ticket/${ticketId}?tab=agent`);
     },
-    [ticketId, handleClose, navigate],
+    [handleClose],
   );
 
   // Close on backdrop click

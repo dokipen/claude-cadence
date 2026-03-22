@@ -264,6 +264,8 @@ export function TicketDetail() {
       {activeTab === "agent" && (
         <AgentTab
           ticketNumber={ticket.number}
+          ticketTitle={ticket.title}
+          ticketState={ticket.state}
           repoUrl={ticket.project.repository}
         />
       )}
