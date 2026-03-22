@@ -50,7 +50,6 @@ const MOCK_SESSION = {
   tmux_session: "lead-2",
   created_at: "2026-03-16T12:00:00Z",
   agent_pid: 1234,
-  worktree_path: "/tmp/worktree",
   repo_url: "test-org/test-repo",
   base_ref: "main",
 };
