@@ -63,6 +63,16 @@ describe("tickets filter — individual filters", () => {
     expect(call.where.state).toBeUndefined();
   });
 
+  it("trims whitespace from labelName before filtering", async () => {
+    const ctx = makeMockContext([]);
+    await tickets(undefined, { labelName: "  bug  " }, ctx);
+
+    const call = ctx.prisma.ticket.findMany.mock.calls[0][0];
+    expect(call.where.labels).toEqual({
+      some: { label: { name: "bug" } },
+    });
+  });
+
   it("sets where.priority when priority arg is provided", async () => {
     const ctx = makeMockContext([]);
     await tickets(undefined, { priority: "HIGH" }, ctx);

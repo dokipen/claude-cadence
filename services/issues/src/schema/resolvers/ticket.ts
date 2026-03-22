@@ -102,7 +102,7 @@ export const ticketResolvers = {
       } else if (labelName) {
         where.labels = {
           some: {
-            label: { name: labelName },
+            label: { name: labelName.trim() },
           },
         };
       }
