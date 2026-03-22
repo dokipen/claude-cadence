@@ -240,7 +240,7 @@ describe("Terminal", () => {
   });
 
   // 7. xterm.js Terminal must be constructed with scroll-related options (issue #248)
-  it("constructs xterm.js Terminal with scrollback >= 1000 and scrollSensitivity >= 1", () => {
+  it("constructs xterm.js Terminal with scrollback >= 5000 and scrollSensitivity >= 1", () => {
     render(<Terminal agentName="agent-1" sessionId="sess-1" />);
 
     const ws = MockWebSocket.instances[0];
@@ -249,7 +249,7 @@ describe("Terminal", () => {
     expect(xtermInstances).toHaveLength(1);
     const opts = xtermInstances[0].options;
     expect(typeof opts.scrollback).toBe("number");
-    expect(opts.scrollback as number).toBeGreaterThanOrEqual(1000);
+    expect(opts.scrollback as number).toBeGreaterThanOrEqual(5000);
     expect(typeof opts.scrollSensitivity).toBe("number");
     expect(opts.scrollSensitivity as number).toBeGreaterThanOrEqual(1);
   });
@@ -301,15 +301,14 @@ describe("Terminal", () => {
     });
   });
 
-  // 8. Right-click on terminal container must suppress the browser's native context menu
-  //    so the tmux mouse context menu is not obscured (issue #266).
-  it("suppresses the browser native context menu on right-click (contextmenu event default prevented)", () => {
+  // 8. Right-click on terminal container must NOT suppress the browser native context menu.
+  it("does not suppress the browser native context menu (contextmenu event default NOT prevented)", () => {
     render(<Terminal agentName="agent-1" sessionId="sess-1" />);
 
     const container = screen.getByTestId("terminal-container");
 
     // A second listener on the same element reads e.defaultPrevented after
-    // the component's handler fires — per the DOM spec, defaultPrevented is
+    // any component handler fires — per the DOM spec, defaultPrevented is
     // visible to all listeners within the same dispatch, so this is reliable.
     let defaultPrevented = false;
     container.addEventListener("contextmenu", (e) => {
@@ -318,7 +317,7 @@ describe("Terminal", () => {
 
     fireEvent.contextMenu(container);
 
-    expect(defaultPrevented).toBe(true);
+    expect(defaultPrevented).toBe(false);
   });
 
 });

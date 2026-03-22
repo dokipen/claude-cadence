@@ -69,7 +69,7 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
       cursorBlink: true,
       fontSize: 12,
       fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace",
-      scrollback: 1000,
+      scrollback: 5000,
       scrollSensitivity: 1,
       fastScrollSensitivity: 5,
       theme: {
@@ -198,16 +198,6 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
       fitRef.current = null;
     };
   }, [connect]);
-
-  // Suppress the browser's native context menu so the tmux mouse context menu
-  // is not obscured when right-clicking inside the terminal (issue #266).
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    const handler = (e: MouseEvent) => e.preventDefault();
-    container.addEventListener("contextmenu", handler);
-    return () => container.removeEventListener("contextmenu", handler);
-  }, []);
 
   // Handle resize — debounced with rAF to avoid flooding CMD_RESIZE on rapid window drag
   useEffect(() => {
