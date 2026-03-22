@@ -1,6 +1,7 @@
 package pty_test
 
 import (
+	"bytes"
 	"context"
 	"net"
 	"net/http"
@@ -194,7 +195,7 @@ func TestServeTerminal_BinaryFrameType(t *testing.T) {
 		if readErr != nil {
 			t.Fatalf("ReadBuffer failed: %v", readErr)
 		}
-		if len(buf) > 0 && strings.Contains(string(buf), "\x80") {
+		if bytes.Contains(buf, []byte{0x80}) {
 			break
 		}
 		if time.Now().After(deadline) {
