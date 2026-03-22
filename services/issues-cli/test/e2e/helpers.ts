@@ -1,10 +1,11 @@
 import { spawn, execSync, type ChildProcess } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import jwt from "jsonwebtoken";
 import { randomBytes } from "node:crypto";
+import { inject } from "vitest";
 
 // Resolve paths relative to repo root (two levels up from issues-cli/)
 const REPO_ROOT = resolve(__dirname, "../../../..");
@@ -33,26 +34,16 @@ export async function createTestServer(): Promise<TestServer> {
   const dbPath = join(tmpDir, "test.db");
   const databaseUrl = `file:${dbPath}`;
 
+  // Copy the pre-migrated and pre-seeded template DB (created once in globalSetup)
+  const templateDbPath = inject("templateDbPath") as string;
+  copyFileSync(templateDbPath, dbPath);
+
   const env = {
     ...process.env,
     DATABASE_URL: databaseUrl,
     PORT: "0",
     JWT_SECRET: TEST_JWT_SECRET,
   };
-
-  // Run Prisma migrations
-  execSync("npx prisma migrate deploy", {
-    cwd: ISSUES_SERVICE_DIR,
-    env,
-    stdio: "pipe",
-  });
-
-  // Run seed
-  execSync("npx prisma db seed", {
-    cwd: ISSUES_SERVICE_DIR,
-    env,
-    stdio: "pipe",
-  });
 
   // Create a test user directly via SQL
   const sqlFile = join(tmpDir, "create-test-user.sql");
