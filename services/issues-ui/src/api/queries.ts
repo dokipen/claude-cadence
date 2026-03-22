@@ -181,3 +181,12 @@ export const TICKET_DETAIL_QUERY = gql`
     }
   }
 `;
+
+export const TRANSITION_TICKET_MUTATION = gql`
+  mutation TransitionTicket($id: ID!, $to: TicketState!) {
+    transitionTicket(id: $id, to: $to) {
+      id
+      state
+    }
+  }
+`;

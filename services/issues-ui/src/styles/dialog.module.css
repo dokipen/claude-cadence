@@ -46,3 +46,44 @@
 .dialogClose:hover {
   color: var(--text);
 }
+
+.dialogMessage {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.dialogCancelButton {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.85rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.dialogCancelButton:hover {
+  background: var(--surface-hover);
+}
+
+.dialogConfirmButton {
+  background: var(--error);
+  border: 1px solid var(--error);
+  color: #fff;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.dialogConfirmButton:hover {
+  opacity: 0.9;
+}

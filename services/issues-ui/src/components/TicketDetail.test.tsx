@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import type { TicketDetail as TicketDetailType, Project } from "../types";
 
+const mockDetailNavigate = vi.fn();
+
 // --- Mock hooks before any imports that use them ---
 vi.mock("../hooks/useProjects", () => ({
   useProjects: vi.fn(),
@@ -17,6 +19,7 @@ const mockNavigateFn = vi.fn();
 vi.mock("react-router", () => ({
   useParams: vi.fn(),
   useSearchParams: vi.fn(),
+  useNavigate: () => mockDetailNavigate,
   Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
     <a href={to}>{children}</a>
   ),
@@ -24,6 +27,18 @@ vi.mock("react-router", () => ({
     mockNavigateFn(to);
     return <div data-testid="navigate" data-to={to} />;
   },
+}));
+
+vi.mock("./ConfirmDialog", () => ({
+  ConfirmDialog: () => null,
+}));
+
+vi.mock("../hooks/useTransitionTicket", () => ({
+  useTransitionTicket: () => ({
+    transition: vi.fn().mockResolvedValue(undefined),
+    loading: false,
+    error: null,
+  }),
 }));
 
 // Mock child components that have complex dependencies
@@ -84,6 +99,7 @@ function makeTicket(projectId: string): TicketDetailType {
 beforeEach(() => {
   vi.restoreAllMocks();
   mockNavigateFn.mockClear();
+  mockDetailNavigate.mockClear();
 
   // Default router setup
   mockUseParams.mockReturnValue({ id: "ticket-1" });

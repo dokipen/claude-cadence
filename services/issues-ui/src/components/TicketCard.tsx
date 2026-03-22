@@ -4,7 +4,9 @@ import type { Ticket } from "../types";
 import { PriorityBadge } from "./PriorityBadge";
 import { LabelBadge } from "./LabelBadge";
 import { LaunchAgentDialog } from "./LaunchAgentDialog";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { getLaunchConfig } from "./launchConfig";
+import { useTransitionTicket } from "../hooks/useTransitionTicket";
 import type { ActiveSessionInfo } from "../types";
 import styles from "../styles/card.module.css";
 import agentStyles from "../styles/agents.module.css";
@@ -28,9 +30,13 @@ export function TicketCard({
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [anchorRect, setAnchorRect] = useState<DOMRect | undefined>(undefined);
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
+  const [closed, setClosed] = useState(false);
   const navigate = useNavigate();
+  const { transition, error: transitionError } = useTransitionTicket();
 
   const launchButtonLabel = getLaunchConfig(ticket.state).buttonLabel;
+  const canClose = ticket.state === "BACKLOG" || ticket.state === "REFINED";
 
   const handleActiveSessionClick = useCallback(
     (e: React.MouseEvent) => {
@@ -52,7 +58,32 @@ export function TicketCard({
     [],
   );
 
+  const handleCloseClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setConfirmCloseOpen(true);
+    },
+    [],
+  );
+
+  const handleConfirmClose = useCallback(async () => {
+    setConfirmCloseOpen(false);
+    try {
+      await transition(ticket.id, "CLOSED");
+      setClosed(true);
+    } catch {
+      // error is tracked in the hook; card remains visible
+    }
+  }, [transition, ticket.id]);
+
+  const handleCancelClose = useCallback(() => {
+    setConfirmCloseOpen(false);
+  }, []);
+
   const activeSession = hasActiveSession(sessions ?? [], ticket.number);
+
+  if (closed) return null;
 
   return (
     <>
@@ -91,6 +122,17 @@ export function TicketCard({
           </div>
         </Link>
         <div className={styles.cardActionsOverlay}>
+          {canClose && (
+            <button
+              type="button"
+              className={styles.cardCloseButton}
+              onClick={handleCloseClick}
+              aria-label="Close ticket"
+              data-testid="card-close-button"
+            >
+              &times;
+            </button>
+          )}
           {activeSession ? (
             <button
               type="button"
@@ -118,6 +160,11 @@ export function TicketCard({
             </span>
           )}
         </div>
+        {transitionError && (
+          <div className={styles.cardError} data-testid="card-close-error">
+            Failed to close
+          </div>
+        )}
       </div>
       <LaunchAgentDialog
         ticketNumber={ticket.number}
@@ -127,6 +174,14 @@ export function TicketCard({
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         anchorRect={anchorRect}
+      />
+      <ConfirmDialog
+        open={confirmCloseOpen}
+        title="Close ticket?"
+        message={`Close #${ticket.number} — ${ticket.title}?`}
+        confirmLabel="Close ticket"
+        onConfirm={handleConfirmClose}
+        onCancel={handleCancelClose}
       />
     </>
   );

@@ -354,6 +354,25 @@
   justify-content: center;
 }
 
+.headerActions {
+  margin-top: 0.75rem;
+}
+
+.closeTicketButton {
+  background: none;
+  border: 1px solid var(--error);
+  color: var(--error);
+  font-size: 0.8rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.closeTicketButton:hover {
+  background: var(--error);
+  color: #fff;
+}
+
 @media (max-width: 600px) {
   .sidebar {
     grid-template-columns: 1fr;

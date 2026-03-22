@@ -1,5 +1,7 @@
-import { useCallback } from "react";
-import { useParams, useSearchParams, Link, Navigate } from "react-router";
+import { useState, useCallback } from "react";
+import { useParams, useSearchParams, Link, Navigate, useNavigate } from "react-router";
+import { ConfirmDialog } from "./ConfirmDialog";
+import { useTransitionTicket } from "../hooks/useTransitionTicket";
 import { useTicket } from "../hooks/useTicket";
 import { useProjects } from "../hooks/useProjects";
 import { PriorityBadge } from "./PriorityBadge";
@@ -115,6 +117,23 @@ export function TicketDetail() {
     [setSearchParams],
   );
 
+  const navigate = useNavigate();
+  const { transition } = useTransitionTicket();
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
+
+  const canClose = ticket?.state === "BACKLOG" || ticket?.state === "REFINED";
+
+  const handleConfirmClose = useCallback(async () => {
+    if (!ticket) return;
+    setConfirmCloseOpen(false);
+    try {
+      await transition(ticket.id, "CLOSED");
+      navigate(`/projects/${ticket.project.id}`);
+    } catch {
+      // error handled by hook
+    }
+  }, [transition, ticket, navigate]);
+
   if (loading) {
     return (
       <div className={styles.container}>
@@ -164,6 +183,18 @@ export function TicketDetail() {
           </span>
           <PriorityBadge priority={ticket.priority} />
         </div>
+        {canClose && (
+          <div className={styles.headerActions}>
+            <button
+              type="button"
+              className={styles.closeTicketButton}
+              onClick={() => setConfirmCloseOpen(true)}
+              data-testid="detail-close-button"
+            >
+              Close ticket
+            </button>
+          </div>
+        )}
       </div>
 
       <div className={agentStyles.tabBar} data-testid="tab-bar">
@@ -269,6 +300,15 @@ export function TicketDetail() {
           repoUrl={ticket.project.repository}
         />
       )}
+
+      <ConfirmDialog
+        open={confirmCloseOpen}
+        title="Close ticket?"
+        message={`Close #${ticket.number} — ${ticket.title}?`}
+        confirmLabel="Close ticket"
+        onConfirm={handleConfirmClose}
+        onCancel={() => setConfirmCloseOpen(false)}
+      />
     </div>
   );
 }

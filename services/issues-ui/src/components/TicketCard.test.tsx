@@ -10,6 +10,20 @@ vi.mock("../styles/agents.module.css", () => ({ default: {} }));
 vi.mock("../styles/animated-icon.module.css", () => ({ default: {} }));
 
 // Mock child components to keep tests focused
+vi.mock("./ConfirmDialog", () => ({
+  ConfirmDialog: ({ open }: { open: boolean }) =>
+    open ? <div data-testid="confirm-dialog" /> : null,
+}));
+
+const mockTransition = vi.fn().mockResolvedValue(undefined);
+vi.mock("../hooks/useTransitionTicket", () => ({
+  useTransitionTicket: () => ({
+    transition: mockTransition,
+    loading: false,
+    error: null,
+  }),
+}));
+
 vi.mock("./LaunchAgentDialog", () => ({
   LaunchAgentDialog: ({ open }: { open: boolean }) =>
     open ? <div data-testid="launch-dialog" /> : null,
@@ -67,6 +81,8 @@ afterEach(() => {
 
 beforeEach(() => {
   mockNavigate.mockReset();
+  mockTransition.mockReset();
+  mockTransition.mockResolvedValue(undefined);
 });
 
 // ---------------------------------------------------------------------------
@@ -219,5 +235,52 @@ describe("TicketCard launch button", () => {
     expect(getByTestId("launch-dialog")).toBeTruthy();
     // Navigation must not occur when the launch dialog is opened
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TicketCard close button — visibility and behavior
+// ---------------------------------------------------------------------------
+
+describe("TicketCard close button", () => {
+  it("shows close button for BACKLOG tickets", () => {
+    const ticket = makeTicket({ state: "BACKLOG" });
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={[]} />);
+    expect(getByTestId("card-close-button")).toBeTruthy();
+  });
+
+  it("shows close button for REFINED tickets", () => {
+    const ticket = makeTicket({ state: "REFINED" });
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={[]} />);
+    expect(getByTestId("card-close-button")).toBeTruthy();
+  });
+
+  it("does not show close button for IN_PROGRESS tickets", () => {
+    const ticket = makeTicket({ state: "IN_PROGRESS" });
+    const { queryByTestId } = render(<TicketCard ticket={ticket} sessions={[]} />);
+    expect(queryByTestId("card-close-button")).toBeNull();
+  });
+
+  it("does not show close button for CLOSED tickets", () => {
+    const ticket = makeTicket({ state: "CLOSED" });
+    const { queryByTestId } = render(<TicketCard ticket={ticket} sessions={[]} />);
+    expect(queryByTestId("card-close-button")).toBeNull();
+  });
+
+  it("clicking close button does not navigate", () => {
+    const ticket = makeTicket({ state: "BACKLOG" });
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={[]} />);
+    fireEvent.click(getByTestId("card-close-button"));
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it("clicking close button opens confirm dialog", () => {
+    const ticket = makeTicket({ state: "BACKLOG" });
+    const { getByTestId, queryByTestId } = render(
+      <TicketCard ticket={ticket} sessions={[]} />,
+    );
+    expect(queryByTestId("confirm-dialog")).toBeNull();
+    fireEvent.click(getByTestId("card-close-button"));
+    expect(getByTestId("confirm-dialog")).toBeTruthy();
   });
 });
