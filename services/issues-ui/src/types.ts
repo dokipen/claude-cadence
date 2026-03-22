@@ -97,7 +97,7 @@ export interface Session {
   error_message?: string;
   agent_pid: number;
   worktree_path: string;
-  repo_url: string;
+  repo_url?: string;
   base_ref: string;
   waiting_for_input?: boolean;
   idle_since?: string;

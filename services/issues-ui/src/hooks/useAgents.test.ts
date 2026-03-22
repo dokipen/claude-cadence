@@ -49,3 +49,14 @@ describe("normalizeRepo", () => {
     );
   });
 });
+
+describe("normalizeRepo - nullish inputs from recovered sessions", () => {
+  it("returns empty string for undefined (recovered session with no repo_url)", () => {
+    expect(normalizeRepo(undefined)).toBe("");
+  });
+
+  it("returns empty string for null (defensive: guard handles falsy values beyond undefined)", () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(normalizeRepo(null as any)).toBe("");
+  });
+});
