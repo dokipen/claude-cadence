@@ -1,0 +1,25 @@
+@keyframes chevronPulse {
+  0%, 100% { opacity: 0.25; }
+  30% { opacity: 1; }
+  60% { opacity: 0.25; }
+}
+
+.chevron1 {
+  animation: chevronPulse 1.6s ease-in-out infinite;
+  animation-delay: 0s;
+}
+
+.chevron2 {
+  animation: chevronPulse 1.6s ease-in-out infinite;
+  animation-delay: 0.2s;
+}
+
+.chevron3 {
+  animation: chevronPulse 1.6s ease-in-out infinite;
+  animation-delay: 0.4s;
+}
+
+.spark {
+  animation: chevronPulse 1.6s ease-in-out infinite;
+  animation-delay: 0.6s;
+}
