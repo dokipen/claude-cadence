@@ -346,6 +346,15 @@
   padding: 0;
 }
 
+.sidebarContent {
+  transition: opacity 0.2s ease;
+}
+
+.sidebarContentHidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .sidebarToggle {
   display: flex;
   align-items: center;
