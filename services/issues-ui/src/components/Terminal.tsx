@@ -72,6 +72,8 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
       scrollback: 5000,
       scrollSensitivity: 1,
       fastScrollSensitivity: 5,
+      rightClickSelectsWord: true,
+      macOptionIsMeta: true,
       theme: {
         // Cadence dark palette — all foreground colors verified ≥ 4.5:1 contrast vs #0d1117
         background: "#0d1117",
