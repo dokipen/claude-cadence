@@ -66,12 +66,27 @@ func rateLimiterInternal(cfg config.RateLimitConfig, now func() time.Time) (lenF
 
 		t := now()
 
-		// Evict stale entries older than 5 minutes.
+		// Evict stale entries (> 5 min) when the map is at capacity.
+		// If nothing is stale, fall back to evicting the single oldest entry
+		// to enforce a hard cap and prevent unbounded growth.
 		if len(limiters) >= 1000 {
+			evicted := 0
 			for k, e := range limiters {
 				if t.Sub(e.lastSeen) > 5*time.Minute {
 					delete(limiters, k)
+					evicted++
 				}
+			}
+			if evicted == 0 {
+				var oldestKey string
+				var oldestTime time.Time
+				for k, e := range limiters {
+					if oldestKey == "" || e.lastSeen.Before(oldestTime) {
+						oldestKey = k
+						oldestTime = e.lastSeen
+					}
+				}
+				delete(limiters, oldestKey)
 			}
 		}
 
