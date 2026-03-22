@@ -4,37 +4,21 @@ import type { Session } from "../types";
 import styles from "../styles/dialog.module.css";
 
 interface RefineAllDialogProps {
-  ticketNumbers: number[];
   repoUrl: string | undefined;
   open: boolean;
   onClose: () => void;
 }
 
 export function RefineAllDialog({
-  ticketNumbers,
   repoUrl,
   open,
   onClose,
 }: RefineAllDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
-  const PREFIX = "Please run /refine on each of the following backlog tickets, one at a time: ";
-  const MAX_LEN = 500;
-
-  // Build the ticket refs that fit within the limit
-  const ticketRefs: string[] = [];
-  let length = PREFIX.length;
-  for (const n of ticketNumbers) {
-    const ref = ticketRefs.length === 0 ? `#${n}` : `, #${n}`;
-    if (length + ref.length > MAX_LEN) break;
-    ticketRefs.push(`#${n}`);
-    length += ref.length;
-  }
-
-  const command = PREFIX + ticketRefs.join(", ");
+  const command = "/refine";
   const sessionName = "refine-all";
   const buttonLabel = "Refine All";
-  const truncated = ticketRefs.length < ticketNumbers.length;
 
   useEffect(() => {
     const el = dialogRef.current;
@@ -102,11 +86,6 @@ export function RefineAllDialog({
             sessionName={sessionName}
             buttonLabel={buttonLabel}
           />
-        )}
-        {truncated && (
-          <p className={styles.truncationNote}>
-            {ticketRefs.length} of {ticketNumbers.length} tickets fit in one session. Launch again for the remaining.
-          </p>
         )}
       </div>
     </dialog>

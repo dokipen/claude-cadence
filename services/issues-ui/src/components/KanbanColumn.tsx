@@ -72,7 +72,6 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
     </div>
     {state === "BACKLOG" && (
       <RefineAllDialog
-        ticketNumbers={tickets.map((t) => t.number)}
         repoUrl={repoUrl}
         open={showRefineAll}
         onClose={() => setShowRefineAll(false)}
