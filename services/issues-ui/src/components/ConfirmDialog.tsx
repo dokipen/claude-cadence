@@ -60,36 +60,38 @@ export function ConfirmDialog({
       onCancel={handleClose}
       data-testid="confirm-dialog"
     >
-      <div className={styles.dialogContent}>
-        <div className={styles.dialogHeader}>
-          <h2 className={styles.dialogTitle}>{title}</h2>
-          <button
-            className={styles.dialogClose}
-            onClick={handleClose}
-            aria-label="Cancel"
-            data-testid="confirm-dialog-cancel-x"
-          >
-            &times;
-          </button>
+      {open && (
+        <div className={styles.dialogContent}>
+          <div className={styles.dialogHeader}>
+            <h2 className={styles.dialogTitle}>{title}</h2>
+            <button
+              className={styles.dialogClose}
+              onClick={handleClose}
+              aria-label="Cancel"
+              data-testid="confirm-dialog-cancel-x"
+            >
+              &times;
+            </button>
+          </div>
+          <p className={styles.dialogMessage}>{message}</p>
+          <div className={styles.dialogActions}>
+            <button
+              className={styles.dialogCancelButton}
+              onClick={handleClose}
+              data-testid="confirm-dialog-cancel"
+            >
+              Cancel
+            </button>
+            <button
+              className={styles.dialogConfirmButton}
+              onClick={handleConfirm}
+              data-testid="confirm-dialog-confirm"
+            >
+              {confirmLabel}
+            </button>
+          </div>
         </div>
-        <p className={styles.dialogMessage}>{message}</p>
-        <div className={styles.dialogActions}>
-          <button
-            className={styles.dialogCancelButton}
-            onClick={handleClose}
-            data-testid="confirm-dialog-cancel"
-          >
-            Cancel
-          </button>
-          <button
-            className={styles.dialogConfirmButton}
-            onClick={handleConfirm}
-            data-testid="confirm-dialog-confirm"
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </div>
+      )}
     </dialog>
   );
 }
