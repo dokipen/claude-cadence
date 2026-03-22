@@ -258,9 +258,6 @@ describe("Terminal", () => {
   it("constructs xterm.js Terminal with rightClickSelectsWord: true and macOptionIsMeta: true", () => {
     render(<Terminal agentName="agent-1" sessionId="sess-1" />);
 
-    const ws = MockWebSocket.instances[0];
-    act(() => { ws.simulateOpen(); });
-
     expect(xtermInstances).toHaveLength(1);
     const opts = xtermInstances[0].options;
     expect(opts.rightClickSelectsWord).toBe(true);
