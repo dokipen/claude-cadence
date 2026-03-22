@@ -86,7 +86,7 @@ export function TicketCard({
             )}
           </div>
         </Link>
-        <span className={styles.cardActionsOverlay}>
+        <div className={styles.cardActionsOverlay}>
           {activeSession ? (
             <button
               type="button"
@@ -100,6 +100,7 @@ export function TicketCard({
             </button>
           ) : (
             <button
+              type="button"
               className={agentStyles.cardLaunchButton}
               onClick={handleLaunchClick}
               data-testid="card-launch-button"
@@ -112,7 +113,7 @@ export function TicketCard({
               {ticket.storyPoints}
             </span>
           )}
-        </span>
+        </div>
       </div>
       <LaunchAgentDialog
         ticketNumber={ticket.number}
