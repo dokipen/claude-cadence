@@ -378,5 +378,23 @@ describe("createSession", () => {
     expect(err).toBeInstanceOf(HubError);
     expect(err).toMatchObject({ status: 502 });
   });
+
+  it("throws HubError with status 502 when response envelope is missing the session key", async () => {
+    mockFetch({ json: () => Promise.resolve({ notSession: validSession }) });
+    const err = await createSession("my-agent", "default", "my-session").catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(HubError);
+    expect(err).toMatchObject({ status: 502 });
+  });
+
+  it("throws HubError with status 502 when response is not an object", async () => {
+    mockFetch({ json: () => Promise.resolve("invalid") });
+    const err = await createSession("my-agent", "default", "my-session").catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(HubError);
+    expect(err).toMatchObject({ status: 502 });
+  });
 });
 
