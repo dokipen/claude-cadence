@@ -290,6 +290,8 @@ SCRIPT
     <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:$HOME/.local/bin:$HOME/bin</string>
     <key>HOME</key>
     <string>$HOME</string>
+    <key>LANG</key>
+    <string>en_US.UTF-8</string>
   </dict>
 </dict>
 </plist>
