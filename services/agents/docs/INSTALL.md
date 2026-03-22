@@ -519,3 +519,23 @@ grpcurl -plaintext 127.0.0.1:4141 list
 # Check connectivity without reflection
 grpcurl -plaintext 127.0.0.1:4141 agents.v1.AgentService/ListSessions
 ```
+
+### Local Network permission blocked (macOS)
+
+**Symptom:** The hub connection fails with:
+
+```
+dial tcp 192.168.x.x:443: connect: no route to host
+```
+
+even though the host is otherwise reachable on the LAN.
+
+**Cause:** macOS requires explicit permission for processes to access local network hosts. Interactive terminal processes inherit the terminal's Local Network permission, but launchd agents must be independently approved. macOS may silently deny connections without prompting.
+
+**Fix:** Open **System Settings > Privacy & Security > Local Network** and enable access for `agentd`. If it does not appear by name, look for `a.out` — the default identifier for Go binaries.
+
+After granting permission, restart the service:
+
+```bash
+launchctl kickstart -k "gui/$(id -u)/com.cadence.agentd"
+```
