@@ -190,3 +190,10 @@
   background: var(--error);
   color: #fff;
 }
+
+.cardError {
+  font-size: 0.65rem;
+  color: var(--error);
+  text-align: right;
+  padding-top: 0.125rem;
+}

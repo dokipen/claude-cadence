@@ -33,7 +33,7 @@ export function TicketCard({
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [closed, setClosed] = useState(false);
   const navigate = useNavigate();
-  const { transition } = useTransitionTicket();
+  const { transition, error: transitionError } = useTransitionTicket();
 
   const launchButtonLabel = getLaunchConfig(ticket.state).buttonLabel;
   const canClose = ticket.state === "BACKLOG" || ticket.state === "REFINED";
@@ -160,6 +160,11 @@ export function TicketCard({
             </span>
           )}
         </div>
+        {transitionError && (
+          <div className={styles.cardError} data-testid="card-close-error">
+            Failed to close
+          </div>
+        )}
       </div>
       <LaunchAgentDialog
         ticketNumber={ticket.number}

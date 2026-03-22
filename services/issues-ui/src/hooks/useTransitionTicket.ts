@@ -32,9 +32,9 @@ export function useTransitionTicket(): UseTransitionTicketResult {
           id,
           to,
         });
-      } catch {
+      } catch (err) {
         setError("Failed to update ticket");
-        throw new Error("Failed to update ticket");
+        throw err;
       } finally {
         setLoading(false);
       }

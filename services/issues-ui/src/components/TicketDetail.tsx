@@ -301,16 +301,14 @@ export function TicketDetail() {
         />
       )}
 
-      {ticket && (
-        <ConfirmDialog
-          open={confirmCloseOpen}
-          title="Close ticket?"
-          message={`Close #${ticket.number} — ${ticket.title}?`}
-          confirmLabel="Close ticket"
-          onConfirm={handleConfirmClose}
-          onCancel={() => setConfirmCloseOpen(false)}
-        />
-      )}
+      <ConfirmDialog
+        open={confirmCloseOpen}
+        title="Close ticket?"
+        message={`Close #${ticket.number} — ${ticket.title}?`}
+        confirmLabel="Close ticket"
+        onConfirm={handleConfirmClose}
+        onCancel={() => setConfirmCloseOpen(false)}
+      />
     </div>
   );
 }
