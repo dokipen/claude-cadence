@@ -25,8 +25,10 @@ func TestSessionNameRe(t *testing.T) {
 		{"with hyphens", "my-agent-session", true},
 		{"with underscores", "my_agent_session", true},
 		{"with dots", "my.agent.1", true},
-		{"with tilde", "~my-session", true},
+		{"with tilde mid-name", "my~session", true},
 		{"mixed allowed chars", "agent_1.0~beta-2", true},
+		{"leading dot", ".hidden", false},
+		{"leading tilde", "~my-session", false},
 		{"space", "my session", false},
 		{"forward slash", "my/session", false},
 		{"backslash", `my\session`, false},
@@ -69,6 +71,8 @@ func TestCreate_SessionNameInvalidCharsReturnErrInvalidArgument(t *testing.T) {
 		{"unicode emoji", "agent🚀"},
 		{"at sign", "user@host"},
 		{"semicolon", "sess;ion"},
+		{"leading dot", ".hidden"},
+		{"leading tilde", "~session"},
 	}
 
 	for _, tt := range tests {
