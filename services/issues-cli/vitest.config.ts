@@ -13,5 +13,15 @@ export default defineConfig({
     sequence: {
       concurrent: false,
     },
+    // Cap concurrent file workers to bound CI resource spike:
+    // Each E2E file runs 3 sequential execSync Prisma calls then holds a live tsx server.
+    // Without a cap all 11 files run simultaneously: up to 11 concurrent blocking Prisma calls + 11 live servers.
+    // maxForks: 4 limits peak concurrency to 4 blocking calls + 4 servers without eliminating the speedup.
+    pool: "forks",
+    poolOptions: {
+      forks: {
+        maxForks: 4,
+      },
+    },
   },
 });
