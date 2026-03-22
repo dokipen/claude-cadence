@@ -273,19 +273,20 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	}
 
 	// Get PID (now returns agent process PID directly).
+	// If the command exited immediately (e.g., fast-exit profile), the tmux
+	// session and server may already be gone. Mark as stopped and skip ttyd
+	// to avoid launching a terminal for a dead session.
 	pid, err := m.tmux.GetPanePID(sessionName)
 	if err != nil {
-		errMsg := fmt.Sprintf("tmux session exited immediately: %v", err)
-		slog.Warn("session creation failed", "session", sessionName, "error", err)
-		// Clean up the tmux session if it still exists.
+		slog.Info("session command exited immediately", "session", sessionName, "error", err)
 		if m.tmuxHasSession(sessionName) {
 			_ = m.tmux.KillSession(sessionName)
 		}
 		m.store.Update(sessionID, func(s *Session) {
-			s.State = StateError
-			s.ErrorMessage = errMsg
+			s.State = StateStopped
+			s.StoppedAt = time.Now()
 		})
-		return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
+		return m.mustGet(sessionID), nil
 	}
 
 	// Start ttyd if enabled.
