@@ -1,4 +1,3 @@
-import { useRef, useEffect } from "react";
 import type { Agent } from "../types";
 import type { AgentSession } from "../hooks/useAllSessions";
 import styles from "../styles/agents.module.css";
@@ -17,19 +16,6 @@ function sessionKey(s: AgentSession): string {
 }
 
 export function SessionList({ agents, sessions, openKeys, onSessionClick, isCollapsed, onToggle }: SessionListProps) {
-  const contentRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const content = contentRef.current;
-    if (!content) return;
-
-    if (isCollapsed) {
-      content.setAttribute("inert", "");
-    } else {
-      content.removeAttribute("inert");
-    }
-  }, [isCollapsed]);
-
   // Group sessions by agent
   const sessionsByAgent = new Map<string, AgentSession[]>();
   for (const s of sessions) {
@@ -42,7 +28,7 @@ export function SessionList({ agents, sessions, openKeys, onSessionClick, isColl
     <div className={styles.sidebarWrapper} data-testid="session-list">
       <div className={`${styles.sessionSidebar}${isCollapsed ? ` ${styles.collapsed}` : ""}`}>
         <div
-          ref={contentRef}
+          inert={isCollapsed || undefined}
           aria-hidden={isCollapsed}
           className={`${styles.sidebarContent}${isCollapsed ? ` ${styles.sidebarContentHidden}` : ""}`}
         >
