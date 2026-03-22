@@ -277,13 +277,10 @@ func TestRateLimiterHardCap(t *testing.T) {
 	}
 }
 
-// TestVictimEvictionAttack reproduces a security bug: an attacker rotating
-// through 1000+ fresh IPs can force the LRU hard-cap eviction to remove a
-// victim IP's rate-limiter entry, resetting its token bucket to a full burst
-// and erasing all accumulated rate-limit debt.
-//
-// This test is expected to FAIL with the current implementation because the
-// bug is not yet fixed: the victim's limiter is recreated fresh after eviction.
+// TestVictimEvictionAttack verifies that an attacker rotating through many
+// fresh IPs cannot force the LRU hard-cap eviction to remove a victim IP's
+// rate-limiter entry, which would reset its token bucket to a full burst
+// and erase all accumulated rate-limit debt.
 func TestVictimEvictionAttack(t *testing.T) {
 	// Burst=5, RequestsPerSecond=1 — tokens are precious.
 	cfg := config.RateLimitConfig{
@@ -328,12 +325,13 @@ func TestVictimEvictionAttack(t *testing.T) {
 		t.Fatalf("setup: victim 6th request got %d, want 429 (bucket should be empty)", code)
 	}
 
-	// Phase 2: fill the rest of the map with 999 fresh attacker IPs from
-	// different /24 subnets. Clock advances to laterTime so all attacker
-	// entries have lastSeen > victim's lastSeen (victim stays oldest).
-	// The victim is already entry #1; we add 999 more to reach 1000 total.
+	// Phase 2: fill the rest of the map with rateLimiterMaxEntries-1 fresh
+	// attacker IPs from different /24 subnets. Clock advances to laterTime so
+	// all attacker entries have lastSeen > victim's lastSeen (victim stays
+	// oldest). The victim is already entry #1; we add rateLimiterMaxEntries-1
+	// more to reach rateLimiterMaxEntries total.
 	currentTime = laterTime
-	for i := 0; i < 999; i++ {
+	for i := 0; i < rateLimiterMaxEntries-1; i++ {
 		// Spread across different /24 subnets as described in the issue.
 		attackerIP := fmt.Sprintf("192.%d.%d.1", (i/256)%256, i%256)
 		if code := sendRequest(attackerIP); code != http.StatusOK {
@@ -379,6 +377,8 @@ func TestCidrKey(t *testing.T) {
 		{"1.2.3.0", "1.2.3.0"},
 		// IPv6 host address → /48 prefix (lower 80 bits zeroed).
 		{"2001:db8::1", "2001:db8::"},
+		// IPv4-mapped IPv6 address → treated as IPv4, masked to /24.
+		{"::ffff:1.2.3.4", "1.2.3.0"},
 		// Unparseable string → returned unchanged.
 		{"not-an-ip", "not-an-ip"},
 	}

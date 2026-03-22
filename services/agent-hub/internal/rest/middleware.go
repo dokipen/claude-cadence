@@ -17,6 +17,11 @@ import (
 // per-IP rate limiter map. Eviction fires when this limit is reached.
 const rateLimiterMaxEntries = 300
 
+// rateLimiterDeniedProtectionWindow is how long a denied entry is protected
+// from LRU eviction after it was last rate-limited. After this window the
+// entry is evictable again (the token bucket will have partially refilled).
+const rateLimiterDeniedProtectionWindow = 2 * time.Minute
+
 // tokenAuth returns middleware that validates Bearer token authentication.
 func tokenAuth(token string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -115,10 +120,12 @@ func rateLimiterInternal(cfg config.RateLimitConfig, now func() time.Time) (lenF
 				var oldestKey string
 				var oldestTime time.Time
 				for k, e := range limiters {
-					if e.denied {
-						// Never evict an entry that has been rate-limited;
-						// doing so would reset the token bucket and erase
-						// accumulated rate-limit debt.
+					if e.denied && t.Sub(e.deniedAt) < rateLimiterDeniedProtectionWindow {
+						// Skip entries that were recently rate-limited to
+						// prevent victim-eviction attacks that would reset
+						// the token bucket and erase rate-limit debt.
+						// After the protection window expires the entry is
+						// evictable again (token bucket has partially refilled).
 						continue
 					}
 					if oldestKey == "" || e.lastSeen.Before(oldestTime) {
@@ -149,6 +156,7 @@ func rateLimiterInternal(cfg config.RateLimitConfig, now func() time.Time) (lenF
 		defer mu.Unlock()
 		if entry, ok := limiters[ip]; ok {
 			entry.denied = true
+			entry.deniedAt = now()
 		}
 	}
 
@@ -182,6 +190,7 @@ type rateLimiterEntry struct {
 	limiter  *rate.Limiter
 	lastSeen time.Time
 	// denied is set to true when this entry has been rate-limited at least
-	// once. Denied entries are exempt from LRU eviction; see getLimiter.
-	denied bool
+	// once. Recently denied entries are exempt from LRU eviction; see getLimiter.
+	denied   bool
+	deniedAt time.Time
 }
