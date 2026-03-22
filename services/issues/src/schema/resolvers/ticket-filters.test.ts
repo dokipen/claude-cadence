@@ -458,3 +458,48 @@ describe("tickets — hasNextPage and edge construction", () => {
     expect(result.pageInfo.hasNextPage).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Invalid filter inputs
+// ---------------------------------------------------------------------------
+describe("tickets filter — invalid filter inputs", () => {
+  it("throws GraphQLError with BAD_USER_INPUT when state is invalid", async () => {
+    const ctx = makeMockContext([]);
+    await expect(
+      tickets(undefined, { state: "INVALID_STATE" }, ctx)
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("Invalid state"),
+      extensions: { code: "BAD_USER_INPUT" },
+    });
+  });
+
+  it("throws GraphQLError with BAD_USER_INPUT when priority is invalid", async () => {
+    const ctx = makeMockContext([]);
+    await expect(
+      tickets(undefined, { priority: "INVALID_PRIORITY" }, ctx)
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("Invalid priority"),
+      extensions: { code: "BAD_USER_INPUT" },
+    });
+  });
+
+  it("throws GraphQLError with BAD_USER_INPUT when excludePriority is invalid", async () => {
+    const ctx = makeMockContext([]);
+    await expect(
+      tickets(undefined, { excludePriority: "INVALID_PRIORITY" }, ctx)
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("Invalid excludePriority"),
+      extensions: { code: "BAD_USER_INPUT" },
+    });
+  });
+
+  it("throws GraphQLError with BAD_USER_INPUT when priority and excludePriority are the same", async () => {
+    const ctx = makeMockContext([]);
+    await expect(
+      tickets(undefined, { priority: "HIGH", excludePriority: "HIGH" }, ctx)
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("priority and excludePriority cannot be the same"),
+      extensions: { code: "BAD_USER_INPUT" },
+    });
+  });
+});
