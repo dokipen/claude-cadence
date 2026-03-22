@@ -308,6 +308,9 @@ describe("Terminal", () => {
 
     const container = screen.getByTestId("terminal-container");
 
+    // A second listener on the same element reads e.defaultPrevented after
+    // the component's handler fires — per the DOM spec, defaultPrevented is
+    // visible to all listeners within the same dispatch, so this is reliable.
     let defaultPrevented = false;
     container.addEventListener("contextmenu", (e) => {
       defaultPrevented = e.defaultPrevented;
