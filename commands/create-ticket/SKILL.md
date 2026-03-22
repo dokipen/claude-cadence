@@ -24,7 +24,7 @@ Do not plan, scaffold, implement, or suggest next steps. The purpose of this com
 
 ## Provider Detection
 
-Detect the configured ticket provider before any operation. Refer to the `ticket-provider` skill for full details.
+Detect the configured ticket provider before any operation. Refer to the `ticket-provider` skill for full details and command reference.
 
 ```bash
 PROVIDER=$(grep -A3 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'provider:' | tail -1 | awk '{print $2}' || echo "github")
@@ -43,7 +43,7 @@ Gather the following — infer from arguments where possible, otherwise ask the 
 | **Description** | Yes | What and why — context for the implementer |
 | **Acceptance criteria** | Yes | Bullet list of conditions that define "done" |
 | **Label/type** | Yes | `bug`, `enhancement`, `chore`, etc. |
-| **Target project** | When ambiguous | Ask if `CLAUDE.md` has no `project_id` and multiple projects exist |
+| **Target project** | If no `project_id` in `CLAUDE.md` | Ask the user which project to use |
 
 If the user provided a title as an argument, use it. Ask for anything missing in a single prompt — do not ping-pong with one question at a time.
 
@@ -66,7 +66,7 @@ Acceptance criteria:
 Proceed? [Y/n]
 ```
 
-Skip confirmation if the user provided all details up front and said something like "create a ticket for X, description Y, AC Z".
+Skip confirmation only when the user explicitly provided **all three** of title, description, and acceptance criteria in their initial message.
 
 ### 3. Create the Ticket
 
@@ -75,11 +75,14 @@ Skip confirmation if the user provided all details up front and said something l
 gh issue create \
   --title "<title>" \
   --label "<type>" \
-  --body "## Description
+  --body "$(cat <<'EOF'
+## Description
 <description>
 
 ## Acceptance Criteria
-<criteria>"
+<criteria>
+EOF
+)"
 ```
 
 **Issues API:**
@@ -88,9 +91,16 @@ issues ticket create \
   --project "$PROJECT" \
   --title "<title>" \
   --labels "<LABEL_ID>" \
-  --description "## Description
-<description>" \
-  --acceptance-criteria "<criteria>" \
+  --description "$(cat <<'EOF'
+## Description
+<description>
+EOF
+)" \
+  --acceptance-criteria "$(cat <<'EOF'
+- [ ] <criterion 1>
+- [ ] <criterion 2>
+EOF
+)" \
   --json
 ```
 
