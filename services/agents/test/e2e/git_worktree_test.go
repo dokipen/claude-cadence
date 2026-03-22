@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	agentsv1 "github.com/dokipen/claude-cadence/services/agents/gen/agents/v1"
