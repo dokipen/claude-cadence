@@ -52,8 +52,10 @@ If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, 
 
    **Issues API:**
    ```bash
-   issues ticket view [NUMBER] --project $PROJECT --json
+   TICKET_JSON=$(issues ticket view [NUMBER] --project $PROJECT --json)
+   echo "$TICKET_JSON"
    ```
+   Save the output as `$TICKET_JSON` — it is reused for label detection in step 5.
 
 3. **If no issue exists**: Create one with a descriptive title and initial context:
 
@@ -393,7 +395,7 @@ The agent should return a detailed outline — not a final document, but raw mat
 
 Using the outline from Plan Phase 1, delegate to a `general-purpose` agent to write and commit the plan document:
 
-1. **Derive a slug** from the ticket title (lowercase, hyphenated, no special chars). Example: "Make a source code explorer" → `source-code-explorer`.
+1. **Derive a slug** from the ticket title: lowercase, spaces replaced with hyphens, all non-alphanumeric-or-hyphen characters removed. Example: "Make a source code explorer" → `source-code-explorer`. The slug must contain only `[a-z0-9-]` — verify this before use. The output path must start with `docs/plans/` and contain no `..` components.
 2. **Write the plan document** to `docs/plans/<slug>.md`. The document should include:
    - **Goal**: What this plan is trying to achieve
    - **Background**: Relevant context from the codebase
@@ -401,15 +403,12 @@ Using the outline from Plan Phase 1, delegate to a `general-purpose` agent to wr
    - **Implementation Phases**: Numbered phases, each with a title, description, and list of tasks. Phases should be independently implementable where possible.
    - **Sequencing**: Which phases must complete before others can begin (dependency graph)
    - **Open Questions**: Anything that needs user/stakeholder input before implementation
-3. **Commit the document**:
+3. **Commit the document**. Use the slug (not the raw ticket title) in the commit message to avoid shell metacharacter issues:
    ```bash
    git add docs/plans/<slug>.md
-   git commit -m "docs: add plan for [ticket title] (#[NUMBER])"
+   git commit -m "docs: add plan for <slug> (#[NUMBER])"
    ```
-4. **Push the branch**:
-   ```bash
-   git push -u origin [BRANCH]
-   ```
+4. **Create a PR and merge** using `/create-pr`. The plan document must land on the default branch before sub-tickets are created, so implementers can link to it at a stable path. Wait for the PR to merge before proceeding to Plan Phase 3.
 
 ### Plan Phase 3: Implementation Ticket Creation
 
@@ -424,7 +423,7 @@ gh issue create \
 [Phase description from plan]
 
 ## Plan Reference
-Derived from the plan document: \`docs/plans/<slug>.md\` (branch: \`[BRANCH]\`, plan ticket: #[NUMBER])
+Derived from the plan document: \`docs/plans/<slug>.md\` (plan ticket: #[NUMBER])
 
 ## Acceptance Criteria
 [Tasks and completion criteria from this phase]"
@@ -451,12 +450,15 @@ Record the created ticket number/ID for each phase — needed for blocker wiring
 
 ### Plan Phase 4: Blocker Wiring
 
-Using the sequencing dependencies from the plan document, wire up blockers between the newly created tickets:
+If the plan document identifies no sequencing dependencies, skip this phase entirely.
+
+Otherwise, wire up blockers between the newly created tickets for each dependency identified in the plan:
 
 **GitHub (default):**
-GitHub does not have a native blocker API via `gh`. Add a **Dependencies** section to each ticket that has prerequisites:
+GitHub does not have a native blocker API via `gh`. Add a **Dependencies** section to each ticket that has prerequisites. Fetch the existing body first to avoid double-expansion:
 ```bash
-gh issue edit [BLOCKED-NUMBER] --body "$(gh issue view [BLOCKED-NUMBER] --json body --jq '.body')
+CURRENT_BODY=$(gh issue view [BLOCKED-NUMBER] --json body --jq '.body')
+gh issue edit [BLOCKED-NUMBER] --body "$CURRENT_BODY
 
 ## Dependencies
 Blocked by: #[BLOCKER-NUMBER]"
