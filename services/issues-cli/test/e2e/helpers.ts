@@ -1,5 +1,5 @@
 import { spawn, execSync, type ChildProcess } from "node:child_process";
-import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -34,9 +34,16 @@ export async function createTestServer(): Promise<TestServer> {
   const dbPath = join(tmpDir, "test.db");
   const databaseUrl = `file:${dbPath}`;
 
-  // Copy the pre-migrated and pre-seeded template DB (created once in globalSetup)
+  // Copy the pre-migrated and pre-seeded template DB (created once in globalSetup).
+  // Also copy WAL and SHM files if present — SQLite WAL mode keeps committed writes
+  // in a separate -wal file until checkpointed, so omitting it would lose seeded data.
   const templateDbPath = inject("templateDbPath") as string;
   copyFileSync(templateDbPath, dbPath);
+  for (const suffix of ["-wal", "-shm"]) {
+    if (existsSync(`${templateDbPath}${suffix}`)) {
+      copyFileSync(`${templateDbPath}${suffix}`, `${dbPath}${suffix}`);
+    }
+  }
 
   const env = {
     ...process.env,

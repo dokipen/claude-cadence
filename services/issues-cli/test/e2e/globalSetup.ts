@@ -16,19 +16,27 @@ export async function setup({ provide }: { provide: (key: string, value: unknown
     DATABASE_URL: databaseUrl,
   };
 
-  // Run migrations once for all test files
-  execSync("npx prisma migrate deploy", {
-    cwd: ISSUES_SERVICE_DIR,
-    env,
-    stdio: "pipe",
-  });
+  try {
+    // Run migrations once for all test files
+    execSync("npx prisma migrate deploy", {
+      cwd: ISSUES_SERVICE_DIR,
+      env,
+      stdio: "pipe",
+    });
 
-  // Seed the template DB once
-  execSync("npx prisma db seed", {
-    cwd: ISSUES_SERVICE_DIR,
-    env,
-    stdio: "pipe",
-  });
+    // Seed the template DB once
+    execSync("npx prisma db seed", {
+      cwd: ISSUES_SERVICE_DIR,
+      env,
+      stdio: "pipe",
+    });
+  } catch (err) {
+    // Clean up on failure so we don't leave orphaned temp dirs
+    rmSync(templateDir, { recursive: true, force: true });
+    throw new Error(
+      `CLI E2E globalSetup failed: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
 
   provide("templateDbPath", templateDbPath);
 
