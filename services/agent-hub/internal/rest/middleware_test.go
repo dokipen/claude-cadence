@@ -179,8 +179,9 @@ func TestHandleListAgents(t *testing.T) {
 }
 
 // TestRateLimiterEviction verifies that eviction fires when the map reaches
-// exactly 1000 entries (>= 1000) and that stale entries (> 5 min old) are
-// removed during eviction.
+// rateLimiterMaxEntries and that stale entries (> 5 min old) are removed.
+// Each IP uses a distinct /24 prefix so that CIDR bucketing produces one
+// map entry per request.
 func TestRateLimiterEviction(t *testing.T) {
 	cfg := config.RateLimitConfig{
 		RequestsPerSecond: 1_000_000.0,
@@ -204,43 +205,47 @@ func TestRateLimiterEviction(t *testing.T) {
 		h.ServeHTTP(rec, req)
 	}
 
-	// Step 1: Add 999 distinct IPs with the old (stale) timestamp.
-	// All entries get lastSeen = baseTime (10 minutes ago).
-	for i := 0; i < 999; i++ {
-		sendRequest(fmt.Sprintf("10.0.%d.%d", i/256, i%256))
+	// Step 1: Add rateLimiterMaxEntries-1 distinct /24 subnets with the old
+	// (stale) timestamp. Each IP is in its own /24 so each produces a new
+	// map entry. All entries get lastSeen = baseTime (10 minutes ago).
+	staleCount := rateLimiterMaxEntries - 1
+	for i := 0; i < staleCount; i++ {
+		sendRequest(fmt.Sprintf("10.%d.%d.1", i/256, i%256))
 	}
 
-	if got := lenFunc(); got != 999 {
-		t.Fatalf("after 999 IPs: map size = %d, want 999", got)
+	if got := lenFunc(); got != staleCount {
+		t.Fatalf("after %d /24-distinct IPs: map size = %d, want %d", staleCount, got, staleCount)
 	}
 
 	// Step 2: Advance the clock to now so new entries are fresh.
 	currentTime = time.Now()
 
-	// Step 3: Add the 1000th distinct IP.
-	// len(limiters) is 999 before this call; 999 >= 1000 is false → no eviction → insert → len = 1000.
-	sendRequest("10.1.0.0")
+	// Step 3: Add the Nth distinct /24 subnet (N = rateLimiterMaxEntries).
+	// len(limiters) is N-1 before this call; N-1 >= N is false → no eviction → insert → len = N.
+	sendRequest("20.0.0.1")
 
-	if got := lenFunc(); got != 1000 {
-		t.Fatalf("after 1000th IP: map size = %d, want 1000", got)
+	if got := lenFunc(); got != rateLimiterMaxEntries {
+		t.Fatalf("after %dth /24: map size = %d, want %d", rateLimiterMaxEntries, got, rateLimiterMaxEntries)
 	}
 
-	// Step 4: Add the 1001st distinct IP.
-	// len(limiters) is 1000 before this call; 1000 >= 1000 is true → eviction runs.
-	// The first 999 entries have lastSeen = baseTime (10 min ago), so they are evicted.
-	// Entry 1000 ("10.1.0.0") has lastSeen = currentTime, so it survives.
-	// After eviction, the 1001st IP is inserted → map size = 2.
-	sendRequest("10.1.0.1")
+	// Step 4: Add the (N+1)th distinct /24 subnet.
+	// len(limiters) is N before this call; N >= N is true → eviction runs.
+	// The first N-1 entries have lastSeen = baseTime (10 min ago), so they are evicted.
+	// Entry N ("20.0.0.0/24") has lastSeen = currentTime, so it survives.
+	// After eviction, the (N+1)th entry is inserted → map size = 2.
+	sendRequest("20.1.0.1")
 
 	if got := lenFunc(); got != 2 {
-		t.Fatalf("after eviction triggered by 1001st IP: map size = %d, want 2 (eviction should have removed 999 stale entries)", got)
+		t.Fatalf("after eviction triggered by %dth /24: map size = %d, want 2 (stale eviction should have removed %d entries)", rateLimiterMaxEntries+1, got, staleCount)
 	}
 }
 
-// TestRateLimiterHardCap verifies that the map cannot grow beyond 1000 entries
-// even when all entries are permanently fresh (fixed clock, no stale eviction).
-// Guards against regression to the soft-eviction-only behavior where the map
-// would grow to the number of distinct IPs when none are stale.
+// TestRateLimiterHardCap verifies that the map cannot grow beyond
+// rateLimiterMaxEntries even when all entries are permanently fresh
+// (fixed clock, no stale eviction). Guards against regression to the
+// soft-eviction-only behavior where the map would grow without bound.
+// Each IP is in a distinct /24 subnet so CIDR bucketing produces one
+// entry per IP.
 func TestRateLimiterHardCap(t *testing.T) {
 	cfg := config.RateLimitConfig{
 		RequestsPerSecond: 1_000_000.0,
@@ -256,8 +261,9 @@ func TestRateLimiterHardCap(t *testing.T) {
 	noop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 	h := middlewareFn(noop)
 
-	// Send requests from 1500 distinct IPs.
-	for i := 0; i < 1500; i++ {
+	// Send requests from rateLimiterMaxEntries*2 distinct /24 subnets.
+	total := rateLimiterMaxEntries * 2
+	for i := 0; i < total; i++ {
 		ip := fmt.Sprintf("10.%d.%d.1:1234", i/256, i%256)
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.RemoteAddr = ip
@@ -266,7 +272,195 @@ func TestRateLimiterHardCap(t *testing.T) {
 	}
 
 	got := lenFunc()
-	if got != 1000 {
-		t.Fatalf("map size = %d after 1500 distinct fresh IPs; want 1000 (hard cap not enforced)", got)
+	if got != rateLimiterMaxEntries {
+		t.Fatalf("map size = %d after %d distinct fresh /24 subnets; want %d (hard cap not enforced)", got, total, rateLimiterMaxEntries)
 	}
+}
+
+// TestVictimEvictionAttack reproduces a security bug: an attacker rotating
+// through 1000+ fresh IPs can force the LRU hard-cap eviction to remove a
+// victim IP's rate-limiter entry, resetting its token bucket to a full burst
+// and erasing all accumulated rate-limit debt.
+//
+// This test is expected to FAIL with the current implementation because the
+// bug is not yet fixed: the victim's limiter is recreated fresh after eviction.
+func TestVictimEvictionAttack(t *testing.T) {
+	// Burst=5, RequestsPerSecond=1 — tokens are precious.
+	cfg := config.RateLimitConfig{
+		RequestsPerSecond: 1.0,
+		Burst:             5,
+	}
+
+	// Two-phase clock: victim is inserted at baseTime (older), attackers at
+	// laterTime (newer). This guarantees the victim has the oldest lastSeen
+	// and will be chosen by the LRU eviction pass.
+	baseTime := time.Now()
+	laterTime := baseTime.Add(1 * time.Second)
+	currentTime := baseTime
+	nowFn := func() time.Time { return currentTime }
+
+	_, middlewareFn := rateLimiterInternal(cfg, nowFn)
+
+	noop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	h := middlewareFn(noop)
+
+	sendRequest := func(ip string) int {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = ip + ":9999"
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	const victimIP = "10.0.0.1"
+
+	// Phase 1: drain the victim's full token bucket at baseTime.
+	// Burst=5 means 5 requests are allowed; a 6th would be rejected.
+	// We exhaust all 5 tokens so the victim has nothing left.
+	currentTime = baseTime
+	for i := 0; i < 5; i++ {
+		if code := sendRequest(victimIP); code != http.StatusOK {
+			t.Fatalf("setup: victim request %d/%d got %d, want 200", i+1, 5, code)
+		}
+	}
+	// Confirm the 6th request is already rejected (bucket truly empty).
+	if code := sendRequest(victimIP); code != http.StatusTooManyRequests {
+		t.Fatalf("setup: victim 6th request got %d, want 429 (bucket should be empty)", code)
+	}
+
+	// Phase 2: fill the rest of the map with 999 fresh attacker IPs from
+	// different /24 subnets. Clock advances to laterTime so all attacker
+	// entries have lastSeen > victim's lastSeen (victim stays oldest).
+	// The victim is already entry #1; we add 999 more to reach 1000 total.
+	currentTime = laterTime
+	for i := 0; i < 999; i++ {
+		// Spread across different /24 subnets as described in the issue.
+		attackerIP := fmt.Sprintf("192.%d.%d.1", (i/256)%256, i%256)
+		if code := sendRequest(attackerIP); code != http.StatusOK {
+			t.Fatalf("setup: attacker seed request %d got %d, want 200", i, code)
+		}
+	}
+
+	// Phase 3: send one brand-new attacker IP to trigger LRU eviction.
+	// The map is at 1000 entries; the new IP causes getLimiter to evict the
+	// single oldest entry. The victim (baseTime) is older than all attackers
+	// (laterTime), so the victim's limiter is evicted and destroyed.
+	currentTime = laterTime
+	if code := sendRequest("172.16.0.1"); code != http.StatusOK {
+		t.Fatalf("setup: eviction-trigger request got %d, want 200", code)
+	}
+
+	// Phase 4: make one more request from the victim IP.
+	//
+	// EXPECTED (correct behaviour): the victim's token bucket was already
+	// exhausted, so this request should be rate-limited → 429.
+	//
+	// ACTUAL (buggy behaviour): the eviction above destroyed the victim's
+	// limiter; getLimiter creates a brand-new one with a full Burst=5 bucket,
+	// so the request succeeds → 200.
+	//
+	// The test fails here because the current implementation is buggy.
+	code := sendRequest(victimIP)
+	if code != http.StatusTooManyRequests {
+		t.Errorf("victim request after eviction: got %d, want 429 — "+
+			"eviction reset the victim's token bucket (LRU eviction attack)", code)
+	}
+}
+
+// TestCidrKey verifies the cidrKey helper for all key input categories.
+func TestCidrKey(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		// IPv4 host address → /24 prefix (last octet zeroed).
+		{"1.2.3.200", "1.2.3.0"},
+		// IPv4 address whose last octet is already zero.
+		{"1.2.3.0", "1.2.3.0"},
+		// IPv6 host address → /48 prefix (lower 80 bits zeroed).
+		{"2001:db8::1", "2001:db8::"},
+		// Unparseable string → returned unchanged.
+		{"not-an-ip", "not-an-ip"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := cidrKey(tt.input)
+			if got != tt.want {
+				t.Errorf("cidrKey(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestRateLimiterCidrBucketing verifies that two IPs in the same /24 share a
+// single map entry, and that an IP in a different /24 gets its own entry.
+func TestRateLimiterCidrBucketing(t *testing.T) {
+	cfg := config.RateLimitConfig{
+		RequestsPerSecond: 1_000_000.0,
+		Burst:             1_000_000,
+	}
+
+	fixedTime := time.Now()
+	nowFn := func() time.Time { return fixedTime }
+
+	lenFunc, middlewareFn := rateLimiterInternal(cfg, nowFn)
+
+	noop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	h := middlewareFn(noop)
+
+	sendRequest := func(ip string) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = ip + ":1234"
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+	}
+
+	// Two IPs in the same /24 (10.0.0.0/24) should share one bucket.
+	sendRequest("10.0.0.1")
+	sendRequest("10.0.0.2")
+
+	if got := lenFunc(); got != 1 {
+		t.Fatalf("after two IPs in the same /24: map size = %d, want 1 (should share one bucket)", got)
+	}
+
+	// An IP in a different /24 (10.0.1.0/24) gets its own bucket.
+	sendRequest("10.0.1.1")
+
+	if got := lenFunc(); got != 2 {
+		t.Fatalf("after adding a third IP in a different /24: map size = %d, want 2", got)
+	}
+}
+
+// BenchmarkRateLimiter measures the hot path: a returning IP that already has
+// an entry in the map. b.RunParallel stresses the mutex under concurrency.
+func BenchmarkRateLimiter(b *testing.B) {
+	cfg := config.RateLimitConfig{
+		RequestsPerSecond: 1_000_000.0,
+		Burst:             1_000_000,
+	}
+
+	fixedTime := time.Now()
+	nowFn := func() time.Time { return fixedTime }
+
+	_, middlewareFn := rateLimiterInternal(cfg, nowFn)
+
+	noop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	h := middlewareFn(noop)
+
+	// Pre-populate the limiter with the IP that will be used in the hot path.
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "192.168.1.1:9999"
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			r.RemoteAddr = "192.168.1.1:9999"
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+		}
+	})
 }
