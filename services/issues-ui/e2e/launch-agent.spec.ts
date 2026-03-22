@@ -47,7 +47,6 @@ const MOCK_SESSION = {
   name: "lead-2",
   agent_profile: "lead",
   state: "creating",
-  tmux_session: "lead-2",
   created_at: "2026-03-16T12:00:00Z",
   agent_pid: 1234,
   repo_url: "test-org/test-repo",
