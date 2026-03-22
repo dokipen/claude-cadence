@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
 
 // Mock TerminalWindow to avoid xterm and other heavy deps.
 // Renders a div with data-testid="terminal-window-{key}" and a button that
@@ -117,6 +117,34 @@ describe("TilingLayout", () => {
     fireEvent.click(screen.getByTestId("maximize-btn-a"));
 
     expect(screen.getByTestId("terminal-window-a")).toBeDefined();
+    expect(screen.getByTestId("terminal-window-b")).toBeDefined();
+  });
+
+  it("clears maximized state when the maximized window is removed from windows", () => {
+    const { rerender } = render(
+      <TilingLayout
+        windows={makeWindows(["a", "b"])}
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    // Maximize window "a"
+    fireEvent.click(screen.getByTestId("maximize-btn-a"));
+    expect(screen.queryByTestId("terminal-window-b")).toBeNull();
+
+    // Remove window "a" (simulates termination)
+    act(() => {
+      rerender(
+        <TilingLayout
+          windows={makeWindows(["b"])}
+          onMinimize={vi.fn()}
+          onTerminated={vi.fn()}
+        />,
+      );
+    });
+
+    // Window "b" should now be visible (maximize state cleared)
     expect(screen.getByTestId("terminal-window-b")).toBeDefined();
   });
 });

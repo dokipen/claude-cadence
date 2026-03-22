@@ -77,17 +77,27 @@ function buildVerticalSplit(keys: string[]): LayoutNode {
 }
 
 export function TilingLayout({ windows, onMinimize, onTerminated, onReorder }: TilingLayoutProps) {
+  // All hooks first
   const [maximizedKey, setMaximizedKey] = useState<string | null>(null);
+  const [ratios, setRatios] = useState<Map<string, number>>(new Map());
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+  const draggingRef = useRef<{ path: string; direction: "horizontal" | "vertical"; startPos: number; startRatio: number; containerSize: number } | null>(null);
+  const dragKeyRef = useRef<string | null>(null);
+
+  // Derived values (not hooks)
   const visibleWindows = maximizedKey !== null
     ? windows.filter((w) => w.key === maximizedKey)
     : windows;
   const windowMap = new Map(windows.map((w) => [w.key, w]));
   const keys = visibleWindows.map((w) => w.key);
   const layout = buildLayout(keys);
-  const [ratios, setRatios] = useState<Map<string, number>>(new Map());
-  const draggingRef = useRef<{ path: string; direction: "horizontal" | "vertical"; startPos: number; startRatio: number; containerSize: number } | null>(null);
-  const dragKeyRef = useRef<string | null>(null);
-  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+
+  // Clear stale maximizedKey when its window is removed
+  useEffect(() => {
+    if (maximizedKey !== null && !windows.some((w) => w.key === maximizedKey)) {
+      setMaximizedKey(null);
+    }
+  }, [windows, maximizedKey]);
 
   // ESC key exits maximized mode
   useEffect(() => {
