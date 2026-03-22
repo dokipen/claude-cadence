@@ -122,10 +122,17 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
       retryCountRef.current = 0;
       setConnState("connected");
 
-      // Send initial handshake: JSON with terminal dimensions.
+      // Re-fit after connection to capture final layout dimensions, then send
+      // the initial resize frame so the PTY is sized correctly from the start.
+      // fit() is called before onResize is registered to avoid a double-send.
+      fit.fit();
       const { cols, rows } = term;
-      const handshake = JSON.stringify({ columns: cols, rows });
-      ws.send(handshake);
+      // Guard: skip if the container has no rendered size yet (hidden tab,
+      // zero-height tile). The ResizeObserver will fire once the container
+      // becomes visible and term.onResize will send the correct frame then.
+      if (cols > 0 && rows > 0) {
+        ws.send(CMD_RESIZE + JSON.stringify({ columns: cols, rows }));
+      }
 
       // Forward terminal input to ttyd with the INPUT prefix.
       term.onData((data) => {
