@@ -176,6 +176,11 @@ export async function createSession(
   return hubFetch(
     `/agents/${encodeURIComponent(agentName)}/sessions`,
     { method: "POST", body: JSON.stringify(body) },
-    validateSessionResponse,
+    (data) => {
+      if (!isRecord(data) || !isRecord(data.session)) {
+        throw new HubError(502, 'Invalid session response: expected object with "session" key');
+      }
+      return validateSessionResponse(data.session);
+    },
   );
 }
