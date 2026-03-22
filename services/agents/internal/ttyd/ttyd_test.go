@@ -171,3 +171,13 @@ func TestConcurrentStartStop(t *testing.T) {
 		t.Fatalf("expected %d freed ports, got %d", n, freeCount)
 	}
 }
+
+func TestCleanupOrphans_NoProcesses(t *testing.T) {
+	client := NewClient(true, 7000, 10, "127.0.0.1", "")
+
+	// Use a socket name that won't match any running process.
+	killed := client.CleanupOrphans("nonexistent-socket-for-test")
+	if killed != 0 {
+		t.Errorf("expected 0 killed processes, got %d", killed)
+	}
+}
