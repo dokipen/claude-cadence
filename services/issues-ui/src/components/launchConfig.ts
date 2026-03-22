@@ -29,6 +29,7 @@ export function getLaunchConfig(state: TicketState): LaunchConfig {
     case "CLOSED":
       return {
         buttonLabel: "Discuss",
+        // Note: ticket titles are user-controlled; see docs/discuss-action-security.md
         command: (n, title) => `Let's discuss ticket #${n} — ${title}`,
         sessionName: (n) => `discuss-${n}`,
       };
