@@ -461,7 +461,52 @@ Derived from the plan document: \`docs/plans/<slug>.md\` (plan ticket: #[NUMBER]
   --json
 ```
 
-Record the created ticket number/ID for each phase — needed for blocker wiring.
+Record the created ticket number/ID for each phase — needed for blocker wiring and milestone labeling.
+
+### Plan Phase 3a: Milestone Labeling
+
+After all implementation tickets are created, create a milestone label and apply it to the plan ticket and every child ticket. This enables filtering and tracking all tickets belonging to the same plan without manual label work.
+
+**Derive the label name** using the same slug from Plan Phase 2:
+```
+MILESTONE_LABEL="milestone:[N]-[slug]"
+```
+For example, issue #42 with slug `add-sound-effects` → `milestone:42-add-sound-effects`.
+
+**GitHub (default):**
+```bash
+# Create or update the label (--force is idempotent: creates if missing, updates color/desc if present)
+gh label create "milestone:[N]-[slug]" \
+  --color "#8B5CF6" \
+  --description "Plan milestone #[N]" \
+  --force
+
+# Apply to plan ticket
+gh issue edit [NUMBER] --add-label "milestone:[N]-[slug]"
+
+# Apply to each child ticket
+gh issue edit [CHILD-NUMBER-1] --add-label "milestone:[N]-[slug]"
+gh issue edit [CHILD-NUMBER-2] --add-label "milestone:[N]-[slug]"
+# ... repeat for all child tickets
+```
+
+**Issues API:**
+```bash
+# Create label if it doesn't already exist
+MILESTONE_LABEL_NAME="milestone:[N]-[slug]"
+EXISTING_ID=$(issues label list --json | jq -r --arg name "$MILESTONE_LABEL_NAME" '.[] | select(.name == $name) | .id')
+if [ -z "$EXISTING_ID" ]; then
+  issues label create --name "$MILESTONE_LABEL_NAME" --color "#8B5CF6" --json
+fi
+
+# Apply to plan ticket
+issues label add PLAN_TICKET_ID --label "$MILESTONE_LABEL_NAME" --json
+
+# Apply to each child ticket
+issues label add CHILD_TICKET_ID_1 --label "$MILESTONE_LABEL_NAME" --json
+issues label add CHILD_TICKET_ID_2 --label "$MILESTONE_LABEL_NAME" --json
+# ... repeat for all child tickets
+```
 
 ### Plan Phase 4: Blocker Wiring
 
