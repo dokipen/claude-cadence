@@ -151,11 +151,26 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 
 **All work happens in worktrees, never on the default branch.**
 
-1. Detect worktree status and current branch:
+0. **Environment verification pre-check** — Run diagnostic commands before any file modifications:
+   ```bash
+   git worktree list
+   git status
+   pwd
+   ```
+   Then run `detect-worktree.sh` to evaluate stop conditions:
    ```bash
    bash skills/project-ops/scripts/detect-worktree.sh
    ```
-   This outputs JSON: `{"in_worktree": true|false, "branch": "<name>"}`
+   This outputs JSON: `{"in_worktree": true|false, "branch": "<name>", "detached_head": true|false}`
+
+   **Stop condition A — Detached HEAD**: If `detached_head` is `true` (branch is empty string): **STOP immediately**. Report the diagnostic output (`git worktree list`, `git status`, `pwd`) to the user. Instruct them to check out a named branch before continuing (e.g., `git checkout <branch-name>`). Do not proceed to any further steps.
+
+   **Stop condition B — Wrong directory**: If `in_worktree` is `false` AND the output of `git worktree list` shows a worktree whose path or branch matches the target issue/branch: **STOP immediately**. Report the correct worktree path from `git worktree list` to the user. Instruct them to `cd` to that path (or re-invoke `/lead` from there). Do not proceed to any further steps.
+
+   Only if neither stop condition is triggered, proceed to step 1.
+
+1. Detect worktree status and current branch (already obtained above in step 0 — reuse the `detect-worktree.sh` output):
+   - JSON fields: `{"in_worktree": true|false, "branch": "<name>", "detached_head": true|false}`
 2. **If already in a worktree** (`in_worktree` is `true`):
    - If on a feature branch (not default): use the current directory and branch as-is. Set `WORKTREE_PREEXISTING=true`.
    - If on the default branch: use `/new-work` to create a branch in-place (the script auto-detects worktrees). Set `WORKTREE_PREEXISTING=true`.
