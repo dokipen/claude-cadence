@@ -86,7 +86,12 @@ export const ticketResolvers = {
         });
       }
       if (excludePriority && !VALID_PRIORITIES.has(excludePriority)) {
-        throw new GraphQLError(`Invalid priority: ${excludePriority}. Must be one of: ${[...VALID_PRIORITIES].join(", ")}`, {
+        throw new GraphQLError(`Invalid excludePriority: ${excludePriority}. Must be one of: ${[...VALID_PRIORITIES].join(", ")}`, {
+          extensions: { code: "BAD_USER_INPUT" },
+        });
+      }
+      if (priority && excludePriority && priority === excludePriority) {
+        throw new GraphQLError(`priority and excludePriority cannot be the same value: ${priority}`, {
           extensions: { code: "BAD_USER_INPUT" },
         });
       }

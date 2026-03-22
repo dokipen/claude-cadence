@@ -488,7 +488,17 @@ describe("tickets filter — invalid filter inputs", () => {
     await expect(
       tickets(undefined, { excludePriority: "INVALID_PRIORITY" }, ctx)
     ).rejects.toMatchObject({
-      message: expect.stringContaining("Invalid priority"),
+      message: expect.stringContaining("Invalid excludePriority"),
+      extensions: { code: "BAD_USER_INPUT" },
+    });
+  });
+
+  it("throws GraphQLError with BAD_USER_INPUT when priority and excludePriority are the same", async () => {
+    const ctx = makeMockContext([]);
+    await expect(
+      tickets(undefined, { priority: "HIGH", excludePriority: "HIGH" }, ctx)
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("priority and excludePriority cannot be the same"),
       extensions: { code: "BAD_USER_INPUT" },
     });
   });
