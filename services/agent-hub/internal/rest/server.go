@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/dokipen/claude-cadence/services/agent-hub/internal/config"
@@ -17,7 +18,7 @@ import (
 // Server is the HTTP server for the agent-hub REST API.
 type Server struct {
 	httpServer *http.Server
-	addr       string
+	addr       atomic.Value // stores string; written once in Start(), read by Addr()
 }
 
 // New creates a new REST server.
@@ -61,30 +62,35 @@ func New(h *hub.Hub, cfg *config.Config) *Server {
 
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 
-	return &Server{
+	s := &Server{
 		httpServer: &http.Server{
 			Addr:         addr,
 			Handler:      mux,
 			ReadTimeout:  10 * time.Second,
 			WriteTimeout: 35 * time.Second, // Must exceed rpcCallTimeout (30s)
 		},
-		addr: addr,
 	}
+	s.addr.Store(addr)
+	return s
 }
 
 // Addr returns the server's listen address.
 func (s *Server) Addr() string {
-	return s.addr
+	if v := s.addr.Load(); v != nil {
+		return v.(string)
+	}
+	return ""
 }
 
 // Start begins listening and serving.
 func (s *Server) Start() error {
-	ln, err := net.Listen("tcp", s.addr)
+	ln, err := net.Listen("tcp", s.Addr())
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
-	s.addr = ln.Addr().String()
-	slog.Info("REST server listening", "addr", s.addr)
+	addr := ln.Addr().String()
+	s.addr.Store(addr)
+	slog.Info("REST server listening", "addr", addr)
 	return s.httpServer.Serve(ln)
 }
 
