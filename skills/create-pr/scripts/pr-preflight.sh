@@ -27,11 +27,12 @@ run_with_globstar() {
   fi
   for try_bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
     if [ -x "$try_bash" ]; then
-      "$try_bash" -c "shopt -s globstar; $cmd"
+      # shellcheck disable=SC2016  # $1 intentionally expands in the subshell, not here
+      "$try_bash" -c 'shopt -s globstar; eval "$1"' -- "$cmd"
       return
     fi
   done
-  echo "   Warning: bash 4.0+ not found; ** glob patterns may not expand recursively" >&2
+  echo "   Warning: bash 4.0+ not found; ** glob patterns will not expand recursively" >&2
   eval "$cmd"
 }
 
