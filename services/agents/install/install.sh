@@ -271,14 +271,30 @@ xml_encode() {
 }
 
 render_template() {
-    local template="$1" output="$2"
+    local template="$1" output="$2" use_xml="${3:-false}"
+    local binary_path config_path user group root_dir log_dir
+    if [[ "$use_xml" == "true" ]]; then
+        binary_path=$(xml_encode "$INSTALL_DIR/$BINARY_NAME")
+        config_path=$(xml_encode "$AGENTD_CONFIG_DIR/config.yaml")
+        user=$(xml_encode "$AGENTD_USER")
+        group=$(xml_encode "$AGENTD_GROUP")
+        root_dir=$(xml_encode "$AGENTD_ROOT_DIR")
+        log_dir=$(xml_encode "$AGENTD_LOG_DIR")
+    else
+        binary_path="$INSTALL_DIR/$BINARY_NAME"
+        config_path="$AGENTD_CONFIG_DIR/config.yaml"
+        user="$AGENTD_USER"
+        group="$AGENTD_GROUP"
+        root_dir="$AGENTD_ROOT_DIR"
+        log_dir="$AGENTD_LOG_DIR"
+    fi
     sed \
-        -e "s|__BINARY_PATH__|$(sed_escape "$INSTALL_DIR/$BINARY_NAME")|g" \
-        -e "s|__CONFIG_PATH__|$(sed_escape "$AGENTD_CONFIG_DIR/config.yaml")|g" \
-        -e "s|__USER__|$(sed_escape "$AGENTD_USER")|g" \
-        -e "s|__GROUP__|$(sed_escape "$AGENTD_GROUP")|g" \
-        -e "s|__ROOT_DIR__|$(sed_escape "$AGENTD_ROOT_DIR")|g" \
-        -e "s|__LOG_DIR__|$(sed_escape "$AGENTD_LOG_DIR")|g" \
+        -e "s|__BINARY_PATH__|$(sed_escape "$binary_path")|g" \
+        -e "s|__CONFIG_PATH__|$(sed_escape "$config_path")|g" \
+        -e "s|__USER__|$(sed_escape "$user")|g" \
+        -e "s|__GROUP__|$(sed_escape "$group")|g" \
+        -e "s|__ROOT_DIR__|$(sed_escape "$root_dir")|g" \
+        -e "s|__LOG_DIR__|$(sed_escape "$log_dir")|g" \
         -e "s|__HUB_AGENT_TOKEN__|$(sed_escape "$(xml_encode "${HUB_AGENT_TOKEN:-}")")|g" \
         "$template" > "$output"
 }
@@ -297,7 +313,7 @@ install_launchd() {
 
     info "Installing launchd service..."
     mkdir -p "$HOME/Library/LaunchAgents"
-    render_template "$plist_tmpl" "$plist_dest"
+    render_template "$plist_tmpl" "$plist_dest" "true"
     chmod 600 "$plist_dest"
 
     # Unload if already loaded, ignore errors.
