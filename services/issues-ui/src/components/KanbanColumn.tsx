@@ -36,7 +36,7 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
     <div className={styles.column} data-testid={`column-${state}`}>
       <div className={styles.columnHeader}>
         <span className={styles.columnTitle}>{STATE_LABELS[state]}</span>
-        {state === "BACKLOG" && tickets.length > 0 && !loading && (
+        {state === "BACKLOG" && tickets.length > 0 && !loading && !hasNextPage && (
           <button
             className={styles.refineAllButton}
             onClick={() => setShowRefineAll(true)}
