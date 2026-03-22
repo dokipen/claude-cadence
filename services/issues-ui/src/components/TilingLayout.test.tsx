@@ -38,7 +38,6 @@ const makeSession = (id: string) =>
     name: `session-${id}`,
     state: "running",
     agentProfile: "default",
-    tmuxSession: `tmux-${id}`,
     createdAt: "2026-01-01T00:00:00Z",
     agentPid: 1234,
     baseRef: "main",

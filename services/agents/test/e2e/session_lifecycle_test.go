@@ -2,10 +2,17 @@ package e2e_test
 
 import (
 	"context"
+	"net"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/coder/websocket"
 	agentsv1 "github.com/dokipen/claude-cadence/services/agents/gen/agents/v1"
+	"github.com/dokipen/claude-cadence/services/agents/internal/config"
+	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
+	"github.com/dokipen/claude-cadence/services/agents/internal/session"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -383,5 +390,164 @@ func TestDestroySession_NotFound(t *testing.T) {
 	}
 	if code := status.Code(err); code != codes.NotFound {
 		t.Errorf("expected NotFound, got %v", code)
+	}
+}
+
+// newTestManagerWithPTY creates an isolated Manager plus its PTYManager so that
+// the test can reach the ring buffer and ServeTerminal directly.
+func newTestManagerWithPTY(t *testing.T) (*session.Manager, *pty.PTYManager) {
+	t.Helper()
+	profiles := map[string]config.Profile{
+		"echo-and-exit": {Command: "bash -c 'echo hello && sleep 1'"},
+		"fast-exit":     {Command: "true"},
+		"sleeper":       {Command: "sleep 3600"},
+	}
+	store := session.NewStore()
+	ptyMgr := pty.NewPTYManager(pty.PTYConfig{BufferSize: 65536})
+	mgr := session.NewManager(store, ptyMgr, nil, nil, profiles)
+	return mgr, ptyMgr
+}
+
+// TestReconnect_RingBufferReplayed verifies that a WebSocket client connecting
+// after output has been produced receives the ring buffer contents replayed.
+func TestReconnect_RingBufferReplayed(t *testing.T) {
+	mgr, ptyMgr := newTestManagerWithPTY(t)
+
+	name := uniqueSessionName(t)
+	sess, err := mgr.Create(session.CreateRequest{
+		AgentProfile: "echo-and-exit",
+		SessionName:  name,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	t.Cleanup(func() { mgr.Destroy(sess.ID, true) })
+
+	// Poll until "hello" appears in the ring buffer.
+	deadline := time.Now().Add(5 * time.Second)
+	var lastBuf []byte
+	for time.Now().Before(deadline) {
+		lastBuf, err = ptyMgr.ReadBuffer(sess.ID)
+		if err == nil && strings.Contains(string(lastBuf), "hello") {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !strings.Contains(string(lastBuf), "hello") {
+		t.Fatalf("timed out waiting for 'hello' in ring buffer; last buf: %q", string(lastBuf))
+	}
+
+	// Start a minimal HTTP server that serves ServeTerminal for this session.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("net.Listen: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws/terminal", func(w http.ResponseWriter, r *http.Request) {
+		conn, acceptErr := websocket.Accept(w, r, &websocket.AcceptOptions{
+			InsecureSkipVerify: true,
+		})
+		if acceptErr != nil {
+			return
+		}
+		defer conn.CloseNow()
+		_ = ptyMgr.ServeTerminal(r.Context(), sess.ID, conn)
+	})
+	httpSrv := &http.Server{Handler: mux}
+	go httpSrv.Serve(ln)
+	t.Cleanup(func() { httpSrv.Close() })
+
+	wsURL := "ws://" + ln.Addr().String() + "/ws/terminal"
+
+	// Connect a WebSocket client and collect output until "hello" arrives or
+	// the context times out.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	wsConn, _, dialErr := websocket.Dial(ctx, wsURL, nil)
+	if dialErr != nil {
+		t.Fatalf("websocket.Dial: %v", dialErr)
+	}
+	defer wsConn.CloseNow()
+
+	var received strings.Builder
+	for {
+		_, data, readErr := wsConn.Read(ctx)
+		if readErr != nil {
+			break
+		}
+		if len(data) > 1 && data[0] == '0' {
+			received.Write(data[1:])
+		}
+		if strings.Contains(received.String(), "hello") {
+			break
+		}
+	}
+
+	if !strings.Contains(received.String(), "hello") {
+		t.Errorf("expected 'hello' replayed via WebSocket, got: %q", received.String())
+	}
+}
+
+// TestCleaner_PTYDestroyedAfterSessionStop verifies that after a fast-exit
+// session stops and the Cleaner runs, the PTY session is no longer accessible.
+func TestCleaner_PTYDestroyedAfterSessionStop(t *testing.T) {
+	mgr, ptyMgr := newTestManagerWithPTY(t)
+
+	name := uniqueSessionName(t)
+	sess, err := mgr.Create(session.CreateRequest{
+		AgentProfile: "fast-exit",
+		SessionName:  name,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	t.Cleanup(func() { mgr.Destroy(sess.ID, true) })
+
+	// Poll until the session transitions to stopped.
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		got, getErr := mgr.Get(sess.ID)
+		if getErr != nil {
+			t.Fatalf("Get: %v", getErr)
+		}
+		if got.State == session.StateStopped {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	got, _ := mgr.Get(sess.ID)
+	if got.State != session.StateStopped {
+		t.Fatalf("expected session STOPPED within 5s, got state %d", got.State)
+	}
+
+	// Start a cleaner with zero TTL and a short interval so it fires quickly.
+	cleanerInterval := 100 * time.Millisecond
+	cleaner := session.NewCleaner(mgr, 0, cleanerInterval)
+	cleaner.Start()
+	defer cleaner.Stop()
+
+	// Wait for the cleaner to run and destroy the session (and thus the PTY).
+	deadline = time.Now().Add(3 * time.Second)
+	sessionDestroyed := false
+	for time.Now().Before(deadline) {
+		_, getErr := mgr.Get(sess.ID)
+		if getErr != nil {
+			sessionDestroyed = true
+			break
+		}
+		time.Sleep(cleanerInterval / 2)
+	}
+
+	if !sessionDestroyed {
+		t.Fatal("expected session to be destroyed by cleaner within 3s")
+	}
+
+	// Verify the PTY is also gone — ReadBuffer should fail.
+	_, ptyErr := ptyMgr.ReadBuffer(sess.ID)
+	if ptyErr == nil {
+		t.Error("expected PTY to be destroyed after cleaner ran, but ReadBuffer succeeded")
 	}
 }

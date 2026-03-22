@@ -63,6 +63,9 @@ func main() {
 	}
 	slog.SetDefault(slog.New(handler))
 
+	// Warn about deprecated config fields.
+	cfg.LogDeprecations(slog.Default())
+
 	// Create components.
 	ptyManager := pty.NewPTYManager(pty.PTYConfig{BufferSize: cfg.PTY.BufferSize})
 	store := session.NewStore()

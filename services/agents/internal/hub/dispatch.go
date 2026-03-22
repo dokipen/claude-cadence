@@ -186,7 +186,6 @@ type sessionInfo struct {
 	WorktreePath    string  `json:"worktree_path,omitempty"`
 	RepoURL         string  `json:"repo_url,omitempty"`
 	BaseRef         string  `json:"base_ref,omitempty"`
-	TmuxSession     string  `json:"tmux_session"`
 	CreatedAt       string  `json:"created_at"`
 	ErrorMessage    string  `json:"error_message,omitempty"`
 	AgentPID        int     `json:"agent_pid,omitempty"`
@@ -212,7 +211,6 @@ func toSessionInfo(s *session.Session) sessionInfo {
 		WorktreePath:    s.WorktreePath,
 		RepoURL:         s.RepoURL,
 		BaseRef:         s.BaseRef,
-		TmuxSession:     s.TmuxSession,
 		CreatedAt:       s.CreatedAt.Format(time.RFC3339),
 		ErrorMessage:    s.ErrorMessage,
 		AgentPID:        s.AgentPID,

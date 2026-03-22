@@ -57,7 +57,6 @@ const makeSession = (id: string, agentName: string): AgentSession => ({
     name: `session-${id}`,
     agentProfile: "default",
     state: "running",
-    tmuxSession: `tmux-${id}`,
     createdAt: "2024-01-01T00:00:00Z",
     agentPid: 1234,
     repoUrl: "https://github.com/example/repo",

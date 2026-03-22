@@ -37,7 +37,7 @@ func TestCreateSession_ExtraArgsInjection(t *testing.T) {
 	// Create a temp file path that the injection would create if unescaped.
 	markerFile := filepath.Join(t.TempDir(), "injection-marker")
 
-	// This payload, if unsanitized and sent to a shell via tmux send-keys,
+	// This payload, if unsanitized and sent to a shell via the PTY manager,
 	// would create the marker file. With proper escaping it should be treated
 	// as a literal string argument to echo.
 	payload := "safe; touch " + markerFile
@@ -63,7 +63,7 @@ func TestCreateSession_ExtraArgsInjection(t *testing.T) {
 		t.Error("expected non-empty session ID")
 	}
 
-	// Wait for the command to execute in tmux.
+	// Wait for the command to execute in the PTY.
 	time.Sleep(1 * time.Second)
 
 	// The marker file must NOT exist — if it does, the injection succeeded.

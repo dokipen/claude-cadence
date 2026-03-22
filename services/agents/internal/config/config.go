@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
@@ -35,8 +36,8 @@ type VaultConfig struct {
 	TokenEnvVar string `yaml:"token_env_var"` // env var override (default: VAULT_TOKEN)
 
 	// AppRole auth fields.
-	RoleID        string `yaml:"role_id"`
-	SecretID      string `yaml:"secret_id"`
+	RoleID         string `yaml:"role_id"`
+	SecretID       string `yaml:"secret_id"`
 	SecretIDEnvVar string `yaml:"secret_id_env_var"` // env var override for secret_id
 }
 
@@ -64,12 +65,12 @@ func (v *VaultConfig) ResolveSecretID() string {
 
 // HubConfig holds optional hub connection settings.
 type HubConfig struct {
-	URL                string        `yaml:"url"`
-	Name               string        `yaml:"name"`
-	Token              string        `yaml:"token"`
-	TokenEnvVar        string        `yaml:"token_env_var"`
-	ReconnectInterval  time.Duration `yaml:"-"`
-	RawReconnect       string        `yaml:"reconnect_interval"`
+	URL               string        `yaml:"url"`
+	Name              string        `yaml:"name"`
+	Token             string        `yaml:"token"`
+	TokenEnvVar       string        `yaml:"token_env_var"`
+	ReconnectInterval time.Duration `yaml:"-"`
+	RawReconnect      string        `yaml:"reconnect_interval"`
 }
 
 // ResolveToken returns the hub token, preferring the env var if set.
@@ -87,8 +88,8 @@ type Config struct {
 	Host       string             `yaml:"host"`
 	Port       int                `yaml:"port"`
 	RootDir    string             `yaml:"root_dir"`
-	Tmux       TmuxConfig         `yaml:"tmux"`  // Deprecated: unused after tmux removal
-	Ttyd       TtydConfig         `yaml:"ttyd"`  // Deprecated: unused after tmux removal
+	Tmux       TmuxConfig         `yaml:"tmux"` // Deprecated: unused after tmux removal
+	Ttyd       TtydConfig         `yaml:"ttyd"` // Deprecated: unused after tmux removal
 	PTY        PTYConfig          `yaml:"pty"`
 	Log        LogConfig          `yaml:"log"`
 	Profiles   map[string]Profile `yaml:"profiles"`
@@ -123,8 +124,8 @@ type TtydConfig struct {
 
 // PTYConfig holds PTY manager settings.
 type PTYConfig struct {
-	BufferSize      int    `yaml:"buffer_size"`       // ring buffer size in bytes; defaults to 1 MB
-	WebSocketScheme string `yaml:"websocket_scheme"`  // "ws" or "wss"; defaults to "ws"
+	BufferSize      int    `yaml:"buffer_size"`      // ring buffer size in bytes; defaults to 1 MB
+	WebSocketScheme string `yaml:"websocket_scheme"` // "ws" or "wss"; defaults to "ws"
 }
 
 // LogConfig holds logging settings.
@@ -173,21 +174,6 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Port == 0 {
 		cfg.Port = 4141
-	}
-	if cfg.Tmux.SocketName == "" {
-		cfg.Tmux.SocketName = "agentd"
-	}
-	if cfg.Ttyd.BasePort == 0 {
-		cfg.Ttyd.BasePort = 7681
-	}
-	if cfg.Ttyd.MaxPorts == 0 {
-		cfg.Ttyd.MaxPorts = 100
-	}
-	if cfg.Ttyd.BindAddress == "" {
-		cfg.Ttyd.BindAddress = "127.0.0.1"
-	}
-	if cfg.Ttyd.AdvertiseAddress == "" && cfg.Ttyd.Enabled {
-		cfg.Ttyd.AdvertiseAddress = cfg.Ttyd.BindAddress
 	}
 	if cfg.Log.Level == "" {
 		cfg.Log.Level = "info"
@@ -248,19 +234,6 @@ func validate(cfg *Config) error {
 	for name, p := range cfg.Profiles {
 		if p.Command == "" {
 			return fmt.Errorf("profile %q: command is required", name)
-		}
-	}
-
-	// Validate ttyd port range.
-	if cfg.Ttyd.Enabled {
-		if cfg.Ttyd.BasePort < 1 || cfg.Ttyd.BasePort > 65535 {
-			return fmt.Errorf("ttyd.base_port must be between 1 and 65535")
-		}
-		if cfg.Ttyd.MaxPorts < 1 {
-			return fmt.Errorf("ttyd.max_ports must be at least 1")
-		}
-		if cfg.Ttyd.BasePort+cfg.Ttyd.MaxPorts > 65536 {
-			return fmt.Errorf("ttyd port range exceeds maximum port number (base_port + max_ports > 65536)")
 		}
 	}
 
@@ -336,4 +309,27 @@ func validate(cfg *Config) error {
 	}
 
 	return nil
+}
+
+// LogDeprecations logs warnings for any deprecated config fields that are set
+// to non-default values. Call this after the logger is fully configured.
+func (c *Config) LogDeprecations(log *slog.Logger) {
+	if c.Tmux.SocketName != "" {
+		log.Warn("config key tmux.socket_name is deprecated and has no effect; remove it from your config")
+	}
+	if c.Ttyd.Enabled {
+		log.Warn("config key ttyd.enabled is deprecated and has no effect; remove it from your config")
+	}
+	if c.Ttyd.BasePort != 0 {
+		log.Warn("config key ttyd.base_port is deprecated and has no effect; remove it from your config")
+	}
+	if c.Ttyd.MaxPorts != 0 {
+		log.Warn("config key ttyd.max_ports is deprecated and has no effect; remove it from your config")
+	}
+	if c.Ttyd.BindAddress != "" {
+		log.Warn("config key ttyd.bind_address is deprecated and has no effect; remove it from your config")
+	}
+	if c.Ttyd.AdvertiseAddress != "" {
+		log.Warn("config key ttyd.advertise_address is deprecated and has no effect; remove it from your config")
+	}
 }

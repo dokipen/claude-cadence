@@ -26,11 +26,10 @@ func TestCleaner_ImmediateDestroyOnProcessExit(t *testing.T) {
 
 	m := newTestManager(ptySessions, alivePIDs)
 	sess := &Session{
-		ID:          "sess-1",
-		Name:        "test-1",
-		State:       StateRunning,
-		TmuxSession: "tmux-1",
-		AgentPID:    42,
+		ID:       "sess-1",
+		Name:     "test-1",
+		State:    StateRunning,
+		AgentPID: 42,
 		CreatedAt:   time.Now().Add(-5 * time.Minute),
 		StoppedAt:   time.Time{}, // not stopped yet
 	}
@@ -45,7 +44,7 @@ func TestCleaner_ImmediateDestroyOnProcessExit(t *testing.T) {
 	}
 }
 
-func TestCleaner_ImmediateDestroyOnTmuxGone(t *testing.T) {
+func TestCleaner_ImmediateDestroyOnPTYGone(t *testing.T) {
 	// Session is Running but the PTY session is gone (e.g., daemon restart killed it).
 	// Cleaner should destroy it immediately.
 	ptySessions := map[string]bool{} // sess-2 is not in PTY manager
@@ -53,12 +52,11 @@ func TestCleaner_ImmediateDestroyOnTmuxGone(t *testing.T) {
 
 	m := newTestManager(ptySessions, alivePIDs)
 	sess := &Session{
-		ID:          "sess-2",
-		Name:        "test-2",
-		State:       StateRunning,
-		TmuxSession: "tmux-1",
-		AgentPID:    42,
-		CreatedAt:   time.Now().Add(-5 * time.Minute),
+		ID:        "sess-2",
+		Name:      "test-2",
+		State:     StateRunning,
+		AgentPID:  42,
+		CreatedAt: time.Now().Add(-5 * time.Minute),
 	}
 	m.store.Add(sess)
 
@@ -66,7 +64,7 @@ func TestCleaner_ImmediateDestroyOnTmuxGone(t *testing.T) {
 	cleaner.cleanup()
 
 	if _, ok := m.store.Get("sess-2"); ok {
-		t.Error("expected session to be destroyed when tmux session is gone, but it still exists")
+		t.Error("expected session to be destroyed when PTY session is gone, but it still exists")
 	}
 }
 
@@ -77,11 +75,10 @@ func TestCleaner_ImmediateDestroyOnCreatingProcessExit(t *testing.T) {
 
 	m := newTestManager(ptySessions, alivePIDs)
 	sess := &Session{
-		ID:          "sess-3",
-		Name:        "test-3",
-		State:       StateCreating,
-		TmuxSession: "tmux-3",
-		AgentPID:    99,
+		ID:        "sess-3",
+		Name:      "test-3",
+		State:     StateCreating,
+		AgentPID:  99,
 		CreatedAt:   time.Now().Add(-1 * time.Minute),
 	}
 	m.store.Add(sess)
@@ -101,11 +98,10 @@ func TestCleaner_SkipsRunningSessionWithAliveProcess(t *testing.T) {
 
 	m := newTestManager(ptySessions, alivePIDs)
 	sess := &Session{
-		ID:          "sess-4",
-		Name:        "test-4",
-		State:       StateRunning,
-		TmuxSession: "tmux-4",
-		AgentPID:    100,
+		ID:       "sess-4",
+		Name:     "test-4",
+		State:    StateRunning,
+		AgentPID: 100,
 		CreatedAt:   time.Now().Add(-5 * time.Minute),
 	}
 	m.store.Add(sess)
