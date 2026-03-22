@@ -1,5 +1,7 @@
+import { useState } from "react";
 import type { Ticket, TicketState, ActiveSessionInfo } from "../types";
 import { TicketCard } from "./TicketCard";
+import { RefineAllDialog } from "./RefineAllDialog";
 import styles from "../styles/board.module.css";
 
 const STATE_LABELS: Record<TicketState, string> = {
@@ -21,6 +23,8 @@ interface KanbanColumnProps {
 }
 
 export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading, error, repoUrl, sessions }: KanbanColumnProps) {
+  const [showRefineAll, setShowRefineAll] = useState(false);
+
   const displayCount = loading
     ? "…"
     : hasNextPage
@@ -28,9 +32,19 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
       : String(tickets.length);
 
   return (
+    <>
     <div className={styles.column} data-testid={`column-${state}`}>
       <div className={styles.columnHeader}>
         <span className={styles.columnTitle}>{STATE_LABELS[state]}</span>
+        {state === "BACKLOG" && tickets.length > 0 && !loading && (
+          <button
+            className={styles.refineAllButton}
+            onClick={() => setShowRefineAll(true)}
+            data-testid="refine-all-button"
+          >
+            Refine All
+          </button>
+        )}
         <span className={styles.columnCount} data-testid={`count-${state}`}>
           {displayCount}
         </span>
@@ -56,5 +70,14 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
           ))}
       </div>
     </div>
+    {state === "BACKLOG" && (
+      <RefineAllDialog
+        ticketNumbers={tickets.map((t) => t.number)}
+        repoUrl={repoUrl}
+        open={showRefineAll}
+        onClose={() => setShowRefineAll(false)}
+      />
+    )}
+    </>
   );
 }
