@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"container/list"
 	"crypto/subtle"
 	"net"
 	"net/http"
@@ -80,74 +81,69 @@ func cidrKey(ip string) string {
 // a trusted reverse proxy (Caddy), the proxy's own rate limiting should
 // be used for client-IP-based throttling.
 func rateLimiter(cfg config.RateLimitConfig) func(http.Handler) http.Handler {
-	_, handler := rateLimiterInternal(cfg, time.Now)
+	_, _, handler := rateLimiterInternal(cfg, time.Now)
 	return handler
 }
 
 // rateLimiterInternal is the testable implementation; it returns both the
-// middleware handler and a function that returns the current map length.
-func rateLimiterInternal(cfg config.RateLimitConfig, now func() time.Time) (lenFunc func() int, handler func(http.Handler) http.Handler) {
+// middleware handler and a function that returns the current map length, and
+// a containsFunc for introspecting map membership in tests.
+func rateLimiterInternal(cfg config.RateLimitConfig, nowFn func() time.Time) (lenFunc func() int, containsFunc func(key string) bool, handler func(http.Handler) http.Handler) {
 	var mu sync.Mutex
-	limiters := make(map[string]*rateLimiterEntry)
+	limiters := make(map[string]*lruEntry)
+	lruList := list.New()
 
 	getLimiter := func(ip string) *rate.Limiter {
 		mu.Lock()
 		defer mu.Unlock()
 
-		t := now()
-
-		// Fast path: returning client, no eviction needed.
+		// Fast path: returning client, move to front to mark most-recently-used.
 		if entry, ok := limiters[ip]; ok {
-			entry.lastSeen = t
+			lruList.MoveToFront(entry.elem)
 			return entry.limiter
 		}
 
 		// New IP: evict before inserting to enforce the hard cap.
-		// Stale sweep first; if nothing is evicted (all entries fresh),
-		// fall back to evicting the single oldest entry (LRU hard cap).
-		// Entries that have been rate-limited (denied=true) are protected
-		// from LRU eviction to prevent victim-eviction attacks where an
-		// attacker rotates IPs to flush a legitimate client's rate state.
+		// Entries that have been rate-limited (denied=true) within the
+		// protection window are exempt from LRU eviction to prevent
+		// victim-eviction attacks that would reset the token bucket and
+		// erase rate-limit debt.
 		if len(limiters) >= rateLimiterMaxEntries {
-			evicted := 0
-			for k, e := range limiters {
-				if t.Sub(e.lastSeen) > 5*time.Minute {
-					delete(limiters, k)
-					evicted++
+			now := nowFn()
+
+			// Walk from LRU tail toward front, find the least-recently-used
+			// entry that is NOT within the denied protection window.
+			var victimKey string
+			for elem := lruList.Back(); elem != nil; elem = elem.Prev() {
+				e := elem.Value.(*lruEntry)
+				if e.denied && now.Sub(e.deniedAt) < rateLimiterDeniedProtectionWindow {
+					// Protected: recently rate-limited, skip.
+					continue
+				}
+				victimKey = e.key
+				break
+			}
+
+			if victimKey == "" {
+				// All entries are protected; fall back to unconditional LRU
+				// eviction of the tail to keep the map bounded.
+				if back := lruList.Back(); back != nil {
+					victimKey = back.Value.(*lruEntry).key
 				}
 			}
-			if evicted == 0 {
-				var oldestKey string
-				var oldestTime time.Time
-				for k, e := range limiters {
-					if e.denied && t.Sub(e.deniedAt) < rateLimiterDeniedProtectionWindow {
-						// Skip entries that were recently rate-limited to
-						// prevent victim-eviction attacks that would reset
-						// the token bucket and erase rate-limit debt.
-						// After the protection window expires the entry is
-						// evictable again (token bucket has partially refilled).
-						continue
-					}
-					if oldestKey == "" || e.lastSeen.Before(oldestTime) {
-						oldestKey = k
-						oldestTime = e.lastSeen
-					}
-				}
-				if oldestKey == "" {
-					// All entries are denied; fall back to true LRU among
-					// all entries to keep the map bounded.
-					for k, e := range limiters {
-						if oldestKey == "" || e.lastSeen.Before(oldestTime) {
-							oldestKey = k
-							oldestTime = e.lastSeen
-						}
-					}
-				}
-				delete(limiters, oldestKey)
+
+			if victimKey != "" {
+				victim := limiters[victimKey]
+				lruList.Remove(victim.elem)
+				delete(limiters, victimKey)
 			}
 		}
+
 		lim := rate.NewLimiter(rate.Limit(cfg.RequestsPerSecond), cfg.Burst)
-		limiters[ip] = &rateLimiterEntry{limiter: lim, lastSeen: t}
+		entry := &lruEntry{limiter: lim, key: ip}
+		elem := lruList.PushFront(entry)
+		entry.elem = elem
+		limiters[ip] = entry
 		return lim
 	}
 
@@ -156,7 +152,7 @@ func rateLimiterInternal(cfg config.RateLimitConfig, now func() time.Time) (lenF
 		defer mu.Unlock()
 		if entry, ok := limiters[ip]; ok {
 			entry.denied = true
-			entry.deniedAt = now()
+			entry.deniedAt = nowFn()
 		}
 	}
 
@@ -164,6 +160,12 @@ func rateLimiterInternal(cfg config.RateLimitConfig, now func() time.Time) (lenF
 		mu.Lock()
 		defer mu.Unlock()
 		return len(limiters)
+	}
+
+	containsFunc = func(key string) bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return limiters[key] != nil
 	}
 
 	handler = func(next http.Handler) http.Handler {
@@ -183,12 +185,13 @@ func rateLimiterInternal(cfg config.RateLimitConfig, now func() time.Time) (lenF
 		})
 	}
 
-	return lenFunc, handler
+	return lenFunc, containsFunc, handler
 }
 
-type rateLimiterEntry struct {
-	limiter  *rate.Limiter
-	lastSeen time.Time
+type lruEntry struct {
+	key     string
+	limiter *rate.Limiter
+	elem    *list.Element
 	// denied is set to true when this entry has been rate-limited at least
 	// once. Recently denied entries are exempt from LRU eviction; see getLimiter.
 	denied   bool
