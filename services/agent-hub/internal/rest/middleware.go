@@ -160,11 +160,9 @@ func rateLimiterInternal(cfg config.RateLimitConfig, nowFn func() time.Time) (le
 				return allProtectedLimiter
 			}
 
-			if victimKey != "" {
-				victim := limiters[victimKey]
-				lruList.Remove(victim.elem)
-				delete(limiters, victimKey)
-			}
+			victim := limiters[victimKey]
+			lruList.Remove(victim.elem)
+			delete(limiters, victimKey)
 		}
 
 		lim := rate.NewLimiter(rate.Limit(cfg.RequestsPerSecond), cfg.Burst)

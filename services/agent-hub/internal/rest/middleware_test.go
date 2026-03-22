@@ -703,7 +703,7 @@ func TestRateLimiterAllProtectedFallback(t *testing.T) {
 	fixedTime := time.Now()
 	nowFn := func() time.Time { return fixedTime }
 
-	_, _, middlewareFn := rateLimiterInternal(cfg, nowFn)
+	lenFn, containsFn, middlewareFn := rateLimiterInternal(cfg, nowFn)
 
 	noop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 	h := middlewareFn(noop)
@@ -756,9 +756,21 @@ func TestRateLimiterAllProtectedFallback(t *testing.T) {
 			"all slots occupied by protected entries; admission should be refused", code)
 	}
 
-	// Step 4: The victim's entry must still be in the map with its exhausted
-	// token bucket. Admission refusal means no eviction occurred, so the
-	// victim is still rate-limited.
+	// Step 4: Verify no eviction occurred: map size must still be
+	// rateLimiterMaxEntries and the victim's CIDR must still be present.
+	if n := lenFn(); n != rateLimiterMaxEntries {
+		t.Errorf("map size after admission refusal: got %d, want %d", n, rateLimiterMaxEntries)
+	}
+	if !containsFn(victimCIDR) {
+		t.Errorf("victim CIDR %s was evicted from the map; it should have been retained", victimCIDR)
+	}
+	attackerCIDR := cidrKey("172.16.0.1")
+	if containsFn(attackerCIDR) {
+		t.Errorf("attacker CIDR %s was inserted into the map; admission should have been refused", attackerCIDR)
+	}
+
+	// Step 5: The victim's bucket was exhausted and its entry was never
+	// evicted, so the next request is still rate-limited.
 	code := sendRequest(victimIP)
 	if code != http.StatusTooManyRequests {
 		t.Errorf("victim request after all-protected fallback: got %d, want 429 — "+
