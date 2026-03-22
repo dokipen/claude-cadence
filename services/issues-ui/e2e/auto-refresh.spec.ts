@@ -19,12 +19,17 @@ test.describe("auto-refresh", () => {
       }
     });
 
+    // Register response listener before fast-forwarding to avoid race condition
+    const responsePromise = page.waitForResponse((resp) =>
+      resp.url().includes("/graphql"),
+    );
+
     // Fast-forward 60 seconds to trigger the polling interval
     graphqlRequestCount = 0;
     await page.clock.fastForward(60_000);
 
     // Wait for the refetch request(s) to complete
-    await page.waitForResponse((resp) => resp.url().includes("/graphql"));
+    await responsePromise;
 
     expect(graphqlRequestCount).toBeGreaterThanOrEqual(1);
 
@@ -57,12 +62,17 @@ test.describe("auto-refresh", () => {
       }
     });
 
+    // Register response listener before fast-forwarding to avoid race condition
+    const responsePromise = page.waitForResponse((resp) =>
+      resp.url().includes("/graphql"),
+    );
+
     // Fast-forward 60 seconds to trigger the polling interval
     graphqlRequestCount = 0;
     await page.clock.fastForward(60_000);
 
     // Wait for the refetch request to complete
-    await page.waitForResponse((resp) => resp.url().includes("/graphql"));
+    await responsePromise;
 
     expect(graphqlRequestCount).toBeGreaterThanOrEqual(1);
 
