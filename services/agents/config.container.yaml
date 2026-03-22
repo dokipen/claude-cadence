@@ -1,0 +1,17 @@
+host: "0.0.0.0"
+port: 4141
+root_dir: /var/lib/agentd
+auth:
+  mode: token
+  token_env_var: AGENTD_TOKEN
+hub:
+  url: ws://agent-hub:4200/ws/agent
+  name: dev
+  token_env_var: HUB_AGENT_TOKEN
+pty:
+  websocket_scheme: ws
+ttyd:
+  advertise_address: "agentd:4142"
+profiles:
+  claude:
+    command: claude

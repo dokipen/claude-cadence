@@ -64,47 +64,40 @@ services:
 
   # Agent services — opt-in via --profile agents
   #
-  # agentd and agent-hub have complex host dependencies (tmux, claude CLI, Go
-  # binary, macOS/Linux service integration) that make them poor fits for
-  # containerisation. They are defined here for completeness and documented
-  # network connectivity, but they run on the host and connect back to the
-  # Docker network via host networking.
+  # Both services are fully containerized. agentd mounts ~/.claude from the host
+  # so the claude CLI can authenticate using the developer's existing credentials.
   #
-  # To use the agents profile:
-  #   1. Build and install agentd: cd services/agents && make build && ./install/install.sh
-  #   2. Build and install agent-hub: cd services/agent-hub && make build
-  #   3. Configure both services with tokens matching .env.dev
-  #   4. Start agent-hub: agent-hub --config <your-config>
-  #   5. Start agentd with hub.url pointing at agent-hub
-  #   6. Then run: docker compose -f docker-compose.dev.yml --profile agents up
+  # Prerequisites:
+  #   - Fill in HUB_API_TOKEN, HUB_AGENT_TOKEN, and AGENTD_TOKEN in .env.dev
+  #   - Ensure ~/.claude exists with valid claude CLI credentials
   #
-  # The placeholder services below use network_mode: host so the containerised
-  # Caddy can reach agent-hub (4200) bound to the host loopback. agentd connects
-  # outbound to agent-hub and does not expose a port.
-
-  agentd:
-    profiles: [agents]
-    # No Dockerfile — agentd requires tmux, claude CLI, and host service
-    # integration. Build from source: cd services/agents && make build
-    # Then run on the host: agentd --config ~/.config/agentd/config.yaml
-    image: busybox
-    command: >
-      sh -c 'echo "agentd placeholder: run agentd on the host (see docker-compose.dev.yml comments)" && sleep infinity'
-    network_mode: host
-    restart: unless-stopped
+  # Start the full stack:
+  #   docker compose -f docker-compose.dev.yml --profile agents up --build
 
   agent-hub:
     profiles: [agents]
-    # No Dockerfile — agent-hub is a Go binary that must run on the host
-    # alongside agentd. Build from source: cd services/agent-hub && make build
-    # Then run: agent-hub --config <your-config.yaml>
-    image: busybox
-    command: >
-      sh -c 'echo "agent-hub placeholder: run agent-hub on the host (see docker-compose.dev.yml comments)" && sleep infinity'
-    network_mode: host
+    build:
+      context: services/agent-hub
     restart: unless-stopped
+    env_file: .env.dev
+    depends_on:
+      - issues
+
+  agentd:
+    profiles: [agents]
+    hostname: agentd
+    build:
+      context: services/agents
+    restart: unless-stopped
+    volumes:
+      - agentd-data:/var/lib/agentd
+      - ${HOME}/.claude:/home/agentd/.claude
+    env_file: .env.dev
+    depends_on:
+      - agent-hub
 
 volumes:
   issues-data:
   caddy-data:
   caddy-config:
+  agentd-data:
