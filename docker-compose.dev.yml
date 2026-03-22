@@ -45,6 +45,12 @@ services:
       - ./services/issues-ui:/app
       - /app/node_modules
     env_file: .env.dev
+    environment:
+      # Vite proxy targets: use Docker DNS names so the dev server can reach
+      # sibling containers. Defaults in vite.config.ts fall back to localhost
+      # for non-Docker local dev.
+      - VITE_API_HOST=issues
+      - VITE_AGENT_HUB_HOST=agent-hub
     depends_on:
       issues:
         condition: service_healthy
