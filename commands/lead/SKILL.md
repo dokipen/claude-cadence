@@ -97,10 +97,26 @@ If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, 
    ```
    If the `state` field is not `REFINED` (or later), run `/refine [NUMBER]` before proceeding.
 
-5. **Check if work is already complete**:
+5. **Detect ticket type**: Check if the ticket has a `plan` label.
+
+   **GitHub (default):**
+   ```bash
+   gh issue view [NUMBER] --json labels --jq '[.labels[].name] | contains(["plan"])'
+   ```
+   Returns `true` if the `plan` label is present.
+
+   **Issues API:** (reuse the JSON already fetched in step 2):
+   ```bash
+   echo "$TICKET_JSON" | jq '[.labels[].name] | contains(["plan"])'
+   ```
+   Returns `true` if the `plan` label is present.
+
+   If `true`, skip to **[Plan Workflow](#plan-workflow)** after completing step 7 (claim). The standard implementation phases do not apply.
+
+6. **Check if work is already complete**:
    Before claiming, delegate to an appropriate specialist to verify the work isn't already done.
 
-6. **Claim the issue**:
+7. **Claim the issue**:
 
    **GitHub (default):**
    ```bash
@@ -125,6 +141,8 @@ If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, 
      issues ticket transition TICKET_ID --to REFINED --json
      issues ticket transition TICKET_ID --to IN_PROGRESS --json
      ```
+
+   **If the ticket has the `plan` label**, proceed to **[Plan Workflow](#plan-workflow)** instead of the standard phases.
 
 ---
 
@@ -348,6 +366,142 @@ In both cases:
 7. Report completion
 
 > **Note:** If this phase is skipped (e.g., conversation ends early), cleanup happens automatically the next time `/new-work` creates a worktree — the `cleanup-merged-worktrees.sh` pre-flight detects merged PRs and cleans up their worktrees, branches, and labels.
+
+---
+
+## Plan Workflow
+
+> This section applies **only** when the ticket has the `plan` label. The standard implementation phases (2–7) are skipped entirely. No source code is changed — the only output is a plan document and a set of implementation tickets.
+
+**Use `/effort max` for all agent delegations in this workflow** — planning work benefits from maximum depth and thoroughness.
+
+### Plan Phase 0: Worktree Setup
+
+Same as the standard [Phase 0](#phase-0-worktree-setup). A worktree is required to commit the plan document.
+
+### Plan Phase 1: Goal Analysis
+
+Delegate to a `general-purpose` agent with `/effort max` to analyze the ticket goal:
+
+- Read the full ticket description and acceptance criteria
+- Survey the existing codebase for relevant context (architecture, conventions, existing patterns)
+- Produce a structured outline: goals, constraints, proposed components/phases, sequencing dependencies
+
+The agent should return a detailed outline — not a final document, but raw material for the plan doc.
+
+### Plan Phase 2: Plan Document Creation
+
+Using the outline from Plan Phase 1, delegate to a `general-purpose` agent to write and commit the plan document:
+
+1. **Derive a slug** from the ticket title (lowercase, hyphenated, no special chars). Example: "Make a source code explorer" → `source-code-explorer`.
+2. **Write the plan document** to `docs/plans/<slug>.md`. The document should include:
+   - **Goal**: What this plan is trying to achieve
+   - **Background**: Relevant context from the codebase
+   - **Architecture**: Key components, abstractions, and how they fit together
+   - **Implementation Phases**: Numbered phases, each with a title, description, and list of tasks. Phases should be independently implementable where possible.
+   - **Sequencing**: Which phases must complete before others can begin (dependency graph)
+   - **Open Questions**: Anything that needs user/stakeholder input before implementation
+3. **Commit the document**:
+   ```bash
+   git add docs/plans/<slug>.md
+   git commit -m "docs: add plan for [ticket title] (#[NUMBER])"
+   ```
+4. **Push the branch**:
+   ```bash
+   git push -u origin [BRANCH]
+   ```
+
+### Plan Phase 3: Implementation Ticket Creation
+
+For each phase in the plan document, create an implementation ticket:
+
+**GitHub (default):**
+```bash
+gh issue create \
+  --title "[Phase title from plan]" \
+  --label "enhancement" \
+  --body "## Description
+[Phase description from plan]
+
+## Plan Reference
+Derived from the plan document: \`docs/plans/<slug>.md\` (branch: \`[BRANCH]\`, plan ticket: #[NUMBER])
+
+## Acceptance Criteria
+[Tasks and completion criteria from this phase]"
+```
+
+**Issues API:**
+```bash
+issues ticket create \
+  --project $PROJECT \
+  --title "[Phase title from plan]" \
+  --labels "ENHANCEMENT_LABEL_ID" \
+  --description "## Description
+[Phase description from plan]
+
+## Plan Reference
+Derived from the plan document: \`docs/plans/<slug>.md\` (plan ticket: #[NUMBER])
+
+## Acceptance Criteria
+[Tasks and completion criteria from this phase]" \
+  --json
+```
+
+Record the created ticket number/ID for each phase — needed for blocker wiring.
+
+### Plan Phase 4: Blocker Wiring
+
+Using the sequencing dependencies from the plan document, wire up blockers between the newly created tickets:
+
+**GitHub (default):**
+GitHub does not have a native blocker API via `gh`. Add a **Dependencies** section to each ticket that has prerequisites:
+```bash
+gh issue edit [BLOCKED-NUMBER] --body "$(gh issue view [BLOCKED-NUMBER] --json body --jq '.body')
+
+## Dependencies
+Blocked by: #[BLOCKER-NUMBER]"
+```
+
+**Issues API:**
+```bash
+issues block add --blocker [BLOCKER-NUMBER] --blocked [BLOCKED-NUMBER] --project $PROJECT --json
+```
+
+### Plan Phase 5: Close the Plan Ticket
+
+After all sub-tickets are created and the plan doc is committed:
+
+**GitHub (default):**
+```bash
+gh issue comment [NUMBER] --body "## Planning complete
+
+Plan document: \`docs/plans/<slug>.md\`
+
+Implementation tickets created:
+$(for each sub-ticket: "- #[SUB-NUMBER]: [title]")
+
+Closing plan ticket."
+gh issue close [NUMBER]
+```
+
+**Issues API:**
+```bash
+issues comment add TICKET_ID --body "## Planning complete
+
+Plan document: \`docs/plans/<slug>.md\`
+
+Implementation tickets created:
+$(for each sub-ticket: "- #[SUB-NUMBER]: [title]")
+
+Closing plan ticket." --json
+issues ticket transition TICKET_ID --to CLOSED --json
+```
+
+### Plan Phase 6: Cleanup
+
+1. Return to default branch and pull latest (skip if `WORKTREE_PREEXISTING`)
+2. Clean up worktree using the `project-ops` skill's `cleanup-worktree.sh` script (skip if `WORKTREE_PREEXISTING`)
+3. Report completion with a summary of the plan doc path and all created tickets
 
 ---
 
