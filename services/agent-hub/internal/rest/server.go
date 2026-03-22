@@ -18,7 +18,7 @@ import (
 // Server is the HTTP server for the agent-hub REST API.
 type Server struct {
 	httpServer *http.Server
-	addr       atomic.Value // stores string; written once in Start(), read by Addr()
+	addr       atomic.Value // stores string; set in New() and updated in Start() after bind, read by Addr()
 }
 
 // New creates a new REST server.
