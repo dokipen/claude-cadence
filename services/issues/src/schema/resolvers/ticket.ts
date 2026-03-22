@@ -141,11 +141,12 @@ export const ticketResolvers = {
       const queryArgs: Prisma.TicketFindManyArgs = {
         where,
         take: first + 1,
-        // CLOSED tickets sort newest-first; updatedAt is used as a proxy for
-        // closedAt since Prisma's @updatedAt stamps the close transition time.
+        // CLOSED tickets sort by updatedAt (proxy for closedAt since Prisma's
+        // @updatedAt stamps the close transition); all others sort by createdAt.
+        // Both use newest-first with id tie-breaking for stable pagination.
         orderBy: state === "CLOSED"
           ? [{ updatedAt: "desc" }, { id: "asc" }]
-          : { createdAt: "asc" },
+          : [{ createdAt: "desc" }, { id: "asc" }],
       };
 
       if (after) {
