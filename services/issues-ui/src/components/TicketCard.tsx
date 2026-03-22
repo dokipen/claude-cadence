@@ -5,15 +5,25 @@ import { PriorityBadge } from "./PriorityBadge";
 import { LabelBadge } from "./LabelBadge";
 import { LaunchAgentDialog } from "./LaunchAgentDialog";
 import { getLaunchConfig } from "./launchConfig";
+import type { AgentSession } from "../hooks/useAllSessions";
 import styles from "../styles/card.module.css";
 import agentStyles from "../styles/agents.module.css";
+
+export function hasActiveSession(sessions: AgentSession[], ticketNumber: number): boolean {
+  const prefixes = [`lead-${ticketNumber}`, `refine-${ticketNumber}`, `discuss-${ticketNumber}`];
+  return sessions.some(
+    (s) => prefixes.includes(s.session.name) && (s.session.state === "running" || s.session.state === "creating" || s.session.state === "destroying")
+  );
+}
 
 export function TicketCard({
   ticket,
   repoUrl,
+  sessions,
 }: {
   ticket: Ticket;
   repoUrl?: string;
+  sessions?: AgentSession[];
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -27,6 +37,8 @@ export function TicketCard({
     },
     [],
   );
+
+  const activeSession = hasActiveSession(sessions ?? [], ticket.number);
 
   return (
     <>
@@ -62,13 +74,19 @@ export function TicketCard({
             </span>
           )}
           <span className={styles.cardActions}>
-            <button
-              className={agentStyles.cardLaunchButton}
-              onClick={handleLaunchClick}
-              data-testid="card-launch-button"
-            >
-              {launchButtonLabel}
-            </button>
+            {activeSession ? (
+              <span className={styles.activeSessionLogo} data-testid="active-session-logo" aria-label="Session in progress">
+                <img src="/cadence-icon-light.svg" alt="" width={18} height={18} className={styles.spinningLogo} />
+              </span>
+            ) : (
+              <button
+                className={agentStyles.cardLaunchButton}
+                onClick={handleLaunchClick}
+                data-testid="card-launch-button"
+              >
+                {launchButtonLabel}
+              </button>
+            )}
             {ticket.storyPoints != null && (
               <span className={styles.storyPoints} data-testid="story-points">
                 {ticket.storyPoints}

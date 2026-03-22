@@ -1,5 +1,6 @@
 import type { Ticket, TicketState } from "../types";
 import { TicketCard } from "./TicketCard";
+import type { AgentSession } from "../hooks/useAllSessions";
 import styles from "../styles/board.module.css";
 
 const STATE_LABELS: Record<TicketState, string> = {
@@ -17,9 +18,10 @@ interface KanbanColumnProps {
   loading: boolean;
   error: string | null;
   repoUrl?: string;
+  sessions?: AgentSession[];
 }
 
-export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading, error, repoUrl }: KanbanColumnProps) {
+export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading, error, repoUrl, sessions }: KanbanColumnProps) {
   const displayCount = loading
     ? "…"
     : hasNextPage
@@ -51,7 +53,7 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
         {!loading &&
           !error &&
           tickets.map((ticket) => (
-            <TicketCard key={ticket.id} ticket={ticket} repoUrl={repoUrl} />
+            <TicketCard key={ticket.id} ticket={ticket} repoUrl={repoUrl} sessions={sessions} />
           ))}
       </div>
     </div>
