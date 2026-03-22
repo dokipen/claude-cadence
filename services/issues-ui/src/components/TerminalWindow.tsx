@@ -14,6 +14,8 @@ interface TerminalWindowProps {
   onDragLeave?: (e: React.DragEvent<HTMLDivElement>) => void;
   onDrop?: (e: React.DragEvent<HTMLDivElement>) => void;
   isDragOver?: boolean;
+  isMaximized?: boolean;
+  onMaximize?: () => void;
 }
 
 export function TerminalWindow({
@@ -27,6 +29,8 @@ export function TerminalWindow({
   onDragLeave,
   onDrop,
   isDragOver,
+  isMaximized,
+  onMaximize,
 }: TerminalWindowProps) {
   const ticketMatch = session.name.match(/^lead-(\d+)$/);
 
@@ -82,6 +86,15 @@ export function TerminalWindow({
             title="Minimize"
           >
             —
+          </button>
+          <button
+            className={styles.tileMaximize}
+            onClick={() => onMaximize?.()}
+            data-testid="tile-maximize"
+            title={isMaximized ? "Restore" : "Maximize"}
+            aria-label={isMaximized ? "Restore" : "Maximize"}
+          >
+            {isMaximized ? "⊡" : "▢"}
           </button>
           <button
             className={styles.tileTerminate}
