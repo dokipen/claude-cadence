@@ -219,6 +219,9 @@ jobs:
         with:
           go-version-file: services/agents/go.mod
           cache-dependency-path: services/agents/go.sum
+      - name: Clear Go build cache
+        working-directory: services/agents
+        run: go clean -cache
       - name: Run go vet
         working-directory: services/agents
         run: go vet ./...
