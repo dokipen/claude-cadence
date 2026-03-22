@@ -212,8 +212,8 @@
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
-  background: rgba(13, 17, 23, 0.85);
-  color: #e6edf3;
+  background: rgb(from var(--bg) r g b / 0.85);
+  color: var(--text);
   font-size: 0.9rem;
   z-index: 10;
 }
@@ -639,8 +639,8 @@
 .spinner {
   width: 20px;
   height: 20px;
-  border: 2px solid rgba(230, 237, 243, 0.2);
-  border-top-color: #e6edf3;
+  border: 2px solid rgb(from var(--text) r g b / 0.2);
+  border-top-color: var(--text);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
