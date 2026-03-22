@@ -5,8 +5,8 @@ An issue-driven, multi-agent development workflow plugin for Claude Code.
 ## What This Plugin Provides
 
 ### Commands (user-invoked slash commands)
-- `/lead` — Coordinate implementation through structured phases with specialist agents
-- `/refine` — Refine GitHub issues to quality standards
+- `/lead N` — Coordinate implementation through structured phases with specialist agents
+- `/refine N` — Refine GitHub issues to quality standards
 
 ### Skills (model-invoked)
 - `new-work` — Create git worktrees for isolated feature development
@@ -77,6 +77,28 @@ Bump the `version` field in `.claude-plugin/plugin.json` only when preparing a r
 - **Communication**: Issue comments pre-PR, PR comments post-PR
 - **GitHub access**: Always use `gh` CLI, never WebFetch for GitHub URLs
 - **Shell syntax**: Always use `$()` for command substitution, never backticks — enforced by shellcheck (SC2006)
+
+## Workflow Rules
+
+These rules reduce ambiguity for contributors and agents working in this repo and in projects integrating Claude Cadence.
+
+### Command Intent
+
+Each command has a specific intent — do not conflate them:
+
+- `/lead N` — **Implement** issue N end-to-end through all workflow phases
+- `/refine N` — **Refine** issue N to quality standards; do not start implementation
+- "create a ticket for X" / "open an issue for X" — **Create the ticket only**; do not start implementation unless explicitly asked
+
+### Target Project Confirmation
+
+When a prompt is ambiguous about which project to target (e.g., "create a ticket for X" without specifying where), **always confirm the target project** before creating tickets or starting work. The default project for this repo is `claude-cadence`. If context suggests a different consuming project, confirm before proceeding.
+
+### Recommended Conventions for Consuming Projects
+
+Projects integrating Claude Cadence can adopt similar rules in their own `CLAUDE.md` to reduce agent friction:
+- Map command names to intent (implement vs. create-only vs. analyze)
+- Specify the default ticket project so agents don't need to infer it
 
 ## Verification
 shellcheck commands/**/*.sh skills/**/*.sh
