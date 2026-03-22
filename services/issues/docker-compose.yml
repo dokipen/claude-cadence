@@ -1,5 +1,6 @@
 services:
   issues:
+    image: issues-service:${IMAGE_TAG:-latest}
     build: .
     restart: unless-stopped
     ports:

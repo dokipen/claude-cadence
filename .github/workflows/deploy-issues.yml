@@ -1,12 +1,16 @@
 name: Deploy Issues Service
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Build Issues Service"]
+    types: [completed]
     branches: [main]
-    paths:
-      - 'services/issues/**'
-      - 'services/issues-cli/**'
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (e.g. sha-abc1234 or latest)'
+        required: false
+        default: 'latest'
 
 concurrency:
   group: deploy-issues
@@ -17,6 +21,8 @@ permissions:
 
 jobs:
   deploy:
+    # Only run if triggered manually or if the build workflow succeeded.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     # Runs directly on Bootsy via self-hosted runner — no SSH needed.
     # Prerequisites:
     #   1. ISSUES_JWT_SECRET repo secret set (matches the running service's JWT_SECRET)
@@ -39,14 +45,32 @@ jobs:
         with:
           clean: true
 
-      - name: Build and deploy
+      - name: Determine image tag
+        id: tag
+        env:
+          INPUT_IMAGE_TAG: ${{ inputs.image_tag }}
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            IMAGE_TAG="${INPUT_IMAGE_TAG}"
+          else
+            IMAGE_TAG="sha-${WORKFLOW_RUN_SHA:0:7}"
+          fi
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy
+        env:
+          IMAGE_TAG: ${{ steps.tag.outputs.image_tag }}
         run: |
           if [ -z "$JWT_SECRET" ]; then
             echo "::error::ISSUES_JWT_SECRET secret is not set"
             exit 1
           fi
-          echo "==> Building Docker image..."
-          docker compose build --pull
+          echo "==> Deploying issues-service:${IMAGE_TAG}..."
+          if ! docker image inspect "issues-service:${IMAGE_TAG}" > /dev/null 2>&1; then
+            echo "::error::Image issues-service:${IMAGE_TAG} not found. Run the build workflow first."
+            exit 1
+          fi
           echo "==> Recreating container..."
           docker compose up -d --force-recreate --wait
           echo "==> Deploy complete"
@@ -74,20 +98,24 @@ jobs:
       - name: Post success summary
         if: success()
         env:
-          COMMIT_SHA: ${{ github.sha }}
+          IMAGE_TAG: ${{ steps.tag.outputs.image_tag }}
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           echo "### Issues service deployed successfully" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Image:** \`issues-service:${IMAGE_TAG}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Commit:** \`${COMMIT_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Service:** https://cadence.bootsy.internal/graphql" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Post failure summary
         if: failure()
         env:
-          COMMIT_SHA: ${{ github.sha }}
+          IMAGE_TAG: ${{ steps.tag.outputs.image_tag }}
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           echo "### Issues service deployment failed" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Image:** \`issues-service:${IMAGE_TAG}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Commit:** \`${COMMIT_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Check the logs above for details." >> "$GITHUB_STEP_SUMMARY"
 
@@ -100,6 +128,8 @@ jobs:
     # Remind dev machines to rebuild the CLI after successful deploys.
     # The Bootsy CLI is rebuilt as part of install.sh via systemd on boot;
     # this notification is for other machines.
+    # Skip on workflow_dispatch (manual/rollback deploys — no CLI source change).
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Post CLI update notice

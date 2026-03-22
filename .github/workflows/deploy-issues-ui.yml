@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
+  build:
     # Runs directly on Bootsy via self-hosted runner — no SSH needed.
     # Prerequisites:
     #   1. Node.js 20+ available on the runner
@@ -25,6 +25,8 @@ jobs:
     defaults:
       run:
         working-directory: services/issues-ui
+    outputs:
+      release_dir: ${{ steps.build.outputs.release_dir }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,21 +46,37 @@ jobs:
           VITE_GITHUB_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
         run: npm run build
 
-      - name: Atomic deploy
+      - name: Create release directory
+        id: build
         run: |
           DEPLOY_DIR="/srv/issues-ui"
           RELEASE_DIR="${DEPLOY_DIR}/releases/$(date +%Y%m%d-%H%M%S)-${GITHUB_SHA:0:7}"
-
-          echo "==> Deploying to ${RELEASE_DIR}..."
           mkdir -p "$RELEASE_DIR"
           cp -r dist/. "$RELEASE_DIR/"
+          echo "release_dir=${RELEASE_DIR}" >> "$GITHUB_OUTPUT"
 
-          # Atomic symlink swap via rename(2) — mv -T is atomic on the same filesystem
+      - name: Post build summary
+        if: success()
+        run: |
+          echo "### Issues UI build complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Release directory:** \`${{ steps.build.outputs.release_dir }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: build
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 5
+    steps:
+      - name: Atomic symlink swap
+        run: |
+          RELEASE_DIR="${{ needs.build.outputs.release_dir }}"
+          DEPLOY_DIR="/srv/issues-ui"
           ln -sfn "$RELEASE_DIR" "${DEPLOY_DIR}/next"
           mv -T "${DEPLOY_DIR}/next" "${DEPLOY_DIR}/current"
 
-          echo "==> Deploy complete"
-
+      - name: Prune old releases
+        run: |
+          DEPLOY_DIR="/srv/issues-ui"
           # Prune old releases, keep last 5.
           # Non-fatal: some releases may be owned by a different user (manual deploys
           # pre-dating the CI runner). Emit a warning rather than failing the deploy.
@@ -84,6 +102,7 @@ jobs:
           echo "### Issues UI deployed successfully" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Commit:** \`${COMMIT_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Release:** \`${{ needs.build.outputs.release_dir }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **URL:** https://cadence.bootsy.internal/" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Post failure summary
@@ -95,7 +114,3 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Commit:** \`${COMMIT_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Check the logs above for details." >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Cleanup workspace
-        if: always()
-        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
