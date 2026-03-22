@@ -8,16 +8,6 @@ port: 4141
 # Root directory for git clones and worktrees
 root_dir: "/var/lib/agentd"
 
-# tmux configuration
-tmux:
-  socket_name: "agentd"
-
-# ttyd websocket terminal
-ttyd:
-  enabled: false
-  base_port: 7681
-  max_ports: 100       # Maximum concurrent ttyd ports (range: base_port to base_port+max_ports)
-
 # PTY manager
 pty:
   buffer_size: 1048576       # Ring buffer size in bytes (default: 1 MB)
