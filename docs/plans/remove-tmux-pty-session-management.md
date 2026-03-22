@@ -310,12 +310,17 @@ type Session struct {
     buf    *RingBuffer
     mu     sync.Mutex
     // done is closed by the cmd.Wait() goroutine when the child process exits.
-    // Callers (e.g. Cleaner) select on this channel instead of polling.
+    // Unexported: accessed via the exported Done() method (receive-only).
     done chan struct{}
     // writers is a fan-out slice for active WebSocket connections.
     // Guarded by mu. Single-viewer semantics: at most one entry in Phase 3.
     writers []io.Writer
 }
+
+func (s *Session) Done() <-chan struct{} { return s.done }
+// Done returns a channel that is closed when the child process exits.
+// Callers in other packages (e.g. internal/session.Cleaner) select on Done()
+// instead of polling via syscall.Kill.
 
 // Manager holds all active PTY sessions.
 type Manager struct {
@@ -326,7 +331,13 @@ type Manager struct {
 func (m *Manager) Create(id, workdir string, args []string, env []string, cols, rows uint16) (*Session, error)
 // Create starts a new PTY session:
 //   - Allocates PTY master/slave pair via creack/pty
-//   - Launches the process with exec.Cmd{Path: args[0], Args: args, Env: env, SysProcAttr: {Setsid: true}}
+//   - env []string: passed verbatim to exec.Cmd.Env. Callers must pass only a minimal,
+//     scrubbed environment. Vault secrets must NOT appear in env — they are readable
+//     via /proc/<pid>/environ by any process with ptrace access. Use the planned agentd
+//     debug endpoint for tooling visibility instead (see Phase 4 audit table).
+//   - Launches the process via creack/pty's pty.StartWithSize (which sets Setsid and Ctty
+//     automatically); do NOT set SysProcAttr.Setsid manually — pty.StartWithSize handles
+//     both Setsid and the controlling terminal (Ctty) assignment required on Linux.
 //   - Sets initial window size (cols, rows); uses 80x24 if both are zero
 //   - Starts the PTY read goroutine: reads master → writes to RingBuffer + fan-out writers
 //   - Starts cmd.Wait() goroutine: closes Session.done on process exit
@@ -344,8 +355,14 @@ func (m *Manager) Destroy(id string) error
 func (m *Manager) ServeTerminal(id string, ws *websocket.Conn) error
 // ServeTerminal:
 //   1. Gets the session by id (returns error if not found)
-//   2. Registers ws in session.writers (displacing any previous active connection — single-viewer semantics)
-//   3. Replays session.buf.Snapshot() to ws (recent history)
+//   1a. Authorization check: the caller (HTTP handler) must verify that the requesting
+//       client holds a valid credential scoped to this session before calling ServeTerminal.
+//       Viewer displacement is logged at INFO level (old connection closed, new connection ID).
+//   2. Under session.mu: takes session.buf.Snapshot() and registers ws in session.writers
+//      (displacing any previous active connection — single-viewer semantics).
+//      The snapshot and writer registration are atomic to prevent the PTY read goroutine
+//      from delivering live bytes before the replay is complete.
+//   3. Writes the snapshot bytes to ws (outside the lock — avoids holding mu during I/O).
 //   4. Enters bidirectional relay loop:
 //        - WS → PTY master: forward input bytes; decode JSON resize frames and call pty.Setsize
 //        - PTY master → WS: handled by the session's read goroutine via the writers fan-out
