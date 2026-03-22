@@ -1,7 +1,6 @@
 package e2e_test
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,16 +10,11 @@ import (
 	"strings"
 	"testing"
 
-	agentsv1 "github.com/dokipen/claude-cadence/services/agents/gen/agents/v1"
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
 	"github.com/dokipen/claude-cadence/services/agents/internal/git"
 	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
-	"github.com/dokipen/claude-cadence/services/agents/internal/server"
-	"github.com/dokipen/claude-cadence/services/agents/internal/service"
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
 	"github.com/dokipen/claude-cadence/services/agents/internal/vault"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 // fakeVaultServer creates a test HTTP server that mimics Vault's KV v2 API.
@@ -64,10 +58,9 @@ func fakeVaultServer(t *testing.T, secrets map[string]map[string]interface{}, ex
 	}))
 }
 
-// vaultTestEnv holds a server wired with vault and git clients.
+// vaultTestEnv holds a manager wired with vault and git clients.
 type vaultTestEnv struct {
-	addr        string
-	srv         *server.Server
+	mgr         *session.Manager
 	bareRepo    string
 	rootDir     string
 	vaultServer *httptest.Server
@@ -128,43 +121,13 @@ func setupVaultTestEnv(t *testing.T, secrets map[string]map[string]interface{}, 
 	store := session.NewStore()
 	gitClient := git.NewClient(rootDir)
 	mgr := session.NewManager(store, ptyManager, gitClient, vaultClient, profiles)
-	svc := service.NewAgentService(mgr)
-
-	srv, err := server.New(svc, &config.Config{
-		Host:       "127.0.0.1",
-		Port:       0,
-		Reflection: true,
-		Auth:       config.AuthConfig{Mode: "none"},
-	})
-	if err != nil {
-		t.Fatalf("creating vault test server: %v", err)
-	}
-
-	go func() {
-		_ = srv.Start()
-	}()
-
-	t.Cleanup(func() {
-		srv.Stop()
-	})
 
 	return &vaultTestEnv{
-		addr:        srv.Addr(),
-		srv:         srv,
+		mgr:         mgr,
 		bareRepo:    bareRepo,
 		rootDir:     rootDir,
 		vaultServer: vs,
 	}
-}
-
-func (e *vaultTestEnv) newClient(t *testing.T) agentsv1.AgentServiceClient {
-	t.Helper()
-	conn, err := grpc.NewClient(e.addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("connecting to vault test server: %v", err)
-	}
-	t.Cleanup(func() { conn.Close() })
-	return agentsv1.NewAgentServiceClient(conn)
 }
 
 func TestVault_TokenAuth(t *testing.T) {
@@ -176,29 +139,23 @@ func TestVault_TokenAuth(t *testing.T) {
 	}
 
 	env := setupVaultTestEnv(t, secrets, vaultToken)
-	client := env.newClient(t)
-	ctx := context.Background()
 	name := uniqueSessionName(t)
 
 	// Creating a session with a vault-enabled profile should succeed,
 	// proving that token auth to Vault worked.
-	resp, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	sess, err := env.mgr.Create(session.CreateRequest{
 		AgentProfile: "vault-sleeper",
 		SessionName:  name,
 	})
 	if err != nil {
-		t.Fatalf("CreateSession: %v", err)
+		t.Fatalf("Create: %v", err)
 	}
 	t.Cleanup(func() {
-		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-			SessionId: resp.GetSession().GetId(),
-			Force:     true,
-		})
+		env.mgr.Destroy(sess.ID, true)
 	})
 
-	sess := resp.GetSession()
-	if sess.GetState().String() != "SESSION_STATE_RUNNING" {
-		t.Errorf("expected STATE_RUNNING, got %s", sess.GetState().String())
+	if sess.State != session.StateRunning {
+		t.Errorf("expected STATE_RUNNING, got %v", sess.State)
 	}
 }
 
@@ -213,27 +170,21 @@ func TestVault_EnvInjection(t *testing.T) {
 	}
 
 	env := setupVaultTestEnv(t, secrets, vaultToken)
-	client := env.newClient(t)
-	ctx := context.Background()
 	name := uniqueSessionName(t)
 
-	resp, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	sess, err := env.mgr.Create(session.CreateRequest{
 		AgentProfile: "vault-sleeper",
 		SessionName:  name,
 	})
 	if err != nil {
-		t.Fatalf("CreateSession: %v", err)
+		t.Fatalf("Create: %v", err)
 	}
 	t.Cleanup(func() {
-		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-			SessionId: resp.GetSession().GetId(),
-			Force:     true,
-		})
+		env.mgr.Destroy(sess.ID, true)
 	})
 
-	sess := resp.GetSession()
-	if sess.GetState().String() != "SESSION_STATE_RUNNING" {
-		t.Errorf("expected STATE_RUNNING, got %s", sess.GetState().String())
+	if sess.State != session.StateRunning {
+		t.Errorf("expected STATE_RUNNING, got %v", sess.State)
 	}
 
 	// Vault secrets are now passed via exec.Cmd.Env — verified via process-level env inspection in unit tests.
@@ -245,28 +196,22 @@ func TestVault_NoSecret_PublicRepo(t *testing.T) {
 	secrets := map[string]map[string]interface{}{}
 
 	env := setupVaultTestEnv(t, secrets, vaultToken)
-	client := env.newClient(t)
-	ctx := context.Background()
 	name := uniqueSessionName(t)
 
 	// Profile without vault_secret should work fine without any vault secrets.
-	resp, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	sess, err := env.mgr.Create(session.CreateRequest{
 		AgentProfile: "no-vault-sleeper",
 		SessionName:  name,
 	})
 	if err != nil {
-		t.Fatalf("CreateSession: %v", err)
+		t.Fatalf("Create: %v", err)
 	}
 	t.Cleanup(func() {
-		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-			SessionId: resp.GetSession().GetId(),
-			Force:     true,
-		})
+		env.mgr.Destroy(sess.ID, true)
 	})
 
-	sess := resp.GetSession()
-	if sess.GetState().String() != "SESSION_STATE_RUNNING" {
-		t.Errorf("expected STATE_RUNNING, got %s", sess.GetState().String())
+	if sess.State != session.StateRunning {
+		t.Errorf("expected STATE_RUNNING, got %v", sess.State)
 	}
 }
 
@@ -280,25 +225,20 @@ func TestVault_SecretRetrieval(t *testing.T) {
 	}
 
 	env := setupVaultTestEnv(t, secrets, vaultToken)
-	client := env.newClient(t)
-	ctx := context.Background()
 	name := uniqueSessionName(t)
 
 	// Session creation succeeds, meaning vault secret was fetched and
 	// used during the git clone operation (even though creds aren't needed
 	// for local bare repos, the fetch-from-vault path is exercised).
-	resp, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	sess, err := env.mgr.Create(session.CreateRequest{
 		AgentProfile: "vault-sleeper",
 		SessionName:  name,
 	})
 	if err != nil {
-		t.Fatalf("CreateSession: %v", err)
+		t.Fatalf("Create: %v", err)
 	}
 	t.Cleanup(func() {
-		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-			SessionId: resp.GetSession().GetId(),
-			Force:     true,
-		})
+		env.mgr.Destroy(sess.ID, true)
 	})
 
 	// Verify the clone directory has repo content (sessions start at clone root).

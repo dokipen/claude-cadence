@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Agent Service (`agentd`) is a gRPC service that manages AI agent sessions. It provides a control plane for launching, monitoring, and destroying agent processes running in tmux sessions, each operating within an isolated git worktree.
+The Agent Service (`agentd`) manages AI agent sessions. It provides a control plane for launching, monitoring, and destroying agent processes running in tmux sessions, each operating within an isolated git worktree. Session management is dispatched through the agent-hub WebSocket reverse connection.
 
 The service is agent-agnostic -- profiles can launch any CLI agent (Claude Code, Gemini, custom tools) with arbitrary arguments. Each profile pairs a command template with a GitHub repository, enabling reproducible, isolated agent sessions against specific codebases.
 
@@ -11,8 +11,7 @@ The service is agent-agnostic -- profiles can launch any CLI agent (Claude Code,
 - **OS**: macOS or Linux
 - **Runtime**: Single Go binary, no container runtime required
 - **Dependencies**: git, tmux (required); ttyd (optional, for web terminal); vault CLI (optional, for secrets)
-- **Default port**: 4141 (configurable)
-- **Default host**: 127.0.0.1 (configurable)
+- **Network**: binds to loopback only; no inbound port exposed externally
 
 ## Core Concepts
 
@@ -49,7 +48,7 @@ A configurable directory where the service stores all git clones and worktrees:
 
 ### US-01: Session Lifecycle
 
-As a user, I can manage agent sessions through the gRPC API.
+As a user, I can manage agent sessions through the hub API.
 
 - I can create a session by specifying a profile name and optional session name
 - I can list all active sessions with their current status
@@ -111,23 +110,26 @@ As a user, I can install the service as a system daemon.
 
 **E2E test file**: `test/e2e/install_test.go`
 
-## gRPC API Summary
+## API Summary
 
-| RPC | Description |
-|-----|-------------|
-| `CreateSession` | Launch an agent in a new tmux session |
-| `GetSession` | Get current state of a session (reconciled with tmux) |
-| `ListSessions` | List all sessions with optional profile/state filters |
-| `DestroySession` | Kill tmux session, clean up worktree, remove state |
+Session management is dispatched via JSON-RPC over the agent-hub WebSocket connection.
 
-See `docs/PLAN.md` for full proto3 definition.
+| Method | Description |
+|--------|-------------|
+| `createSession` | Launch an agent in a new tmux session |
+| `getSession` | Get current state of a session (reconciled with tmux) |
+| `listSessions` | List all sessions with optional profile/state filters |
+| `destroySession` | Kill tmux session, clean up worktree, remove state |
+| `getTerminalEndpoint` | Get terminal relay or URL for a session |
+
+See `docs/PLAN.md` and `internal/hub/dispatch.go` for the full API surface.
 
 ## Configuration
 
 Service configuration is stored in YAML format at `~/.config/agentd/config.yaml` (overridable via `--config` flag or `AGENTD_CONFIG` env var).
 
 Key configuration sections:
-- **Network**: host, port
+- **Network**: host (loopback binding)
 - **Root directory**: where repos and worktrees are stored
 - **Vault**: address, auth method, secret prefix
 - **tmux**: socket name
@@ -143,7 +145,7 @@ See `docs/PLAN.md` for full configuration schema.
 | Phase | Est | Description |
 |-------|-----|-------------|
 | 0 | 1 | Project setup: docs, plan, issue scaffolding |
-| 1 | 5 | Steel thread: gRPC + config + tmux CRUD |
+| 1 | 5 | Steel thread: config + tmux CRUD |
 | 2 | 5 | Git repository management + worktrees |
 | 3 | 3 | Vault integration |
 | 4 | 3 | ttyd web terminal access |

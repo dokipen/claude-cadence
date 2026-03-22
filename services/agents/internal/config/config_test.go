@@ -24,7 +24,6 @@ func validPTY() PTYConfig {
 
 func TestValidate_ZeroStaleSessionTTL(t *testing.T) {
 	cfg := &Config{
-		Host:     "127.0.0.1",
 		Auth:     AuthConfig{Mode: "none"},
 		Profiles: validProfiles(),
 		Cleanup:  CleanupConfig{StaleSessionTTL: 0, ReapInterval: 30 * time.Second},
@@ -37,7 +36,6 @@ func TestValidate_ZeroStaleSessionTTL(t *testing.T) {
 
 func TestValidate_ValidLocalhostNoAuth(t *testing.T) {
 	cfg := &Config{
-		Host:     "127.0.0.1",
 		Auth:     AuthConfig{Mode: "none"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),
@@ -50,7 +48,6 @@ func TestValidate_ValidLocalhostNoAuth(t *testing.T) {
 
 func TestValidate_ValidLocalhostIPv6(t *testing.T) {
 	cfg := &Config{
-		Host:     "::1",
 		Auth:     AuthConfig{Mode: "none"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),
@@ -63,7 +60,6 @@ func TestValidate_ValidLocalhostIPv6(t *testing.T) {
 
 func TestValidate_ValidTokenAuth(t *testing.T) {
 	cfg := &Config{
-		Host:     "127.0.0.1",
 		Auth:     AuthConfig{Mode: "token", Token: "mysecret"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),
@@ -76,7 +72,6 @@ func TestValidate_ValidTokenAuth(t *testing.T) {
 
 func TestValidate_ValidTokenAuthWithEnvVar(t *testing.T) {
 	cfg := &Config{
-		Host:     "127.0.0.1",
 		Auth:     AuthConfig{Mode: "token", TokenEnvVar: "AGENTD_TOKEN"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),
@@ -89,7 +84,6 @@ func TestValidate_ValidTokenAuthWithEnvVar(t *testing.T) {
 
 func TestValidate_TokenAuthWithoutToken(t *testing.T) {
 	cfg := &Config{
-		Host:     "127.0.0.1",
 		Auth:     AuthConfig{Mode: "token"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),
@@ -106,7 +100,6 @@ func TestValidate_TokenAuthWithoutToken(t *testing.T) {
 
 func TestValidate_InvalidAuthMode(t *testing.T) {
 	cfg := &Config{
-		Host:     "127.0.0.1",
 		Auth:     AuthConfig{Mode: "invalid"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),
@@ -117,35 +110,7 @@ func TestValidate_InvalidAuthMode(t *testing.T) {
 	}
 }
 
-func TestValidate_NonLocalhostWithTokenAuth(t *testing.T) {
-	cfg := &Config{
-		Host:     "0.0.0.0",
-		Auth:     AuthConfig{Mode: "token", Token: "secret"},
-		Profiles: validProfiles(),
-		Cleanup:  validCleanup(),
-		PTY:      validPTY(),
-	}
-	if err := validate(cfg); err != nil {
-		t.Errorf("expected no error, got: %v", err)
-	}
-}
 
-func TestValidate_NonLocalhostWithoutAuth(t *testing.T) {
-	cfg := &Config{
-		Host:     "0.0.0.0",
-		Auth:     AuthConfig{Mode: "none"},
-		Profiles: validProfiles(),
-		Cleanup:  validCleanup(),
-	}
-	err := validate(cfg)
-	if err == nil {
-		t.Fatal("expected error for non-localhost without auth")
-	}
-	want := "authentication required for non-localhost bindings"
-	if err.Error() != want {
-		t.Errorf("expected %q, got %q", want, err.Error())
-	}
-}
 
 func TestResolveToken_ReturnsTokenWhenNoEnvVar(t *testing.T) {
 	a := &AuthConfig{Token: "hardcoded"}
@@ -175,7 +140,6 @@ func TestResolveToken_FallsBackToTokenWhenEnvVarEmpty(t *testing.T) {
 
 func TestValidate_Hub_Valid_WithToken(t *testing.T) {
 	cfg := &Config{
-		Host:     "127.0.0.1",
 		Auth:     AuthConfig{Mode: "none"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),
@@ -194,7 +158,6 @@ func TestValidate_Hub_Valid_WithToken(t *testing.T) {
 
 func TestValidate_Hub_Valid_WithTokenEnvVar(t *testing.T) {
 	cfg := &Config{
-		Host:     "127.0.0.1",
 		Auth:     AuthConfig{Mode: "none"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),
@@ -213,7 +176,6 @@ func TestValidate_Hub_Valid_WithTokenEnvVar(t *testing.T) {
 
 func TestValidate_Hub_MissingURL(t *testing.T) {
 	cfg := &Config{
-		Host:     "127.0.0.1",
 		Auth:     AuthConfig{Mode: "none"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),
@@ -236,7 +198,6 @@ func TestValidate_Hub_MissingURL(t *testing.T) {
 
 func TestValidate_Hub_MissingName(t *testing.T) {
 	cfg := &Config{
-		Host:     "127.0.0.1",
 		Auth:     AuthConfig{Mode: "none"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),
@@ -259,7 +220,6 @@ func TestValidate_Hub_MissingName(t *testing.T) {
 
 func TestValidate_Hub_MissingToken(t *testing.T) {
 	cfg := &Config{
-		Host:     "127.0.0.1",
 		Auth:     AuthConfig{Mode: "none"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),
@@ -305,7 +265,6 @@ func TestHubResolveToken_ReturnsEnvVarWhenSet(t *testing.T) {
 
 func TestValidate_PTY_WebSocketScheme_Invalid(t *testing.T) {
 	cfg := &Config{
-		Host:     "127.0.0.1",
 		Auth:     AuthConfig{Mode: "none"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),
@@ -319,7 +278,6 @@ func TestValidate_PTY_WebSocketScheme_Invalid(t *testing.T) {
 
 func TestValidate_PTY_WebSocketScheme_WSS(t *testing.T) {
 	cfg := &Config{
-		Host:     "127.0.0.1",
 		Auth:     AuthConfig{Mode: "none"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),
@@ -342,7 +300,6 @@ func TestHubResolveToken_FallsBackToTokenWhenEnvVarEmpty(t *testing.T) {
 
 func advertiseAddressCfg(addr string) *Config {
 	return &Config{
-		Host:     "127.0.0.1",
 		Auth:     AuthConfig{Mode: "none"},
 		Profiles: validProfiles(),
 		Cleanup:  validCleanup(),

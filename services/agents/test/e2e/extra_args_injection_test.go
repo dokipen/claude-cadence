@@ -1,22 +1,17 @@
 package e2e_test
 
 import (
-	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	agentsv1 "github.com/dokipen/claude-cadence/services/agents/gen/agents/v1"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"github.com/dokipen/claude-cadence/services/agents/internal/session"
 )
 
 func TestCreateSession_ExtraArgsNullByte(t *testing.T) {
-	client := newTestClient(t)
-	ctx := context.Background()
-
-	_, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	_, err := testMgr.Create(session.CreateRequest{
 		AgentProfile: "echo-args",
 		SessionName:  uniqueSessionName(t),
 		ExtraArgs:    []string{"hello\x00world"},
@@ -24,14 +19,13 @@ func TestCreateSession_ExtraArgsNullByte(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for null byte in ExtraArgs, got nil")
 	}
-	if code := status.Code(err); code != codes.InvalidArgument {
-		t.Errorf("expected InvalidArgument, got %v", code)
+	var sessErr *session.Error
+	if !errors.As(err, &sessErr) || sessErr.Code != session.ErrInvalidArgument {
+		t.Errorf("expected ErrInvalidArgument, got %v", err)
 	}
 }
 
 func TestCreateSession_ExtraArgsInjection(t *testing.T) {
-	client := newTestClient(t)
-	ctx := context.Background()
 	name := uniqueSessionName(t)
 
 	// Create a temp file path that the injection would create if unescaped.
@@ -42,24 +36,20 @@ func TestCreateSession_ExtraArgsInjection(t *testing.T) {
 	// as a literal string argument to echo.
 	payload := "safe; touch " + markerFile
 
-	resp, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	sess, err := testMgr.Create(session.CreateRequest{
 		AgentProfile: "echo-args",
 		SessionName:  name,
 		ExtraArgs:    []string{payload},
 	})
 	if err != nil {
-		t.Fatalf("CreateSession: %v", err)
+		t.Fatalf("Create: %v", err)
 	}
 
 	t.Cleanup(func() {
-		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-			SessionId: resp.GetSession().GetId(),
-			Force:     true,
-		})
+		testMgr.Destroy(sess.ID, true)
 	})
 
-	sess := resp.GetSession()
-	if sess.GetId() == "" {
+	if sess.ID == "" {
 		t.Error("expected non-empty session ID")
 	}
 

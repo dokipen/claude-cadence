@@ -1,4 +1,4 @@
-.PHONY: build build-linux proto test test-e2e test-cleanup clean deploy-agent
+.PHONY: build build-linux test test-e2e test-cleanup clean deploy-agent
 
 BINARY := agentd
 BINARY_LINUX := agentd-linux
@@ -24,12 +24,6 @@ else
 	$(MAKE) build-linux
 	bash install/deploy.sh --name $(NAME) --host $(NAME)
 endif
-
-proto:
-	protoc --proto_path=proto \
-		--go_out=. --go_opt=module=$(MODULE) \
-		--go-grpc_out=. --go-grpc_opt=module=$(MODULE) \
-		proto/agents/v1/agents.proto
 
 test:
 	go test -v ./...

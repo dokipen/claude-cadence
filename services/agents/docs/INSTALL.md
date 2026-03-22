@@ -1,6 +1,6 @@
 # agentd Installation and Operations Guide
 
-`agentd` is a gRPC service for managing AI agent sessions in tmux. This guide covers
+`agentd` is a service for managing AI agent sessions in tmux. This guide covers
 installation, configuration, and day-to-day operation.
 
 ---
@@ -14,9 +14,6 @@ installation, configuration, and day-to-day operation.
 | Go 1.21+ | Build only | Not needed if using a pre-built binary |
 | git | Yes | Worktree and repo management |
 | vault CLI | No | Secret injection for private repos |
-| grpcurl | No | Useful for health checks and manual API calls |
-
-**Default network binding:** `127.0.0.1:4141`
 
 ---
 
@@ -78,7 +75,6 @@ cp services/agents/config.example.yaml ~/.config/agentd/config.yaml
 ```yaml
 # Network binding
 host: "127.0.0.1"   # default: 127.0.0.1
-port: 4141           # default: 4141
 
 # Root directory for git clones and worktrees (required for git/worktree features)
 root_dir: "/var/lib/agentd"
@@ -121,8 +117,6 @@ profiles:
     description: "Claude Code agent"
     vault_secret: ""   # optional — Vault path for repo credentials
 
-# gRPC reflection (enables grpcurl service discovery)
-reflection: false   # default: false
 ```
 
 ### Configuration constraints
@@ -220,17 +214,6 @@ Or inline (not recommended for shared configs):
 auth:
   mode: "token"
   token: "my-secret-token"
-```
-
-### Authenticating with grpcurl
-
-Pass the token in the `Authorization` header:
-
-```bash
-grpcurl -plaintext \
-  -H "Authorization: Bearer $AGENTD_TOKEN" \
-  127.0.0.1:4141 \
-  agents.v1.AgentService/ListSessions
 ```
 
 Token authentication is required whenever `agentd` is bound to a non-loopback
@@ -427,25 +410,11 @@ with a 5-second restart delay. Logs go to the journal (`SyslogIdentifier=agentd`
 
 A shared Caddyfile in `infrastructure/Caddyfile` provides a single entry point for both the issues and agents services. See the [Caddy setup section](../../../infrastructure/README.md) for full details.
 
-When running behind Caddy, gRPC requests to agentd are routed through `/agents/*` on the Caddy host using h2c transport. Direct access on port 4141 remains available for local development.
+When running behind Caddy, agent-hub traffic is proxied through the configured routes. See the [infrastructure README](../../../infrastructure/README.md) for details.
 
 ---
 
 ## 13. Troubleshooting
-
-### Port already in use
-
-```
-failed to listen: address already in use
-```
-
-Another process is using port 4141. Either stop the other process or change
-`port` in the config.
-
-```bash
-# Find the process using the port
-lsof -i :4141
-```
 
 ### Permission errors on root_dir
 
@@ -464,22 +433,12 @@ is formatted correctly: `Bearer <token>` (case-sensitive).
 ### Enabling debug logging
 
 Set `log.level` to `"debug"` in the config and restart the service. This produces
-verbose output for all gRPC calls, tmux interactions, and session state transitions.
+verbose output for all tmux interactions and session state transitions.
 
 ```yaml
 log:
   level: "debug"
   format: "text"   # "text" is easier to read in a terminal; use "json" for log aggregators
-```
-
-### Health check with grpcurl
-
-```bash
-# List available services (requires reflection: true in config)
-grpcurl -plaintext 127.0.0.1:4141 list
-
-# Check connectivity without reflection
-grpcurl -plaintext 127.0.0.1:4141 agents.v1.AgentService/ListSessions
 ```
 
 ### Local Network permission blocked (macOS)

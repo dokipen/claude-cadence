@@ -1,33 +1,26 @@
 package e2e_test
 
 import (
-	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	agentsv1 "github.com/dokipen/claude-cadence/services/agents/gen/agents/v1"
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
 	"github.com/dokipen/claude-cadence/services/agents/internal/git"
 	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
-	"github.com/dokipen/claude-cadence/services/agents/internal/server"
-	"github.com/dokipen/claude-cadence/services/agents/internal/service"
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
-// gitTestEnv holds a standalone server wired with a git.Client.
+// gitTestEnv holds a manager wired with a git.Client.
 type gitTestEnv struct {
-	addr     string
-	srv      *server.Server
+	mgr      *session.Manager
 	bareRepo string
 	rootDir  string
 }
 
-// setupGitTestEnv creates a bare git repo, starts a server with git support,
+// setupGitTestEnv creates a bare git repo, creates a manager with git support,
 // and returns a cleanup function.
 func setupGitTestEnv(t *testing.T) *gitTestEnv {
 	t.Helper()
@@ -67,74 +60,35 @@ func setupGitTestEnv(t *testing.T) *gitTestEnv {
 	store := session.NewStore()
 	gitClient := git.NewClient(rootDir)
 	mgr := session.NewManager(store, ptyManager, gitClient, nil, profiles)
-	svc := service.NewAgentService(mgr)
-
-	gitTestCfg := &config.Config{
-		Host:       "127.0.0.1",
-		Port:       0,
-		Reflection: true,
-		Auth:       config.AuthConfig{Mode: "none"},
-	}
-
-	srv, err := server.New(svc, gitTestCfg)
-	if err != nil {
-		t.Fatalf("creating git test server: %v", err)
-	}
-
-	go func() {
-		_ = srv.Start()
-	}()
-
-	t.Cleanup(func() {
-		srv.Stop()
-	})
 
 	return &gitTestEnv{
-		addr:     srv.Addr(),
-		srv:      srv,
+		mgr:      mgr,
 		bareRepo: bareRepo,
 		rootDir:  rootDir,
 	}
 }
 
-func (e *gitTestEnv) newClient(t *testing.T) agentsv1.AgentServiceClient {
-	t.Helper()
-	conn, err := grpc.NewClient(e.addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("connecting to git test server: %v", err)
-	}
-	t.Cleanup(func() { conn.Close() })
-	return agentsv1.NewAgentServiceClient(conn)
-}
-
 func TestGitClone_FirstSession(t *testing.T) {
 	env := setupGitTestEnv(t)
-	client := env.newClient(t)
-	ctx := context.Background()
 	name := uniqueSessionName(t)
 
-	resp, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	sess, err := env.mgr.Create(session.CreateRequest{
 		AgentProfile: "git-sleeper",
 		SessionName:  name,
 	})
 	if err != nil {
-		t.Fatalf("CreateSession: %v", err)
+		t.Fatalf("Create: %v", err)
 	}
 
 	t.Cleanup(func() {
-		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-			SessionId: resp.GetSession().GetId(),
-			Force:     true,
-		})
+		env.mgr.Destroy(sess.ID, true)
 	})
 
-	sess := resp.GetSession()
-
 	// worktree_path is no longer pre-created by agentd — agents create their own via /new-work.
-	if sess.GetWorktreePath() != "" {
-		t.Errorf("expected empty worktree_path, got %q", sess.GetWorktreePath())
+	if sess.WorktreePath != "" {
+		t.Errorf("expected empty worktree_path, got %q", sess.WorktreePath)
 	}
-	if sess.GetRepoUrl() == "" {
+	if sess.RepoURL == "" {
 		t.Error("expected non-empty repo_url")
 	}
 
@@ -167,23 +121,18 @@ func TestGitClone_FirstSession(t *testing.T) {
 
 func TestGitClone_SecondSession_ReusesClone(t *testing.T) {
 	env := setupGitTestEnv(t)
-	client := env.newClient(t)
-	ctx := context.Background()
 
 	// Create first session.
 	name1 := uniqueSessionName(t)
-	resp1, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	sess1, err := env.mgr.Create(session.CreateRequest{
 		AgentProfile: "git-sleeper",
 		SessionName:  name1,
 	})
 	if err != nil {
-		t.Fatalf("CreateSession 1: %v", err)
+		t.Fatalf("Create 1: %v", err)
 	}
 	t.Cleanup(func() {
-		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-			SessionId: resp1.GetSession().GetId(),
-			Force:     true,
-		})
+		env.mgr.Destroy(sess1.ID, true)
 	})
 
 	// Note the clone directory's mod time.
@@ -192,18 +141,15 @@ func TestGitClone_SecondSession_ReusesClone(t *testing.T) {
 
 	// Create second session — should reuse the same clone.
 	name2 := uniqueSessionName(t)
-	resp2, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	sess2, err := env.mgr.Create(session.CreateRequest{
 		AgentProfile: "git-sleeper",
 		SessionName:  name2,
 	})
 	if err != nil {
-		t.Fatalf("CreateSession 2: %v", err)
+		t.Fatalf("Create 2: %v", err)
 	}
 	t.Cleanup(func() {
-		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-			SessionId: resp2.GetSession().GetId(),
-			Force:     true,
-		})
+		env.mgr.Destroy(sess2.ID, true)
 	})
 
 	// Verify no additional clone directories were created.
@@ -215,23 +161,18 @@ func TestGitClone_SecondSession_ReusesClone(t *testing.T) {
 
 func TestGitRepoUpdate_PullsLatest(t *testing.T) {
 	env := setupGitTestEnv(t)
-	client := env.newClient(t)
-	ctx := context.Background()
 
 	// Create first session to trigger initial clone.
 	name1 := uniqueSessionName(t)
-	resp1, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	sess1, err := env.mgr.Create(session.CreateRequest{
 		AgentProfile: "git-sleeper",
 		SessionName:  name1,
 	})
 	if err != nil {
-		t.Fatalf("CreateSession 1: %v", err)
+		t.Fatalf("Create 1: %v", err)
 	}
 	t.Cleanup(func() {
-		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-			SessionId: resp1.GetSession().GetId(),
-			Force:     true,
-		})
+		env.mgr.Destroy(sess1.ID, true)
 	})
 
 	// Push a new commit to the bare repo.
@@ -245,18 +186,15 @@ func TestGitRepoUpdate_PullsLatest(t *testing.T) {
 
 	// Create second session — should pull latest and have the new file.
 	name2 := uniqueSessionName(t)
-	resp2, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	sess2, err := env.mgr.Create(session.CreateRequest{
 		AgentProfile: "git-sleeper",
 		SessionName:  name2,
 	})
 	if err != nil {
-		t.Fatalf("CreateSession 2: %v", err)
+		t.Fatalf("Create 2: %v", err)
 	}
 	t.Cleanup(func() {
-		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-			SessionId: resp2.GetSession().GetId(),
-			Force:     true,
-		})
+		env.mgr.Destroy(sess2.ID, true)
 	})
 
 	// Verify the new file exists in the clone directory (sessions start at clone root).
@@ -280,23 +218,18 @@ func TestGitRepoUpdate_PullsLatest(t *testing.T) {
 
 func TestGitDetachedHead_RecoveredOnNextSession(t *testing.T) {
 	env := setupGitTestEnv(t)
-	client := env.newClient(t)
-	ctx := context.Background()
 
 	// Create first session to trigger initial clone.
 	name1 := uniqueSessionName(t)
-	resp1, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	sess1, err := env.mgr.Create(session.CreateRequest{
 		AgentProfile: "git-sleeper",
 		SessionName:  name1,
 	})
 	if err != nil {
-		t.Fatalf("CreateSession 1: %v", err)
+		t.Fatalf("Create 1: %v", err)
 	}
 	t.Cleanup(func() {
-		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-			SessionId: resp1.GetSession().GetId(),
-			Force:     true,
-		})
+		env.mgr.Destroy(sess1.ID, true)
 	})
 
 	// Detach HEAD in the clone root to simulate a session that ran
@@ -328,18 +261,15 @@ func TestGitDetachedHead_RecoveredOnNextSession(t *testing.T) {
 
 	// Creating a second session should recover from detached HEAD via pullDefaultBranch.
 	name2 := uniqueSessionName(t)
-	resp2, err := client.CreateSession(ctx, &agentsv1.CreateSessionRequest{
+	sess2, err := env.mgr.Create(session.CreateRequest{
 		AgentProfile: "git-sleeper",
 		SessionName:  name2,
 	})
 	if err != nil {
-		t.Fatalf("CreateSession 2 (after detached HEAD): %v", err)
+		t.Fatalf("Create 2 (after detached HEAD): %v", err)
 	}
 	t.Cleanup(func() {
-		client.DestroySession(ctx, &agentsv1.DestroySessionRequest{
-			SessionId: resp2.GetSession().GetId(),
-			Force:     true,
-		})
+		env.mgr.Destroy(sess2.ID, true)
 	})
 
 	// Verify HEAD is now attached to the default branch (main).

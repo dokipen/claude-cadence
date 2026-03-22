@@ -1,13 +1,12 @@
 # agentd
 
-gRPC service for managing AI agent sessions.
+Service for managing AI agent sessions via agent-hub WebSocket.
 
 ## Quick Start
 
 ### Prerequisites
 
 - Go 1.23+
-- protoc + Go plugins (for proto regeneration only)
 
 ### Build
 

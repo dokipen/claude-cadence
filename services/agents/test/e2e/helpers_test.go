@@ -8,17 +8,12 @@ import (
 	"testing"
 	"time"
 
-	agentsv1 "github.com/dokipen/claude-cadence/services/agents/gen/agents/v1"
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
 	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
-	"github.com/dokipen/claude-cadence/services/agents/internal/server"
-	"github.com/dokipen/claude-cadence/services/agents/internal/service"
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
-var serverAddr string
+var testMgr *session.Manager
 
 func TestMain(m *testing.M) {
 	// Load test config
@@ -30,48 +25,12 @@ func TestMain(m *testing.M) {
 	// Create components
 	ptyManager := pty.NewPTYManager(pty.PTYConfig{BufferSize: cfg.PTY.BufferSize})
 	store := session.NewStore()
-	mgr := session.NewManager(store, ptyManager, nil, nil, cfg.Profiles)
-	svc := service.NewAgentService(mgr)
-
-	// Create a minimal config for test server
-	testCfg := &config.Config{
-		Host:       "127.0.0.1",
-		Port:       0,
-		Reflection: true, // tests use reflection
-		Auth:       config.AuthConfig{Mode: "none"},
-	}
-
-	// Start server on random port
-	srv, err := server.New(svc, testCfg)
-	if err != nil {
-		log.Fatalf("creating server: %v", err)
-	}
-
-	go func() {
-		if err := srv.Start(); err != nil {
-			log.Printf("server stopped: %v", err)
-		}
-	}()
-
-	serverAddr = srv.Addr()
+	testMgr = session.NewManager(store, ptyManager, nil, nil, cfg.Profiles)
 
 	// Run tests
 	code := m.Run()
 
-	// Cleanup
-	srv.Stop()
-
 	os.Exit(code)
-}
-
-func newTestClient(t *testing.T) agentsv1.AgentServiceClient {
-	t.Helper()
-	conn, err := grpc.NewClient(serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("connecting to server: %v", err)
-	}
-	t.Cleanup(func() { conn.Close() })
-	return agentsv1.NewAgentServiceClient(conn)
 }
 
 func uniqueSessionName(t *testing.T) string {

@@ -79,7 +79,8 @@ services:
   #   6. Then run: docker compose -f docker-compose.dev.yml --profile agents up
   #
   # The placeholder services below use network_mode: host so the containerised
-  # Caddy can reach agentd (4141) and agent-hub (4200) bound to the host loopback.
+  # Caddy can reach agent-hub (4200) bound to the host loopback. agentd connects
+  # outbound to agent-hub and does not expose a port.
 
   agentd:
     profiles: [agents]
