@@ -7,7 +7,6 @@ import { KanbanBoard } from "./components/KanbanBoard";
 import { FilterBar } from "./components/FilterBar";
 import { TicketDetail } from "./components/TicketDetail";
 import { AgentManager } from "./components/AgentManager";
-import { DocsPage } from "./components/DocsPage";
 import { ProjectSelector } from "./components/ProjectSelector";
 import { useProjects } from "./hooks/useProjects";
 import type { TicketFilters } from "./hooks/useTickets";
@@ -104,7 +103,7 @@ function AppShell() {
     } catch { return null; }
   });
   const [filters, setFilters] = useState<TicketFilters>({});
-  const showFilters = projectId && !location.pathname.startsWith("/ticket/") && !location.pathname.startsWith("/agents") && !location.pathname.startsWith("/docs");
+  const showFilters = projectId && !location.pathname.startsWith("/ticket/") && !location.pathname.startsWith("/agents");
 
   useEffect(() => {
     if (projectId) {
@@ -147,9 +146,6 @@ function AppShell() {
           <Link to="/agents" className={layoutStyles.navLink} data-testid="agents-nav-link">
             Agents
           </Link>
-          <Link to="/docs" className={layoutStyles.navLink} data-testid="docs-nav-link">
-            Docs
-          </Link>
           <NotificationDropdown waitingSessions={waitingSessions} />
         </div>
         <div className={layoutStyles.headerRight}>
@@ -171,7 +167,6 @@ function AppShell() {
       <main className={layoutStyles.main}>
         <Routes>
           <Route path="/agents" element={<AgentManager sessions={sessions} selectedProject={selectedProject} />} />
-          <Route path="/docs/*" element={<DocsPage />} />
           <Route
             path="/projects/:projectId/*"
             element={<KanbanBoard projectId={projectId} filters={filters} repoUrl={repoUrl} sessions={activeSessions} />}
