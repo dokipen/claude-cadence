@@ -350,6 +350,9 @@ In both cases:
 
 1. **Direct the user to spin up the dev environment** (see `docs/dev-environment.md`):
    ```bash
+   # If .env.dev doesn't exist yet, copy the example and fill in secrets first
+   cp .env.dev.example .env.dev
+   # Then start the stack
    docker compose -f docker-compose.dev.yml up --build
    ```
    Then open **http://localhost** in a browser.
