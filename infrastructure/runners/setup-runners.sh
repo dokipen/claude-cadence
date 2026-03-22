@@ -497,6 +497,18 @@ download_runner_tarball() {
         sudo_cmd mkdir -p "$cache_dir"
     fi
 
+    # Remove stale tarballs for other versions of this OS/arch
+    for stale in "${cache_dir}/actions-runner-${RUNNER_OS}-${RUNNER_ARCH}-"*.tar.gz; do
+        [[ -f "$stale" ]] || continue
+        [[ "$stale" == "$RUNNER_TARBALL_CACHE" ]] && continue
+        info "  Removing stale tarball: $stale"
+        if [[ "$OS" == "darwin" ]]; then
+            run_cmd rm -f "$stale"
+        else
+            sudo_cmd rm -f "$stale"
+        fi
+    done
+
     # If cache file already exists, verify its integrity then skip download
     if [[ -f "$RUNNER_TARBALL_CACHE" ]]; then
         info "  Using cached tarball: $RUNNER_TARBALL_CACHE"
