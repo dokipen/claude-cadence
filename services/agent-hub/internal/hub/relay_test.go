@@ -68,3 +68,43 @@ func TestDecodeTerminalFrame_WrongTypeByte(t *testing.T) {
 		t.Fatal("expected error for wrong type byte, got nil")
 	}
 }
+
+func TestDecodeRelayEndFrame_HappyPath(t *testing.T) {
+	sessionID := uuid.MustParse("12345678-1234-1234-1234-123456789abc")
+
+	// Build a valid relay-end frame: [0x02][16-byte UUID].
+	frame := make([]byte, sharedrelay.TerminalFrameHeaderLen)
+	frame[0] = sharedrelay.FrameTypeRelayEnd
+	copy(frame[1:17], sessionID[:])
+
+	gotID, err := DecodeRelayEndFrame(frame)
+	if err != nil {
+		t.Fatalf("DecodeRelayEndFrame: unexpected error: %v", err)
+	}
+	if gotID != sessionID {
+		t.Errorf("session ID mismatch: got %v, want %v", gotID, sessionID)
+	}
+}
+
+func TestDecodeRelayEndFrame_TooShort(t *testing.T) {
+	short := make([]byte, sharedrelay.TerminalFrameHeaderLen-1)
+	short[0] = sharedrelay.FrameTypeRelayEnd
+
+	_, err := DecodeRelayEndFrame(short)
+	if err == nil {
+		t.Fatal("expected error for frame shorter than 17 bytes, got nil")
+	}
+}
+
+func TestDecodeRelayEndFrame_WrongTypeByte(t *testing.T) {
+	// Build a valid-length frame but with the terminal type byte instead of relay-end.
+	frame := make([]byte, sharedrelay.TerminalFrameHeaderLen)
+	frame[0] = sharedrelay.FrameTypeTerminal
+	id := uuid.New()
+	copy(frame[1:17], id[:])
+
+	_, err := DecodeRelayEndFrame(frame)
+	if err == nil {
+		t.Fatal("expected error for wrong type byte (FrameTypeTerminal), got nil")
+	}
+}

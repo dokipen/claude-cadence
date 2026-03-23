@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net"
@@ -13,6 +14,16 @@ import (
 	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
 	sharedrelay "github.com/dokipen/claude-cadence/services/shared/relay"
 )
+
+// encodeRelayEndFrame encodes a relay-end notification frame as:
+//
+//	[1-byte type=0x02][16-byte session UUID]
+func encodeRelayEndFrame(sessionID uuid.UUID) []byte {
+	frame := make([]byte, sharedrelay.TerminalFrameHeaderLen)
+	frame[0] = sharedrelay.FrameTypeRelayEnd
+	copy(frame[1:17], sessionID[:])
+	return frame
+}
 
 // encodeTerminalFrame encodes a terminal data frame as:
 //
@@ -151,25 +162,42 @@ func (c *Client) runTerminalRelay(
 	// Main loop: hub binary frames → PTY input (via localConn).
 	// Receives browser→PTY frames from inputCh and forwards them to localConn
 	// as ttyd client→server text frames.
+	ptyEnded := false
+loop:
 	for {
 		select {
 		case <-ctx.Done():
 			slog.Debug("relay: context done, stopping relay", "session_id", ptySessID)
-			return
+			break loop
 		case <-outputDone:
 			slog.Debug("relay: output goroutine done, stopping relay", "session_id", ptySessID)
-			return
+			ptyEnded = true
+			break loop
 		case payload, ok := <-inputCh:
 			if !ok {
 				slog.Debug("relay: input channel closed, stopping relay", "session_id", ptySessID)
-				return
+				break loop
 			}
 			// payload is the raw ttyd client→server frame forwarded from the browser:
 			// byte '0' + input bytes, or byte '1' + JSON resize.
 			if writeErr := localConn.Write(ctx, websocket.MessageText, payload); writeErr != nil {
 				slog.Warn("relay: local WS write failed", "session_id", ptySessID, "error", writeErr)
-				return
+				break loop
 			}
+		}
+	}
+
+	// PTY ended and hub is still connected: notify hub to close its relay channel,
+	// then immediately destroy the session record so it no longer appears in listSessions.
+	if ptyEnded && ctx.Err() == nil {
+		frame := encodeRelayEndFrame(parsed)
+		c.writeMu.Lock()
+		_ = hubConn.Write(context.Background(), websocket.MessageBinary, frame)
+		c.writeMu.Unlock()
+
+		destroyParams, _ := json.Marshal(map[string]any{"session_id": ptySessID, "force": true})
+		if _, rpcErr := c.dispatcher.DestroySession(destroyParams); rpcErr != nil {
+			slog.Debug("relay: session already gone or destroy failed", "session_id", ptySessID)
 		}
 	}
 }

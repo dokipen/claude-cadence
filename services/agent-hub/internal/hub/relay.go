@@ -19,6 +19,20 @@ func EncodeTerminalFrame(sessionID uuid.UUID, payload []byte) []byte {
 	return frame
 }
 
+// DecodeRelayEndFrame decodes a relay-end binary frame, returning the session UUID.
+// Returns an error if the frame is malformed or the type byte is wrong.
+func DecodeRelayEndFrame(frame []byte) (uuid.UUID, error) {
+	if len(frame) < sharedrelay.TerminalFrameHeaderLen {
+		return uuid.UUID{}, fmt.Errorf("relay-end frame too short: %d bytes", len(frame))
+	}
+	if frame[0] != sharedrelay.FrameTypeRelayEnd {
+		return uuid.UUID{}, fmt.Errorf("unexpected frame type: 0x%02x (expected relay-end 0x%02x)", frame[0], sharedrelay.FrameTypeRelayEnd)
+	}
+	var id uuid.UUID
+	copy(id[:], frame[1:17])
+	return id, nil
+}
+
 // DecodeTerminalFrame decodes a binary frame. Returns the session UUID and
 // payload, or an error if the frame is malformed.
 func DecodeTerminalFrame(frame []byte) (sessionID uuid.UUID, payload []byte, err error) {

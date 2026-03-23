@@ -140,6 +140,17 @@ func (a *ConnectedAgent) DeliverTerminalFrame(sessionID uuid.UUID, payload []byt
 	}
 }
 
+// CloseTerminalChannel closes the relay channel for a single session and removes
+// it from the map. Safe to call when no relay is registered for the session.
+func (a *ConnectedAgent) CloseTerminalChannel(sessionID uuid.UUID) {
+	a.terminalMu.Lock()
+	defer a.terminalMu.Unlock()
+	if ch, ok := a.terminalChannels[sessionID]; ok {
+		close(ch)
+		delete(a.terminalChannels, sessionID)
+	}
+}
+
 // CloseTerminalChannels closes all terminal relay channels and clears the map.
 // This unblocks any relay goroutines waiting on the channels, causing them to
 // see ok=false and clean up.
