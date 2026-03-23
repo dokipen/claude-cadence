@@ -32,14 +32,14 @@ const defaultPingInterval = 10 * time.Second
 // accepted — suitable for development or when the reverse proxy enforces access
 // control. When non-empty, only the listed origin patterns are allowed.
 // A zero idleTimeout disables idle timeout enforcement.
-func HandleTerminalProxy(h *hub.Hub, allowedOrigins []string, idleTimeout time.Duration) http.HandlerFunc {
-	return handleTerminalProxy(h, allowedOrigins, defaultPingInterval, idleTimeout)
+func HandleTerminalProxy(h *hub.Hub, allowedOrigins []string, idleTimeout time.Duration, agentdToken string) http.HandlerFunc {
+	return handleTerminalProxy(h, allowedOrigins, defaultPingInterval, idleTimeout, agentdToken)
 }
 
 // handleTerminalProxy is the testable implementation that accepts an explicit
 // pingInterval and idleTimeout, avoiding the data race caused by tests mutating
 // a package-level var. A zero idleTimeout disables idle timeout enforcement.
-func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.Duration, idleTimeout time.Duration) http.HandlerFunc {
+func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.Duration, idleTimeout time.Duration, agentdToken string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		agentName := r.PathValue("agent_name")
 		sessionID := r.PathValue("session_id")
@@ -229,9 +229,15 @@ func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.
 
 		// Dial agentd's terminal WebSocket.
 		ttydURL := endpoint.URL
-		ttydConn, _, err := websocket.Dial(r.Context(), ttydURL, &websocket.DialOptions{
+		dialOpts := &websocket.DialOptions{
 			Subprotocols: []string{"tty"},
-		})
+		}
+		if agentdToken != "" {
+			dialOpts.HTTPHeader = http.Header{
+				"Authorization": []string{"Bearer " + agentdToken},
+			}
+		}
+		ttydConn, _, err := websocket.Dial(r.Context(), ttydURL, dialOpts)
 		if err != nil {
 			slog.Error("failed to dial ttyd", "url", ttydURL, "error", err)
 			writeJSONError(w, http.StatusBadGateway, "failed to connect to terminal")
