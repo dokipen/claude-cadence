@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/coder/websocket"
@@ -34,13 +35,15 @@ const defaultPingInterval = 10 * time.Second
 // validation (CSRF protection). When empty, connections from any origin are
 // accepted — suitable for development or when the reverse proxy enforces access
 // control. When non-empty, only the listed origin patterns are allowed.
-func HandleTerminalProxy(h *hub.Hub, allowedOrigins []string) http.HandlerFunc {
-	return handleTerminalProxy(h, allowedOrigins, defaultPingInterval)
+// A zero idleTimeout disables idle timeout enforcement.
+func HandleTerminalProxy(h *hub.Hub, allowedOrigins []string, idleTimeout time.Duration) http.HandlerFunc {
+	return handleTerminalProxy(h, allowedOrigins, defaultPingInterval, idleTimeout)
 }
 
 // handleTerminalProxy is the testable implementation that accepts an explicit
-// pingInterval, avoiding the data race caused by tests mutating a package-level var.
-func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.Duration) http.HandlerFunc {
+// pingInterval and idleTimeout, avoiding the data race caused by tests mutating
+// a package-level var. A zero idleTimeout disables idle timeout enforcement.
+func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.Duration, idleTimeout time.Duration) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		agentName := r.PathValue("agent_name")
 		sessionID := r.PathValue("session_id")
@@ -80,7 +83,20 @@ func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.
 				return
 			}
 
-			// Accept the browser's WebSocket upgrade before opening the relay.
+			// Create context and session ID early so we can check the session
+			// limit before accepting the WebSocket upgrade.
+			ctx, ctxCancel := context.WithCancel(r.Context())
+			defer ctxCancel()
+
+			sessionTrackID := uuid.NewString()
+			if !h.AcquireTerminalSession(sessionTrackID, ctxCancel) {
+				ctxCancel()
+				http.Error(w, "terminal session limit reached", http.StatusServiceUnavailable)
+				return
+			}
+			defer h.UntrackTerminalSession(sessionTrackID)
+
+			// Accept the browser's WebSocket upgrade after the session limit check.
 			acceptOpts := &websocket.AcceptOptions{
 				Subprotocols: []string{"tty"},
 			}
@@ -104,13 +120,25 @@ func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.
 
 			browserConn.SetReadLimit(maxRelayMessageSize)
 
-			ctx, ctxCancel := context.WithCancel(r.Context())
-			defer ctxCancel()
+			// Set up idle timeout if configured.
+			var idleTimer *time.Timer
+			var idleTimerMu sync.Mutex
 
-			// Track this terminal session for graceful shutdown.
-			sessionTrackID := uuid.NewString()
-			h.TrackTerminalSession(sessionTrackID, ctxCancel)
-			defer h.UntrackTerminalSession(sessionTrackID)
+			resetIdle := func() {} // no-op when idleTimeout == 0
+
+			if idleTimeout > 0 {
+				idleTimer = time.AfterFunc(idleTimeout, func() {
+					slog.Info("terminal session idle timeout", "session", sessionTrackID, "idle_timeout", idleTimeout)
+					ctxCancel()
+				})
+				defer idleTimer.Stop()
+
+				resetIdle = func() {
+					idleTimerMu.Lock()
+					defer idleTimerMu.Unlock()
+					idleTimer.Reset(idleTimeout)
+				}
+			}
 
 			relayCh, cleanup, err := h.OpenTerminalRelay(ctx, agentName, sessionUUID)
 			if err != nil {
@@ -132,6 +160,7 @@ func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.
 						if err := browserConn.Write(ctx, websocket.MessageBinary, payload); err != nil {
 							return
 						}
+						resetIdle()
 					case <-ctx.Done():
 						return
 					}
@@ -147,6 +176,7 @@ func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.
 				if err := h.WriteTerminalFrame(ctx, agentName, sessionUUID, payload); err != nil {
 					break
 				}
+				resetIdle()
 			}
 			return
 		}
@@ -187,6 +217,19 @@ func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.
 			writeJSONError(w, http.StatusBadGateway, "terminal endpoint mismatch")
 			return
 		}
+
+		// Create context and session ID early so we can check the session
+		// limit before accepting the WebSocket upgrade.
+		ctx, ctxCancel := context.WithCancel(r.Context())
+		defer ctxCancel()
+
+		sessionTrackID := uuid.NewString()
+		if !h.AcquireTerminalSession(sessionTrackID, ctxCancel) {
+			ctxCancel()
+			http.Error(w, "terminal session limit reached", http.StatusServiceUnavailable)
+			return
+		}
+		defer h.UntrackTerminalSession(sessionTrackID)
 
 		// Dial agentd's terminal WebSocket.
 		ttydURL := endpoint.URL
@@ -234,18 +277,29 @@ func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.
 		browserConn.SetReadLimit(maxRelayMessageSize)
 		ttydConn.SetReadLimit(maxRelayMessageSize)
 
-		// Relay bidirectionally.
-		ctx, ctxCancel := context.WithCancel(r.Context())
-		defer ctxCancel()
+		// Set up idle timeout if configured.
+		var idleTimer *time.Timer
+		var idleTimerMu sync.Mutex
 
-		// Track this terminal session for graceful shutdown.
-		sessionTrackID := uuid.NewString()
-		h.TrackTerminalSession(sessionTrackID, ctxCancel)
-		defer h.UntrackTerminalSession(sessionTrackID)
+		activityFn := func() {} // no-op when idleTimeout == 0
+
+		if idleTimeout > 0 {
+			idleTimer = time.AfterFunc(idleTimeout, func() {
+				slog.Info("terminal session idle timeout", "session", sessionTrackID, "idle_timeout", idleTimeout)
+				ctxCancel()
+			})
+			defer idleTimer.Stop()
+
+			activityFn = func() {
+				idleTimerMu.Lock()
+				defer idleTimerMu.Unlock()
+				idleTimer.Reset(idleTimeout)
+			}
+		}
 
 		errc := make(chan error, 4)
-		go func() { errc <- relay(ctx, browserConn, ttydConn) }()
-		go func() { errc <- relay(ctx, ttydConn, browserConn) }()
+		go func() { errc <- relay(ctx, browserConn, ttydConn, activityFn) }()
+		go func() { errc <- relay(ctx, ttydConn, browserConn, activityFn) }()
 		go func() { errc <- pingKeepalive(ctx, browserConn, pingInterval) }()
 		go func() { errc <- pingKeepalive(ctx, ttydConn, pingInterval) }()
 
@@ -258,8 +312,10 @@ func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.
 	}
 }
 
-// relay copies WebSocket messages from src to dst until ctx is cancelled or an error occurs.
-func relay(ctx context.Context, dst, src *websocket.Conn) error {
+// relay copies WebSocket messages from src to dst until ctx is cancelled or an
+// error occurs. activityFn is called after each successful write to signal
+// activity (used to reset the idle timeout timer).
+func relay(ctx context.Context, dst, src *websocket.Conn, activityFn func()) error {
 	for {
 		msgType, data, err := src.Read(ctx)
 		if err != nil {
@@ -274,6 +330,7 @@ func relay(ctx context.Context, dst, src *websocket.Conn) error {
 			}
 			return err
 		}
+		activityFn()
 	}
 }
 

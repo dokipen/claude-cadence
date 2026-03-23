@@ -30,8 +30,9 @@ type Hub struct {
 	agents map[string]*ConnectedAgent
 
 	// termSessions tracks active terminal proxy cancel functions for graceful drain.
-	termMu       sync.Mutex
-	termSessions map[string]context.CancelFunc
+	termMu              sync.Mutex
+	termSessions        map[string]context.CancelFunc
+	maxTerminalSessions int
 
 	heartbeatInterval time.Duration
 	heartbeatTimeout  time.Duration
@@ -41,15 +42,17 @@ type Hub struct {
 	done   chan struct{}
 }
 
-// New creates a new Hub.
-func New(heartbeatInterval, heartbeatTimeout, agentTTL time.Duration) *Hub {
+// New creates a new Hub. maxTerminalSessions sets the maximum number of
+// concurrent terminal proxy sessions; 0 means unlimited.
+func New(heartbeatInterval, heartbeatTimeout, agentTTL time.Duration, maxTerminalSessions int) *Hub {
 	return &Hub{
-		agents:            make(map[string]*ConnectedAgent),
-		termSessions:      make(map[string]context.CancelFunc),
-		heartbeatInterval: heartbeatInterval,
-		heartbeatTimeout:  heartbeatTimeout,
-		agentTTL:          agentTTL,
-		done:              make(chan struct{}),
+		agents:              make(map[string]*ConnectedAgent),
+		termSessions:        make(map[string]context.CancelFunc),
+		maxTerminalSessions: maxTerminalSessions,
+		heartbeatInterval:   heartbeatInterval,
+		heartbeatTimeout:    heartbeatTimeout,
+		agentTTL:            agentTTL,
+		done:                make(chan struct{}),
 	}
 }
 
@@ -83,6 +86,20 @@ func (h *Hub) Stop() {
 		agent.Conn().Close(websocket.StatusGoingAway, "hub shutting down")
 		delete(h.agents, name)
 	}
+}
+
+// AcquireTerminalSession atomically checks the concurrent session limit and, if
+// the limit is not exceeded, registers the session. Returns true on success or
+// false when the limit has been reached (in which case the session is not added).
+// A maxTerminalSessions value of 0 means unlimited.
+func (h *Hub) AcquireTerminalSession(id string, cancel context.CancelFunc) bool {
+	h.termMu.Lock()
+	defer h.termMu.Unlock()
+	if h.maxTerminalSessions > 0 && len(h.termSessions) >= h.maxTerminalSessions {
+		return false
+	}
+	h.termSessions[id] = cancel
+	return true
 }
 
 // TrackTerminalSession registers an active terminal proxy session for graceful shutdown.

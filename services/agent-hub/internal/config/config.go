@@ -20,6 +20,14 @@ type Config struct {
 	RawTTL         string          `yaml:"agent_ttl"`
 	RateLimit      RateLimitConfig `yaml:"rate_limit"`
 	Log            LogConfig       `yaml:"log"`
+	Terminal       TerminalConfig  `yaml:"terminal"`
+}
+
+// TerminalConfig holds terminal proxy settings.
+type TerminalConfig struct {
+	MaxSessions    int           `yaml:"max_sessions"`
+	IdleTimeout    time.Duration `yaml:"-"`
+	RawIdleTimeout string        `yaml:"idle_timeout"`
 }
 
 // RateLimitConfig holds rate limiting settings for the REST API.
@@ -151,6 +159,14 @@ func parseDurations(cfg *Config) error {
 		return fmt.Errorf("agent_ttl: %w", err)
 	}
 	cfg.AgentTTL = ttl
+
+	if cfg.Terminal.RawIdleTimeout != "" {
+		idleTimeout, err := time.ParseDuration(cfg.Terminal.RawIdleTimeout)
+		if err != nil {
+			return fmt.Errorf("terminal.idle_timeout: %w", err)
+		}
+		cfg.Terminal.IdleTimeout = idleTimeout
+	}
 
 	return nil
 }

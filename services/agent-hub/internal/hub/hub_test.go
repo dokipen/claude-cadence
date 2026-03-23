@@ -67,7 +67,7 @@ func connectAgent(t *testing.T, url, name string) {
 // startTestHubWithHeartbeat creates a Hub and HTTP server with custom heartbeat settings.
 func startTestHubWithHeartbeat(t *testing.T, interval, timeout time.Duration) (*Hub, string) {
 	t.Helper()
-	h := New(interval, timeout, 5*time.Minute)
+	h := New(interval, timeout, 5*time.Minute, 0)
 	h.Start()
 	t.Cleanup(h.Stop)
 
@@ -219,7 +219,7 @@ func TestHub_Call_Success(t *testing.T) {
 }
 
 func TestHub_Call_AgentOffline(t *testing.T) {
-	h := New(30*time.Second, 5*time.Second, 5*time.Minute)
+	h := New(30*time.Second, 5*time.Second, 5*time.Minute, 0)
 	h.Start()
 	defer h.Stop()
 
@@ -360,7 +360,7 @@ func TestRegister(t *testing.T) {
 // nil conns are removed before Stop so that Stop does not panic.
 func newTestHubNoReaper(t *testing.T) *Hub {
 	t.Helper()
-	h := New(30*time.Second, 5*time.Second, 5*time.Minute)
+	h := New(30*time.Second, 5*time.Second, 5*time.Minute, 0)
 	h.Start()
 	t.Cleanup(func() {
 		// Remove nil-conn agents to prevent panic in Stop.
@@ -512,7 +512,7 @@ func TestRegister_ProfileRepoEmpty(t *testing.T) {
 
 func TestReaper(t *testing.T) {
 	ttl := 50 * time.Millisecond
-	h := New(30*time.Second, 5*time.Second, ttl)
+	h := New(30*time.Second, 5*time.Second, ttl, 0)
 	h.Start()
 	t.Cleanup(func() {
 		h.mu.Lock()
