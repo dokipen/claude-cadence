@@ -167,6 +167,10 @@ func handleCreateSession(h *hub.Hub) http.HandlerFunc {
 			return
 		}
 
+		// CreateSession params are small (session ID + profile name); cap at RPC
+		// frame limit rather than the global REST body limit (1 MiB).
+		r.Body = http.MaxBytesReader(w, r.Body, hub.RPCMaxMessageSize)
+
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			var maxBytesErr *http.MaxBytesError
