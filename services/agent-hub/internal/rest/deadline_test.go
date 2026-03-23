@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -18,14 +19,19 @@ import (
 func TestBodyReadDeadline_FastClientSucceeds(t *testing.T) {
 	const deadline = 100 * time.Millisecond
 
-	var gotBody string
+	var (
+		mu      sync.Mutex
+		gotBody string
+	)
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		data, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, "read body: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
+		mu.Lock()
 		gotBody = string(data)
+		mu.Unlock()
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, "ok")
 	})
@@ -52,8 +58,11 @@ func TestBodyReadDeadline_FastClientSucceeds(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, respBody)
 	}
 
-	if gotBody != "hello" {
-		t.Errorf("expected body %q, got %q", "hello", gotBody)
+	mu.Lock()
+	got := gotBody
+	mu.Unlock()
+	if got != "hello" {
+		t.Errorf("expected body %q, got %q", "hello", got)
 	}
 }
 
