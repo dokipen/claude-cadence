@@ -30,19 +30,24 @@
 		reverse_proxy issues:4000
 	}
 
-	# Agent Hub — REST API
+	# Agent Hub — REST API and terminal WebSocket proxy.
+	# Inject the API token so browser requests through Caddy are authenticated.
 	handle /api/v1/* {
-		reverse_proxy agent-hub:4200
+		reverse_proxy agent-hub:4200 {
+			header_up Authorization "Bearer {env.HUB_API_TOKEN}"
+		}
 	}
 
-	# Agent Hub — agent WebSocket registration
+	# Agent Hub — agent WebSocket registration (uses its own token, no injection needed)
 	handle /ws/agent {
 		reverse_proxy agent-hub:4200
 	}
 
 	# Agent Hub — terminal WebSocket proxy
 	handle /ws/terminal/* {
-		reverse_proxy agent-hub:4200
+		reverse_proxy agent-hub:4200 {
+			header_up Authorization "Bearer {env.HUB_API_TOKEN}"
+		}
 	}
 
 	# Issues UI — Vite dev server with HMR

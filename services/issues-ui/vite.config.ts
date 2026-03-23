@@ -3,11 +3,12 @@ import react from "@vitejs/plugin-react";
 
 const apiHost = process.env.VITE_API_HOST || "localhost";
 const apiPort = process.env.VITE_API_PORT || "4000";
+const agentHubHost = process.env.VITE_AGENT_HUB_HOST || "localhost";
 const agentHubPort = Number(process.env.VITE_AGENT_HUB_PORT ?? "4200");
 if (!Number.isInteger(agentHubPort) || agentHubPort < 1 || agentHubPort > 65535) {
   throw new Error("VITE_AGENT_HUB_PORT must be a valid port number");
 }
-const agentHubToken = process.env.AGENT_HUB_TOKEN || "";
+const agentHubToken = process.env.HUB_API_TOKEN || process.env.AGENT_HUB_TOKEN || "";
 
 export default defineConfig({
   plugins: [react()],
@@ -18,7 +19,7 @@ export default defineConfig({
     proxy: {
       "/graphql": `http://${apiHost}:${apiPort}`,
       "/api/v1": {
-        target: `http://localhost:${agentHubPort}`,
+        target: `http://${agentHubHost}:${agentHubPort}`,
         configure: (proxy) => {
           if (agentHubToken) {
             proxy.on("proxyReq", (proxyReq) => {
@@ -28,7 +29,7 @@ export default defineConfig({
         },
       },
       "/ws/terminal": {
-        target: `http://localhost:${agentHubPort}`,
+        target: `http://${agentHubHost}:${agentHubPort}`,
         ws: true,
         configure: (proxy) => {
           if (agentHubToken) {

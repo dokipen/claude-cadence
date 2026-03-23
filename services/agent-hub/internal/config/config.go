@@ -28,6 +28,18 @@ type TerminalConfig struct {
 	MaxSessions    int           `yaml:"max_sessions"`
 	IdleTimeout    time.Duration `yaml:"-"`
 	RawIdleTimeout string        `yaml:"idle_timeout"`
+	// TokenEnvVar is the environment variable containing the Bearer token
+	// to send when dialing agentd's terminal WebSocket endpoint. Required
+	// when agentd uses token auth (non-localhost bindings).
+	TokenEnvVar string `yaml:"token_env_var"`
+}
+
+// ResolveToken returns the terminal proxy token from the env var, or empty string.
+func (t *TerminalConfig) ResolveToken() string {
+	if t.TokenEnvVar != "" {
+		return os.Getenv(t.TokenEnvVar)
+	}
+	return ""
 }
 
 // RateLimitConfig holds rate limiting settings for the REST API.

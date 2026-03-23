@@ -1,0 +1,9 @@
+host: "0.0.0.0"
+auth:
+  token_env_var: HUB_API_TOKEN
+hub_auth:
+  token_env_var: HUB_AGENT_TOKEN
+terminal:
+  token_env_var: AGENTD_TOKEN
+allowed_origins:
+  - "http://localhost"

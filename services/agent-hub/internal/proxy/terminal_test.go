@@ -88,7 +88,9 @@ func TestHandleTerminalProxy_AgentNotFound(t *testing.T) {
 	defer h.Stop()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0))
+
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0, ""))
+
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
@@ -155,7 +157,9 @@ func TestHandleTerminalProxy_Relay(t *testing.T) {
 
 	// Start proxy server.
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0))
+
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0, ""))
+
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -251,7 +255,9 @@ func TestHandleTerminalProxy_AddressMismatch(t *testing.T) {
 	waitForAgent(t, h, "mismatch-agent")
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0))
+
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0, ""))
+
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -272,7 +278,9 @@ func TestHandleTerminalProxy_EmptyURL(t *testing.T) {
 	waitForAgent(t, h, "empty-addr-agent")
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0))
+
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0, ""))
+
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -293,7 +301,9 @@ func TestHandleTerminalProxy_BadScheme(t *testing.T) {
 	waitForAgent(t, h, "bad-scheme-agent")
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0))
+
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0, ""))
+
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -314,7 +324,9 @@ func TestHandleTerminalProxy_MalformedURL(t *testing.T) {
 	waitForAgent(t, h, "malformed-agent")
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0))
+
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0, ""))
+
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -368,7 +380,7 @@ func TestHandleTerminalProxy_SurvivesReadTimeout(t *testing.T) {
 	// Use NewUnstartedServer so we can set a short ReadTimeout that would
 	// kill WebSocket connections without the fix.
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0, ""))
 	proxySrv := httptest.NewUnstartedServer(mux)
 	proxySrv.Config.ReadTimeout = 150 * time.Millisecond
 	proxySrv.Config.WriteTimeout = 35 * time.Second
@@ -412,7 +424,9 @@ func TestHandleTerminalProxy_OriginRejected(t *testing.T) {
 	defer h.Stop()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, []string{"example.com"}, 0))
+
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, []string{"example.com"}, 0, ""))
+
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -576,7 +590,7 @@ func TestHandleTerminalProxy_KeepalivePreventsDrop(t *testing.T) {
 	// Start the proxy server with a 100ms ping interval — well within the 300ms
 	// idle timeout and long enough for loopback pong roundtrips.
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", handleTerminalProxy(h, nil, 100*time.Millisecond, 0))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", handleTerminalProxy(h, nil, 100*time.Millisecond, 0, ""))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -714,7 +728,7 @@ func TestHandleTerminalProxy_RelayMode(t *testing.T) {
 	waitForAgent(t, h, "relay-agent")
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0, ""))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -777,7 +791,7 @@ func TestHandleTerminalProxy_BackwardCompat_DirectDial(t *testing.T) {
 	waitForAgent(t, h, "direct-agent")
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0, ""))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -856,7 +870,7 @@ func TestHandleTerminalProxy_IdleTimeout(t *testing.T) {
 
 		mux := http.NewServeMux()
 		mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}",
-			handleTerminalProxy(h, nil, 5*time.Second, idleTimeout))
+			handleTerminalProxy(h, nil, 5*time.Second, idleTimeout, ""))
 		proxySrv := httptest.NewServer(mux)
 		defer proxySrv.Close()
 
@@ -904,7 +918,7 @@ func TestHandleTerminalProxy_IdleTimeout(t *testing.T) {
 
 		mux2 := http.NewServeMux()
 		mux2.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}",
-			handleTerminalProxy(h2, nil, 5*time.Second, idleTimeout))
+			handleTerminalProxy(h2, nil, 5*time.Second, idleTimeout, ""))
 		proxySrv2 := httptest.NewServer(mux2)
 		defer proxySrv2.Close()
 
@@ -1018,7 +1032,7 @@ func TestHandleTerminalProxy_SessionLimit(t *testing.T) {
 	// Start the proxy server.
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}",
-		handleTerminalProxy(h, nil, time.Second, 0))
+		handleTerminalProxy(h, nil, time.Second, 0, ""))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -1103,7 +1117,7 @@ func TestHandleTerminalProxy_RelayIdleTimeout(t *testing.T) {
 
 		mux := http.NewServeMux()
 		mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}",
-			handleTerminalProxy(h, nil, 5*time.Second, idleTimeout))
+			handleTerminalProxy(h, nil, 5*time.Second, idleTimeout, ""))
 		proxySrv := httptest.NewServer(mux)
 		defer proxySrv.Close()
 
@@ -1152,7 +1166,7 @@ func TestHandleTerminalProxy_RelayIdleTimeout(t *testing.T) {
 
 		mux2 := http.NewServeMux()
 		mux2.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}",
-			handleTerminalProxy(h2, nil, 5*time.Second, idleTimeout))
+			handleTerminalProxy(h2, nil, 5*time.Second, idleTimeout, ""))
 		proxySrv2 := httptest.NewServer(mux2)
 		defer proxySrv2.Close()
 
@@ -1241,7 +1255,7 @@ func TestHandleTerminalProxy_RelaySessionLimit(t *testing.T) {
 	// Start the proxy server.
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}",
-		handleTerminalProxy(h, nil, time.Second, 0))
+		handleTerminalProxy(h, nil, time.Second, 0, ""))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 

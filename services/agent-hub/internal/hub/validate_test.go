@@ -47,9 +47,15 @@ func TestValidateAdvertiseAddress(t *testing.T) {
 		{name: "IPv4 multicast", addr: "224.0.0.1", wantErr: true},
 		{name: "IPv6 multicast", addr: "ff00::1", wantErr: true},
 
-		// Non-IP strings.
-		{name: "hostname", addr: "my-host.local", wantErr: true},
-		{name: "not an address", addr: "not-an-address", wantErr: true},
+		// DNS hostnames (Docker/Kubernetes service discovery).
+		{name: "bare hostname", addr: "my-host.local", wantErr: false},
+		{name: "bare hostname simple", addr: "agentd", wantErr: false},
+		{name: "hostname with port", addr: "agentd:4142", wantErr: false},
+		{name: "hostname with dots and port", addr: "agentd.default.svc.cluster.local:4142", wantErr: false},
+
+		// Invalid strings.
+		{name: "path in address", addr: "host/path", wantErr: true},
+		{name: "whitespace", addr: "not an address", wantErr: true},
 
 		// CIDR notation is not a plain IP.
 		{name: "CIDR notation", addr: "10.0.0.0/8", wantErr: true},
