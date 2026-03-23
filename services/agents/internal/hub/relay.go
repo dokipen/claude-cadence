@@ -11,24 +11,15 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
-)
-
-const (
-	// frameTypeTerminal identifies a terminal relay binary frame.
-	// Must match agent-hub's FrameTypeTerminal = 0x01.
-	frameTypeTerminal byte = 0x01
-	// terminalFrameHeaderLen is 1 (type byte) + 16 (UUID bytes).
-	terminalFrameHeaderLen = 17
+	sharedrelay "github.com/dokipen/claude-cadence/services/shared/relay"
 )
 
 // encodeTerminalFrame encodes a terminal data frame as:
 //
 //	[1-byte type=0x01][16-byte session UUID][payload]
-//
-// This must match the format in services/agent-hub/internal/hub/relay.go.
 func encodeTerminalFrame(sessionID uuid.UUID, payload []byte) []byte {
-	frame := make([]byte, terminalFrameHeaderLen+len(payload))
-	frame[0] = frameTypeTerminal
+	frame := make([]byte, sharedrelay.TerminalFrameHeaderLen+len(payload))
+	frame[0] = sharedrelay.FrameTypeTerminal
 	copy(frame[1:17], sessionID[:])
 	copy(frame[17:], payload)
 	return frame
@@ -37,10 +28,10 @@ func encodeTerminalFrame(sessionID uuid.UUID, payload []byte) []byte {
 // decodeTerminalFrame decodes a binary frame, returning the session UUID and
 // payload. Returns an error if the frame is malformed or the type byte is wrong.
 func decodeTerminalFrame(frame []byte) (uuid.UUID, []byte, error) {
-	if len(frame) < terminalFrameHeaderLen {
+	if len(frame) < sharedrelay.TerminalFrameHeaderLen {
 		return uuid.UUID{}, nil, fmt.Errorf("terminal frame too short: %d bytes", len(frame))
 	}
-	if frame[0] != frameTypeTerminal {
+	if frame[0] != sharedrelay.FrameTypeTerminal {
 		return uuid.UUID{}, nil, fmt.Errorf("unexpected frame type: 0x%02x", frame[0])
 	}
 	var id uuid.UUID
