@@ -36,6 +36,7 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const everConnectedRef = useRef(false);
   const isAutoRetryRef = useRef(false);
+  const copyHandlerRef = useRef<((e: ClipboardEvent) => void) | null>(null);
   // true while auto-retrying after a drop (distinct from initial "connecting" text)
   const reconnectingRef = useRef(false);
   const [connState, setConnState] = useState<ConnectionState>("connecting");
@@ -64,6 +65,11 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
     if (termRef.current) {
       termRef.current.dispose();
       termRef.current = null;
+    }
+
+    if (copyHandlerRef.current) {
+      container.removeEventListener("copy", copyHandlerRef.current);
+      copyHandlerRef.current = null;
     }
 
     // During post-drop auto-reconnect, keep the "reconnecting" overlay active
@@ -111,6 +117,38 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
     term.loadAddon(fit);
     term.open(container);
     fit.fit();
+
+    // Guard against double-write: keyboard handler sets this flag so the DOM
+    // copy event (which may fire immediately after) skips its own clipboard write.
+    let keyboardCopyHandled = false;
+
+    term.attachCustomKeyEventHandler((event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "c" && event.type === "keydown") {
+        const selection = term.getSelection();
+        if (selection) {
+          const trimmed = selection.split("\n").map((line) => line.trimEnd()).join("\n").trimEnd();
+          keyboardCopyHandled = true;
+          navigator.clipboard.writeText(trimmed).catch(console.error);
+          return false; // prevent xterm from handling this key event
+        }
+      }
+      return true;
+    });
+
+    const handleCopy = (e: ClipboardEvent) => {
+      if (keyboardCopyHandled) {
+        keyboardCopyHandled = false;
+        return;
+      }
+      const selection = term.getSelection();
+      if (selection && e.clipboardData) {
+        e.preventDefault();
+        const trimmed = selection.split("\n").map((line) => line.trimEnd()).join("\n").trimEnd();
+        e.clipboardData.setData("text/plain", trimmed);
+      }
+    };
+    copyHandlerRef.current = handleCopy;
+    container.addEventListener("copy", handleCopy);
 
     termRef.current = term;
     fitRef.current = fit;
@@ -248,6 +286,10 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
       termRef.current = null;
       wsRef.current = null;
       fitRef.current = null;
+      if (copyHandlerRef.current && containerRef.current) {
+        containerRef.current.removeEventListener("copy", copyHandlerRef.current);
+        copyHandlerRef.current = null;
+      }
     };
   }, [connect]);
 
