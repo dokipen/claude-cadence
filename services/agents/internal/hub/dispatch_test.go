@@ -186,7 +186,7 @@ func TestMapSessionError(t *testing.T) {
 	}
 }
 
-func TestDispatcher_GetTerminalEndpoint_PathInjection(t *testing.T) {
+func TestDispatcher_GetTerminalEndpoint_InvalidSessionID(t *testing.T) {
 	cases := []struct {
 		name      string
 		sessionID string
@@ -201,13 +201,7 @@ func TestDispatcher_GetTerminalEndpoint_PathInjection(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			store := session.NewStore()
-			// Seed the injection string as a session ID so the test reaches validation
-			// before the store lookup (once the fix is in place, the store won't be reached).
-			store.Add(&session.Session{ID: tc.sessionID, State: session.StateStopped})
-			mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{})
-			d := NewDispatcher(mgr, "192.168.1.10", "ws")
-
+			d := newTestDispatcher()
 			params, _ := json.Marshal(map[string]string{"session_id": tc.sessionID})
 			_, rpcErr := d.GetTerminalEndpoint(params)
 			if rpcErr == nil {
@@ -217,6 +211,31 @@ func TestDispatcher_GetTerminalEndpoint_PathInjection(t *testing.T) {
 				t.Errorf("expected InvalidArgument (%d), got %d", rpcErrInvalidArgument, rpcErr.Code)
 			}
 		})
+	}
+}
+
+func TestDispatcher_GetTerminalEndpoint_URNFormNormalized(t *testing.T) {
+	// uuid.Parse accepts URN-prefixed UUIDs ("urn:uuid:...") — verify the URL
+	// uses the normalized canonical form (no colon in path), not the raw input.
+	const canonicalID = "550e8400-e29b-41d4-a716-446655440002"
+	store := session.NewStore()
+	store.Add(&session.Session{ID: canonicalID, State: session.StateStopped})
+	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{})
+	d := NewDispatcher(mgr, "192.168.1.10", "ws")
+
+	urnForm := "urn:uuid:" + canonicalID
+	params, _ := json.Marshal(map[string]string{"session_id": urnForm})
+	result, rpcErr := d.GetTerminalEndpoint(params)
+	if rpcErr != nil {
+		t.Fatalf("unexpected rpcError: code=%d msg=%s", rpcErr.Code, rpcErr.Message)
+	}
+	var out terminalEndpointResult
+	if err := json.Unmarshal(result, &out); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	want := "ws://192.168.1.10/ws/terminal/" + canonicalID
+	if out.URL != want {
+		t.Errorf("URL = %q, want %q", out.URL, want)
 	}
 }
 
