@@ -36,14 +36,23 @@ type Session struct {
 
 // Store is a thread-safe in-memory session store.
 type Store struct {
-	mu       sync.RWMutex
-	sessions map[string]*Session
+	mu        sync.RWMutex
+	sessions  map[string]*Session
+	persister *Persister
 }
 
-// NewStore creates a new empty Store.
+// NewStore creates a new empty Store without persistence.
 func NewStore() *Store {
 	return &Store{
 		sessions: make(map[string]*Session),
+	}
+}
+
+// NewStoreWithPersister creates a new Store backed by the given Persister.
+func NewStoreWithPersister(p *Persister) *Store {
+	return &Store{
+		sessions:  make(map[string]*Session),
+		persister: p,
 	}
 }
 
@@ -52,6 +61,9 @@ func (s *Store) Add(session *Session) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sessions[session.ID] = session
+	if s.persister != nil {
+		s.persister.queue(*session)
+	}
 }
 
 // Get retrieves a session by ID.
@@ -102,6 +114,9 @@ func (s *Store) Update(id string, fn func(*Session)) bool {
 		return false
 	}
 	fn(sess)
+	if s.persister != nil {
+		s.persister.queue(*sess)
+	}
 	return true
 }
 
@@ -114,5 +129,8 @@ func (s *Store) Delete(id string) bool {
 		return false
 	}
 	delete(s.sessions, id)
+	if s.persister != nil {
+		s.persister.queueDelete(id)
+	}
 	return true
 }

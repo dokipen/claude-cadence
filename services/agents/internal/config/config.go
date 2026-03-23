@@ -84,6 +84,11 @@ func (h *HubConfig) ResolveToken() string {
 	return h.Token
 }
 
+// SessionConfig holds session persistence settings.
+type SessionConfig struct {
+	Dir string `yaml:"dir"` // directory for persisted session state; empty disables persistence
+}
+
 // Config is the top-level agentd configuration.
 type Config struct {
 	RootDir  string             `yaml:"root_dir"`
@@ -95,6 +100,7 @@ type Config struct {
 	Vault    *VaultConfig       `yaml:"vault"`
 	Cleanup  CleanupConfig      `yaml:"cleanup"`
 	Hub      *HubConfig         `yaml:"hub"`
+	Session  SessionConfig      `yaml:"session"`
 }
 
 // CleanupConfig holds stale session cleanup settings.
