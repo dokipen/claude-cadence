@@ -76,7 +76,13 @@ func New(h *hub.Hub, cfg *config.Config) *Server {
 			Addr:         addr,
 			Handler:      mux,
 			ReadHeaderTimeout: 10 * time.Second,
-			WriteTimeout:      35 * time.Second, // Must exceed rpcCallTimeout (30s)
+			// ReadTimeout is intentionally not set. Go's ReadTimeout applies to
+			// the full net.Conn lifetime: setting it would kill long-lived
+			// WebSocket connections (agent WS, terminal WS) once the timeout
+			// fires. The same protection is achieved per-request for REST
+			// endpoints via bodyReadDeadlineMiddleware (30 s), and the
+			// ReadHeaderTimeout (10 s) covers the pre-body window.
+			WriteTimeout: 35 * time.Second, // Must exceed rpcCallTimeout (30s)
 		},
 	}
 	s.addr.Store(addr)

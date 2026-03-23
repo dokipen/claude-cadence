@@ -360,6 +360,15 @@ func handleAgentWebSocket(h *hub.Hub, agentToken string) http.HandlerFunc {
 			return
 		}
 
+		// Clear any server-level read deadline so a future ReadTimeout on
+		// http.Server does not kill this long-lived WebSocket connection.
+		rc := http.NewResponseController(w)
+		if err := rc.SetReadDeadline(time.Time{}); err != nil {
+			slog.Error("failed to clear read deadline", "error", err)
+			conn.Close(websocket.StatusInternalError, "internal error")
+			return
+		}
+
 		// The register message is a JSON-RPC text frame; apply the RPC limit.
 		// HandleAgentConnection raises this to MaxMessageSize for relay frames.
 		conn.SetReadLimit(hub.RPCMaxMessageSize)
