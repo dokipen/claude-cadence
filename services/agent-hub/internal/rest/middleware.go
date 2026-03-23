@@ -3,6 +3,7 @@ package rest
 import (
 	"container/list"
 	"crypto/subtle"
+	"errors"
 	"net"
 	"net/http"
 	"strings"
@@ -212,6 +213,29 @@ func rateLimiterInternal(cfg config.RateLimitConfig, nowFn func() time.Time) (le
 	}
 
 	return lenFunc, containsFunc, handler
+}
+
+// BodyReadTimeout is the maximum duration allowed to read a request body after
+// headers are fully received. It is applied as a per-request read deadline via
+// bodyReadDeadlineMiddleware.
+const BodyReadTimeout = 30 * time.Second
+
+// bodyReadDeadlineMiddleware sets a read deadline on the underlying connection
+// so that slow or stalled request bodies are rejected after BodyReadTimeout.
+// The deadline is set on a best-effort basis: if the underlying ResponseWriter
+// does not support SetReadDeadline (e.g. httptest.NewRecorder in tests), the
+// middleware proceeds without a deadline rather than returning an error.
+func bodyReadDeadlineMiddleware(timeout time.Duration) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			rc := http.NewResponseController(w)
+			deadline := time.Now().Add(timeout)
+			if err := rc.SetReadDeadline(deadline); err != nil && !errors.Is(err, http.ErrNotSupported) {
+				// best effort — proceed even if not supported
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // MaxRestBodySize is the maximum number of bytes accepted in a REST request body (1 MiB).

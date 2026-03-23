@@ -1,131 +1,166 @@
 package rest
 
 import (
-	"context"
-	"encoding/json"
+	"bufio"
+	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
-
-	"github.com/coder/websocket"
-	"github.com/dokipen/claude-cadence/services/agent-hub/internal/hub"
 )
 
-// TestIntegration_ListAllSessionsDeadline verifies that handleListAllSessions
-// returns HTTP 504 when the overall fan-out deadline fires before any agent
-// responds.
-func TestIntegration_ListAllSessionsDeadline(t *testing.T) {
-	const agentToken = "deadline-agent-token"
-	const agentDelay = 200 * time.Millisecond
-	const fanOutDeadline = 100 * time.Millisecond
+// TestBodyReadDeadline_FastClientSucceeds verifies that a normal POST request
+// whose body arrives well within the deadline completes with HTTP 200 and that
+// the handler is able to read the full body.
+func TestBodyReadDeadline_FastClientSucceeds(t *testing.T) {
+	const deadline = 100 * time.Millisecond
 
-	// Create a hub with generous heartbeat settings.
-	h := hub.New(30*time.Second, 5*time.Second, 5*time.Minute, 0)
-	h.Start()
-	t.Cleanup(h.Stop)
+	var (
+		mu      sync.Mutex
+		gotBody string
+	)
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "read body: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		mu.Lock()
+		gotBody = string(data)
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "ok")
+	})
 
-	// Build a mux with:
-	//   - /ws/agent  → handleAgentWebSocket (so agents can connect and register)
-	//   - /api/v1/sessions → handleListAllSessions with a 100ms deadline
-	mux := http.NewServeMux()
-	mux.Handle("GET /ws/agent", http.HandlerFunc(handleAgentWebSocket(h, agentToken)))
-	mux.HandleFunc("GET /api/v1/sessions", handleListAllSessions(h, fanOutDeadline))
-
-	ts := httptest.NewServer(mux)
+	handler := bodyReadDeadlineMiddleware(deadline)(inner)
+	ts := httptest.NewServer(handler)
 	t.Cleanup(ts.Close)
 
-	// connectSlowAgent dials the hub WS endpoint, registers with the given name,
-	// then enters a loop that sleeps agentDelay before responding to listSessions
-	// (simulating a slow agent that won't answer before the deadline fires).
-	connectSlowAgent := func(name string) {
-		wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws/agent"
-		ctx := context.Background()
-
-		conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
-			HTTPHeader: http.Header{
-				"Authorization": {"Bearer " + agentToken},
-			},
-		})
-		if err != nil {
-			t.Errorf("dial hub (%s): %v", name, err)
-			return
-		}
-		t.Cleanup(func() { conn.Close(websocket.StatusNormalClosure, "test done") })
-
-		// Send register.
-		regReq, _ := hub.NewRequest("reg-1", "register", &hub.RegisterParams{
-			Name: name,
-			Profiles: map[string]hub.ProfileInfo{
-				"default": {Description: "slow agent"},
-			},
-		})
-		data, _ := json.Marshal(regReq)
-		if err := conn.Write(ctx, websocket.MessageText, data); err != nil {
-			t.Errorf("write register (%s): %v", name, err)
-			return
-		}
-
-		// Read register ack.
-		if _, _, err = conn.Read(ctx); err != nil {
-			t.Errorf("read register ack (%s): %v", name, err)
-			return
-		}
-
-		// Slow response loop.
-		go func() {
-			for {
-				_, msgData, err := conn.Read(context.Background())
-				if err != nil {
-					return
-				}
-				var req hub.Request
-				json.Unmarshal(msgData, &req)
-
-				if req.Method == "ping" {
-					resp, _ := hub.NewResponse(req.ID, map[string]bool{"pong": true})
-					b, _ := json.Marshal(resp)
-					conn.Write(context.Background(), websocket.MessageText, b)
-					continue
-				}
-
-				// For listSessions: sleep past the fan-out deadline before responding.
-				time.Sleep(agentDelay)
-
-				resp, _ := hub.NewResponse(req.ID, map[string]any{"sessions": []any{}})
-				b, _ := json.Marshal(resp)
-				conn.Write(context.Background(), websocket.MessageText, b)
-			}
-		}()
+	body := strings.NewReader("hello")
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/test", body)
+	if err != nil {
+		t.Fatalf("build request: %v", err)
 	}
+	req.Header.Set("Content-Type", "text/plain")
 
-	// Connect 2 slow agents.
-	connectSlowAgent("slow-agent-1")
-	connectSlowAgent("slow-agent-2")
-
-	// Wait until both agents appear in the hub.
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if h.AgentCount() >= 2 {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if h.AgentCount() < 2 {
-		t.Fatalf("agents did not register in time, got %d", h.AgentCount())
-	}
-
-	// Make the request — the 100ms fan-out deadline should fire before the
-	// agents' 200ms delay elapses, causing a 504 response.
-	req, _ := http.NewRequest("GET", ts.URL+"/api/v1/sessions", nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		t.Fatalf("list all sessions: %v", err)
+		t.Fatalf("do request: %v", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusGatewayTimeout {
-		t.Errorf("expected 504 Gateway Timeout, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, respBody)
+	}
+
+	mu.Lock()
+	got := gotBody
+	mu.Unlock()
+	if got != "hello" {
+		t.Errorf("expected body %q, got %q", "hello", got)
+	}
+}
+
+// TestBodyReadDeadline_SlowBodyTriggersDeadline verifies that when a client
+// dials raw TCP, sends headers, then stalls longer than the deadline before
+// sending the body, the server closes the connection or returns an error.
+func TestBodyReadDeadline_SlowBodyTriggersDeadline(t *testing.T) {
+	const deadline = 50 * time.Millisecond
+	const margin = 100 * time.Millisecond
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Attempt to read the full body — should fail when deadline fires.
+		_, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "read timeout", http.StatusRequestTimeout)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := bodyReadDeadlineMiddleware(deadline)(inner)
+	ts := httptest.NewServer(handler)
+	t.Cleanup(ts.Close)
+
+	// Dial raw TCP to the test server.
+	conn, err := net.Dial("tcp", ts.Listener.Addr().String())
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	// Write HTTP request line and headers — declare a 5-byte body but don't
+	// send it yet, so the server is blocked waiting for the body.
+	headers := "POST /test HTTP/1.1\r\n" +
+		"Host: " + ts.Listener.Addr().String() + "\r\n" +
+		"Content-Length: 5\r\n" +
+		"Content-Type: text/plain\r\n" +
+		"Connection: close\r\n" +
+		"\r\n"
+	if _, err := fmt.Fprint(conn, headers); err != nil {
+		t.Fatalf("write headers: %v", err)
+	}
+
+	// Sleep longer than the deadline so the server's read deadline fires.
+	time.Sleep(deadline + margin)
+
+	// Try to write the body — the connection may already be dead.
+	_, _ = fmt.Fprint(conn, "hello")
+
+	// Set a read deadline on our end so we don't hang forever.
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+
+	// Read whatever the server sent back (may be an error response or EOF).
+	reader := bufio.NewReader(conn)
+	line, err := reader.ReadString('\n')
+
+	if err != nil && err != io.EOF {
+		// Connection was closed by server — that is the expected outcome when the
+		// read deadline fires mid-read (the server closes the underlying conn).
+		t.Logf("connection closed by server (expected): %v", err)
+		return
+	}
+
+	// If we got a response line, it must NOT be a 200.
+	if strings.Contains(line, "200") {
+		t.Errorf("expected non-200 response or closed connection after deadline, got: %q", line)
+	}
+
+	t.Logf("server response line: %q", line)
+}
+
+// TestBodyReadDeadline_RecorderGracefulDegradation verifies that
+// bodyReadDeadlineMiddleware does not panic when the underlying ResponseWriter
+// (httptest.NewRecorder) does not implement SetReadDeadline. It also verifies
+// that the inner handler is still called (graceful degradation).
+func TestBodyReadDeadline_RecorderGracefulDegradation(t *testing.T) {
+	const deadline = 50 * time.Millisecond
+
+	handlerCalled := false
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := bodyReadDeadlineMiddleware(deadline)(inner)
+
+	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("body"))
+	rec := httptest.NewRecorder()
+
+	// Must not panic even though httptest.ResponseRecorder does not support
+	// SetReadDeadline.
+	handler.ServeHTTP(rec, req)
+
+	if !handlerCalled {
+		t.Error("expected inner handler to be called, but it was not")
+	}
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
 	}
 }

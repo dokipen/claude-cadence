@@ -29,7 +29,7 @@ func New(h *hub.Hub, cfg *config.Config) *Server {
 	agentToken := cfg.HubAuth.ResolveToken()
 	mux.Handle("GET /ws/agent", rateLimiter(cfg.RateLimit)(http.HandlerFunc(handleAgentWebSocket(h, agentToken))))
 
-	// REST API endpoints — protected by API token auth.
+	// REST API endpoints — protected by API token auth, with body-read deadline.
 	apiMux := http.NewServeMux()
 	apiMux.HandleFunc("GET /api/v1/agents", handleListAgents(h))
 	apiMux.HandleFunc("GET /api/v1/agents/{name}", handleGetAgent(h))
@@ -38,7 +38,6 @@ func New(h *hub.Hub, cfg *config.Config) *Server {
 	apiMux.HandleFunc("GET /api/v1/agents/{name}/sessions", handleListSessions(h))
 	apiMux.HandleFunc("GET /api/v1/agents/{name}/sessions/{id}", handleGetSession(h))
 	apiMux.HandleFunc("DELETE /api/v1/agents/{name}/sessions/{id}", handleDestroySession(h))
-	apiMux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", proxy.HandleTerminalProxy(h, cfg.AllowedOrigins, cfg.Terminal.IdleTimeout, cfg.Terminal.ResolveToken()))
 
 	var apiHandler http.Handler = apiMux
 	if cfg.Auth.Mode == "token" {
@@ -46,10 +45,21 @@ func New(h *hub.Hub, cfg *config.Config) *Server {
 		apiHandler = tokenAuth(apiToken)(apiMux)
 	}
 	apiHandler = maxBodyMiddleware(apiHandler)
+	apiHandler = bodyReadDeadlineMiddleware(BodyReadTimeout)(apiHandler)
 	apiHandler = rateLimiter(cfg.RateLimit)(apiHandler)
 	apiHandler = metricsMiddleware(apiHandler)
 	mux.Handle("/api/v1/", apiHandler)
-	mux.Handle("/ws/terminal/", apiHandler)
+
+	// Terminal WebSocket — rate limited and auth-protected, but no body-read
+	// deadline: setting a connection-level read deadline would kill live sessions.
+	var terminalHandler http.Handler = http.HandlerFunc(proxy.HandleTerminalProxy(h, cfg.AllowedOrigins, cfg.Terminal.IdleTimeout, cfg.Terminal.ResolveToken()))
+	if cfg.Auth.Mode == "token" {
+		apiToken := cfg.Auth.ResolveToken()
+		terminalHandler = tokenAuth(apiToken)(terminalHandler)
+	}
+	terminalHandler = rateLimiter(cfg.RateLimit)(terminalHandler)
+	terminalHandler = metricsMiddleware(terminalHandler)
+	mux.Handle("/ws/terminal/", terminalHandler)
 
 	// Metrics endpoint — protected by API token auth when auth is enabled.
 	var metricsHandler http.Handler = expvar.Handler()
