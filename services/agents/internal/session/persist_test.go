@@ -472,9 +472,11 @@ func TestRestoreFromPersister_Running_ProcessAlive(t *testing.T) {
 	}
 }
 
-func TestRestoreFromPersister_Creating_NoPID(t *testing.T) {
+func TestRestoreFromPersister_Creating(t *testing.T) {
 	dir := t.TempDir()
 
+	// All StateCreating sessions become StateError on restore regardless of PID:
+	// the daemon has no PTY handle to reconnect to, so the session is unrecoverable.
 	sess := makeSession(StateCreating)
 	sess.AgentPID = 0
 	writeSessionFile(t, dir, sess)

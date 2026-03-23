@@ -497,16 +497,23 @@ func (m *Manager) RestoreFromPersister(p *Persister) error {
 	for _, sess := range sessions {
 		switch sess.State {
 		case StateDestroying:
+			// Daemon died mid-destroy. Clean up the file directly (not via the
+			// queue) since RestoreFromPersister runs before the write loop has
+			// received any ops — no ordering concern exists at this point.
 			p.deleteFile(sess.ID)
 			slog.Info("cleaned up mid-destroy session on restore", "id", sess.ID)
 			continue
 
 		case StateCreating:
-			if sess.AgentPID == 0 {
-				sess.State = StateError
-				sess.ErrorMessage = "session interrupted during creation (daemon restart)"
-				slog.Info("marking mid-create session as error on restore", "id", sess.ID)
-			}
+			// Daemon died during Create(). Two sub-cases:
+			//   AgentPID == 0: crashed before pty.Create — no process exists.
+			//   AgentPID != 0: crashed between pty.Create and the Running update.
+			//                  The process may or may not still be running, but
+			//                  we have no PTY handle to reconnect to it, so treat
+			//                  it as an error in both cases.
+			sess.State = StateError
+			sess.ErrorMessage = "session interrupted during creation (daemon restart)"
+			slog.Info("marking mid-create session as error on restore", "id", sess.ID, "pid", sess.AgentPID)
 
 		case StateRunning:
 			if !m.processAlive(sess.AgentPID) {

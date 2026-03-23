@@ -5,9 +5,16 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
+
+// uuidRe matches the canonical UUID format produced by github.com/google/uuid.
+// Session files whose ID does not match this pattern are rejected during LoadAll
+// to prevent path-traversal attacks if someone writes a crafted JSON file with a
+// malicious "id" field (e.g. "../../etc/passwd") into the session directory.
+var uuidRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 // writeOp is a discriminated union for save and delete operations.
 type writeOp struct {
@@ -93,23 +100,25 @@ func NewPersister(dir string) (*Persister, error) {
 	return p, nil
 }
 
-// queue enqueues a save operation. Non-blocking: drops with a warning if full.
+// queue enqueues a save operation. Non-blocking: drops with an error log if full.
+// A dropped save means the session's on-disk state diverges from memory until the
+// next state change; operators should alert on this log line.
 func (p *Persister) queue(s Session) {
 	op := writeOp{session: s}
 	select {
 	case p.ch <- op:
 	default:
-		slog.Warn("persist: write channel full, dropping save", "session_id", s.ID)
+		slog.Error("persist: write channel full, dropping save — on-disk state may diverge", "session_id", s.ID)
 	}
 }
 
-// queueDelete enqueues a delete operation. Non-blocking: drops with a warning if full.
+// queueDelete enqueues a delete operation. Non-blocking: drops with an error log if full.
 func (p *Persister) queueDelete(id string) {
 	op := writeOp{del: true, id: id}
 	select {
 	case p.ch <- op:
 	default:
-		slog.Warn("persist: write channel full, dropping delete", "session_id", id)
+		slog.Error("persist: write channel full, dropping delete — stale file may remain on disk", "session_id", id)
 	}
 }
 
@@ -148,9 +157,11 @@ func (p *Persister) saveFile(s Session) {
 		return
 	}
 	if err := os.Rename(tmpPath, finalPath); err != nil {
-		slog.Warn("persist: failed to rename tmp file", "session_id", s.ID, "error", err)
+		slog.Warn("persist: failed to rename tmp file", "session_id", s.ID, "path", tmpPath, "error", err)
 		// Best-effort cleanup of orphaned tmp file.
-		_ = os.Remove(tmpPath)
+		if rmErr := os.Remove(tmpPath); rmErr != nil && !os.IsNotExist(rmErr) {
+			slog.Warn("persist: failed to remove orphaned tmp file", "path", tmpPath, "error", rmErr)
+		}
 	}
 }
 
@@ -188,6 +199,12 @@ func (p *Persister) LoadAll() ([]*Session, error) {
 		var rec sessionRecord
 		if err := json.Unmarshal(data, &rec); err != nil {
 			slog.Warn("persist: failed to unmarshal session file, skipping", "file", name, "error", err)
+			continue
+		}
+		// Reject non-UUID IDs to prevent path traversal: a crafted file with
+		// "id": "../../etc/passwd" would otherwise let deleteFile escape p.dir.
+		if !uuidRe.MatchString(rec.ID) {
+			slog.Warn("persist: session file has non-UUID id, skipping", "file", name, "id", rec.ID)
 			continue
 		}
 		sessions = append(sessions, recordToSession(rec))
