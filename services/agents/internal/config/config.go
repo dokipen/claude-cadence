@@ -87,8 +87,7 @@ func (h *HubConfig) ResolveToken() string {
 // Config is the top-level agentd configuration.
 type Config struct {
 	RootDir  string             `yaml:"root_dir"`
-	Tmux     TmuxConfig         `yaml:"tmux"` // Deprecated: unused after tmux removal
-	Ttyd     TtydConfig         `yaml:"ttyd"` // Most fields deprecated after tmux removal; advertise_address is still active
+	Ttyd     TtydConfig         `yaml:"ttyd"` // Most fields deprecated after PTY migration; advertise_address is still active
 	PTY      PTYConfig          `yaml:"pty"`
 	Log      LogConfig          `yaml:"log"`
 	Profiles map[string]Profile `yaml:"profiles"`
@@ -104,11 +103,6 @@ type CleanupConfig struct {
 	ReapInterval    time.Duration `yaml:"-"`
 	RawTTL          string        `yaml:"stale_session_ttl"`
 	RawReapInterval string        `yaml:"session_reap_interval"`
-}
-
-// TmuxConfig holds tmux-specific settings.
-type TmuxConfig struct {
-	SocketName string `yaml:"socket_name"`
 }
 
 // TtydConfig holds ttyd websocket terminal settings.
@@ -304,9 +298,6 @@ func validate(cfg *Config) error {
 // LogDeprecations logs warnings for any deprecated config fields that are set
 // to non-default values. Call this after the logger is fully configured.
 func (c *Config) LogDeprecations(log *slog.Logger) {
-	if c.Tmux.SocketName != "" {
-		log.Warn("config key tmux.socket_name is deprecated and has no effect; remove it from your config")
-	}
 	if c.Ttyd.Enabled {
 		log.Warn("config key ttyd.enabled is deprecated and has no effect; remove it from your config")
 	}

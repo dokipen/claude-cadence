@@ -6,7 +6,7 @@ user-invokable: false
 
 ## Overview
 
-`agentd` is a service that manages AI agent sessions in tmux. It no longer exposes a direct gRPC port. Instead, session management is dispatched through the agent-hub WebSocket reverse connection — agentd connects outbound to the hub and receives JSON-RPC commands over that persistent connection.
+`agentd` is a service that manages AI agent sessions. It no longer exposes a direct gRPC port. Instead, session management is dispatched through the agent-hub WebSocket reverse connection — agentd connects outbound to the hub and receives JSON-RPC commands over that persistent connection.
 
 This is an internal skill for understanding agentd's architecture and its API surface.
 
@@ -22,7 +22,7 @@ This is an internal skill for understanding agentd's architecture and its API su
                                  ▼
                   ┌──────────────────────────────────────┐
                   │ agentd (host loopback only)           │
-                  │   session manager + tmux sessions     │
+                  │   session manager + PTY sessions      │
                   │   JSON-RPC dispatcher                 │
                   └──────────────────────────────────────┘
 ```
@@ -39,10 +39,10 @@ The dispatcher handles the following methods (see `dispatch.go` for full param/r
 
 | Method | Description |
 |--------|-------------|
-| `createSession` | Launch an agent in a new tmux session |
-| `getSession` | Get current state of a session (reconciled with tmux) |
+| `createSession` | Launch an agent in a new PTY session |
+| `getSession` | Get current state of a session (reconciled with PTY process) |
 | `listSessions` | List sessions with optional `agent_profile`, `state`, and `waiting_for_input` filters |
-| `destroySession` | Kill tmux session, clean up worktree, remove state |
+| `destroySession` | Kill PTY session, clean up worktree, remove state |
 | `getTerminalEndpoint` | Get terminal relay info for a session |
 
 ### Session States

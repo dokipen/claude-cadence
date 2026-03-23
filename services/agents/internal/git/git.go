@@ -171,7 +171,7 @@ func (c *Client) pullDefaultBranch(cloneDir string, creds *Credentials) error {
 
 	// Update the working tree so sessions starting in cloneDir see the latest
 	// content. This runs under the per-clone mutex, but the mutex is released
-	// before the tmux session starts. Concurrent sessions for the same repo
+	// before the PTY session starts. Concurrent sessions for the same repo
 	// share this working tree; any uncommitted changes a session writes before
 	// calling /new-work could be discarded by a subsequent pull. The workflow
 	// contract (agents call /new-work immediately) keeps this window small.

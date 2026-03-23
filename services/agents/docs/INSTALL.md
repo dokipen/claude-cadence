@@ -1,6 +1,6 @@
 # agentd Installation and Operations Guide
 
-`agentd` is a service for managing AI agent sessions in tmux. This guide covers
+`agentd` is a service for managing AI agent sessions. This guide covers
 installation, configuration, and day-to-day operation.
 
 ---
@@ -160,7 +160,7 @@ Profile `command` strings are Go templates evaluated at session start:
 | `{{.WorktreePath}}` | Absolute path of the checked-out worktree |
 | `{{.PluginDir}}` | Plugin directory from profile config (empty if not set) |
 | `{{.ExtraArgs}}` | Additional arguments passed by the caller at session creation |
-| `{{.SessionName}}` | Human-readable tmux session name |
+| `{{.SessionName}}` | Human-readable session name |
 | `{{.SessionID}}` | Unique session UUID |
 
 Use `{{if .PluginDir}}` conditionals to omit flags when the variable is unset.
@@ -342,12 +342,12 @@ The agent's name (e.g. `"mbp-bob"`) should appear with `"status": "online"`. It 
 
 ## 10. Stale Session Cleanup
 
-agentd automatically tracks session state. When a tmux session stops (the agent
+agentd automatically tracks session state. When a PTY session stops (the agent
 process exits), the session transitions to a stopped state. The cleanup subsystem
 runs on a configurable interval and destroys stopped sessions that have been idle
 longer than `stale_session_ttl`.
 
-On restart, agentd reconciles its internal state with the live tmux sessions,
+On restart, agentd reconciles its internal state with the running PTY sessions,
 recovering any sessions that are still running.
 
 ```yaml
@@ -433,7 +433,7 @@ is formatted correctly: `Bearer <token>` (case-sensitive).
 ### Enabling debug logging
 
 Set `log.level` to `"debug"` in the config and restart the service. This produces
-verbose output for all tmux interactions and session state transitions.
+verbose output for all PTY interactions and session state transitions.
 
 ```yaml
 log:

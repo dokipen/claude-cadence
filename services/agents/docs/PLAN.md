@@ -2,9 +2,9 @@
 
 ## Context
 
-The cadence project needs a service that manages AI agent sessions. The service handles the full agent lifecycle: loading configured agent profiles, managing git repository clones, creating isolated worktree environments, and launching agent processes in tmux sessions with optional web-based terminal access via ttyd.
+The cadence project needs a service that manages AI agent sessions. The service handles the full agent lifecycle: loading configured agent profiles, managing git repository clones, creating isolated worktree environments, and launching agent processes in PTY-based sessions with optional web-based terminal access via a built-in WebSocket relay.
 
-This enables running multiple concurrent agent sessions, each in their own isolated git worktree, observable via browser, and manageable through the agent-hub API. The service runs as a system daemon (launchd on macOS, systemd on Linux) on bare metal -- not containerized, since it manages tmux sessions directly.
+This enables running multiple concurrent agent sessions, each in their own isolated git worktree, observable via browser, and manageable through the agent-hub API. The service runs as a system daemon (launchd on macOS, systemd on Linux) on bare metal -- not containerized, since it has hard host dependencies (PTY management, OS service integration).
 
 ## Architecture Decisions
 
@@ -13,8 +13,8 @@ This enables running multiple concurrent agent sessions, each in their own isola
 | Language | Go | Single static binary, excellent process management, fast startup for system daemon |
 | API | JSON-RPC over hub WebSocket | Session commands dispatched through agent-hub reverse connection |
 | Config | YAML | Standard for Go services, supports comments, human-readable |
-| Session management | tmux | User requirement. Dedicated socket (`agentd`) isolates from user tmux |
-| Web terminal | ttyd | Exposes tmux sessions as websocket-backed terminals in browser |
+| Session management | PTY (native Go) | Native PTY management via PTYManager; no external dependency |
+| Web terminal | Built-in WebSocket relay | Streams PTY output to browser via built-in relay |
 | Secrets | HashiCorp Vault | User requirement. Token + AppRole auth |
 | Service mgmt | launchd (macOS) / systemd (Linux) | User requirement. Install script handles both |
 | Repo storage | Full clones under root_dir | Required for `git worktree add`. Never modified except default branch pull |
@@ -29,14 +29,10 @@ services/agents/
 ├── internal/
 │   ├── config/
 │   │   └── config.go                 # YAML config loading + validation
-│   ├── tmux/
-│   │   └── tmux.go                   # Session create/destroy/list/has-session
 │   ├── git/
 │   │   └── git.go                    # Clone, pull, worktree add/remove/prune
 │   ├── vault/
 │   │   └── vault.go                  # Vault client, secret fetching
-│   ├── ttyd/
-│   │   └── ttyd.go                   # ttyd process management, port allocation
 │   └── session/
 │       ├── manager.go                # Session lifecycle orchestration
 │       └── store.go                  # In-memory session state (map + mutex)
@@ -47,7 +43,7 @@ services/agents/
 │   └── agentd.service.tmpl           # systemd template
 ├── test/
 │   └── e2e/
-│       ├── helpers_test.go           # TestMain, test client factory, tmux helpers
+│       ├── helpers_test.go           # TestMain, test client factory, test helpers
 │       ├── session_lifecycle_test.go  # CRUD e2e tests
 │       ├── git_worktree_test.go      # Git + worktree e2e tests
 │       └── testdata/
@@ -77,10 +73,10 @@ agentd no longer exposes a direct gRPC port. Session management is dispatched th
 
 | Method | Description |
 |--------|-------------|
-| `createSession` | Launch an agent in a new tmux session |
-| `getSession` | Get current state of a session (reconciled with tmux) |
+| `createSession` | Launch an agent in a new PTY-based session |
+| `getSession` | Get current state of a session (reconciled with live PTY processes) |
 | `listSessions` | List sessions with optional profile/state filters |
-| `destroySession` | Kill tmux session, clean up worktree, remove state |
+| `destroySession` | Terminate PTY process, clean up worktree, remove state |
 | `getTerminalEndpoint` | Get terminal relay or URL for a session |
 
 Requests are dispatched by agent-hub over the WebSocket connection that agentd maintains to the hub. agentd does not accept inbound connections.
@@ -101,15 +97,6 @@ vault:
   address: "http://127.0.0.1:8200"
   auth_method: "token"          # "token" or "approle"
   secret_prefix: "secret/data/agentd"
-
-# tmux configuration
-tmux:
-  socket_name: "agentd"         # Dedicated tmux socket
-
-# ttyd websocket configuration
-ttyd:
-  enabled: false
-  base_port: 7681               # Incremented per session
 
 # Logging
 log:
@@ -163,30 +150,30 @@ profiles:
 
 ### CreateSession Flow
 
-1. **Validate** -- profile exists, session_name unique (check in-memory store AND `tmux has-session`), name is tmux-safe (`[a-zA-Z0-9_-]`, max 200 chars), extra_args validated (no null bytes, max 64 args, max 4096 bytes each). Auto-generate name if empty.
+1. **Validate** -- profile exists, session_name unique (check in-memory store), name is valid (`[a-zA-Z0-9_-]`, max 200 chars), extra_args validated (no null bytes, max 64 args, max 4096 bytes each). Auto-generate name if empty.
 2. **Create record** -- UUID v4, state=CREATING, store in memory.
 3. **[Phase 2+] Ensure repo clone** -- clone to `{root_dir}/repos/{owner}/{repo}` if not exists. Fetch + pull default branch.
 4. **[Phase 2+] Create worktree** -- `git worktree add {root_dir}/worktrees/{session-id} {base_ref}`
 5. **[Phase 3+] Resolve vault secrets** -- fetch credentials, prepare env vars.
-6. **Create tmux session** -- `tmux -L agentd new-session -d -s {name} -c {workdir}`. Inject env vars via `tmux set-environment`. Send command via `tmux send-keys`.
-7. **[Phase 4+] Start ttyd** -- `ttyd -p {port} -W tmux -L agentd attach-session -t {name}`
-8. **Record PID** -- `tmux list-panes -t {name} -F '#{pane_pid}'`. State=RUNNING.
+6. **Spawn PTY process** -- PTYManager spawns agent process in a pseudo-terminal with the working directory set to `{workdir}`. Inject env vars into process environment.
+7. **[Phase 4+] Start WebSocket relay** -- built-in relay connects to PTY session for browser terminal access.
+8. **Record PID** -- PTYManager returns process PID. State=RUNNING.
 9. **Return session** -- or state=ERROR with message if any step fails.
 
 ### GetSession Flow
 
-Look up by ID. Reconcile with tmux:
-- tmux session exists + PID alive -> RUNNING
-- tmux session exists + PID exited -> STOPPED
-- tmux session gone -> STOPPED or ERROR
+Look up by ID. Reconcile with live PTY processes:
+- PTY process alive -> RUNNING
+- PTY process exited -> STOPPED
+- PTY process not found -> STOPPED or ERROR
 
 ### DestroySession Flow
 
 1. Look up session. NOT_FOUND if missing.
 2. If process running and `force=false` -> FAILED_PRECONDITION.
 3. State=DESTROYING.
-4. Kill tmux: `tmux -L agentd kill-session -t {name}`
-5. [Phase 4+] Kill ttyd process.
+4. Terminate PTY process.
+5. [Phase 4+] Stop WebSocket relay.
 6. [Phase 2+] Remove worktree: `git worktree remove {path} --force` + `git worktree prune`
 7. Remove from store.
 
@@ -209,8 +196,8 @@ Tests use Go's built-in `testing` package. The session manager runs **in-process
 - `TestMain`: starts session manager with test config, tears down after all tests
 - `newTestClient(t)`: creates a test dispatcher backed by the session manager with `t.Cleanup`
 - `uniqueSessionName(t)`: generates `e2e-{TestName}-{nanos}` to prevent collisions
-- `tmuxSessionExists(name)`: independent tmux verification via `tmux has-session`
-- `cleanupAllTestSessions()`: safety net that kills all `e2e-` prefixed tmux sessions
+- `ptySessionRunning(id)`: independent PTY process verification via PTYManager
+- `cleanupAllTestSessions()`: safety net that terminates all `e2e-` prefixed PTY sessions
 
 ### Test profiles (simple processes, not real agents)
 ```yaml
@@ -227,11 +214,11 @@ profiles:
 
 ### Test cleanup (3 layers)
 1. Per-test: `t.Cleanup` calls DestroySession
-2. TestMain: `cleanupAllTestSessions()` kills all `e2e-*` tmux sessions
-3. Makefile: `make test-cleanup` for manual recovery
+2. TestMain: `cleanupAllTestSessions()` terminates all `e2e-*` PTY sessions
+3. Manual recovery: `pkill -f "agentd"` to kill stray PTY processes
 
 ### CI
-- GitHub Actions: `apt-get install -y tmux` on ubuntu-latest
+- GitHub Actions: ubuntu-latest
 - `go test -v -count=1 -timeout 120s ./test/e2e/`
 
 ## Install Script Design
@@ -243,7 +230,7 @@ profiles:
    - User to run as (default: current user, option to create new)
    - Root directory (default: `/var/lib/agentd`)
    - Host (default: `127.0.0.1`)
-3. **Verify prerequisites**: git, tmux installed. Warn if vault CLI missing.
+3. **Verify prerequisites**: git installed. Warn if vault CLI missing.
 4. **Build/copy binary** to `/usr/local/bin/agentd`
 5. **Create directories**: root_dir/repos, root_dir/worktrees, config dir
 6. **Generate config**: render config.yaml from prompts
@@ -259,10 +246,10 @@ profiles:
 
 Create the `services/agents/docs/` directory, drop the plan into it, create the GitHub milestone and all phase issues. This issue is the foundation that all other issues reference for context.
 
-### Phase 1: Steel Thread -- Config + Tmux Session CRUD (est: 5)
+### Phase 1: Steel Thread -- Config + PTY Session CRUD (est: 5)
 **Blocked by:** Phase 0
 
-Proves the core control plane: session manager starts, CreateSession starts a process in tmux, Get/List/Destroy work, e2e tests pass. No git, no vault, no ttyd, no install script.
+Proves the core control plane: session manager starts, CreateSession spawns a PTY process, Get/List/Destroy work, e2e tests pass. No git, no vault, no WebSocket relay, no install script.
 
 ### Phase 2: Git Repository Management + Worktrees (est: 5)
 **Blocked by:** Phase 1
@@ -274,10 +261,10 @@ Clone repos, pull default branch, create worktrees per session, cleanup on destr
 
 HashiCorp Vault client for private repo credentials and env var injection.
 
-### Phase 4: ttyd Web Terminal Access (est: 3)
+### Phase 4: Web Terminal Access (est: 3)
 **Blocked by:** Phase 1
 
-Websocket-backed web terminal access to tmux sessions via ttyd.
+WebSocket relay for browser-based terminal access to PTY sessions.
 
 ### Phase 5: Install Script + Service Management (est: 5)
 **Blocked by:** Phase 1
@@ -301,10 +288,10 @@ Plugin skill integration, full documentation, and GitHub Actions CI.
 | Phase | Est | Description | Depends on |
 |-------|-----|-------------|------------|
 | 0 | 1 | Project setup: docs, plan, issue scaffolding | -- |
-| 1 | 5 | Steel thread: config + tmux CRUD | Phase 0 |
+| 1 | 5 | Steel thread: config + PTY session CRUD | Phase 0 |
 | 2 | 5 | Git repository management + worktrees | Phase 1 |
 | 3 | 3 | Vault integration | Phase 2 |
-| 4 | 3 | ttyd web terminal access | Phase 1 |
+| 4 | 3 | Web terminal access (PTY relay) | Phase 1 |
 | 5 | 5 | Install script (launchd + systemd) | Phase 1 |
 | 6 | 3 | Stale cleanup + service recovery | Phase 1 |
 | 7 | 5 | Cadence skill + docs + CI | Phase 6 |
