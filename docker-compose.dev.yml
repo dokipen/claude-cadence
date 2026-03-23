@@ -84,7 +84,8 @@ services:
   agent-hub:
     profiles: [agents]
     build:
-      context: services/agent-hub
+      context: services
+      dockerfile: agent-hub/Dockerfile
     restart: unless-stopped
     env_file: .env.dev
     depends_on:
@@ -104,7 +105,8 @@ services:
     # resolves it for binding, and agent-hub resolves it via Docker DNS for proxying.
     hostname: agentd
     build:
-      context: services/agents
+      context: services
+      dockerfile: agents/Dockerfile
     restart: unless-stopped
     volumes:
       - agentd-data:/var/lib/agentd

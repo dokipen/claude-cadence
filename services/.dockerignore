@@ -1,0 +1,9 @@
+# Prevent env files and IDE config from being sent to the Docker build daemon.
+.env*
+.vscode/
+.idea/
+
+# Frontend build artifacts and dependencies (not needed by Go services).
+issues-ui/node_modules/
+issues-ui/dist/
+issues-cli/node_modules/

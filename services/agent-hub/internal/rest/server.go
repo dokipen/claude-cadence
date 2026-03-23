@@ -59,7 +59,7 @@ func New(h *hub.Hub, cfg *config.Config) *Server {
 	}
 	terminalHandler = rateLimiter(cfg.RateLimit)(terminalHandler)
 	terminalHandler = metricsMiddleware(terminalHandler)
-	mux.Handle("/ws/terminal/", terminalHandler)
+	mux.Handle("GET /ws/terminal/{agent_name}/{session_id}", terminalHandler)
 
 	// Metrics endpoint — protected by API token auth when auth is enabled.
 	var metricsHandler http.Handler = expvar.Handler()

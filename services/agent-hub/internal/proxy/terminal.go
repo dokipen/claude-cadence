@@ -112,6 +112,7 @@ func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.
 
 			// Clear the server's WriteTimeout so idle terminal sessions aren't killed.
 			rc := http.NewResponseController(w)
+			rc.SetReadDeadline(time.Time{})
 			rc.SetWriteDeadline(time.Time{})
 
 			browserConn.SetReadLimit(hub.MaxMessageSize)
@@ -143,6 +144,19 @@ func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.
 				return
 			}
 			defer cleanup()
+
+			// Ping browserConn to prevent idle OS/NAT firewalls from dropping the
+			// browser→hub connection. Read is called concurrently by the browser→PTY
+			// loop below, satisfying the pong-reception requirement.
+			//
+			// Unlike the non-relay path (which drains four goroutines via errc),
+			// this goroutine is fire-and-forget: the deferred ctxCancel above
+			// unblocks pingKeepalive's ctx.Done select, guaranteeing cleanup.
+			go func() {
+				if err := pingKeepalive(ctx, browserConn, pingInterval); err != nil && ctx.Err() == nil {
+					ctxCancel()
+				}
+			}()
 
 			// PTY → Browser goroutine.
 			go func() {
