@@ -17,12 +17,17 @@ import (
 // to change its AdvertiseAddress.
 var ErrAdvertiseAddressChanged = errors.New("advertise address changed on re-registration")
 
-// MaxMessageSize is the maximum allowed WebSocket message size (1 MiB).
-// Increased from the coder/websocket default of 64 KiB to support terminal
-// relay frames, which can carry large PTY output bursts. This limit applies
-// only to authenticated agent connections — browser WebSocket connections use
-// a separate, smaller limit configured in the proxy handler.
+// MaxMessageSize is the maximum allowed WebSocket message size for relay
+// (binary) frames (1 MiB). Sized for PTY burst output from terminal relay.
+// This is the connection-level read limit applied via SetReadLimit.
 const MaxMessageSize = 1 << 20
+
+// RPCMaxMessageSize is the maximum allowed size for a single JSON-RPC
+// (text) frame from an agent (64 KiB). RPC payloads (register, ping/pong,
+// listSessions, createSession responses) are structurally small — a 1 MiB
+// text frame would never occur in normal operation and likely indicates a
+// misconfigured or malicious client. Enforced post-read in HandleAgentConnection.
+const RPCMaxMessageSize = 64 * 1024
 
 // Hub manages registered agentd connections.
 type Hub struct {
@@ -304,6 +309,17 @@ func (h *Hub) HandleAgentConnection(ctx context.Context, agent *ConnectedAgent) 
 			}
 
 		case websocket.MessageText:
+			if len(data) > RPCMaxMessageSize {
+				slog.Warn("oversized RPC frame from agent, closing connection",
+					"agent", agent.Name,
+					"size", len(data),
+					"limit", RPCMaxMessageSize,
+				)
+				agent.Conn().Close(websocket.StatusMessageTooBig, "RPC frame exceeds limit")
+				agent.CloseTerminalChannels()
+				h.markOfflineIfCurrent(agent.Name, agent)
+				return
+			}
 			var msg Response
 			if err := json.Unmarshal(data, &msg); err != nil {
 				slog.Warn("invalid message from agent", "agent", agent.Name, "error", err)
