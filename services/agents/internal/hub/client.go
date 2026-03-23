@@ -334,6 +334,8 @@ func (c *Client) RegisterRelaySession(sessionID string, relayCancel context.Canc
 	// dispatchBinaryFrame's lookup, which uses uuid.UUID.String().
 	if parsed, err := uuid.Parse(sessionID); err == nil {
 		sessionID = parsed.String()
+	} else {
+		slog.Warn("RegisterRelaySession: sessionID is not a valid UUID; frames may not be delivered", "sessionID", sessionID, "err", err)
 	}
 	ch := make(chan []byte, terminalRelayChannelBufSize)
 	c.relayChMu.Lock()
