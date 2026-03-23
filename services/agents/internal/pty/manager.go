@@ -14,7 +14,10 @@ import (
 	"github.com/creack/pty"
 )
 
-const defaultBufferSize = 1 << 20 // 1 MB
+// defaultBufferSize is 1 byte less than 1 MB so that a ttyd replay frame
+// (1-byte type prefix + buffer contents) fits within the hub proxy's
+// MaxMessageSize (1 << 20) read limit.
+const defaultBufferSize = 1<<20 - 1
 
 const maxResizeDimension uint16 = 500
 

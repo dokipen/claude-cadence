@@ -188,7 +188,7 @@ func applyDefaults(cfg *Config) {
 		}
 	}
 	if cfg.PTY.BufferSize == 0 {
-		cfg.PTY.BufferSize = 1048576
+		cfg.PTY.BufferSize = 1<<20 - 1 // leave 1 byte for ttyd frame prefix
 	}
 	if cfg.PTY.WebSocketScheme == "" {
 		cfg.PTY.WebSocketScheme = "ws"
