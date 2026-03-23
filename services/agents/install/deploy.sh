@@ -114,13 +114,16 @@ deploy_remote() {
 
     # Write or update env file with hub token (preserve existing vars)
     info "Updating env file..."
+    local escaped_token
+    escaped_token="$(sed_escape "$HUB_AGENT_TOKEN")"
     if ssh "$HOST" "test -f $remote_env" 2>/dev/null; then
         # Update HUB_AGENT_TOKEN in-place if present, append if not
         if ssh "$HOST" "sudo grep -q '^HUB_AGENT_TOKEN=' $remote_env" 2>/dev/null; then
-            ssh "$HOST" "sudo sed -i 's|^HUB_AGENT_TOKEN=.*|HUB_AGENT_TOKEN=$HUB_AGENT_TOKEN|' $remote_env"
+            ssh "$HOST" "sudo sed -i 's|^HUB_AGENT_TOKEN=.*|HUB_AGENT_TOKEN=${escaped_token}|' $remote_env"
         else
             printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" | ssh "$HOST" "sudo tee -a $remote_env > /dev/null"
         fi
+        ssh "$HOST" "sudo chmod 600 $remote_env"
     else
         printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" | ssh "$HOST" "sudo tee $remote_env > /dev/null && sudo chmod 600 $remote_env"
     fi
@@ -206,10 +209,12 @@ deploy_local() {
 
     # Write or update env file with hub token (preserve existing vars)
     info "Updating env file..."
+    local escaped_token
+    escaped_token="$(sed_escape "$HUB_AGENT_TOKEN")"
     if [[ -f "$env_file" ]]; then
         # Update HUB_AGENT_TOKEN in-place if present, append if not
         if grep -q '^HUB_AGENT_TOKEN=' "$env_file" 2>/dev/null; then
-            sed -i '' "s|^HUB_AGENT_TOKEN=.*|HUB_AGENT_TOKEN=$HUB_AGENT_TOKEN|" "$env_file"
+            sed -i '' "s|^HUB_AGENT_TOKEN=.*|HUB_AGENT_TOKEN=${escaped_token}|" "$env_file"
         else
             printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" >> "$env_file"
         fi
