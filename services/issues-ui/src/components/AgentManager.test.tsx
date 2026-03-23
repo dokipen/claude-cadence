@@ -43,6 +43,7 @@ vi.mock("./TilingLayout", () => ({
   },
 }));
 
+import { MemoryRouter } from "react-router";
 import { AgentManager } from "./AgentManager";
 
 afterEach(() => {
@@ -72,7 +73,7 @@ describe("AgentManager", () => {
     const sessions = [makeSession(sessionId, agentName)];
 
     const { getAllByTestId } = render(
-      <AgentManager sessions={sessions} selectedProject={null} />,
+      <MemoryRouter><AgentManager sessions={sessions} selectedProject={null} /></MemoryRouter>,
     );
 
     // Click the session button to open it
@@ -104,7 +105,7 @@ describe("AgentManager", () => {
     const expectedKey = `${agentName}:${sessionId}`;
 
     const { getAllByTestId } = render(
-      <AgentManager sessions={sessions} selectedProject={null} />,
+      <MemoryRouter><AgentManager sessions={sessions} selectedProject={null} /></MemoryRouter>,
     );
 
     const sessionButtons = getAllByTestId("sidebar-session");
