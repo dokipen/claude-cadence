@@ -518,7 +518,7 @@ describe("clipboard copy trimming", () => {
     expect(result).toBe(false);
 
     // Clipboard should receive the trimmed text (trailing whitespace removed, blank trailing lines dropped)
-    expect((navigator.clipboard as { writeText: ReturnType<typeof vi.fn> }).writeText).toHaveBeenCalledWith("hello\nworld");
+    expect((navigator.clipboard as unknown as { writeText: ReturnType<typeof vi.fn> }).writeText).toHaveBeenCalledWith("hello\nworld");
   });
 
   // 3. Cmd+C (metaKey) with active selection: same trimming behavior
@@ -531,7 +531,7 @@ describe("clipboard copy trimming", () => {
     const result = handler({ key: "c", ctrlKey: false, metaKey: true, type: "keydown" });
 
     expect(result).toBe(false);
-    expect((navigator.clipboard as { writeText: ReturnType<typeof vi.fn> }).writeText).toHaveBeenCalledWith("foo\nbar");
+    expect((navigator.clipboard as unknown as { writeText: ReturnType<typeof vi.fn> }).writeText).toHaveBeenCalledWith("foo\nbar");
   });
 
   // 4. Ctrl+C with NO selection: handler returns true, clipboard NOT written
@@ -545,7 +545,7 @@ describe("clipboard copy trimming", () => {
 
     // Handler returns true so xterm processes the key normally (SIGINT)
     expect(result).toBe(true);
-    expect((navigator.clipboard as { writeText: ReturnType<typeof vi.fn> }).writeText).not.toHaveBeenCalled();
+    expect((navigator.clipboard as unknown as { writeText: ReturnType<typeof vi.fn> }).writeText).not.toHaveBeenCalled();
   });
 
   // 5. copy DOM event with active xterm selection: trims and sets clipboardData
@@ -587,7 +587,7 @@ describe("clipboard copy trimming", () => {
     // clipboardData.setData must NOT be called — keyboard handler already wrote to clipboard
     expect(setData).not.toHaveBeenCalled();
     // writeText must have been called exactly once (from the keyboard handler)
-    expect((navigator.clipboard as { writeText: ReturnType<typeof vi.fn> }).writeText).toHaveBeenCalledTimes(1);
+    expect((navigator.clipboard as unknown as { writeText: ReturnType<typeof vi.fn> }).writeText).toHaveBeenCalledTimes(1);
   });
 
   // 6. copy DOM event with NO active xterm selection: clipboard is not modified
