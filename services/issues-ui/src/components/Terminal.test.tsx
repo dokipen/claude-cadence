@@ -481,7 +481,7 @@ describe("clipboard copy trimming", () => {
       unobserve = vi.fn();
       disconnect = vi.fn();
     });
-    vi.stubGlobal("navigator", { clipboard: { writeText: vi.fn() } });
+    vi.stubGlobal("navigator", { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
     vi.useFakeTimers();
   });
 
@@ -564,6 +564,30 @@ describe("clipboard copy trimming", () => {
     act(() => { container.dispatchEvent(copyEvent); });
 
     expect(setData).toHaveBeenCalledWith("text/plain", "line one\nline two");
+  });
+
+  // 6a. Double-write guard: copy DOM event is skipped when keyboard copy already handled it
+  it("copy DOM event is skipped when keyboard handler already handled the copy", () => {
+    renderConnected();
+    const term = xtermInstances[0];
+    term.getSelection.mockReturnValue("text   ");
+
+    const container = screen.getByTestId("terminal-container");
+
+    // Trigger keyboard copy (sets the guard flag)
+    const handler = term.attachCustomKeyEventHandler.mock.calls[0][0] as (e: { key: string; ctrlKey: boolean; metaKey: boolean; type: string }) => boolean;
+    handler({ key: "c", ctrlKey: true, metaKey: false, type: "keydown" });
+
+    // Immediately fire the DOM copy event (simulates browser emitting copy after keydown)
+    const setData = vi.fn();
+    const copyEvent = new Event("copy", { bubbles: true, cancelable: true });
+    Object.defineProperty(copyEvent, "clipboardData", { value: { setData }, writable: false });
+    act(() => { container.dispatchEvent(copyEvent); });
+
+    // clipboardData.setData must NOT be called — keyboard handler already wrote to clipboard
+    expect(setData).not.toHaveBeenCalled();
+    // writeText must have been called exactly once (from the keyboard handler)
+    expect((navigator.clipboard as { writeText: ReturnType<typeof vi.fn> }).writeText).toHaveBeenCalledTimes(1);
   });
 
   // 6. copy DOM event with NO active xterm selection: clipboard is not modified

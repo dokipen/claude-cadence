@@ -69,6 +69,7 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
 
     if (copyHandlerRef.current) {
       container.removeEventListener("copy", copyHandlerRef.current);
+      copyHandlerRef.current = null;
     }
 
     // During post-drop auto-reconnect, keep the "reconnecting" overlay active
@@ -117,12 +118,17 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
     term.open(container);
     fit.fit();
 
+    // Guard against double-write: keyboard handler sets this flag so the DOM
+    // copy event (which may fire immediately after) skips its own clipboard write.
+    let keyboardCopyHandled = false;
+
     term.attachCustomKeyEventHandler((event) => {
       if ((event.ctrlKey || event.metaKey) && event.key === "c" && event.type === "keydown") {
         const selection = term.getSelection();
         if (selection) {
           const trimmed = selection.split("\n").map((line) => line.trimEnd()).join("\n").trimEnd();
-          navigator.clipboard.writeText(trimmed);
+          keyboardCopyHandled = true;
+          navigator.clipboard.writeText(trimmed).catch(console.error);
           return false; // prevent xterm from handling this key event
         }
       }
@@ -130,6 +136,10 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
     });
 
     const handleCopy = (e: ClipboardEvent) => {
+      if (keyboardCopyHandled) {
+        keyboardCopyHandled = false;
+        return;
+      }
       const selection = term.getSelection();
       if (selection && e.clipboardData) {
         e.preventDefault();
