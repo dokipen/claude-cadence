@@ -114,12 +114,10 @@ func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.
 			rc := http.NewResponseController(w)
 			if err := rc.SetReadDeadline(time.Time{}); err != nil {
 				slog.Error("failed to clear read deadline", "error", err)
-				browserConn.Close(websocket.StatusInternalError, "internal error")
 				return
 			}
 			if err := rc.SetWriteDeadline(time.Time{}); err != nil {
 				slog.Error("failed to clear write deadline", "error", err)
-				browserConn.Close(websocket.StatusInternalError, "internal error")
 				return
 			}
 
@@ -296,12 +294,10 @@ func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.
 		rc := http.NewResponseController(w)
 		if err := rc.SetReadDeadline(time.Time{}); err != nil {
 			slog.Error("failed to clear read deadline", "error", err)
-			browserConn.Close(websocket.StatusInternalError, "internal error")
 			return
 		}
 		if err := rc.SetWriteDeadline(time.Time{}); err != nil {
 			slog.Error("failed to clear write deadline", "error", err)
-			browserConn.Close(websocket.StatusInternalError, "internal error")
 			return
 		}
 
