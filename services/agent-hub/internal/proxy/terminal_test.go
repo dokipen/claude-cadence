@@ -20,7 +20,7 @@ import (
 // getTerminalEndpoint with address/port pointing at the mock ttyd server.
 func startTestHub(t *testing.T, mockTtydAddr string) (*hub.Hub, string) {
 	t.Helper()
-	h := hub.New(30*time.Second, 5*time.Second, 5*time.Minute)
+	h := hub.New(30*time.Second, 5*time.Second, 5*time.Minute, 0)
 	h.Start()
 	t.Cleanup(h.Stop)
 
@@ -83,12 +83,12 @@ func waitForAgent(t *testing.T, h *hub.Hub, name string) {
 }
 
 func TestHandleTerminalProxy_AgentNotFound(t *testing.T) {
-	h := hub.New(30*time.Second, 5*time.Second, 5*time.Minute)
+	h := hub.New(30*time.Second, 5*time.Second, 5*time.Minute, 0)
 	h.Start()
 	defer h.Stop()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0))
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
@@ -103,7 +103,7 @@ func TestHandleTerminalProxy_AgentNotFound(t *testing.T) {
 }
 
 func TestHandleTerminalProxy_AgentOffline(t *testing.T) {
-	h := hub.New(30*time.Second, 5*time.Second, 5*time.Minute)
+	h := hub.New(30*time.Second, 5*time.Second, 5*time.Minute, 0)
 	h.Start()
 	defer h.Stop()
 
@@ -155,7 +155,7 @@ func TestHandleTerminalProxy_Relay(t *testing.T) {
 
 	// Start proxy server.
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -251,7 +251,7 @@ func TestHandleTerminalProxy_AddressMismatch(t *testing.T) {
 	waitForAgent(t, h, "mismatch-agent")
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -272,7 +272,7 @@ func TestHandleTerminalProxy_EmptyURL(t *testing.T) {
 	waitForAgent(t, h, "empty-addr-agent")
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -293,7 +293,7 @@ func TestHandleTerminalProxy_BadScheme(t *testing.T) {
 	waitForAgent(t, h, "bad-scheme-agent")
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -314,7 +314,7 @@ func TestHandleTerminalProxy_MalformedURL(t *testing.T) {
 	waitForAgent(t, h, "malformed-agent")
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -368,7 +368,7 @@ func TestHandleTerminalProxy_SurvivesReadTimeout(t *testing.T) {
 	// Use NewUnstartedServer so we can set a short ReadTimeout that would
 	// kill WebSocket connections without the fix.
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0))
 	proxySrv := httptest.NewUnstartedServer(mux)
 	proxySrv.Config.ReadTimeout = 150 * time.Millisecond
 	proxySrv.Config.WriteTimeout = 35 * time.Second
@@ -407,12 +407,12 @@ func TestHandleTerminalProxy_SurvivesReadTimeout(t *testing.T) {
 }
 
 func TestHandleTerminalProxy_OriginRejected(t *testing.T) {
-	h := hub.New(30*time.Second, 5*time.Second, 5*time.Minute)
+	h := hub.New(30*time.Second, 5*time.Second, 5*time.Minute, 0)
 	h.Start()
 	defer h.Stop()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, []string{"example.com"}))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, []string{"example.com"}, 0))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -576,7 +576,7 @@ func TestHandleTerminalProxy_KeepalivePreventsDrop(t *testing.T) {
 	// Start the proxy server with a 100ms ping interval — well within the 300ms
 	// idle timeout and long enough for loopback pong roundtrips.
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", handleTerminalProxy(h, nil, 100*time.Millisecond))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", handleTerminalProxy(h, nil, 100*time.Millisecond, 0))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -714,7 +714,7 @@ func TestHandleTerminalProxy_RelayMode(t *testing.T) {
 	waitForAgent(t, h, "relay-agent")
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -777,7 +777,7 @@ func TestHandleTerminalProxy_BackwardCompat_DirectDial(t *testing.T) {
 	waitForAgent(t, h, "direct-agent")
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil))
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}", HandleTerminalProxy(h, nil, 0))
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
@@ -805,4 +805,510 @@ func TestHandleTerminalProxy_BackwardCompat_DirectDial(t *testing.T) {
 	if string(data) != expected {
 		t.Errorf("expected %q, got %q", expected, string(data))
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Idle timeout test
+// ---------------------------------------------------------------------------
+
+// TestHandleTerminalProxy_IdleTimeout verifies that a terminal session with
+// no activity is closed after the idle timeout fires.
+//
+// Uses the direct-dial path (agent returns a URL). The idle timer calls
+// ctxCancel which tears down the relay goroutines and closes the browser
+// WebSocket connection.
+//
+// Also verifies the positive case: when messages keep flowing the connection
+// survives well past the idle timeout.
+func TestHandleTerminalProxy_IdleTimeout(t *testing.T) {
+	const idleTimeout = 150 * time.Millisecond
+
+	// Mock ttyd echo server.
+	mockTtyd := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+			InsecureSkipVerify: true,
+			Subprotocols:       []string{"tty"},
+		})
+		if err != nil {
+			return
+		}
+		defer conn.Close(websocket.StatusNormalClosure, "done")
+		for {
+			msgType, data, err := conn.Read(r.Context())
+			if err != nil {
+				return
+			}
+			if err := conn.Write(r.Context(), msgType, append([]byte("echo:"), data...)); err != nil {
+				return
+			}
+		}
+	}))
+	defer mockTtyd.Close()
+
+	mockAddr := strings.TrimPrefix(mockTtyd.URL, "http://")
+	mockHost := strings.SplitN(mockAddr, ":", 2)[0]
+
+	// Part 1: idle connection is closed after idleTimeout.
+	t.Run("closes after idle", func(t *testing.T) {
+		h, hubURL := startTestHub(t, mockTtyd.URL)
+		connectAgent(t, hubURL, "idle-agent", mockHost, mockAddr)
+		waitForAgent(t, h, "idle-agent")
+
+		mux := http.NewServeMux()
+		mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}",
+			handleTerminalProxy(h, nil, 5*time.Second, idleTimeout))
+		proxySrv := httptest.NewServer(mux)
+		defer proxySrv.Close()
+
+		proxyWSURL := "ws" + strings.TrimPrefix(proxySrv.URL, "http") + "/ws/terminal/idle-agent/idle-sess-1"
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		browserConn, _, err := websocket.Dial(ctx, proxyWSURL, nil)
+		if err != nil {
+			t.Fatalf("browser dial failed: %v", err)
+		}
+		defer browserConn.Close(websocket.StatusNormalClosure, "done")
+
+		// Send one message to confirm the connection is working.
+		if err := browserConn.Write(ctx, websocket.MessageBinary, []byte("ping")); err != nil {
+			t.Fatalf("initial write failed: %v", err)
+		}
+		// Read the echo so we know the message round-tripped.
+		if _, _, err := browserConn.Read(ctx); err != nil {
+			t.Fatalf("initial read failed: %v", err)
+		}
+
+		// Now go idle — wait for idleTimeout + a comfortable margin.
+		time.Sleep(idleTimeout * 2)
+
+		// The proxy should have cancelled the session context and closed the
+		// browser connection. Any further interaction should fail.
+		if err := browserConn.Write(ctx, websocket.MessageBinary, []byte("after idle")); err == nil {
+			// Write may succeed (data buffered); confirm with a Read.
+			readCtx, readCancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			defer readCancel()
+			_, _, readErr := browserConn.Read(readCtx)
+			if readErr == nil {
+				t.Error("expected connection to be closed after idle timeout, but read succeeded")
+			}
+		}
+		// If write returned an error the connection is already closed — that is the expected outcome.
+	})
+
+	// Part 2: active connection survives past the idle timeout.
+	t.Run("stays open while active", func(t *testing.T) {
+		h2, hubURL2 := startTestHub(t, mockTtyd.URL)
+		connectAgent(t, hubURL2, "active-agent", mockHost, mockAddr)
+		waitForAgent(t, h2, "active-agent")
+
+		mux2 := http.NewServeMux()
+		mux2.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}",
+			handleTerminalProxy(h2, nil, 5*time.Second, idleTimeout))
+		proxySrv2 := httptest.NewServer(mux2)
+		defer proxySrv2.Close()
+
+		proxyWSURL2 := "ws" + strings.TrimPrefix(proxySrv2.URL, "http") + "/ws/terminal/active-agent/active-sess-1"
+		ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel2()
+
+		browserConn2, _, err := websocket.Dial(ctx2, proxyWSURL2, nil)
+		if err != nil {
+			t.Fatalf("browser dial failed: %v", err)
+		}
+		defer browserConn2.Close(websocket.StatusNormalClosure, "done")
+
+		// Keep sending messages at half the idle timeout to reset it repeatedly.
+		// Total duration is 4× idleTimeout — well past a single timeout window.
+		const rounds = 8
+		tickInterval := idleTimeout / 2
+		for i := range rounds {
+			time.Sleep(tickInterval)
+			msg := []byte("keepalive")
+			if err := browserConn2.Write(ctx2, websocket.MessageBinary, msg); err != nil {
+				t.Fatalf("write at round %d failed: %v", i, err)
+			}
+			_, data, err := browserConn2.Read(ctx2)
+			if err != nil {
+				t.Fatalf("read at round %d failed: %v (connection closed despite activity)", i, err)
+			}
+			if string(data) != "echo:keepalive" {
+				t.Errorf("round %d: expected echo:keepalive, got %q", i, data)
+			}
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Session limit test
+// ---------------------------------------------------------------------------
+
+// TestHandleTerminalProxy_SessionLimit verifies that the hub enforces a
+// concurrent terminal session cap. The direct-dial path checks the limit
+// before the WebSocket upgrade, so the rejected request gets HTTP 503.
+func TestHandleTerminalProxy_SessionLimit(t *testing.T) {
+	const maxSessions = 2
+
+	// Mock ttyd echo server — keeps connections open indefinitely.
+	mockTtyd := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+			InsecureSkipVerify: true,
+			Subprotocols:       []string{"tty"},
+		})
+		if err != nil {
+			return
+		}
+		defer conn.Close(websocket.StatusNormalClosure, "done")
+		// Block until context cancelled (connection held open).
+		for {
+			msgType, data, err := conn.Read(r.Context())
+			if err != nil {
+				return
+			}
+			if err := conn.Write(r.Context(), msgType, append([]byte("echo:"), data...)); err != nil {
+				return
+			}
+		}
+	}))
+	defer mockTtyd.Close()
+
+	mockAddr := strings.TrimPrefix(mockTtyd.URL, "http://")
+	mockHost := strings.SplitN(mockAddr, ":", 2)[0]
+
+	// Build a hub with the session limit.
+	h := hub.New(30*time.Second, 5*time.Second, 5*time.Minute, maxSessions)
+	h.Start()
+	t.Cleanup(h.Stop)
+
+	// Reuse the agent-registration HTTP server pattern from startTestHub.
+	agentSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+			InsecureSkipVerify: true,
+		})
+		if err != nil {
+			t.Errorf("accept ws: %v", err)
+			return
+		}
+		_, data, err := conn.Read(r.Context())
+		if err != nil {
+			return
+		}
+		var req hub.Request
+		json.Unmarshal(data, &req)
+		var params hub.RegisterParams
+		json.Unmarshal(req.Params, &params)
+
+		resp, _ := hub.NewResponse(req.ID, &hub.RegisterResult{Accepted: true})
+		respData, _ := json.Marshal(resp)
+		conn.Write(r.Context(), websocket.MessageText, respData)
+
+		agent, err := h.Register(params.Name, conn, &params)
+		if err != nil {
+			conn.Close(websocket.StatusPolicyViolation, err.Error())
+			return
+		}
+		h.HandleAgentConnection(r.Context(), agent)
+	}))
+	t.Cleanup(agentSrv.Close)
+
+	// Register the agent.
+	connectAgent(t, agentSrv.URL, "limit-agent", mockHost, mockAddr)
+	waitForAgent(t, h, "limit-agent")
+
+	// Start the proxy server.
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}",
+		handleTerminalProxy(h, nil, time.Second, 0))
+	proxySrv := httptest.NewServer(mux)
+	defer proxySrv.Close()
+
+	baseURL := "ws" + strings.TrimPrefix(proxySrv.URL, "http") + "/ws/terminal/limit-agent/"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Open maxSessions connections — all should succeed.
+	conns := make([]*websocket.Conn, maxSessions)
+	for i := range maxSessions {
+		url := baseURL + "sess-limit-" + string(rune('1'+i))
+		conn, _, err := websocket.Dial(ctx, url, nil)
+		if err != nil {
+			t.Fatalf("connection %d failed: %v", i+1, err)
+		}
+		conns[i] = conn
+	}
+	t.Cleanup(func() {
+		for _, c := range conns {
+			if c != nil {
+				c.Close(websocket.StatusNormalClosure, "test done")
+			}
+		}
+	})
+
+	// Verify the hub tracks exactly maxSessions sessions.
+	if got := h.TerminalSessionCount(); got != maxSessions {
+		t.Errorf("expected %d active sessions, got %d", maxSessions, got)
+	}
+
+	// A 3rd connection must be rejected with 503.
+	resp, err := http.Get(proxySrv.URL + "/ws/terminal/limit-agent/sess-limit-extra")
+	if err != nil {
+		t.Fatalf("3rd connection request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 for 3rd connection, got %d", resp.StatusCode)
+	}
+
+	// Close one of the open sessions.
+	conns[0].Close(websocket.StatusNormalClosure, "releasing slot")
+	conns[0] = nil
+
+	// Poll until the hub unregisters the session (UntrackTerminalSession runs
+	// in a defer inside the handler goroutine).
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if h.TerminalSessionCount() < maxSessions {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if got := h.TerminalSessionCount(); got >= maxSessions {
+		t.Fatalf("session count did not drop after close: still %d", got)
+	}
+
+	// A new connection should now succeed.
+	newConn, _, err := websocket.Dial(ctx, baseURL+"sess-limit-new", nil)
+	if err != nil {
+		t.Fatalf("new connection after slot freed failed: %v", err)
+	}
+	defer newConn.Close(websocket.StatusNormalClosure, "done")
+}
+
+// ---------------------------------------------------------------------------
+// Relay path idle timeout test
+// ---------------------------------------------------------------------------
+
+// TestHandleTerminalProxy_RelayIdleTimeout verifies idle timeout enforcement on
+// the relay path (endpoint.Relay=true). Mirrors TestHandleTerminalProxy_IdleTimeout
+// but uses connectRelayAgent instead of a direct-dial agent.
+func TestHandleTerminalProxy_RelayIdleTimeout(t *testing.T) {
+	const idleTimeout = 150 * time.Millisecond
+
+	// Part 1: idle connection is closed after idleTimeout.
+	t.Run("closes after idle", func(t *testing.T) {
+		h, hubURL := startTestHub(t, "")
+		connectRelayAgent(t, hubURL, "relay-idle-agent")
+		waitForAgent(t, h, "relay-idle-agent")
+
+		mux := http.NewServeMux()
+		mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}",
+			handleTerminalProxy(h, nil, 5*time.Second, idleTimeout))
+		proxySrv := httptest.NewServer(mux)
+		defer proxySrv.Close()
+
+		sessionID := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+		proxyWSURL := "ws" + strings.TrimPrefix(proxySrv.URL, "http") + "/ws/terminal/relay-idle-agent/" + sessionID
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		browserConn, _, err := websocket.Dial(ctx, proxyWSURL, nil)
+		if err != nil {
+			t.Fatalf("browser dial failed: %v", err)
+		}
+		defer browserConn.Close(websocket.StatusNormalClosure, "done")
+
+		// Send one message to confirm the connection is working.
+		if err := browserConn.Write(ctx, websocket.MessageBinary, []byte("ping")); err != nil {
+			t.Fatalf("initial write failed: %v", err)
+		}
+		// Read the echo to confirm message round-tripped.
+		if _, _, err := browserConn.Read(ctx); err != nil {
+			t.Fatalf("initial read failed: %v", err)
+		}
+
+		// Go idle — wait for idleTimeout + comfortable margin.
+		time.Sleep(idleTimeout * 2)
+
+		// The proxy should have cancelled the session context and closed the
+		// browser connection. Any further interaction should fail.
+		if err := browserConn.Write(ctx, websocket.MessageBinary, []byte("after idle")); err == nil {
+			// Write may succeed (data buffered); confirm with a Read.
+			readCtx, readCancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			defer readCancel()
+			_, _, readErr := browserConn.Read(readCtx)
+			if readErr == nil {
+				t.Error("expected connection to be closed after idle timeout, but read succeeded")
+			}
+		}
+		// If write returned an error the connection is already closed — expected outcome.
+	})
+
+	// Part 2: active connection survives past the idle timeout.
+	t.Run("stays open while active", func(t *testing.T) {
+		h2, hubURL2 := startTestHub(t, "")
+		connectRelayAgent(t, hubURL2, "relay-active-agent")
+		waitForAgent(t, h2, "relay-active-agent")
+
+		mux2 := http.NewServeMux()
+		mux2.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}",
+			handleTerminalProxy(h2, nil, 5*time.Second, idleTimeout))
+		proxySrv2 := httptest.NewServer(mux2)
+		defer proxySrv2.Close()
+
+		sessionID := "11111111-2222-3333-4444-aaaaaaaaaaaa"
+		proxyWSURL2 := "ws" + strings.TrimPrefix(proxySrv2.URL, "http") + "/ws/terminal/relay-active-agent/" + sessionID
+		ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel2()
+
+		browserConn2, _, err := websocket.Dial(ctx2, proxyWSURL2, nil)
+		if err != nil {
+			t.Fatalf("browser dial failed: %v", err)
+		}
+		defer browserConn2.Close(websocket.StatusNormalClosure, "done")
+
+		// Keep sending messages at half the idle timeout to reset it repeatedly.
+		// Total duration is 4× idleTimeout — well past a single timeout window.
+		const rounds = 8
+		tickInterval := idleTimeout / 2
+		for i := range rounds {
+			time.Sleep(tickInterval)
+			msg := []byte("keepalive")
+			if err := browserConn2.Write(ctx2, websocket.MessageBinary, msg); err != nil {
+				t.Fatalf("write at round %d failed: %v", i, err)
+			}
+			_, data, err := browserConn2.Read(ctx2)
+			if err != nil {
+				t.Fatalf("read at round %d failed: %v (connection closed despite activity)", i, err)
+			}
+			if string(data) != "echo:keepalive" {
+				t.Errorf("round %d: expected echo:keepalive, got %q", i, data)
+			}
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Relay path session limit test
+// ---------------------------------------------------------------------------
+
+// TestHandleTerminalProxy_RelaySessionLimit verifies that the hub enforces a
+// concurrent terminal session cap on the relay path (endpoint.Relay=true).
+// Mirrors TestHandleTerminalProxy_SessionLimit but uses connectRelayAgent.
+func TestHandleTerminalProxy_RelaySessionLimit(t *testing.T) {
+	const maxSessions = 2
+
+	// Build a hub with the session limit.
+	h := hub.New(30*time.Second, 5*time.Second, 5*time.Minute, maxSessions)
+	h.Start()
+	t.Cleanup(h.Stop)
+
+	// Start the agent registration server backed by our hub.
+	agentSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+			InsecureSkipVerify: true,
+		})
+		if err != nil {
+			t.Errorf("accept ws: %v", err)
+			return
+		}
+		_, data, err := conn.Read(r.Context())
+		if err != nil {
+			return
+		}
+		var req hub.Request
+		json.Unmarshal(data, &req)
+		var params hub.RegisterParams
+		json.Unmarshal(req.Params, &params)
+
+		resp, _ := hub.NewResponse(req.ID, &hub.RegisterResult{Accepted: true})
+		respData, _ := json.Marshal(resp)
+		conn.Write(r.Context(), websocket.MessageText, respData)
+
+		agent, err := h.Register(params.Name, conn, &params)
+		if err != nil {
+			conn.Close(websocket.StatusPolicyViolation, err.Error())
+			return
+		}
+		h.HandleAgentConnection(r.Context(), agent)
+	}))
+	t.Cleanup(agentSrv.Close)
+
+	// Register a relay agent.
+	connectRelayAgent(t, agentSrv.URL, "relay-limit-agent")
+	waitForAgent(t, h, "relay-limit-agent")
+
+	// Start the proxy server.
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}",
+		handleTerminalProxy(h, nil, time.Second, 0))
+	proxySrv := httptest.NewServer(mux)
+	defer proxySrv.Close()
+
+	baseURL := "ws" + strings.TrimPrefix(proxySrv.URL, "http") + "/ws/terminal/relay-limit-agent/"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Session IDs must be valid UUIDs for the relay path.
+	sessionIDs := []string{
+		"00000001-0000-0000-0000-000000000001",
+		"00000001-0000-0000-0000-000000000002",
+	}
+
+	// Open maxSessions connections — all should succeed.
+	conns := make([]*websocket.Conn, maxSessions)
+	for i := range maxSessions {
+		url := baseURL + sessionIDs[i]
+		conn, _, err := websocket.Dial(ctx, url, nil)
+		if err != nil {
+			t.Fatalf("connection %d failed: %v", i+1, err)
+		}
+		conns[i] = conn
+	}
+	t.Cleanup(func() {
+		for _, c := range conns {
+			if c != nil {
+				c.Close(websocket.StatusNormalClosure, "test done")
+			}
+		}
+	})
+
+	// Verify the hub tracks exactly maxSessions sessions.
+	if got := h.TerminalSessionCount(); got != maxSessions {
+		t.Errorf("expected %d active sessions, got %d", maxSessions, got)
+	}
+
+	// A 3rd connection must be rejected with 503.
+	resp, err := http.Get(proxySrv.URL + "/ws/terminal/relay-limit-agent/00000001-0000-0000-0000-000000000003")
+	if err != nil {
+		t.Fatalf("3rd connection request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 for 3rd connection, got %d", resp.StatusCode)
+	}
+
+	// Close one of the open sessions.
+	conns[0].Close(websocket.StatusNormalClosure, "releasing slot")
+	conns[0] = nil
+
+	// Poll until the hub unregisters the session.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if h.TerminalSessionCount() < maxSessions {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if got := h.TerminalSessionCount(); got >= maxSessions {
+		t.Fatalf("session count did not drop after close: still %d", got)
+	}
+
+	// A new connection should now succeed.
+	newConn, _, err := websocket.Dial(ctx, baseURL+"00000001-0000-0000-0000-000000000004", nil)
+	if err != nil {
+		t.Fatalf("new connection after slot freed failed: %v", err)
+	}
+	defer newConn.Close(websocket.StatusNormalClosure, "done")
 }

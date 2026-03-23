@@ -22,7 +22,7 @@ func TestIntegration_ListAllSessionsDeadline(t *testing.T) {
 	const fanOutDeadline = 100 * time.Millisecond
 
 	// Create a hub with generous heartbeat settings.
-	h := hub.New(30*time.Second, 5*time.Second, 5*time.Minute)
+	h := hub.New(30*time.Second, 5*time.Second, 5*time.Minute, 0)
 	h.Start()
 	t.Cleanup(h.Stop)
 

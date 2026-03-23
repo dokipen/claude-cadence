@@ -455,6 +455,28 @@ func TestValidate_NegativeRateLimitFields(t *testing.T) {
 	})
 }
 
+func TestValidate_NegativeIdleTimeout(t *testing.T) {
+	cfg := &Config{
+		Host:    "127.0.0.1",
+		Auth:    AuthConfig{Mode: "token", Token: "secret"},
+		HubAuth: HubAuthConfig{Token: "hub-secret"},
+		Heartbeat: HeartbeatConfig{
+			Interval: 30 * time.Second,
+			Timeout:  10 * time.Second,
+		},
+		AgentTTL: 5 * time.Minute,
+		Terminal: TerminalConfig{IdleTimeout: -1 * time.Second},
+	}
+	err := validate(cfg)
+	if err == nil {
+		t.Fatal("expected error for negative idle_timeout")
+	}
+	want := "terminal.idle_timeout must not be negative"
+	if err.Error() != want {
+		t.Errorf("expected %q, got %q", want, err.Error())
+	}
+}
+
 // --- AuthConfig.ResolveToken ---
 
 func TestAuthConfig_ResolveToken_InlineToken(t *testing.T) {
