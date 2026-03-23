@@ -19,10 +19,6 @@ import (
 const (
 	// rpcCallTimeout is the maximum time to wait for a getTerminalEndpoint response.
 	rpcCallTimeout = 30 * time.Second
-
-	// maxRelayMessageSize is the maximum size of a single WebSocket message
-	// relayed through the terminal proxy (1 MiB).
-	maxRelayMessageSize = 1024 * 1024
 )
 
 // defaultPingInterval is how often the proxy sends keepalive pings to both
@@ -118,7 +114,7 @@ func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.
 			rc := http.NewResponseController(w)
 			rc.SetWriteDeadline(time.Time{})
 
-			browserConn.SetReadLimit(maxRelayMessageSize)
+			browserConn.SetReadLimit(hub.MaxMessageSize)
 
 			// Set up idle timeout if configured.
 			var idleTimer *time.Timer
@@ -274,8 +270,8 @@ func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.
 		rc.SetWriteDeadline(time.Time{})
 
 		// Apply read limits to prevent memory exhaustion.
-		browserConn.SetReadLimit(maxRelayMessageSize)
-		ttydConn.SetReadLimit(maxRelayMessageSize)
+		browserConn.SetReadLimit(hub.MaxMessageSize)
+		ttydConn.SetReadLimit(hub.MaxMessageSize)
 
 		// Set up idle timeout if configured.
 		var idleTimer *time.Timer

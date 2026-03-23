@@ -356,7 +356,9 @@ func handleAgentWebSocket(h *hub.Hub, agentToken string) http.HandlerFunc {
 			return
 		}
 
-		conn.SetReadLimit(hub.MaxMessageSize)
+		// The register message is a JSON-RPC text frame; apply the RPC limit.
+		// HandleAgentConnection raises this to MaxMessageSize for relay frames.
+		conn.SetReadLimit(hub.RPCMaxMessageSize)
 
 		// Read the first message, which must be a register request.
 		_, data, err := conn.Read(r.Context())

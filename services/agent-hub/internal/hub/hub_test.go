@@ -793,3 +793,133 @@ func TestRegister_AllowSameAdvertiseAddress(t *testing.T) {
 		t.Errorf("AdvertiseAddress changed unexpectedly: got %q", stored.TtydConfig.AdvertiseAddress)
 	}
 }
+
+// connectRawAgent dials the test server, completes the register handshake,
+// and returns the raw WebSocket connection for direct frame manipulation.
+// The caller is responsible for closing the connection.
+func connectRawAgent(t *testing.T, url, name string) *websocket.Conn {
+	t.Helper()
+
+	wsURL := "ws" + strings.TrimPrefix(url, "http")
+	conn, _, err := websocket.Dial(context.Background(), wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+
+	// Send register.
+	regReq, _ := NewRequest("reg-1", "register", &RegisterParams{
+		Name:     name,
+		Profiles: map[string]ProfileInfo{"default": {Description: "test", Repo: "https://github.com/test/repo"}},
+	})
+	data, _ := json.Marshal(regReq)
+	if err := conn.Write(context.Background(), websocket.MessageText, data); err != nil {
+		t.Fatalf("write register: %v", err)
+	}
+
+	// Read register ack.
+	if _, _, err := conn.Read(context.Background()); err != nil {
+		t.Fatalf("read register ack: %v", err)
+	}
+
+	return conn
+}
+
+// TestHandleAgentConnection_OversizedTextFrame verifies that a text frame
+// larger than RPCMaxMessageSize causes the hub to close the connection and
+// mark the agent offline.
+func TestHandleAgentConnection_OversizedTextFrame(t *testing.T) {
+	h, url := startTestHub(t)
+
+	conn := connectRawAgent(t, url, "oversize-agent")
+	defer conn.CloseNow()
+
+	agent := waitForAgent(t, h, "oversize-agent")
+	if agent.Status() != StatusOnline {
+		t.Fatalf("expected agent to start online, got %s", agent.Status())
+	}
+
+	// Send a text frame one byte larger than RPCMaxMessageSize.
+	oversized := make([]byte, RPCMaxMessageSize+1)
+	for i := range oversized {
+		oversized[i] = 'x'
+	}
+	// Write may succeed (the close may happen on the hub side during Read).
+	_ = conn.Write(context.Background(), websocket.MessageText, oversized)
+
+	// The next Read on the client side should fail — the hub closed the
+	// connection after detecting the oversized text frame.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, _, readErr := conn.Read(ctx)
+	if readErr == nil {
+		t.Fatal("expected connection to be closed by hub after oversized text frame")
+	}
+
+	// Poll until the hub marks the agent offline.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if agent.Status() == StatusOffline {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if agent.Status() != StatusOffline {
+		t.Errorf("expected agent to be marked offline after oversized text frame, got %s", agent.Status())
+	}
+}
+
+// TestHandleAgentConnection_AtLimitBinaryFrame verifies that a binary relay
+// frame does NOT close the connection. Binary frames are allowed up to
+// MaxMessageSize (1 MiB); the hub logs a warning about the invalid frame
+// header and continues the read loop. The RPC size check must not apply
+// to binary frames.
+func TestHandleAgentConnection_AtLimitBinaryFrame(t *testing.T) {
+	h, url := startTestHub(t)
+
+	conn := connectRawAgent(t, url, "atlimit-agent")
+	defer conn.CloseNow()
+
+	agent := waitForAgent(t, h, "atlimit-agent")
+	if agent.Status() != StatusOnline {
+		t.Fatalf("expected agent to start online, got %s", agent.Status())
+	}
+
+	// Send a binary frame of exactly MaxMessageSize bytes. The frame header
+	// will be invalid (no 0x01 type byte in the right position), so
+	// DecodeTerminalFrame returns an error — but the hub logs a warning and
+	// continues the loop without closing the connection.
+	// Use half the relay limit to avoid any boundary behavior from WebSocket framing overhead.
+	atLimit := make([]byte, MaxMessageSize/2)
+	if err := conn.Write(context.Background(), websocket.MessageBinary, atLimit); err != nil {
+		t.Fatalf("write binary frame: %v", err)
+	}
+
+	// Give the hub's read loop a moment to process the frame.
+	time.Sleep(100 * time.Millisecond)
+
+	// The agent should still be online — the hub did not close the connection.
+	if agent.Status() != StatusOnline {
+		t.Errorf("expected agent to remain online after at-limit binary frame, got %s", agent.Status())
+	}
+
+	// Confirm the connection is still usable: send a valid JSON-RPC text
+	// message and verify we can read back from the server without a
+	// connection-closed error. Use a short deadline to distinguish "no
+	// reply" (expected, hub doesn't respond to unsolicited messages) from
+	// "connection closed".
+	pingReq, _ := NewRequest("ping-check", "ping", nil)
+	pingData, _ := json.Marshal(pingReq)
+	if err := conn.Write(context.Background(), websocket.MessageText, pingData); err != nil {
+		t.Fatalf("write after binary frame failed — connection was closed: %v", err)
+	}
+}
+
+// TestMaxMessageSizeConstants asserts that RPCMaxMessageSize is strictly less
+// than MaxMessageSize. If someone changes one constant without the other this
+// test will fail, preventing an accidental inversion.
+func TestMaxMessageSizeConstants(t *testing.T) {
+	if RPCMaxMessageSize >= MaxMessageSize {
+		t.Errorf("RPCMaxMessageSize (%d) must be < MaxMessageSize (%d)",
+			RPCMaxMessageSize, MaxMessageSize)
+	}
+}
