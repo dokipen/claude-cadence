@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
 )
 
@@ -132,6 +134,10 @@ func (d *Dispatcher) GetTerminalEndpoint(params json.RawMessage) (json.RawMessag
 	var p getTerminalEndpointParams
 	if err := json.Unmarshal(params, &p); err != nil {
 		return nil, &rpcError{Code: rpcErrInvalidArgument, Message: "invalid params: " + err.Error()}
+	}
+
+	if _, err := uuid.Parse(p.SessionID); err != nil {
+		return nil, &rpcError{Code: rpcErrInvalidArgument, Message: "invalid session_id: must be a UUID"}
 	}
 
 	// Verify session exists.
