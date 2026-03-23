@@ -292,7 +292,11 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 			s.State = StateStopped
 			s.StoppedAt = time.Now()
 		})
-		return m.mustGet(sessionID)
+		sess, getErr := m.mustGet(sessionID)
+		if getErr != nil {
+			return nil, &Error{Code: ErrInternal, Message: getErr.Error()}
+		}
+		return sess, nil
 	}
 
 	slog.Debug("session command running", "session", sessionID, "name", req.SessionName, "pid", pid)
@@ -303,7 +307,11 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		s.WebsocketURL = ""
 	})
 
-	return m.mustGet(sessionID)
+	sess, getErr := m.mustGet(sessionID)
+	if getErr != nil {
+		return nil, &Error{Code: ErrInternal, Message: getErr.Error()}
+	}
+	return sess, nil
 }
 
 // Get returns a session by ID, reconciling state with PTY reality.
@@ -401,7 +409,7 @@ func (m *Manager) cleanup(sessionID, errMsg string) {
 func (m *Manager) mustGet(id string) (*Session, error) {
 	sess, ok := m.store.Get(id)
 	if !ok {
-		return nil, fmt.Errorf("session %q not found after create: possible race with cleaner", id)
+		return nil, fmt.Errorf("session not found after create: internal error")
 	}
 	return sess, nil
 }

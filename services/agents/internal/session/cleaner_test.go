@@ -213,8 +213,8 @@ func TestCleaner_StartStop(t *testing.T) {
 func TestCleaner_SkipsCreatingSessionWithNoPTY(t *testing.T) {
 	// Session is in StateCreating with AgentPID 0 and no PTY entry — simulating
 	// the window between store.Add() and PTY creation inside manager.Create().
-	// The cleaner must not touch it; destroying it here would cause a nil pointer
-	// panic when Create() later calls mustGet().
+	// The cleaner must not touch it; destroying it here would cause mustGet()
+	// to return an error when Create() later calls it.
 	ptySessions := map[string]bool{} // sess-race is NOT in PTY manager yet
 	alivePIDs := map[int]bool{}      // PID 0 is NOT alive
 
