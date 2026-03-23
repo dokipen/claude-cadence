@@ -30,6 +30,7 @@ type Manager struct {
 	git          *git.Client
 	vault        *vault.Client
 	profiles     map[string]config.Profile
+	maxSessions  int
 	ptyHasSession func(id string) bool // injectable for tests; defaults to checking pty.PID
 	processAlive  func(pid int) bool
 }
@@ -37,13 +38,15 @@ type Manager struct {
 // NewManager creates a new session Manager.
 // gitClient may be nil if no profiles use repos.
 // vaultClient may be nil if no profiles use vault secrets.
-func NewManager(store *Store, ptyManager *pty.PTYManager, gitClient *git.Client, vaultClient *vault.Client, profiles map[string]config.Profile) *Manager {
+// maxSessions is the maximum number of concurrent sessions; 0 means unlimited.
+func NewManager(store *Store, ptyManager *pty.PTYManager, gitClient *git.Client, vaultClient *vault.Client, profiles map[string]config.Profile, maxSessions int) *Manager {
 	m := &Manager{
-		store:    store,
-		pty:      ptyManager,
-		git:      gitClient,
-		vault:    vaultClient,
-		profiles: profiles,
+		store:       store,
+		pty:         ptyManager,
+		git:         gitClient,
+		vault:       vaultClient,
+		profiles:    profiles,
+		maxSessions: maxSessions,
 	}
 	if ptyManager != nil {
 		m.ptyHasSession = func(id string) bool {
@@ -127,7 +130,9 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		State:        StateCreating,
 		CreatedAt:    time.Now(),
 	}
-	m.store.Add(sess)
+	if err := m.store.TryAdd(sess, m.maxSessions); err != nil {
+		return nil, err
+	}
 
 	// Fetch Vault secrets if the profile has a vault_secret path.
 	var gitCreds *git.Credentials

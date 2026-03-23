@@ -9,6 +9,7 @@ const (
 	ErrInvalidArgument
 	ErrFailedPrecondition
 	ErrInternal
+	ErrResourceExhausted
 )
 
 // Error is a domain error with a code and message.

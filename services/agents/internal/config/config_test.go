@@ -365,3 +365,53 @@ func TestValidate_AdvertiseAddressEmptyAllowed(t *testing.T) {
 		t.Errorf("expected no error for empty advertise_address, got: %v", err)
 	}
 }
+
+func TestPTYConfig_Validate_NegativeMaxSessions(t *testing.T) {
+	cfg := &Config{
+		Auth:     AuthConfig{Mode: "none"},
+		Profiles: validProfiles(),
+		Cleanup:  validCleanup(),
+		PTY:      PTYConfig{WebSocketScheme: "ws", MaxSessions: -1},
+	}
+	err := validate(cfg)
+	if err == nil {
+		t.Fatal("expected error for negative MaxSessions")
+	}
+	want := "pty.max_sessions must be >= 0 (0 means unlimited)"
+	if err.Error() != want {
+		t.Errorf("error = %q, want %q", err.Error(), want)
+	}
+}
+
+func TestCleanupConfig_Validate_NegativeCreatingSessionTTL(t *testing.T) {
+	cfg := &Config{
+		Auth:    AuthConfig{Mode: "none"},
+		Profiles: validProfiles(),
+		Cleanup: CleanupConfig{
+			StaleSessionTTL:    time.Hour,
+			ReapInterval:       30 * time.Second,
+			CreatingSessionTTL: -1,
+		},
+		PTY: validPTY(),
+	}
+	err := validate(cfg)
+	if err == nil {
+		t.Fatal("expected error for negative CreatingSessionTTL")
+	}
+	want := "cleanup.creating_session_ttl must be >= 0 (0 means disabled)"
+	if err.Error() != want {
+		t.Errorf("error = %q, want %q", err.Error(), want)
+	}
+}
+
+func TestPTYConfig_Validate_ZeroMaxSessions(t *testing.T) {
+	cfg := &Config{
+		Auth:     AuthConfig{Mode: "none"},
+		Profiles: validProfiles(),
+		Cleanup:  validCleanup(),
+		PTY:      PTYConfig{WebSocketScheme: "ws", MaxSessions: 0},
+	}
+	if err := validate(cfg); err != nil {
+		t.Errorf("expected no error for MaxSessions=0 (unlimited), got: %v", err)
+	}
+}

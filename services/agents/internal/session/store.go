@@ -54,6 +54,21 @@ func (s *Store) Add(session *Session) {
 	s.sessions[session.ID] = session
 }
 
+// TryAdd inserts a session into the store, enforcing an optional cap.
+// If maxSessions > 0 and the store already contains maxSessions entries,
+// TryAdd returns ErrResourceExhausted without inserting the session.
+// The check and insert are performed under a single write lock to prevent
+// TOCTOU races under concurrent creates.
+func (s *Store) TryAdd(session *Session, maxSessions int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if maxSessions > 0 && len(s.sessions) >= maxSessions {
+		return &Error{Code: ErrResourceExhausted, Message: "max sessions reached"}
+	}
+	s.sessions[session.ID] = session
+	return nil
+}
+
 // Get retrieves a session by ID.
 func (s *Store) Get(id string) (*Session, bool) {
 	s.mu.RLock()

@@ -65,7 +65,7 @@ func main() {
 	cfg.LogDeprecations(slog.Default())
 
 	// Create components.
-	ptyManager := pty.NewPTYManager(pty.PTYConfig{BufferSize: cfg.PTY.BufferSize})
+	ptyManager := pty.NewPTYManager(pty.PTYConfig{BufferSize: cfg.PTY.BufferSize, MaxSessions: cfg.PTY.MaxSessions})
 	store := session.NewStore()
 	var gitClient *git.Client
 	if cfg.RootDir != "" {
@@ -80,10 +80,10 @@ func main() {
 		}
 		vaultClient = vc
 	}
-	manager := session.NewManager(store, ptyManager, gitClient, vaultClient, cfg.Profiles)
+	manager := session.NewManager(store, ptyManager, gitClient, vaultClient, cfg.Profiles, cfg.PTY.MaxSessions)
 
 	// Start background stale session cleaner.
-	cleaner := session.NewCleaner(manager, cfg.Cleanup.StaleSessionTTL, cfg.Cleanup.ReapInterval)
+	cleaner := session.NewCleaner(manager, cfg.Cleanup.StaleSessionTTL, cfg.Cleanup.ReapInterval, cfg.Cleanup.CreatingSessionTTL)
 	cleaner.Start()
 
 	// Start background idle input monitor.

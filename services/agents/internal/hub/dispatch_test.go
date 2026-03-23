@@ -12,7 +12,7 @@ import (
 // with no external dependencies (no pty, no git, no vault).
 func newFakeManager() *session.Manager {
 	store := session.NewStore()
-	return session.NewManager(store, nil, nil, nil, map[string]config.Profile{})
+	return session.NewManager(store, nil, nil, nil, map[string]config.Profile{}, 0)
 }
 
 func newTestDispatcher() *Dispatcher {
@@ -101,7 +101,7 @@ func TestDispatcher_GetTerminalEndpoint_RelayWhenNoAdvertiseAddress(t *testing.T
 	// so the Client can start a relay pump over the hub WebSocket.
 	store := session.NewStore()
 	store.Add(&session.Session{ID: "550e8400-e29b-41d4-a716-446655440001", State: session.StateStopped})
-	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{})
+	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{}, 0)
 	d := NewDispatcher(mgr, "", "ws") // empty advertise address → relay path
 
 	result, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"550e8400-e29b-41d4-a716-446655440001"}`))
@@ -124,7 +124,7 @@ func TestDispatcher_GetTerminalEndpoint_RelayWhenNoAdvertiseAddress(t *testing.T
 func TestDispatcher_GetTerminalEndpoint_Success(t *testing.T) {
 	store := session.NewStore()
 	store.Add(&session.Session{ID: "550e8400-e29b-41d4-a716-446655440002", State: session.StateStopped})
-	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{})
+	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{}, 0)
 	d := NewDispatcher(mgr, "192.168.1.10", "ws")
 
 	result, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"550e8400-e29b-41d4-a716-446655440002"}`))
@@ -148,7 +148,7 @@ func TestDispatcher_GetTerminalEndpoint_Success(t *testing.T) {
 func TestDispatcher_GetTerminalEndpoint_WSSScheme(t *testing.T) {
 	store := session.NewStore()
 	store.Add(&session.Session{ID: "550e8400-e29b-41d4-a716-446655440003", State: session.StateStopped})
-	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{})
+	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{}, 0)
 	d := NewDispatcher(mgr, "example.com", "wss")
 
 	result, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"550e8400-e29b-41d4-a716-446655440003"}`))
@@ -220,7 +220,7 @@ func TestDispatcher_GetTerminalEndpoint_URNFormNormalized(t *testing.T) {
 	const canonicalID = "550e8400-e29b-41d4-a716-446655440002"
 	store := session.NewStore()
 	store.Add(&session.Session{ID: canonicalID, State: session.StateStopped})
-	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{})
+	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{}, 0)
 	d := NewDispatcher(mgr, "192.168.1.10", "ws")
 
 	urnForm := "urn:uuid:" + canonicalID

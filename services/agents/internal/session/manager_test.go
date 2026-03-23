@@ -315,3 +315,27 @@ func TestManager_MustGetReturnsErrorOnMissing(t *testing.T) {
 		t.Error("mustGet() error = nil, want non-nil")
 	}
 }
+
+func TestCreate_ResourceExhausted(t *testing.T) {
+	profiles := map[string]config.Profile{
+		"default": {Command: "echo {{.SessionName}}"},
+	}
+	m := newCreateTestManager(profiles)
+	m.maxSessions = 1
+
+	// Pre-fill the store with one session to hit the cap immediately.
+	m.store.Add(&Session{ID: "pre-existing", Name: "pre-existing", State: StateRunning})
+
+	// Create should now fail with ErrResourceExhausted.
+	_, err := m.Create(CreateRequest{
+		AgentProfile: "default",
+		SessionName:  "new-session",
+	})
+	if err == nil {
+		t.Fatal("Create() = nil, want ErrResourceExhausted")
+	}
+	sesErr, ok := err.(*Error)
+	if !ok || sesErr.Code != ErrResourceExhausted {
+		t.Errorf("Create() error = %v (%T), want *Error{Code: ErrResourceExhausted}", err, err)
+	}
+}

@@ -99,10 +99,11 @@ type Config struct {
 
 // CleanupConfig holds stale session cleanup settings.
 type CleanupConfig struct {
-	StaleSessionTTL time.Duration `yaml:"-"`
-	ReapInterval    time.Duration `yaml:"-"`
-	RawTTL          string        `yaml:"stale_session_ttl"`
-	RawReapInterval string        `yaml:"session_reap_interval"`
+	StaleSessionTTL    time.Duration `yaml:"-"`
+	ReapInterval       time.Duration `yaml:"-"`
+	CreatingSessionTTL time.Duration `yaml:"creating_session_ttl"`
+	RawTTL             string        `yaml:"stale_session_ttl"`
+	RawReapInterval    string        `yaml:"session_reap_interval"`
 }
 
 // TtydConfig holds ttyd websocket terminal settings.
@@ -118,6 +119,7 @@ type TtydConfig struct {
 type PTYConfig struct {
 	BufferSize      int    `yaml:"buffer_size"`      // ring buffer size in bytes; must be < 1 MB (see #344)
 	WebSocketScheme string `yaml:"websocket_scheme"` // "ws" or "wss"; defaults to "ws"
+	MaxSessions     int    `yaml:"max_sessions"`     // max concurrent sessions; 0 means unlimited
 }
 
 // LogConfig holds logging settings.
@@ -275,6 +277,12 @@ func validate(cfg *Config) error {
 	const maxBufferSize = 1<<20 - 1 // ttyd frame prefix + buffer must fit in hub's MaxMessageSize
 	if cfg.PTY.BufferSize > maxBufferSize {
 		return fmt.Errorf("pty.buffer_size (%d) must be <= %d to fit within hub proxy message limit", cfg.PTY.BufferSize, maxBufferSize)
+	}
+	if cfg.PTY.MaxSessions < 0 {
+		return fmt.Errorf("pty.max_sessions must be >= 0 (0 means unlimited)")
+	}
+	if cfg.Cleanup.CreatingSessionTTL < 0 {
+		return fmt.Errorf("cleanup.creating_session_ttl must be >= 0 (0 means disabled)")
 	}
 	switch cfg.PTY.WebSocketScheme {
 	case "ws", "wss":
