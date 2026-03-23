@@ -3,10 +3,14 @@ FROM golang:1.25-alpine AS builder
 
 WORKDIR /build
 
-COPY go.mod go.sum ./
+# Copy the shared module to the path the replace directive expects:
+# go.mod has "replace => ../shared"; from WORKDIR /build, ../shared = /shared.
+COPY shared/ /shared/
+
+COPY agents/go.mod agents/go.sum ./
 RUN go mod download
 
-COPY . .
+COPY agents/ .
 RUN CGO_ENABLED=0 GOOS=linux go build -o agentd ./cmd/agentd
 
 # Runtime stage
@@ -22,7 +26,7 @@ WORKDIR /app
 
 COPY --from=builder --chown=agentd:agentd /build/agentd ./
 
-COPY --chown=agentd:agentd config.container.yaml /etc/agentd/config.yaml
+COPY --chown=agentd:agentd agents/config.container.yaml /etc/agentd/config.yaml
 
 ENV AGENTD_CONFIG=/etc/agentd/config.yaml
 

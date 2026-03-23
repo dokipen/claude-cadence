@@ -646,6 +646,102 @@ func TestHandleTerminalProxy_KeepalivePreventsDrop(t *testing.T) {
 	}
 }
 
+// TestHandleTerminalProxy_RelayKeepalivePreventsBrowserDrop verifies that the
+// relay path sends periodic keepalive pings to browserConn so that idle
+// OS/NAT firewalls do not drop the browser→hub TCP connection.
+//
+// The proxy server's listener is wrapped in an idleClosingListener that closes
+// any connection idle for 80ms. With pingInterval = 30ms the pings must keep
+// the browser connection alive through a 200ms idle period.
+//
+// Before the fix: the relay path in handleTerminalProxy has no pingKeepalive
+// for browserConn, so the idle timer fires, the TCP connection is closed, and
+// the browser's Write/Read after the sleep fails.
+// After the fix: pings reset the idle timer and the round-trip succeeds.
+func TestHandleTerminalProxy_RelayKeepalivePreventsBrowserDrop(t *testing.T) {
+	const (
+		idleTimeout  = 80 * time.Millisecond
+		pingInterval = 30 * time.Millisecond
+		sleepTime    = 200 * time.Millisecond // 2.5x the idle timeout
+	)
+
+	// Start hub and connect a relay-mode agent.
+	h, hubURL := startTestHub(t, "")
+	connectRelayAgent(t, hubURL, "relay-keepalive-agent")
+	waitForAgent(t, h, "relay-keepalive-agent")
+
+	// Create the proxy server's TCP listener manually so we can wrap it in
+	// an idleClosingListener. This simulates a NAT/OS that drops the
+	// browser→hub connection when no data flows for idleTimeout.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	idleLn := &idleClosingListener{Listener: ln, idleTimeout: idleTimeout}
+
+	// Register the proxy handler with a short ping interval.
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ws/terminal/{agent_name}/{session_id}",
+		handleTerminalProxy(h, nil, pingInterval, 0, ""))
+
+	proxySrv := httptest.NewUnstartedServer(mux)
+	proxySrv.Listener = idleLn
+	proxySrv.Start()
+	defer proxySrv.Close()
+
+	sessionID := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	proxyWSURL := "ws" + strings.TrimPrefix(proxySrv.URL, "http") + "/ws/terminal/relay-keepalive-agent/" + sessionID
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	browserConn, _, err := websocket.Dial(ctx, proxyWSURL, nil)
+	if err != nil {
+		t.Fatalf("browser dial failed: %v", err)
+	}
+	defer browserConn.Close(websocket.StatusNormalClosure, "done")
+
+	// The coder/websocket library requires Read to be called concurrently so
+	// that it can process incoming Ping control frames and auto-respond with
+	// Pong. Without this, a pingKeepalive targeting browserConn would time out
+	// waiting for the pong and tear down the connection.
+	type readResult struct {
+		msgType websocket.MessageType
+		data    []byte
+		err     error
+	}
+	readCh := make(chan readResult, 1)
+	go func() {
+		msgType, data, err := browserConn.Read(ctx)
+		readCh <- readResult{msgType, data, err}
+	}()
+
+	// Sleep for 2.5× the idle timeout without sending any data.
+	// WITHOUT keepalive on browserConn: the idleClosingListener fires at
+	// 80ms, drops the TCP connection, and the subsequent Write/Read fail.
+	// WITH keepalive: pings every 30ms reset the idle timer so the browser
+	// connection survives the full 200ms idle period.
+	time.Sleep(sleepTime)
+
+	// Try to send a message through the (hopefully still-alive) browser conn.
+	msg := []byte("relay after idle")
+	if err := browserConn.Write(ctx, websocket.MessageBinary, msg); err != nil {
+		t.Fatalf("browser write after idle period: %v (browserConn was dropped — relay path missing pingKeepalive)", err)
+	}
+
+	// Collect the echo via the background reader.
+	result := <-readCh
+	if result.err != nil {
+		t.Fatalf("browser read after idle period: %v (browserConn was dropped — relay path missing pingKeepalive)", result.err)
+	}
+
+	expected := "echo:relay after idle"
+	if string(result.data) != expected {
+		t.Errorf("expected %q, got %q", expected, string(result.data))
+	}
+}
+
+
 // connectRelayAgent registers an agent that responds to getTerminalEndpoint
 // with {relay: true}. After sending that response it echoes every binary
 // frame it receives back to the hub as a binary frame using the same session
