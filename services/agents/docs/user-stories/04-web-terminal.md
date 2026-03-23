@@ -8,7 +8,7 @@ The service provides web-based terminal access to agent sessions via a built-in 
 
 ### WebSocket Relay Lifecycle
 - As a user, each new session gets a WebSocket relay connected to its PTY
-- As a user, The WebSocket relay connects to the PTY session after it is created
+- As a user, the WebSocket relay connects to the PTY session after it is created
 - As a user, the relay is automatically stopped when the session is destroyed
 - As a user, sessions work normally for API access even without an active web terminal connection
 

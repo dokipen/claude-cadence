@@ -296,7 +296,7 @@ The browser never needs direct network access to agent machines.
 3. `GET /api/v1/agents` shows the agent with `status: offline`
 4. agentd reconnects with exponential backoff (1s → 30s, with jitter), re-sends `register`
 5. Hub matches by name, transitions back to `online`
-6. tmux sessions survive the disconnect — queryable again after reconnection
+6. PTY sessions survive the disconnect — queryable again after reconnection
 7. If agent stays offline past `agent_ttl` (default 5m), hub removes its entry
 
 ## Verification

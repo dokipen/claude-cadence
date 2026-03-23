@@ -215,7 +215,7 @@ profiles:
 ### Test cleanup (3 layers)
 1. Per-test: `t.Cleanup` calls DestroySession
 2. TestMain: `cleanupAllTestSessions()` terminates all `e2e-*` PTY sessions
-3. Makefile: `make test-cleanup` for manual recovery
+3. Manual recovery: `pkill -f "agentd"` to kill stray PTY processes
 
 ### CI
 - GitHub Actions: ubuntu-latest
