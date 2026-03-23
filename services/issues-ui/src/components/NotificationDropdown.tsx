@@ -53,7 +53,7 @@ export function NotificationDropdown({ waitingSessions }: NotificationDropdownPr
             Waiting for input
           </div>
           {waitingSessions.map((ws) => {
-            const linkTo = `/agents?session=${ws.agentName}:${ws.session.id}`;
+            const linkTo = `/agents?session=${encodeURIComponent(ws.agentName)}:${encodeURIComponent(ws.session.id)}`;
             return (
               <Link
                 key={`${ws.agentName}:${ws.session.id}`}
