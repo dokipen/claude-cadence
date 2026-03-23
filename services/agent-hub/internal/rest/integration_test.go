@@ -743,8 +743,9 @@ func TestIntegration_OversizedBody(t *testing.T) {
 	simulateAgent(t, baseURL, agentToken, "test-agent")
 	waitForAgent(t, h, "test-agent")
 
-	// Build a body that exceeds MaxRestBodySize by 1 byte.
-	oversizedBody := strings.NewReader(strings.Repeat("x", rest.MaxRestBodySize+1))
+	// handleCreateSession caps the body at RPCMaxMessageSize (64 KiB), tighter
+	// than the global REST limit. Build a body that exceeds it by 1 byte.
+	oversizedBody := strings.NewReader(strings.Repeat("x", hub.RPCMaxMessageSize+1))
 
 	req, _ := http.NewRequest("POST", baseURL+"/api/v1/agents/test-agent/sessions", oversizedBody)
 	req.Header.Set("Authorization", "Bearer "+apiToken)
