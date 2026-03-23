@@ -112,9 +112,18 @@ deploy_remote() {
     # Ensure config dir
     ssh "$HOST" "sudo mkdir -p $remote_config_dir"
 
-    # Write env file with hub token (pipe via stdin to avoid token in process args)
-    info "Writing env file..."
-    printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" | ssh "$HOST" "sudo tee $remote_env > /dev/null && sudo chmod 600 $remote_env"
+    # Write or update env file with hub token (preserve existing vars)
+    info "Updating env file..."
+    if ssh "$HOST" "test -f $remote_env" 2>/dev/null; then
+        # Update HUB_AGENT_TOKEN in-place if present, append if not
+        if ssh "$HOST" "sudo grep -q '^HUB_AGENT_TOKEN=' $remote_env" 2>/dev/null; then
+            ssh "$HOST" "sudo sed -i 's|^HUB_AGENT_TOKEN=.*|HUB_AGENT_TOKEN=$HUB_AGENT_TOKEN|' $remote_env"
+        else
+            printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" | ssh "$HOST" "sudo tee -a $remote_env > /dev/null"
+        fi
+    else
+        printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" | ssh "$HOST" "sudo tee $remote_env > /dev/null && sudo chmod 600 $remote_env"
+    fi
 
     # Add hub section to config if missing
     if ssh "$HOST" "grep -q '^hub:' $remote_config 2>/dev/null"; then
@@ -195,10 +204,19 @@ deploy_local() {
     cp "$binary" "$bin_dir/agentd"
     chmod 755 "$bin_dir/agentd"
 
-    # Write env file (create with restricted permissions first to avoid race)
-    info "Writing env file..."
-    install -m 600 /dev/null "$env_file"
-    printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" > "$env_file"
+    # Write or update env file with hub token (preserve existing vars)
+    info "Updating env file..."
+    if [[ -f "$env_file" ]]; then
+        # Update HUB_AGENT_TOKEN in-place if present, append if not
+        if grep -q '^HUB_AGENT_TOKEN=' "$env_file" 2>/dev/null; then
+            sed -i '' "s|^HUB_AGENT_TOKEN=.*|HUB_AGENT_TOKEN=$HUB_AGENT_TOKEN|" "$env_file"
+        else
+            printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" >> "$env_file"
+        fi
+    else
+        install -m 600 /dev/null "$env_file"
+        printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" > "$env_file"
+    fi
 
     # Write config if missing
     if [[ -f "$config_file" ]]; then
