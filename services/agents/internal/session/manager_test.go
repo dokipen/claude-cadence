@@ -304,3 +304,14 @@ func TestShellJoinArgs(t *testing.T) {
 		})
 	}
 }
+
+func TestManager_MustGetReturnsErrorOnMissing(t *testing.T) {
+	m := newCreateTestManager(nil)
+	sess, err := m.mustGet("nonexistent-id")
+	if sess != nil {
+		t.Errorf("mustGet() session = %v, want nil", sess)
+	}
+	if err == nil {
+		t.Error("mustGet() error = nil, want non-nil")
+	}
+}
