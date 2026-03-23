@@ -46,6 +46,7 @@ func New(h *hub.Hub, cfg *config.Config) *Server {
 		apiHandler = tokenAuth(apiToken)(apiMux)
 	}
 	apiHandler = maxBodyMiddleware(apiHandler)
+	apiHandler = bodyReadDeadlineMiddleware(BodyReadTimeout)(apiHandler)
 	apiHandler = rateLimiter(cfg.RateLimit)(apiHandler)
 	apiHandler = metricsMiddleware(apiHandler)
 	mux.Handle("/api/v1/", apiHandler)
