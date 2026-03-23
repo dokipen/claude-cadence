@@ -174,3 +174,18 @@ func TestMaxResizeDimension(t *testing.T) {
 		t.Errorf("expected maxResizeDimension=500, got %d", maxResizeDimension)
 	}
 }
+
+// TestDefaultBufferSize_FitsWithFramePrefix verifies that a full ring buffer
+// replay frame (1-byte ttyd type prefix + buffer contents) does not exceed the
+// hub proxy's MaxMessageSize (1 << 20). This guards against the off-by-one
+// that caused #344: terminal connections dropped when the buffer was full.
+func TestDefaultBufferSize_FitsWithFramePrefix(t *testing.T) {
+	const maxMessageSize = 1 << 20 // must match hub.MaxMessageSize
+	const framePrefixLen = 1       // ttyd type byte ('0')
+	frameSize := framePrefixLen + defaultBufferSize
+	if frameSize > maxMessageSize {
+		t.Errorf("full replay frame (%d bytes) exceeds MaxMessageSize (%d); "+
+			"defaultBufferSize must be at most %d",
+			frameSize, maxMessageSize, maxMessageSize-framePrefixLen)
+	}
+}
