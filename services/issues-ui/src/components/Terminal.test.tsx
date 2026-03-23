@@ -59,6 +59,7 @@ class MockWebSocket {
   onmessage: ((ev: MessageEvent) => void) | null = null;
   onerror: ((ev: Event) => void) | null = null;
 
+  protocol: string = "tty";
   send = vi.fn();
   close = vi.fn();
 
@@ -262,6 +263,24 @@ describe("Terminal", () => {
     const opts = xtermInstances[0].options;
     expect(opts.rightClickSelectsWord).toBe(true);
     expect(opts.macOptionIsMeta).toBe(true);
+  });
+
+  // 10. Mismatched subprotocol triggers error overlay without retrying
+  it("shows error overlay when server does not confirm tty subprotocol", async () => {
+    render(<Terminal agentName="test-agent" sessionId="test-session" />);
+    const ws = MockWebSocket.instances[0];
+    ws.protocol = "";
+    await act(async () => {
+      ws.simulateOpen();
+      // simulateOpen() calls onopen which calls ws.close(); trigger onclose to
+      // exercise the permanent-error path (retry budget should be exhausted).
+      ws.simulateClose();
+    });
+    expect(screen.getByTestId("terminal-error")).toBeDefined();
+    expect(ws.close).toHaveBeenCalled();
+    // No retry: a second WebSocket should not have been constructed.
+    expect(MockWebSocket.instances).toHaveLength(1);
+    expect(screen.queryByTestId("terminal-connecting")).toBeNull();
   });
 
   // ---------------------------------------------------------------------------

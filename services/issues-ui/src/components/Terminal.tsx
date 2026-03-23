@@ -130,6 +130,16 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
     wsRef.current = ws;
 
     ws.onopen = () => {
+      // Verify the server confirmed the "tty" subprotocol. If it didn't,
+      // proceeding with ttyd binary framing would cause a silent protocol
+      // mismatch. Exhaust the retry budget first so onclose lands on the
+      // permanent-error path instead of scheduling auto-retries.
+      if (ws.protocol !== "tty") {
+        retryCountRef.current = RETRY_DELAYS_MS.length;
+        ws.close(1002); // 1002 = Protocol Error
+        return;
+      }
+
       reconnectingRef.current = false;
       everConnectedRef.current = true;
       retryCountRef.current = 0;
