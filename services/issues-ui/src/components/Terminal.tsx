@@ -136,7 +136,7 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
       // permanent-error path instead of scheduling auto-retries.
       if (ws.protocol !== "tty") {
         retryCountRef.current = RETRY_DELAYS_MS.length;
-        ws.close();
+        ws.close(1002); // 1002 = Protocol Error
         return;
       }
 
