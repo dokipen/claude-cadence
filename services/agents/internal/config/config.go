@@ -88,7 +88,7 @@ func (h *HubConfig) ResolveToken() string {
 type Config struct {
 	RootDir  string             `yaml:"root_dir"`
 	Tmux     TmuxConfig         `yaml:"tmux"` // Deprecated: unused after tmux removal
-	Ttyd     TtydConfig         `yaml:"ttyd"` // Deprecated: unused after tmux removal
+	Ttyd     TtydConfig         `yaml:"ttyd"` // Most fields deprecated after tmux removal; advertise_address is still active
 	PTY      PTYConfig          `yaml:"pty"`
 	Log      LogConfig          `yaml:"log"`
 	Profiles map[string]Profile `yaml:"profiles"`
@@ -318,8 +318,5 @@ func (c *Config) LogDeprecations(log *slog.Logger) {
 	}
 	if c.Ttyd.BindAddress != "" {
 		log.Warn("config key ttyd.bind_address is deprecated and has no effect; remove it from your config")
-	}
-	if c.Ttyd.AdvertiseAddress != "" {
-		log.Warn("config key ttyd.advertise_address is deprecated and has no effect; remove it from your config")
 	}
 }
