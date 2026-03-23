@@ -102,14 +102,6 @@ func (h *Hub) AcquireTerminalSession(id string, cancel context.CancelFunc) bool 
 	return true
 }
 
-// TrackTerminalSession registers an active terminal proxy session for graceful shutdown.
-// Returns a session ID that must be passed to UntrackTerminalSession on completion.
-func (h *Hub) TrackTerminalSession(id string, cancel context.CancelFunc) {
-	h.termMu.Lock()
-	h.termSessions[id] = cancel
-	h.termMu.Unlock()
-}
-
 // UntrackTerminalSession removes a terminal proxy session from the tracker.
 func (h *Hub) UntrackTerminalSession(id string) {
 	h.termMu.Lock()

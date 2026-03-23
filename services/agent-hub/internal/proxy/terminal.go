@@ -157,10 +157,10 @@ func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.
 						if !ok {
 							return
 						}
+						resetIdle()
 						if err := browserConn.Write(ctx, websocket.MessageBinary, payload); err != nil {
 							return
 						}
-						resetIdle()
 					case <-ctx.Done():
 						return
 					}
@@ -173,10 +173,10 @@ func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.
 				if err != nil {
 					break
 				}
+				resetIdle()
 				if err := h.WriteTerminalFrame(ctx, agentName, sessionUUID, payload); err != nil {
 					break
 				}
-				resetIdle()
 			}
 			return
 		}
@@ -313,8 +313,10 @@ func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.
 }
 
 // relay copies WebSocket messages from src to dst until ctx is cancelled or an
-// error occurs. activityFn is called after each successful write to signal
-// activity (used to reset the idle timeout timer).
+// error occurs. activityFn is called after each successful read and write to
+// signal activity (used to reset the idle timeout timer). Calling on read
+// ensures keystrokes (browser→PTY direction) reset the idle timer even when
+// PTY output is sparse.
 func relay(ctx context.Context, dst, src *websocket.Conn, activityFn func()) error {
 	for {
 		msgType, data, err := src.Read(ctx)
@@ -324,6 +326,7 @@ func relay(ctx context.Context, dst, src *websocket.Conn, activityFn func()) err
 			}
 			return err
 		}
+		activityFn()
 		if err := dst.Write(ctx, msgType, data); err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()

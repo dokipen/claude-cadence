@@ -565,11 +565,15 @@ func TestTerminalSessions(t *testing.T) {
 		t.Fatalf("expected 0 sessions, got %d", got)
 	}
 
-	// Track two sessions.
+	// Acquire two sessions.
 	_, cancel1 := context.WithCancel(context.Background())
 	_, cancel2 := context.WithCancel(context.Background())
-	h.TrackTerminalSession("sess-1", cancel1)
-	h.TrackTerminalSession("sess-2", cancel2)
+	if !h.AcquireTerminalSession("sess-1", cancel1) {
+		t.Fatal("AcquireTerminalSession sess-1 failed unexpectedly")
+	}
+	if !h.AcquireTerminalSession("sess-2", cancel2) {
+		t.Fatal("AcquireTerminalSession sess-2 failed unexpectedly")
+	}
 
 	if got := h.TerminalSessionCount(); got != 2 {
 		t.Errorf("expected 2 sessions, got %d", got)

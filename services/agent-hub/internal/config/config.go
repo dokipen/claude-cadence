@@ -211,6 +211,9 @@ func validate(cfg *Config) error {
 	if cfg.RateLimit.Burst < 0 {
 		return fmt.Errorf("rate_limit.burst must not be negative")
 	}
+	if cfg.Terminal.IdleTimeout < 0 {
+		return fmt.Errorf("terminal.idle_timeout must not be negative")
+	}
 
 	return nil
 }
