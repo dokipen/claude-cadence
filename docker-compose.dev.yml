@@ -114,8 +114,8 @@ services:
       - ${HOME}/.claude:/home/agentd/.claude
     env_file: .env.dev
     healthcheck:
-      # agentd is gRPC-only; verify the port is accepting connections.
-      test: ["CMD-SHELL", "nc -z localhost 4141 || exit 1"]
+      # agentd binds the HTTP terminal server to agentd:4142 (the container hostname).
+      test: ["CMD-SHELL", "nc -z agentd 4142 || exit 1"]
       interval: 10s
       timeout: 3s
       start_period: 15s
