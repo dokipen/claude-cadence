@@ -73,7 +73,7 @@ func (c *Client) runTerminalRelay(
 	// The cleanup closes the channel (unblocking the input select below) and
 	// also cancels relayCtx so that any writes referencing the old hub
 	// connection are torn down immediately on hub reconnect.
-	inputCh, cleanup := c.RegisterRelaySession(ptySessID, relayCancel)
+	inputCh, cleanup := c.RegisterRelaySession(parsed.String(), relayCancel)
 	defer cleanup()
 
 	// Spin up a local WebSocket server that calls ServeTerminal.

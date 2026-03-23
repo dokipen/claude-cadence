@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/google/uuid"
 
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
 	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
@@ -329,6 +330,13 @@ func (c *Client) writeResponse(ctx context.Context, conn *websocket.Conn, resp *
 // Returns the channel and a cleanup function that removes the registration.
 // The caller must invoke cleanup when the relay session ends.
 func (c *Client) RegisterRelaySession(sessionID string, relayCancel context.CancelFunc) (<-chan []byte, func()) {
+	// Normalize to canonical lowercase UUID form so the key always matches
+	// dispatchBinaryFrame's lookup, which uses uuid.UUID.String().
+	if parsed, err := uuid.Parse(sessionID); err == nil {
+		sessionID = parsed.String()
+	} else {
+		slog.Warn("RegisterRelaySession: sessionID is not a valid UUID; frames may not be delivered", "sessionID", sessionID, "err", err)
+	}
 	ch := make(chan []byte, terminalRelayChannelBufSize)
 	c.relayChMu.Lock()
 	c.relayCh[sessionID] = ch

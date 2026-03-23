@@ -3,6 +3,8 @@ package hub
 import (
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 func TestBackoff(t *testing.T) {
@@ -67,5 +69,49 @@ func TestBackoff(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestRegisterRelaySession_NormalizesUUIDKey(t *testing.T) {
+	// uppercaseID is a valid UUID in non-canonical (uppercase) form.
+	// uuid.Parse accepts it, but uuid.UUID.String() returns the lowercase form.
+	const uppercaseID = "550E8400-E29B-41D4-A716-446655440000"
+
+	c := &Client{
+		relayCh: make(map[string]chan []byte),
+	}
+
+	// relayCancel is a no-op; we only care about channel dispatch here.
+	relayCancel := func() {}
+
+	inputCh, cleanup := c.RegisterRelaySession(uppercaseID, relayCancel)
+	defer cleanup()
+
+	// Build a binary frame for the same session. encodeTerminalFrame accepts a
+	// uuid.UUID value whose bytes are identical regardless of the string form
+	// used to parse it. dispatchBinaryFrame will call sessionUUID.String() to
+	// produce the canonical lowercase lookup key.
+	parsed, err := uuid.Parse(uppercaseID)
+	if err != nil {
+		t.Fatalf("uuid.Parse(%q) unexpected error: %v", uppercaseID, err)
+	}
+	want := []byte("hello relay")
+	frame := encodeTerminalFrame(parsed, want)
+
+	// dispatchBinaryFrame decodes the frame and looks up the canonical lowercase
+	// key. Before the fix, RegisterRelaySession stores the raw uppercase key, so
+	// the lookup misses and the payload is never delivered.
+	c.dispatchBinaryFrame(frame)
+
+	select {
+	case got, ok := <-inputCh:
+		if !ok {
+			t.Fatal("channel closed unexpectedly")
+		}
+		if string(got) != string(want) {
+			t.Fatalf("got payload %q, want %q", got, want)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("timed out waiting for payload: RegisterRelaySession stored uppercase key but dispatchBinaryFrame looks up lowercase canonical key")
 	}
 }
