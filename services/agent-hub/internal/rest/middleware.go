@@ -219,7 +219,8 @@ const MaxRestBodySize = 1 << 20 // 1 MiB
 
 // maxBodyMiddleware limits the size of request bodies to MaxRestBodySize bytes.
 // Requests that exceed the limit will receive HTTP 413 Request Entity Too Large.
-// This middleware should not be applied to WebSocket upgrade endpoints.
+// Safe to apply to WebSocket upgrade routes (GET with no body) — MaxBytesReader
+// wraps r.Body, which is not read during the upgrade handshake.
 func maxBodyMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, MaxRestBodySize)

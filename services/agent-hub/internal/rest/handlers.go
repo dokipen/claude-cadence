@@ -171,7 +171,7 @@ func handleCreateSession(h *hub.Hub) http.HandlerFunc {
 		if err != nil {
 			var maxBytesErr *http.MaxBytesError
 			if errors.As(err, &maxBytesErr) {
-				http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+				writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
 				return
 			}
 			writeJSONError(w, http.StatusBadRequest, "failed to read request body")
