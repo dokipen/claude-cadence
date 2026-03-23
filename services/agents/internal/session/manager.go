@@ -480,3 +480,51 @@ func shellJoinArgs(args []string) string {
 func isProcessAlive(pid int) bool {
 	return syscall.Kill(pid, 0) == nil
 }
+
+// RestoreFromPersister loads persisted sessions from disk into the store and
+// reconciles them against live process state. Call once at startup before
+// starting the Cleaner and Monitor.
+func (m *Manager) RestoreFromPersister(p *Persister) error {
+	if p == nil {
+		return nil
+	}
+
+	sessions, err := p.LoadAll()
+	if err != nil {
+		return err
+	}
+
+	for _, sess := range sessions {
+		switch sess.State {
+		case StateDestroying:
+			p.deleteFile(sess.ID)
+			slog.Info("cleaned up mid-destroy session on restore", "id", sess.ID)
+			continue
+
+		case StateCreating:
+			if sess.AgentPID == 0 {
+				sess.State = StateError
+				sess.ErrorMessage = "session interrupted during creation (daemon restart)"
+				slog.Info("marking mid-create session as error on restore", "id", sess.ID)
+			}
+
+		case StateRunning:
+			if !m.processAlive(sess.AgentPID) {
+				sess.State = StateStopped
+				if sess.StoppedAt.IsZero() {
+					sess.StoppedAt = time.Now()
+				}
+			}
+			slog.Info("restored session", "id", sess.ID, "state", sess.State, "pid", sess.AgentPID)
+
+		default:
+			// StateStopped, StateError: add as-is.
+			slog.Info("restored session", "id", sess.ID, "state", sess.State, "pid", sess.AgentPID)
+		}
+
+		m.store.Add(sess)
+	}
+
+	slog.Info("restored persisted sessions", "count", len(sessions))
+	return nil
+}
