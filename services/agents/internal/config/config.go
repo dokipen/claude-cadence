@@ -122,7 +122,7 @@ type TtydConfig struct {
 
 // PTYConfig holds PTY manager settings.
 type PTYConfig struct {
-	BufferSize      int    `yaml:"buffer_size"`      // ring buffer size in bytes; defaults to 1 MB
+	BufferSize      int    `yaml:"buffer_size"`      // ring buffer size in bytes; must be < 1 MB (see #344)
 	WebSocketScheme string `yaml:"websocket_scheme"` // "ws" or "wss"; defaults to "ws"
 }
 
@@ -278,6 +278,10 @@ func validate(cfg *Config) error {
 	}
 
 	// Validate PTY config.
+	const maxBufferSize = 1<<20 - 1 // ttyd frame prefix + buffer must fit in hub's MaxMessageSize
+	if cfg.PTY.BufferSize > maxBufferSize {
+		return fmt.Errorf("pty.buffer_size (%d) must be <= %d to fit within hub proxy message limit", cfg.PTY.BufferSize, maxBufferSize)
+	}
 	switch cfg.PTY.WebSocketScheme {
 	case "ws", "wss":
 		// ok

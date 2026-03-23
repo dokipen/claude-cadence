@@ -6,7 +6,7 @@ root_dir: "/var/lib/agentd"
 
 # PTY manager
 pty:
-  buffer_size: 1048576       # Ring buffer size in bytes (default: 1 MB)
+  buffer_size: 1048575       # Ring buffer size in bytes (default: 1<<20 - 1; must be < 1 MB)
   websocket_scheme: "ws"     # WebSocket scheme for terminal endpoint: "ws" (default) or "wss" for TLS deployments
 
 # Logging

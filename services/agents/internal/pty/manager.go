@@ -23,7 +23,8 @@ const maxResizeDimension uint16 = 500
 
 // PTYConfig holds configuration for PTYManager.
 type PTYConfig struct {
-	// BufferSize is the ring buffer capacity in bytes. Defaults to 1 MB.
+	// BufferSize is the ring buffer capacity in bytes. Defaults to (1<<20)-1
+	// to leave room for the ttyd frame prefix within the hub proxy's 1 MB limit.
 	BufferSize int
 	// MaxSessions is the maximum number of concurrent sessions. Zero means unlimited.
 	MaxSessions int
