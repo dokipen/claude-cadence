@@ -32,6 +32,6 @@ ENV AGENTD_CONFIG=/etc/agentd/config.yaml
 
 USER agentd
 
-EXPOSE 4141 4142
+EXPOSE 4142
 
 CMD ["./agentd"]

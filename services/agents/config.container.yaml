@@ -1,5 +1,3 @@
-host: "0.0.0.0"
-port: 4141
 root_dir: /var/lib/agentd
 auth:
   mode: token
