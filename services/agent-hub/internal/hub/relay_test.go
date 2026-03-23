@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+
+	sharedrelay "github.com/dokipen/claude-cadence/services/shared/relay"
 )
 
 func TestEncodeDecodeTerminalFrame_RoundTrip(t *testing.T) {
@@ -45,8 +47,8 @@ func TestEncodeDecodeTerminalFrame_EmptyPayload(t *testing.T) {
 
 func TestDecodeTerminalFrame_TooShort(t *testing.T) {
 	// Frame shorter than 17 bytes must return an error.
-	short := make([]byte, terminalFrameHeaderLen-1)
-	short[0] = FrameTypeTerminal
+	short := make([]byte, sharedrelay.TerminalFrameHeaderLen-1)
+	short[0] = sharedrelay.FrameTypeTerminal
 
 	_, _, err := DecodeTerminalFrame(short)
 	if err == nil {
@@ -56,7 +58,7 @@ func TestDecodeTerminalFrame_TooShort(t *testing.T) {
 
 func TestDecodeTerminalFrame_WrongTypeByte(t *testing.T) {
 	// Build a valid-length frame but with a wrong type byte.
-	frame := make([]byte, terminalFrameHeaderLen+4)
+	frame := make([]byte, sharedrelay.TerminalFrameHeaderLen+4)
 	frame[0] = 0x02 // wrong type
 	id := uuid.New(); copy(frame[1:17], id[:])
 	copy(frame[17:], []byte("data"))
