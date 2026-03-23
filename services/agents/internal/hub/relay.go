@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"sync/atomic"
+	"time"
 
 	"github.com/coder/websocket"
 	"github.com/google/uuid"
@@ -135,6 +137,12 @@ func (c *Client) runTerminalRelay(
 	// outputDone signals that the PTY→hub goroutine has exited.
 	outputDone := make(chan struct{})
 
+	// ptyExited is set to true when the output goroutine exits because the PTY
+	// closed (localConn.Read failed before ctx was cancelled). It remains false
+	// when the goroutine exits due to a hub write failure so that we do not
+	// incorrectly destroy a still-running PTY session.
+	var ptyExited atomic.Bool
+
 	// Goroutine: PTY output → hub binary frames.
 	// Reads ttyd text frames from localConn and forwards as binary relay frames.
 	go func() {
@@ -143,6 +151,11 @@ func (c *Client) runTerminalRelay(
 			_, data, readErr := localConn.Read(ctx)
 			if readErr != nil {
 				slog.Debug("relay: local WS read ended", "session_id", ptySessID, "error", readErr)
+				// Only set ptyExited when the PTY closed before the hub disconnected.
+				// If ctx is already cancelled, the PTY may still be alive (hub dropped).
+				if ctx.Err() == nil {
+					ptyExited.Store(true)
+				}
 				return
 			}
 			// data is a ttyd server→client frame: byte '0' + raw terminal bytes.
@@ -154,7 +167,7 @@ func (c *Client) runTerminalRelay(
 			c.writeMu.Unlock()
 			if writeErr != nil {
 				slog.Debug("relay: hub write failed", "session_id", ptySessID, "error", writeErr)
-				return
+				return // hub write failed — don't set ptyExited
 			}
 		}
 	}()
@@ -187,13 +200,18 @@ loop:
 		}
 	}
 
-	// PTY ended and hub is still connected: notify hub to close its relay channel,
-	// then immediately destroy the session record so it no longer appears in listSessions.
-	if ptyEnded && ctx.Err() == nil {
+	// PTY ended naturally and hub is still connected: notify hub to close its
+	// relay channel, then immediately destroy the session record so it no longer
+	// appears in listSessions.
+	if ptyEnded && ctx.Err() == nil && ptyExited.Load() {
 		frame := encodeRelayEndFrame(parsed)
+		writeCtx, writeCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		c.writeMu.Lock()
-		_ = hubConn.Write(context.Background(), websocket.MessageBinary, frame)
+		if err := hubConn.Write(writeCtx, websocket.MessageBinary, frame); err != nil {
+			slog.Debug("relay: failed to send relay-end frame", "session_id", ptySessID, "error", err)
+		}
 		c.writeMu.Unlock()
+		writeCancel()
 
 		destroyParams, _ := json.Marshal(map[string]any{"session_id": ptySessID, "force": true})
 		if _, rpcErr := c.dispatcher.DestroySession(destroyParams); rpcErr != nil {

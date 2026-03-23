@@ -333,7 +333,7 @@ func (h *Hub) HandleAgentConnection(ctx context.Context, agent *ConnectedAgent) 
 				slog.Debug("relay ended for session", "agent", agent.Name, "session_id", sessionID)
 				agent.CloseTerminalChannel(sessionID)
 			default:
-				slog.Warn("unknown binary frame type from agent", "agent", agent.Name, "type", fmt.Sprintf("0x%02x", data[0]))
+				slog.Debug("unknown binary frame type from agent", "agent", agent.Name, "type", fmt.Sprintf("0x%02x", data[0]))
 			}
 
 		case websocket.MessageText:

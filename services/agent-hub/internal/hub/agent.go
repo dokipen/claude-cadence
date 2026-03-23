@@ -104,9 +104,12 @@ func (a *ConnectedAgent) RegisterTerminalRelay(sessionID uuid.UUID) (<-chan []by
 	cleanup := func() {
 		once.Do(func() {
 			a.terminalMu.Lock()
+			_, stillOpen := a.terminalChannels[sessionID]
 			delete(a.terminalChannels, sessionID)
 			a.terminalMu.Unlock()
-			close(ch)
+			if stillOpen {
+				close(ch)
+			}
 		})
 	}
 	return ch, cleanup
