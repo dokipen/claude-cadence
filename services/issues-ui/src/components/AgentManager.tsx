@@ -1,5 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type { Project } from "../types";
+import { useSearchParams } from "react-router";
 import { useAgents, normalizeRepo } from "../hooks/useAgents";
 import { SessionList, sessionKey } from "./SessionList";
 import { TilingLayout } from "./TilingLayout";
@@ -42,6 +43,29 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
       return next;
     });
   }, []);
+
+  const [searchParams] = useSearchParams();
+  const initialSessionKey = searchParams.get("session");
+  const hasAutoOpened = useRef(false);
+
+  useEffect(() => {
+    if (hasAutoOpened.current || !initialSessionKey) return;
+    const target = sessions.find((s) => sessionKey(s) === initialSessionKey);
+    if (!target) return;
+    hasAutoOpened.current = true;
+    setOpenWindows((prev) => {
+      if (prev.some((w) => w.key === initialSessionKey)) return prev;
+      return [
+        ...prev,
+        {
+          key: initialSessionKey,
+          session: target.session,
+          agentName: target.agentName,
+          projectId: selectedProject?.id,
+        },
+      ];
+    });
+  }, [initialSessionKey, sessions, selectedProject?.id]);
 
   const openKeys = new Set(openWindows.map((w) => w.key));
 

@@ -7,11 +7,6 @@ interface NotificationDropdownProps {
   waitingSessions: AgentSession[];
 }
 
-function ticketIdFromSessionName(name: string): string | null {
-  const match = name.match(/^lead-(\d+)/);
-  return match ? match[1] : null;
-}
-
 function formatIdleDuration(idleSince: string | undefined): string {
   if (!idleSince) return "";
   const seconds = Math.floor((Date.now() - new Date(idleSince).getTime()) / 1000);
@@ -58,10 +53,7 @@ export function NotificationDropdown({ waitingSessions }: NotificationDropdownPr
             Waiting for input
           </div>
           {waitingSessions.map((ws) => {
-            const ticketId = ticketIdFromSessionName(ws.session.name);
-            const linkTo = ticketId
-              ? `/ticket/${ticketId}`
-              : "/agents";
+            const linkTo = `/agents?session=${ws.agentName}:${ws.session.id}`;
             return (
               <Link
                 key={`${ws.agentName}:${ws.session.id}`}
