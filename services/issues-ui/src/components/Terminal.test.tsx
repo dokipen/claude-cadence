@@ -4,7 +4,7 @@ import { render, screen, cleanup, fireEvent, act } from "@testing-library/react"
 
 // Mock @xterm/xterm — canvas APIs are not available in jsdom
 // Use vi.hoisted so the array is available inside the hoisted vi.mock factory
-const xtermInstances = vi.hoisted(() => [] as Array<{ focus: ReturnType<typeof vi.fn>; options: Record<string, unknown> }>);
+const xtermInstances = vi.hoisted(() => [] as Array<{ focus: ReturnType<typeof vi.fn>; options: Record<string, unknown>; attachCustomKeyEventHandler: ReturnType<typeof vi.fn>; getSelection: ReturnType<typeof vi.fn> }>);
 const fitAddonInstances = vi.hoisted(() => [] as Array<{ fit: ReturnType<typeof vi.fn> }>);
 
 vi.mock("@xterm/xterm", () => ({
@@ -16,12 +16,14 @@ vi.mock("@xterm/xterm", () => ({
     onResize = vi.fn();
     write = vi.fn();
     focus = vi.fn();
+    attachCustomKeyEventHandler = vi.fn();
+    getSelection = vi.fn(() => "");
     cols = 80;
     rows = 24;
     options: Record<string, unknown> = {};
     constructor(opts?: Record<string, unknown>) {
       this.options = opts ?? {};
-      xtermInstances.push(this as unknown as { focus: ReturnType<typeof vi.fn>; options: Record<string, unknown> });
+      xtermInstances.push(this as unknown as { focus: ReturnType<typeof vi.fn>; options: Record<string, unknown>; attachCustomKeyEventHandler: ReturnType<typeof vi.fn>; getSelection: ReturnType<typeof vi.fn> });
     }
   },
 }));
@@ -466,4 +468,118 @@ describe("Terminal", () => {
     });
   });
 
+});
+
+describe("clipboard copy trimming", () => {
+  beforeEach(() => {
+    MockWebSocket.instances = [];
+    xtermInstances.length = 0;
+    fitAddonInstances.length = 0;
+    vi.stubGlobal("WebSocket", MockWebSocket);
+    vi.stubGlobal("ResizeObserver", class {
+      observe = vi.fn();
+      unobserve = vi.fn();
+      disconnect = vi.fn();
+    });
+    vi.stubGlobal("navigator", { clipboard: { writeText: vi.fn() } });
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    cleanup();
+  });
+
+  // Helper: render Terminal and advance to connected state
+  function renderConnected() {
+    render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+    act(() => { MockWebSocket.instances[0].simulateOpen(); });
+  }
+
+  // 1. attachCustomKeyEventHandler is called on the xterm Terminal instance
+  it("calls attachCustomKeyEventHandler on the xterm Terminal instance", () => {
+    renderConnected();
+    expect(xtermInstances).toHaveLength(1);
+    expect(xtermInstances[0].attachCustomKeyEventHandler).toHaveBeenCalled();
+  });
+
+  // 2. Ctrl+C with active selection: trims trailing whitespace and writes to clipboard
+  it("Ctrl+C with active selection trims trailing whitespace and writes to clipboard", async () => {
+    renderConnected();
+    const term = xtermInstances[0];
+    term.getSelection.mockReturnValue("hello   \nworld  \n  ");
+
+    // Retrieve and call the registered key event handler
+    const handler = term.attachCustomKeyEventHandler.mock.calls[0][0] as (e: { key: string; ctrlKey: boolean; metaKey: boolean; type: string }) => boolean;
+    const result = handler({ key: "c", ctrlKey: true, metaKey: false, type: "keydown" });
+
+    // Handler should return false (prevents default xterm behavior)
+    expect(result).toBe(false);
+
+    // Clipboard should receive the trimmed text (trailing whitespace removed, blank trailing lines dropped)
+    expect((navigator.clipboard as { writeText: ReturnType<typeof vi.fn> }).writeText).toHaveBeenCalledWith("hello\nworld");
+  });
+
+  // 3. Cmd+C (metaKey) with active selection: same trimming behavior
+  it("Cmd+C with active selection trims trailing whitespace and writes to clipboard", async () => {
+    renderConnected();
+    const term = xtermInstances[0];
+    term.getSelection.mockReturnValue("foo   \nbar  ");
+
+    const handler = term.attachCustomKeyEventHandler.mock.calls[0][0] as (e: { key: string; ctrlKey: boolean; metaKey: boolean; type: string }) => boolean;
+    const result = handler({ key: "c", ctrlKey: false, metaKey: true, type: "keydown" });
+
+    expect(result).toBe(false);
+    expect((navigator.clipboard as { writeText: ReturnType<typeof vi.fn> }).writeText).toHaveBeenCalledWith("foo\nbar");
+  });
+
+  // 4. Ctrl+C with NO selection: handler returns true, clipboard NOT written
+  it("Ctrl+C with no selection returns true and does not write to clipboard", () => {
+    renderConnected();
+    const term = xtermInstances[0];
+    term.getSelection.mockReturnValue("");
+
+    const handler = term.attachCustomKeyEventHandler.mock.calls[0][0] as (e: { key: string; ctrlKey: boolean; metaKey: boolean; type: string }) => boolean;
+    const result = handler({ key: "c", ctrlKey: true, metaKey: false, type: "keydown" });
+
+    // Handler returns true so xterm processes the key normally (SIGINT)
+    expect(result).toBe(true);
+    expect((navigator.clipboard as { writeText: ReturnType<typeof vi.fn> }).writeText).not.toHaveBeenCalled();
+  });
+
+  // 5. copy DOM event with active xterm selection: trims and sets clipboardData
+  it("copy DOM event with active xterm selection trims trailing whitespace and sets clipboardData", () => {
+    renderConnected();
+    const term = xtermInstances[0];
+    term.getSelection.mockReturnValue("line one   \nline two  ");
+
+    const container = screen.getByTestId("terminal-container");
+
+    // Build a synthetic copy Event with a clipboardData mock (ClipboardEvent not available in jsdom)
+    const setData = vi.fn();
+    const copyEvent = new Event("copy", { bubbles: true, cancelable: true });
+    Object.defineProperty(copyEvent, "clipboardData", { value: { setData }, writable: false });
+
+    act(() => { container.dispatchEvent(copyEvent); });
+
+    expect(setData).toHaveBeenCalledWith("text/plain", "line one\nline two");
+  });
+
+  // 6. copy DOM event with NO active xterm selection: clipboard is not modified
+  it("copy DOM event with no active xterm selection does not modify clipboardData", () => {
+    renderConnected();
+    const term = xtermInstances[0];
+    term.getSelection.mockReturnValue("");
+
+    const container = screen.getByTestId("terminal-container");
+
+    const setData = vi.fn();
+    const copyEvent = new Event("copy", { bubbles: true, cancelable: true });
+    Object.defineProperty(copyEvent, "clipboardData", { value: { setData }, writable: false });
+
+    act(() => { container.dispatchEvent(copyEvent); });
+
+    expect(setData).not.toHaveBeenCalled();
+  });
 });
