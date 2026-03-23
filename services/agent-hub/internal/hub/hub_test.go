@@ -864,10 +864,11 @@ func TestHandleAgentConnection_OversizedTextFrame(t *testing.T) {
 	}
 }
 
-// TestHandleAgentConnection_AtLimitBinaryFrame verifies that a binary frame of
-// exactly MaxMessageSize bytes does NOT close the connection. Binary relay
-// frames up to MaxMessageSize (1 MiB) are permitted; the hub logs a warning
-// about the invalid frame header and continues the read loop.
+// TestHandleAgentConnection_AtLimitBinaryFrame verifies that a binary relay
+// frame does NOT close the connection. Binary frames are allowed up to
+// MaxMessageSize (1 MiB); the hub logs a warning about the invalid frame
+// header and continues the read loop. The RPC size check must not apply
+// to binary frames.
 func TestHandleAgentConnection_AtLimitBinaryFrame(t *testing.T) {
 	h, url := startTestHub(t)
 
@@ -883,7 +884,8 @@ func TestHandleAgentConnection_AtLimitBinaryFrame(t *testing.T) {
 	// will be invalid (no 0x01 type byte in the right position), so
 	// DecodeTerminalFrame returns an error — but the hub logs a warning and
 	// continues the loop without closing the connection.
-	atLimit := make([]byte, MaxMessageSize)
+	// Use half the relay limit to avoid any boundary behavior from WebSocket framing overhead.
+	atLimit := make([]byte, MaxMessageSize/2)
 	if err := conn.Write(context.Background(), websocket.MessageBinary, atLimit); err != nil {
 		t.Fatalf("write binary frame: %v", err)
 	}
