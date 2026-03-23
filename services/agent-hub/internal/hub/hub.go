@@ -11,6 +11,8 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/google/uuid"
+
+	sharedrelay "github.com/dokipen/claude-cadence/services/shared/relay"
 )
 
 // ErrAdvertiseAddressChanged is returned when a re-registering agent attempts
@@ -308,13 +310,30 @@ func (h *Hub) HandleAgentConnection(ctx context.Context, agent *ConnectedAgent) 
 
 		switch msgType {
 		case websocket.MessageBinary:
-			sessionID, payload, err := DecodeTerminalFrame(data)
-			if err != nil {
-				slog.Warn("invalid binary frame from agent", "agent", agent.Name, "error", err)
+			if len(data) < sharedrelay.TerminalFrameHeaderLen {
+				slog.Warn("binary frame too short from agent", "agent", agent.Name, "len", len(data))
 				continue
 			}
-			if !agent.DeliverTerminalFrame(sessionID, payload) {
-				slog.Debug("no relay registered for session", "agent", agent.Name, "session_id", sessionID)
+			switch data[0] {
+			case sharedrelay.FrameTypeTerminal:
+				sessionID, payload, err := DecodeTerminalFrame(data)
+				if err != nil {
+					slog.Warn("invalid terminal frame from agent", "agent", agent.Name, "error", err)
+					continue
+				}
+				if !agent.DeliverTerminalFrame(sessionID, payload) {
+					slog.Debug("no relay registered for session", "agent", agent.Name, "session_id", sessionID)
+				}
+			case sharedrelay.FrameTypeRelayEnd:
+				sessionID, err := DecodeRelayEndFrame(data)
+				if err != nil {
+					slog.Warn("invalid relay-end frame from agent", "agent", agent.Name, "error", err)
+					continue
+				}
+				slog.Debug("relay ended for session", "agent", agent.Name, "session_id", sessionID)
+				agent.CloseTerminalChannel(sessionID)
+			default:
+				slog.Debug("unknown binary frame type from agent", "agent", agent.Name, "type", fmt.Sprintf("0x%02x", data[0]))
 			}
 
 		case websocket.MessageText:

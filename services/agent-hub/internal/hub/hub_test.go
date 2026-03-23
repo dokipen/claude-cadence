@@ -11,6 +11,10 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+
+	"github.com/google/uuid"
+
+	sharedrelay "github.com/dokipen/claude-cadence/services/shared/relay"
 )
 
 // startTestHub creates a Hub and HTTP server that accepts agent WebSocket connections.
@@ -921,5 +925,141 @@ func TestMaxMessageSizeConstants(t *testing.T) {
 	if RPCMaxMessageSize >= MaxMessageSize {
 		t.Errorf("RPCMaxMessageSize (%d) must be < MaxMessageSize (%d)",
 			RPCMaxMessageSize, MaxMessageSize)
+	}
+}
+
+// TestCloseTerminalChannel verifies that CloseTerminalChannel closes and removes
+// a single relay channel while leaving other channels for different sessions intact.
+func TestCloseTerminalChannel(t *testing.T) {
+	agent := &ConnectedAgent{
+		Name:             "test-agent",
+		status:           StatusOnline,
+		pending:          make(map[string]chan *Response),
+		terminalChannels: make(map[uuid.UUID]chan []byte),
+	}
+
+	sessA := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	sessB := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+
+	chA, _ := agent.RegisterTerminalRelay(sessA)
+	chB, cleanupB := agent.RegisterTerminalRelay(sessB)
+	defer cleanupB()
+
+	// Close only sessA.
+	agent.CloseTerminalChannel(sessA)
+
+	// chA should be closed: receive returns zero value with ok=false.
+	select {
+	case val, ok := <-chA:
+		if ok {
+			t.Errorf("expected chA to be closed, got value %v", val)
+		}
+	default:
+		t.Error("expected receive on closed chA to succeed immediately, but it would block")
+	}
+
+	// chB should still be open and empty (non-blocking receive would block).
+	select {
+	case val, ok := <-chB:
+		if !ok {
+			t.Error("expected chB to still be open, but it was closed")
+		} else {
+			t.Errorf("expected chB to be empty and open, got unexpected value %v", val)
+		}
+	default:
+		// Good: channel is open and empty.
+	}
+
+	// Count remaining terminal channels — should be exactly 1.
+	agent.terminalMu.Lock()
+	count := len(agent.terminalChannels)
+	agent.terminalMu.Unlock()
+	if count != 1 {
+		t.Errorf("expected 1 terminal channel after CloseTerminalChannel, got %d", count)
+	}
+}
+
+// TestHandleAgentConnection_RelayEndFrame verifies that when an agent sends a
+// FrameTypeRelayEnd binary frame, the hub closes the corresponding terminal channel.
+func TestHandleAgentConnection_RelayEndFrame(t *testing.T) {
+	h, url := startTestHub(t)
+
+	conn := connectRawAgent(t, url, "relay-end-agent")
+	defer conn.CloseNow()
+
+	agent := waitForAgent(t, h, "relay-end-agent")
+
+	// Register a terminal relay channel for a known session ID.
+	sessID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
+	ch, _ := agent.RegisterTerminalRelay(sessID)
+
+	// Build and send a FrameTypeRelayEnd frame: [0x02][16-byte UUID].
+	frame := make([]byte, sharedrelay.TerminalFrameHeaderLen)
+	frame[0] = sharedrelay.FrameTypeRelayEnd
+	copy(frame[1:17], sessID[:])
+
+	if err := conn.Write(context.Background(), websocket.MessageBinary, frame); err != nil {
+		t.Fatalf("write relay-end frame: %v", err)
+	}
+
+	// Poll until the channel is closed (hub processes frame asynchronously).
+	deadline := time.Now().Add(2 * time.Second)
+	channelClosed := false
+	for time.Now().Before(deadline) {
+		select {
+		case _, ok := <-ch:
+			if !ok {
+				channelClosed = true
+			}
+		default:
+		}
+		if channelClosed {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if !channelClosed {
+		t.Error("expected terminal channel to be closed after FrameTypeRelayEnd, but it is still open")
+	}
+}
+
+// TestHandleAgentConnection_UnknownBinaryFrameType verifies that an unknown
+// binary frame type is handled gracefully — logged and ignored — and the
+// connection remains open.
+func TestHandleAgentConnection_UnknownBinaryFrameType(t *testing.T) {
+	h, url := startTestHub(t)
+
+	conn := connectRawAgent(t, url, "unknown-frame-agent")
+	defer conn.CloseNow()
+
+	agent := waitForAgent(t, h, "unknown-frame-agent")
+	if agent.Status() != StatusOnline {
+		t.Fatalf("expected agent to start online, got %s", agent.Status())
+	}
+
+	// Send a binary frame with unknown type 0xFF and a valid-length header.
+	frame := make([]byte, sharedrelay.TerminalFrameHeaderLen)
+	frame[0] = 0xFF
+	id := uuid.New()
+	copy(frame[1:17], id[:])
+
+	if err := conn.Write(context.Background(), websocket.MessageBinary, frame); err != nil {
+		t.Fatalf("write unknown frame: %v", err)
+	}
+
+	// Give the hub's read loop a moment to process the frame.
+	time.Sleep(100 * time.Millisecond)
+
+	// Agent should still be online — hub did not close the connection.
+	if agent.Status() != StatusOnline {
+		t.Errorf("expected agent to remain online after unknown binary frame type, got %s", agent.Status())
+	}
+
+	// Confirm connection is still usable by sending a valid text frame.
+	pingReq, _ := NewRequest("ping-unknown-check", "ping", nil)
+	pingData, _ := json.Marshal(pingReq)
+	if err := conn.Write(context.Background(), websocket.MessageText, pingData); err != nil {
+		t.Fatalf("write after unknown frame failed — connection was closed: %v", err)
 	}
 }

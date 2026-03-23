@@ -104,9 +104,12 @@ func (a *ConnectedAgent) RegisterTerminalRelay(sessionID uuid.UUID) (<-chan []by
 	cleanup := func() {
 		once.Do(func() {
 			a.terminalMu.Lock()
+			_, stillOpen := a.terminalChannels[sessionID]
 			delete(a.terminalChannels, sessionID)
 			a.terminalMu.Unlock()
-			close(ch)
+			if stillOpen {
+				close(ch)
+			}
 		})
 	}
 	return ch, cleanup
@@ -137,6 +140,17 @@ func (a *ConnectedAgent) DeliverTerminalFrame(sessionID uuid.UUID, payload []byt
 			"payload_len", len(payload),
 		)
 		return false
+	}
+}
+
+// CloseTerminalChannel closes the relay channel for a single session and removes
+// it from the map. Safe to call when no relay is registered for the session.
+func (a *ConnectedAgent) CloseTerminalChannel(sessionID uuid.UUID) {
+	a.terminalMu.Lock()
+	defer a.terminalMu.Unlock()
+	if ch, ok := a.terminalChannels[sessionID]; ok {
+		close(ch)
+		delete(a.terminalChannels, sessionID)
 	}
 }
 
