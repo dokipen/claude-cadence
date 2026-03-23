@@ -59,6 +59,7 @@ class MockWebSocket {
   onmessage: ((ev: MessageEvent) => void) | null = null;
   onerror: ((ev: Event) => void) | null = null;
 
+  protocol: string = "tty";
   send = vi.fn();
   close = vi.fn();
 
@@ -262,6 +263,19 @@ describe("Terminal", () => {
     const opts = xtermInstances[0].options;
     expect(opts.rightClickSelectsWord).toBe(true);
     expect(opts.macOptionIsMeta).toBe(true);
+  });
+
+  // 10. Mismatched subprotocol triggers error overlay and closes the socket
+  it("shows error overlay when server does not confirm tty subprotocol", async () => {
+    render(<Terminal agentName="test-agent" sessionId="test-session" />);
+    const ws = MockWebSocket.instances[0];
+    ws.protocol = "";
+    await act(async () => {
+      ws.simulateOpen();
+    });
+    expect(screen.getByTestId("terminal-error")).toBeDefined();
+    expect(ws.close).toHaveBeenCalled();
+    expect(screen.queryByTestId("terminal-connecting")).toBeNull();
   });
 
   // ---------------------------------------------------------------------------
