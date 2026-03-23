@@ -19,7 +19,7 @@ The service integrates with HashiCorp Vault to retrieve credentials for private 
 - As a user, SSH repos use the key via `GIT_SSH_COMMAND`
 
 ### Environment Variable Injection
-- As a user, Vault secrets can be injected as environment variables into tmux sessions
+- As a user, Vault secrets can be injected as environment variables into PTY sessions
 - As a user, injected secrets are available to the agent process running in the session
 - As a user, profiles without `vault_secret` work without any Vault configuration (public repos)
 
@@ -29,7 +29,7 @@ The service integrates with HashiCorp Vault to retrieve credentials for private 
 |------|-------------|
 | `TestVault_TokenAuth` | Connect to Vault dev server with token auth |
 | `TestVault_SecretRetrieval` | Fetch and use secrets for git operations |
-| `TestVault_EnvInjection` | Secrets appear as env vars in tmux session |
+| `TestVault_EnvInjection` | Secrets appear as env vars in PTY session |
 | `TestVault_NoSecret_PublicRepo` | Profiles without vault_secret work fine |
 
 ## Implementation Phase

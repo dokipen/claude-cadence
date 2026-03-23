@@ -1,4 +1,4 @@
-.PHONY: build build-linux test test-e2e test-cleanup clean deploy-agent
+.PHONY: build build-linux test test-e2e clean deploy-agent
 
 BINARY := agentd
 BINARY_LINUX := agentd-linux
@@ -30,11 +30,6 @@ test:
 
 test-e2e:
 	go test -v -count=1 -timeout 120s ./test/e2e/
-
-test-cleanup:
-	@echo "Killing all e2e tmux sessions..."
-	@tmux -L agentd list-sessions -F '#{session_name}' 2>/dev/null | grep '^e2e-' | xargs -I{} tmux -L agentd kill-session -t {} 2>/dev/null || true
-	@echo "Done."
 
 clean:
 	rm -f $(BINARY) $(BINARY_LINUX)

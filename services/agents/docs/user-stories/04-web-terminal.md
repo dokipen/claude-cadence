@@ -2,23 +2,18 @@
 
 ## Summary
 
-The service provides web-based terminal access to agent sessions via ttyd, which exposes tmux sessions as websocket-backed terminals accessible from a browser.
+The service provides web-based terminal access to agent sessions via a built-in WebSocket relay that streams the PTY output to a browser.
 
 ## Stories
 
-### ttyd Lifecycle
-- As a user, when `ttyd.enabled=true` in config, each new session gets a ttyd process
-- As a user, ttyd is started after the tmux session is created
-- As a user, ttyd is automatically stopped when the session is destroyed
-- As a user, if ttyd is not enabled, sessions work normally without web terminal access
-
-### Port Management
-- As a user, each session gets a unique websocket port (incremented from `ttyd.base_port`)
-- As a user, port collisions are avoided by tracking allocated ports
-- As a user, ports are released when sessions are destroyed
+### WebSocket Relay Lifecycle
+- As a user, each new session gets a WebSocket relay connected to its PTY
+- As a user, The WebSocket relay connects to the PTY session after it is created
+- As a user, the relay is automatically stopped when the session is destroyed
+- As a user, sessions work normally for API access even without an active web terminal connection
 
 ### Web Access
-- As a user, the `Session` response includes a `websocket_url` field with the ttyd URL
+- As a user, the `Session` response includes a `websocket_url` field with the relay URL
 - As a user, I can open the websocket URL in a browser to see the agent's terminal
 - As a user, the web terminal is writable (I can interact with the agent session)
 
@@ -26,14 +21,13 @@ The service provides web-based terminal access to agent sessions via ttyd, which
 
 | Test | Description |
 |------|-------------|
-| `TestTtyd_StartsWithSession` | ttyd process started when session created |
-| `TestTtyd_HttpResponds` | ttyd HTTP endpoint responds |
-| `TestTtyd_StopsOnDestroy` | ttyd process killed when session destroyed |
-| `TestTtyd_UniquePort` | Each session gets a different port |
-| `TestTtyd_Disabled` | Sessions work without ttyd when disabled |
+| `TestWebTerminal_StartsWithSession` | WebSocket relay starts when session created |
+| `TestWebTerminal_HttpResponds` | WebSocket endpoint responds |
+| `TestWebTerminal_StopsOnDestroy` | Relay stopped when session destroyed |
+| `TestWebTerminal_UniqueURL` | Each session gets a unique WebSocket URL |
 
 ## Implementation Phase
 
-**Phase 4** (ttyd Web Terminal Access) -- 3 story points
+**Phase 4** (Web Terminal Access) -- 3 story points
 
 Blocked by: Phase 1

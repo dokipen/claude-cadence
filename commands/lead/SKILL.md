@@ -379,7 +379,7 @@ Run **both** applicable sub-sections below. A PR that touches both agent-service
 
 #### Agent-service changes (`services/agents/`, `services/agent-hub/`)
 
-These services have hard host dependencies (tmux, the `claude` CLI, OS service integration) that make them impractical to containerize. Run them on the host alongside the compose stack.
+These services have hard host dependencies (the `claude` CLI, OS service integration) that make them impractical to containerize. Run them on the host alongside the compose stack.
 
 1. **Ensure `.env.dev` exists** with the agent-service secrets (`HUB_API_TOKEN`, `HUB_AGENT_TOKEN`, `AGENTD_TOKEN`):
    ```bash

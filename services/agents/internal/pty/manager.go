@@ -200,7 +200,6 @@ func (m *PTYManager) WaitError(id string) (error, error) {
 }
 
 // ReadBuffer returns a snapshot of the ring buffer for the given session.
-// Used as a drop-in replacement for tmux.CapturePane.
 func (m *PTYManager) ReadBuffer(id string) ([]byte, error) {
 	sess, err := m.Get(id)
 	if err != nil {

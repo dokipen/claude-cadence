@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Agent Service (`agentd`) manages AI agent sessions. It provides a control plane for launching, monitoring, and destroying agent processes running in tmux sessions, each operating within an isolated git worktree. Session management is dispatched through the agent-hub WebSocket reverse connection.
+The Agent Service (`agentd`) manages AI agent sessions. It provides a control plane for launching, monitoring, and destroying agent processes running in PTY-based sessions, each operating within an isolated git worktree. Session management is dispatched through the agent-hub WebSocket reverse connection.
 
 The service is agent-agnostic -- profiles can launch any CLI agent (Claude Code, Gemini, custom tools) with arbitrary arguments. Each profile pairs a command template with a GitHub repository, enabling reproducible, isolated agent sessions against specific codebases.
 
@@ -10,7 +10,7 @@ The service is agent-agnostic -- profiles can launch any CLI agent (Claude Code,
 
 - **OS**: macOS or Linux
 - **Runtime**: Single Go binary, no container runtime required
-- **Dependencies**: git, tmux (required); ttyd (optional, for web terminal); vault CLI (optional, for secrets)
+- **Dependencies**: git (required); vault CLI (optional, for secrets)
 - **Network**: binds to loopback only; no inbound port exposed externally
 
 ## Core Concepts
@@ -29,10 +29,10 @@ Profiles are defined in the service's YAML configuration file. The command templ
 
 A running instance of an agent profile. Each session has:
 - A unique UUID identifier
-- A human-readable name (used as the tmux session name)
+- A human-readable name
 - An isolated git worktree (created from the latest default branch)
-- A tmux session running the agent command
-- Optional ttyd process for web terminal access
+- A PTY process running the agent command
+- Optional WebSocket relay for web terminal access
 - Lifecycle state tracking (CREATING, RUNNING, STOPPED, ERROR, DESTROYING)
 
 ### Root Directory
@@ -53,10 +53,10 @@ As a user, I can manage agent sessions through the hub API.
 - I can create a session by specifying a profile name and optional session name
 - I can list all active sessions with their current status
 - I can get details about a specific session by ID
-- I can destroy a session, which kills the tmux session and cleans up resources
+- I can destroy a session, which terminates the PTY process and cleans up resources
 - Duplicate session names are rejected with an appropriate error
 - If I don't provide a session name, one is auto-generated
-- Session names are validated for tmux-safe characters (`[a-zA-Z0-9_-]`)
+- Session names are validated (`[a-zA-Z0-9_-]`)
 - Extra args are validated (no null bytes, max 64 args, max 4096 bytes each) and individually shell-escaped before template rendering
 
 **E2E test file**: `test/e2e/session_lifecycle_test.go`
@@ -80,7 +80,7 @@ As a user, the service manages git repositories and creates isolated environment
 As a user, the service can use HashiCorp Vault for credentials.
 
 - The service fetches GitHub credentials from Vault for private repo cloning
-- Vault secrets can be injected as environment variables into agent sessions
+- Vault secrets can be injected as environment variables into PTY sessions
 - Both token and AppRole authentication methods are supported
 - Profiles without `vault_secret` work without Vault (public repos)
 
@@ -90,10 +90,10 @@ As a user, the service can use HashiCorp Vault for credentials.
 
 As a user, I can observe agent sessions through a web browser.
 
-- When ttyd is enabled, each session gets a ttyd process exposing the tmux session
+- Each session has a WebSocket relay for terminal access
 - The session's websocket URL is included in the Session response
 - Each session gets a unique port (incremented from a configurable base port)
-- ttyd processes are automatically stopped when sessions are destroyed
+- The WebSocket relay is automatically stopped when sessions are destroyed
 
 **E2E test file**: `test/e2e/websocket_test.go`
 
@@ -116,10 +116,10 @@ Session management is dispatched via JSON-RPC over the agent-hub WebSocket conne
 
 | Method | Description |
 |--------|-------------|
-| `createSession` | Launch an agent in a new tmux session |
-| `getSession` | Get current state of a session (reconciled with tmux) |
+| `createSession` | Launch an agent in a new PTY-based session |
+| `getSession` | Get current state of a session (reconciled with live PTY processes) |
 | `listSessions` | List all sessions with optional profile/state filters |
-| `destroySession` | Kill tmux session, clean up worktree, remove state |
+| `destroySession` | Terminate PTY process, clean up worktree, remove state |
 | `getTerminalEndpoint` | Get terminal relay or URL for a session |
 
 See `docs/PLAN.md` and `internal/hub/dispatch.go` for the full API surface.
@@ -132,8 +132,6 @@ Key configuration sections:
 - **Network**: host (loopback binding)
 - **Root directory**: where repos and worktrees are stored
 - **Vault**: address, auth method, secret prefix
-- **tmux**: socket name
-- **ttyd**: enabled, base port
 - **Logging**: level, format
 - **Cleanup**: stale session TTL, check interval
 - **Profiles**: named agent configurations
@@ -145,10 +143,10 @@ See `docs/PLAN.md` for full configuration schema.
 | Phase | Est | Description |
 |-------|-----|-------------|
 | 0 | 1 | Project setup: docs, plan, issue scaffolding |
-| 1 | 5 | Steel thread: config + tmux CRUD |
+| 1 | 5 | Steel thread: config + PTY session CRUD |
 | 2 | 5 | Git repository management + worktrees |
 | 3 | 3 | Vault integration |
-| 4 | 3 | ttyd web terminal access |
+| 4 | 3 | Web terminal access (PTY relay) |
 | 5 | 5 | Install script (launchd + systemd) |
 | 6 | 3 | Stale cleanup + service recovery |
 | 7 | 5 | Cadence skill + docs + CI |
