@@ -112,8 +112,14 @@ func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.
 
 			// Clear the server's WriteTimeout so idle terminal sessions aren't killed.
 			rc := http.NewResponseController(w)
-			rc.SetReadDeadline(time.Time{})
-			rc.SetWriteDeadline(time.Time{})
+			if err := rc.SetReadDeadline(time.Time{}); err != nil {
+				slog.Error("failed to clear read deadline", "error", err)
+				return
+			}
+			if err := rc.SetWriteDeadline(time.Time{}); err != nil {
+				slog.Error("failed to clear write deadline", "error", err)
+				return
+			}
 
 			browserConn.SetReadLimit(hub.MaxMessageSize)
 
@@ -286,8 +292,14 @@ func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.
 		// WebSocket connections. ReadHeaderTimeout doesn't affect post-upgrade
 		// connections, but we clear both as defense-in-depth.
 		rc := http.NewResponseController(w)
-		rc.SetReadDeadline(time.Time{})
-		rc.SetWriteDeadline(time.Time{})
+		if err := rc.SetReadDeadline(time.Time{}); err != nil {
+			slog.Error("failed to clear read deadline", "error", err)
+			return
+		}
+		if err := rc.SetWriteDeadline(time.Time{}); err != nil {
+			slog.Error("failed to clear write deadline", "error", err)
+			return
+		}
 
 		// Apply read limits to prevent memory exhaustion.
 		browserConn.SetReadLimit(hub.MaxMessageSize)
