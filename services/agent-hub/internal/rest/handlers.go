@@ -167,8 +167,13 @@ func handleCreateSession(h *hub.Hub) http.HandlerFunc {
 			return
 		}
 
-		body, err := io.ReadAll(io.LimitReader(r.Body, hub.MaxMessageSize))
+		body, err := io.ReadAll(r.Body)
 		if err != nil {
+			var maxBytesErr *http.MaxBytesError
+			if errors.As(err, &maxBytesErr) {
+				http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+				return
+			}
 			writeJSONError(w, http.StatusBadRequest, "failed to read request body")
 			return
 		}

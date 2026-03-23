@@ -733,3 +733,31 @@ func TestIntegration_RateLimiting_WSTerminal(t *testing.T) {
 		t.Error("expected /ws/terminal/ to be rate limited after burst exhausted, but no 429 was returned")
 	}
 }
+
+func TestIntegration_OversizedBody(t *testing.T) {
+	apiToken := "test-api-token"
+	agentToken := "test-agent-token"
+	cfg := testConfig(apiToken, agentToken)
+
+	h, baseURL := startIntegrationServer(t, cfg)
+	simulateAgent(t, baseURL, agentToken, "test-agent")
+	waitForAgent(t, h, "test-agent")
+
+	// Build a body that exceeds MaxRestBodySize by 1 byte.
+	oversizedBody := strings.NewReader(strings.Repeat("x", rest.MaxRestBodySize+1))
+
+	req, _ := http.NewRequest("POST", baseURL+"/api/v1/agents/test-agent/sessions", oversizedBody)
+	req.Header.Set("Authorization", "Bearer "+apiToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 413, got %d: %s", resp.StatusCode, body)
+	}
+}
