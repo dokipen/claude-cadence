@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
 )
 
@@ -134,8 +136,14 @@ func (d *Dispatcher) GetTerminalEndpoint(params json.RawMessage) (json.RawMessag
 		return nil, &rpcError{Code: rpcErrInvalidArgument, Message: "invalid params: " + err.Error()}
 	}
 
-	// Verify session exists.
-	if _, err := d.manager.Get(p.SessionID); err != nil {
+	sessionID, err := uuid.Parse(p.SessionID)
+	if err != nil {
+		return nil, &rpcError{Code: rpcErrInvalidArgument, Message: "invalid session_id: must be a UUID"}
+	}
+
+	// Verify session exists. Use the normalized form so URN/brace UUIDs resolve
+	// to the same key as the canonical hyphenated form used at creation time.
+	if _, err := d.manager.Get(sessionID.String()); err != nil {
 		return nil, mapSessionError(err)
 	}
 
@@ -145,8 +153,11 @@ func (d *Dispatcher) GetTerminalEndpoint(params json.RawMessage) (json.RawMessag
 	}
 
 	// Backward compat: return a direct URL when advertise_address is set.
+	// Use sessionID.String() (normalized canonical form) rather than the raw
+	// p.SessionID to prevent non-standard UUID forms (URN prefix, braces) from
+	// reaching the URL.
 	return marshalResult(terminalEndpointResult{
-		URL: d.webSocketScheme + "://" + d.advertiseAddress + "/ws/terminal/" + p.SessionID,
+		URL: d.webSocketScheme + "://" + d.advertiseAddress + "/ws/terminal/" + sessionID.String(),
 	})
 }
 

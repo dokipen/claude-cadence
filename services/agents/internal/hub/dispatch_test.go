@@ -87,7 +87,7 @@ func TestDispatcher_GetTerminalEndpoint_InvalidParams(t *testing.T) {
 func TestDispatcher_GetTerminalEndpoint_SessionNotFound(t *testing.T) {
 	d := newTestDispatcher()
 
-	_, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"nonexistent"}`))
+	_, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"550e8400-e29b-41d4-a716-446655440000"}`))
 	if rpcErr == nil {
 		t.Fatal("expected rpcError for nonexistent session")
 	}
@@ -100,11 +100,11 @@ func TestDispatcher_GetTerminalEndpoint_RelayWhenNoAdvertiseAddress(t *testing.T
 	// When no advertise_address is configured, the dispatcher returns {relay: true}
 	// so the Client can start a relay pump over the hub WebSocket.
 	store := session.NewStore()
-	store.Add(&session.Session{ID: "s1", State: session.StateStopped})
+	store.Add(&session.Session{ID: "550e8400-e29b-41d4-a716-446655440001", State: session.StateStopped})
 	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{})
 	d := NewDispatcher(mgr, "", "ws") // empty advertise address → relay path
 
-	result, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"s1"}`))
+	result, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"550e8400-e29b-41d4-a716-446655440001"}`))
 	if rpcErr != nil {
 		t.Fatalf("unexpected rpcError: code=%d msg=%s", rpcErr.Code, rpcErr.Message)
 	}
@@ -123,11 +123,11 @@ func TestDispatcher_GetTerminalEndpoint_RelayWhenNoAdvertiseAddress(t *testing.T
 
 func TestDispatcher_GetTerminalEndpoint_Success(t *testing.T) {
 	store := session.NewStore()
-	store.Add(&session.Session{ID: "s1", State: session.StateStopped})
+	store.Add(&session.Session{ID: "550e8400-e29b-41d4-a716-446655440002", State: session.StateStopped})
 	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{})
 	d := NewDispatcher(mgr, "192.168.1.10", "ws")
 
-	result, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"s1"}`))
+	result, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"550e8400-e29b-41d4-a716-446655440002"}`))
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: code=%d msg=%s", rpcErr.Code, rpcErr.Message)
 	}
@@ -140,18 +140,18 @@ func TestDispatcher_GetTerminalEndpoint_Success(t *testing.T) {
 		t.Error("expected non-empty URL")
 	}
 	// URL should contain the advertise address and session ID.
-	if out.URL != "ws://192.168.1.10/ws/terminal/s1" {
+	if out.URL != "ws://192.168.1.10/ws/terminal/550e8400-e29b-41d4-a716-446655440002" {
 		t.Errorf("unexpected URL: %s", out.URL)
 	}
 }
 
 func TestDispatcher_GetTerminalEndpoint_WSSScheme(t *testing.T) {
 	store := session.NewStore()
-	store.Add(&session.Session{ID: "s2", State: session.StateStopped})
+	store.Add(&session.Session{ID: "550e8400-e29b-41d4-a716-446655440003", State: session.StateStopped})
 	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{})
 	d := NewDispatcher(mgr, "example.com", "wss")
 
-	result, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"s2"}`))
+	result, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"550e8400-e29b-41d4-a716-446655440003"}`))
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: code=%d msg=%s", rpcErr.Code, rpcErr.Message)
 	}
@@ -160,7 +160,7 @@ func TestDispatcher_GetTerminalEndpoint_WSSScheme(t *testing.T) {
 	if err := json.Unmarshal(result, &out); err != nil {
 		t.Fatalf("unmarshal result: %v", err)
 	}
-	if out.URL != "wss://example.com/ws/terminal/s2" {
+	if out.URL != "wss://example.com/ws/terminal/550e8400-e29b-41d4-a716-446655440003" {
 		t.Errorf("unexpected URL: %s", out.URL)
 	}
 }
@@ -183,6 +183,59 @@ func TestMapSessionError(t *testing.T) {
 		if rpcErr.Code != tt.expected {
 			t.Errorf("ErrorCode %d: expected RPC code %d, got %d", tt.code, tt.expected, rpcErr.Code)
 		}
+	}
+}
+
+func TestDispatcher_GetTerminalEndpoint_InvalidSessionID(t *testing.T) {
+	cases := []struct {
+		name      string
+		sessionID string
+	}{
+		{"dot_dot", "../evil"},
+		{"absolute_path", "/etc/passwd"},
+		{"percent_slash", "%2F"},
+		{"empty", ""},
+		{"whitespace", "   "},
+		{"uuid_plus_path", "550e8400-e29b-41d4-a716-446655440000/../../admin"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := newTestDispatcher()
+			params, _ := json.Marshal(map[string]string{"session_id": tc.sessionID})
+			_, rpcErr := d.GetTerminalEndpoint(params)
+			if rpcErr == nil {
+				t.Fatalf("expected rpcError for session_id %q, got nil", tc.sessionID)
+			}
+			if rpcErr.Code != rpcErrInvalidArgument {
+				t.Errorf("expected InvalidArgument (%d), got %d", rpcErrInvalidArgument, rpcErr.Code)
+			}
+		})
+	}
+}
+
+func TestDispatcher_GetTerminalEndpoint_URNFormNormalized(t *testing.T) {
+	// uuid.Parse accepts URN-prefixed UUIDs ("urn:uuid:...") — verify the URL
+	// uses the normalized canonical form (no colon in path), not the raw input.
+	const canonicalID = "550e8400-e29b-41d4-a716-446655440002"
+	store := session.NewStore()
+	store.Add(&session.Session{ID: canonicalID, State: session.StateStopped})
+	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{})
+	d := NewDispatcher(mgr, "192.168.1.10", "ws")
+
+	urnForm := "urn:uuid:" + canonicalID
+	params, _ := json.Marshal(map[string]string{"session_id": urnForm})
+	result, rpcErr := d.GetTerminalEndpoint(params)
+	if rpcErr != nil {
+		t.Fatalf("unexpected rpcError: code=%d msg=%s", rpcErr.Code, rpcErr.Message)
+	}
+	var out terminalEndpointResult
+	if err := json.Unmarshal(result, &out); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	want := "ws://192.168.1.10/ws/terminal/" + canonicalID
+	if out.URL != want {
+		t.Errorf("URL = %q, want %q", out.URL, want)
 	}
 }
 
