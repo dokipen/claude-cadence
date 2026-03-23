@@ -209,3 +209,30 @@ func TestCleaner_StartStop(t *testing.T) {
 	cleaner.Start()
 	cleaner.Stop() // must return promptly
 }
+
+func TestCleaner_SkipsCreatingSessionWithNoPTY(t *testing.T) {
+	// Session is in StateCreating with AgentPID 0 and no PTY entry — simulating
+	// the window between store.Add() and PTY creation inside manager.Create().
+	// The cleaner must not touch it; destroying it here would cause a nil pointer
+	// panic when Create() later calls mustGet().
+	ptySessions := map[string]bool{} // sess-race is NOT in PTY manager yet
+	alivePIDs := map[int]bool{}      // PID 0 is NOT alive
+
+	m := newTestManager(ptySessions, alivePIDs)
+	sess := &Session{
+		ID:        "sess-race",
+		Name:      "test-race",
+		State:     StateCreating,
+		AgentPID:  0,
+		CreatedAt: time.Now().Add(-1 * time.Minute),
+	}
+	m.store.Add(sess)
+
+	cleaner := NewCleaner(m, time.Hour, time.Minute)
+	cleaner.cleanup()
+
+	// Session must still be present — cleaner should have skipped it entirely.
+	if _, ok := m.store.Get("sess-race"); !ok {
+		t.Error("expected StateCreating session with no PTY and PID 0 to be skipped by cleaner, but it was destroyed")
+	}
+}

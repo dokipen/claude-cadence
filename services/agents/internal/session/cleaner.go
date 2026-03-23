@@ -69,6 +69,18 @@ func (c *Cleaner) cleanup() {
 	now := time.Now()
 
 	for _, sess := range sessions {
+		// StateCreating sessions with no PID yet are exclusively owned by the
+		// Create goroutine. The PTY does not exist until Create() calls
+		// pty.Create(), so reconcile() would incorrectly mark them Stopped and
+		// Destroy() would remove them from the store before Create() finishes.
+		// Skip them to close this race window.
+		//
+		// If AgentPID is non-zero the process was actually started; reconcile
+		// can still detect a dead process and clean it up normally.
+		if sess.State == StateCreating && sess.AgentPID == 0 {
+			continue
+		}
+
 		originalState := sess.State
 
 		// Reconcile updates sess in-place: Running/Creating → Stopped if process died.

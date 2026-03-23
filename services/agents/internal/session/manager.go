@@ -139,7 +139,11 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 				s.State = StateError
 				s.ErrorMessage = errMsg
 			})
-			return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
+			sess, getErr := m.mustGet(sessionID)
+			if getErr != nil {
+				return nil, fmt.Errorf("%s; %w", errMsg, getErr)
+			}
+			return sess, &Error{Code: ErrInternal, Message: errMsg}
 		}
 
 		secrets, err := m.vault.GetSecret(profile.VaultSecret)
@@ -149,7 +153,11 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 				s.State = StateError
 				s.ErrorMessage = errMsg
 			})
-			return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
+			sess, getErr := m.mustGet(sessionID)
+			if getErr != nil {
+				return nil, fmt.Errorf("%s; %w", errMsg, getErr)
+			}
+			return sess, &Error{Code: ErrInternal, Message: errMsg}
 		}
 		vaultSecrets = secrets
 
@@ -173,7 +181,11 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 				s.State = StateError
 				s.ErrorMessage = errMsg
 			})
-			return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
+			sess, getErr := m.mustGet(sessionID)
+			if getErr != nil {
+				return nil, fmt.Errorf("%s; %w", errMsg, getErr)
+			}
+			return sess, &Error{Code: ErrInternal, Message: errMsg}
 		}
 
 		cloneDir, err := m.git.EnsureClone(profile.Repo, gitCreds)
@@ -183,7 +195,11 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 				s.State = StateError
 				s.ErrorMessage = errMsg
 			})
-			return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
+			sess, getErr := m.mustGet(sessionID)
+			if getErr != nil {
+				return nil, fmt.Errorf("%s; %w", errMsg, getErr)
+			}
+			return sess, &Error{Code: ErrInternal, Message: errMsg}
 		}
 
 		workdir = cloneDir
@@ -200,7 +216,11 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 			s.State = StateError
 			s.ErrorMessage = errMsg
 		})
-		return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
+		retSess, getErr := m.mustGet(sessionID)
+		if getErr != nil {
+			return nil, fmt.Errorf("%s; %w", errMsg, getErr)
+		}
+		return retSess, &Error{Code: ErrInternal, Message: errMsg}
 	}
 
 	// Build env slice for PTY (format: "KEY=VALUE").
@@ -224,11 +244,16 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	// Request env vars (validate keys before creating session).
 	for k, v := range req.Env {
 		if !envKeyRe.MatchString(k) {
+			errMsg := fmt.Sprintf("invalid env var key: %q", k)
 			m.store.Update(sessionID, func(s *Session) {
 				s.State = StateError
-				s.ErrorMessage = fmt.Sprintf("invalid env var key: %q", k)
+				s.ErrorMessage = errMsg
 			})
-			return m.mustGet(sessionID), &Error{Code: ErrInvalidArgument, Message: fmt.Sprintf("invalid env var key: %q", k)}
+			retSess, getErr := m.mustGet(sessionID)
+			if getErr != nil {
+				return nil, fmt.Errorf("%s; %w", errMsg, getErr)
+			}
+			return retSess, &Error{Code: ErrInvalidArgument, Message: errMsg}
 		}
 		envSlice = append(envSlice, fmt.Sprintf("%s=%s", k, v))
 	}
@@ -248,7 +273,11 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 			s.State = StateError
 			s.ErrorMessage = errMsg
 		})
-		return m.mustGet(sessionID), &Error{Code: ErrInternal, Message: errMsg}
+		retSess, getErr := m.mustGet(sessionID)
+		if getErr != nil {
+			return nil, fmt.Errorf("%s; %w", errMsg, getErr)
+		}
+		return retSess, &Error{Code: ErrInternal, Message: errMsg}
 	}
 
 	// Get PID of the child process.
@@ -263,7 +292,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 			s.State = StateStopped
 			s.StoppedAt = time.Now()
 		})
-		return m.mustGet(sessionID), nil
+		return m.mustGet(sessionID)
 	}
 
 	slog.Debug("session command running", "session", sessionID, "name", req.SessionName, "pid", pid)
@@ -274,7 +303,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		s.WebsocketURL = ""
 	})
 
-	return m.mustGet(sessionID), nil
+	return m.mustGet(sessionID)
 }
 
 // Get returns a session by ID, reconciling state with PTY reality.
@@ -369,9 +398,12 @@ func (m *Manager) cleanup(sessionID, errMsg string) {
 	})
 }
 
-func (m *Manager) mustGet(id string) *Session {
-	sess, _ := m.store.Get(id)
-	return sess
+func (m *Manager) mustGet(id string) (*Session, error) {
+	sess, ok := m.store.Get(id)
+	if !ok {
+		return nil, fmt.Errorf("session %q not found after create: possible race with cleaner", id)
+	}
+	return sess, nil
 }
 
 type templateData struct {

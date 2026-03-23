@@ -222,6 +222,9 @@ type sessionsJSON struct {
 }
 
 func toSessionInfo(s *session.Session) sessionInfo {
+	if s == nil {
+		return sessionInfo{}
+	}
 	info := sessionInfo{
 		ID:              s.ID,
 		Name:            s.Name,
