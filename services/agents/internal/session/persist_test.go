@@ -576,6 +576,47 @@ func TestRestoreFromPersister_Nil(t *testing.T) {
 	}
 }
 
+func TestRestoreFromPersister_DuplicateName(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create two sessions with different IDs but the same name.
+	sess1 := makeSession(StateStopped)
+	sess2 := makeSession(StateStopped)
+	sess2.Name = sess1.Name // same name, different IDs
+
+	writeSessionFile(t, dir, sess1)
+	writeSessionFile(t, dir, sess2)
+
+	p, err := NewPersister(dir)
+	if err != nil {
+		t.Fatalf("NewPersister: %v", err)
+	}
+	defer p.Stop()
+
+	store := NewStore()
+	m := newManagerWithStore(store, map[string]bool{}, map[int]bool{})
+
+	// RestoreFromPersister must return nil — skipping a duplicate is a
+	// recovery behavior, not a fatal error.
+	if err := m.RestoreFromPersister(p); err != nil {
+		t.Fatalf("RestoreFromPersister returned unexpected error: %v", err)
+	}
+
+	// Exactly one session should be stored for this name — the duplicate
+	// must have been rejected, not silently inserted.
+	all := store.List()
+	if len(all) != 1 {
+		t.Errorf("store contains %d sessions, want 1 (duplicate name should be skipped)", len(all))
+	}
+
+	// The single stored session must be retrievable by name.
+	_, ok := store.GetByName(sess1.Name)
+	if !ok {
+		t.Errorf("GetByName(%q) returned false, want true", sess1.Name)
+	}
+}
+
+
 // --- Integration test: daemon restart simulation ---
 
 func TestDaemonRestart_Simulation(t *testing.T) {

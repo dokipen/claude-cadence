@@ -2,6 +2,7 @@ package session
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -525,7 +526,15 @@ func (m *Manager) RestoreFromPersister(p *Persister) error {
 			slog.Info("restored session", "id", sess.ID, "state", sess.State, "pid", sess.AgentPID)
 		}
 
-		m.store.Add(sess)
+		if err := m.store.TryAdd(sess, 0); err != nil {
+			var sessErr *Error
+			if errors.As(err, &sessErr) && sessErr.Code == ErrAlreadyExists {
+				slog.Warn("skipping duplicate session name on restore",
+					"id", sess.ID, "name", sess.Name)
+				continue
+			}
+			return fmt.Errorf("restore session %s: %w", sess.ID, err)
+		}
 	}
 
 	slog.Info("restored persisted sessions", "count", len(sessions))
