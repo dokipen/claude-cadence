@@ -39,12 +39,14 @@ type Store struct {
 	mu        sync.RWMutex
 	sessions  map[string]*Session
 	persister *Persister
+	names     map[string]string // name -> id secondary index
 }
 
 // NewStore creates a new empty Store without persistence.
 func NewStore() *Store {
 	return &Store{
 		sessions: make(map[string]*Session),
+		names:    make(map[string]string),
 	}
 }
 
@@ -52,6 +54,7 @@ func NewStore() *Store {
 func NewStoreWithPersister(p *Persister) *Store {
 	return &Store{
 		sessions:  make(map[string]*Session),
+		names:     make(map[string]string),
 		persister: p,
 	}
 }
@@ -61,6 +64,9 @@ func (s *Store) Add(session *Session) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sessions[session.ID] = session
+	if session.Name != "" {
+		s.names[session.Name] = session.ID
+	}
 	if s.persister != nil {
 		s.persister.queue(*session)
 	}
@@ -86,16 +92,17 @@ func (s *Store) TryAdd(session *Session, maxSessions int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if session.Name != "" {
-		for _, existing := range s.sessions {
-			if existing.Name == session.Name {
-				return &Error{Code: ErrAlreadyExists, Message: "session name already exists"}
-			}
+		if _, exists := s.names[session.Name]; exists {
+			return &Error{Code: ErrAlreadyExists, Message: "session name already exists"}
 		}
 	}
 	if maxSessions > 0 && len(s.sessions) >= maxSessions {
 		return &Error{Code: ErrResourceExhausted, Message: "max sessions reached"}
 	}
 	s.sessions[session.ID] = session
+	if session.Name != "" {
+		s.names[session.Name] = session.ID
+	}
 	return nil
 }
 
@@ -116,13 +123,13 @@ func (s *Store) Get(id string) (*Session, bool) {
 func (s *Store) GetByName(name string) (*Session, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	for _, sess := range s.sessions {
-		if sess.Name == name {
-			cp := *sess
-			return &cp, true
-		}
+	id, ok := s.names[name]
+	if !ok {
+		return nil, false
 	}
-	return nil, false
+	sess := s.sessions[id]
+	cp := *sess
+	return &cp, true
 }
 
 // List returns all sessions as copies.
@@ -146,7 +153,17 @@ func (s *Store) Update(id string, fn func(*Session)) bool {
 	if !ok {
 		return false
 	}
+	oldName := sess.Name
 	fn(sess)
+	// Sync name index if the name changed.
+	if sess.Name != oldName {
+		if oldName != "" {
+			delete(s.names, oldName)
+		}
+		if sess.Name != "" {
+			s.names[sess.Name] = id
+		}
+	}
 	if s.persister != nil {
 		s.persister.queue(*sess)
 	}
@@ -158,8 +175,12 @@ func (s *Store) Update(id string, fn func(*Session)) bool {
 func (s *Store) Delete(id string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, ok := s.sessions[id]; !ok {
+	sess, ok := s.sessions[id]
+	if !ok {
 		return false
+	}
+	if sess.Name != "" {
+		delete(s.names, sess.Name)
 	}
 	delete(s.sessions, id)
 	if s.persister != nil {
