@@ -526,6 +526,12 @@ func (m *Manager) RestoreFromPersister(p *Persister) error {
 			slog.Info("restored session", "id", sess.ID, "state", sess.State, "pid", sess.AgentPID)
 		}
 
+		if sess.Name != "" && !sessionNameRe.MatchString(sess.Name) {
+			slog.Warn("skipping session with invalid name on restore",
+				"id", sess.ID, "name", sess.Name)
+			continue
+		}
+
 		if err := m.store.TryAdd(sess, 0); err != nil {
 			var sessErr *Error
 			if errors.As(err, &sessErr) && sessErr.Code == ErrAlreadyExists {
