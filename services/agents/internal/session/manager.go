@@ -104,7 +104,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	// Auto-generate name if empty.
 	sessionName := req.SessionName
 	if sessionName == "" {
-		sessionName = fmt.Sprintf("%s-%d", req.AgentProfile, time.Now().UnixNano())
+		sessionName = fmt.Sprintf("%s-%s", req.AgentProfile, uuid.New().String())
 	}
 
 	// Validate name length.
