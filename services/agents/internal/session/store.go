@@ -66,14 +66,32 @@ func (s *Store) Add(session *Session) {
 	}
 }
 
-// TryAdd inserts a session into the store, enforcing an optional cap.
-// If maxSessions > 0 and the store already contains maxSessions entries,
-// TryAdd returns ErrResourceExhausted without inserting the session.
-// The check and insert are performed under a single write lock to prevent
-// TOCTOU races under concurrent creates.
+// TryAdd inserts a session into the store, enforcing an optional cap and
+// an optional name-uniqueness constraint.
+//
+// Name uniqueness: if session.Name is non-empty, TryAdd scans existing
+// sessions and returns ErrAlreadyExists if any session has the same name.
+// When session.Name is empty the uniqueness check is skipped — this is
+// intentional, to remain compatible with tests and legacy callers that do
+// not supply a name. Any caller that expects name-uniqueness enforcement
+// must provide a non-empty Name.
+//
+// Cap enforcement: if maxSessions > 0 and the store already contains
+// maxSessions entries, TryAdd returns ErrResourceExhausted without
+// inserting the session.
+//
+// Both the check and the insert are performed under a single write lock to
+// prevent TOCTOU races under concurrent creates.
 func (s *Store) TryAdd(session *Session, maxSessions int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if session.Name != "" {
+		for _, existing := range s.sessions {
+			if existing.Name == session.Name {
+				return &Error{Code: ErrAlreadyExists, Message: "session name already exists"}
+			}
+		}
+	}
 	if maxSessions > 0 && len(s.sessions) >= maxSessions {
 		return &Error{Code: ErrResourceExhausted, Message: "max sessions reached"}
 	}
