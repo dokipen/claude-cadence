@@ -153,14 +153,13 @@ func (c *Cleaner) cleanup() {
 			if age < effectiveTTL {
 				continue
 			}
-			slog.Info("destroying stale session",
+			slog.Info("destroying error session",
 				"id", sess.ID,
 				"name", sess.Name,
-				"state", sess.State,
 				"age", age.String(),
 			)
 			if err := c.manager.Destroy(sess.ID, true); err != nil {
-				slog.Warn("failed to destroy stale session",
+				slog.Warn("failed to destroy error session",
 					"id", sess.ID,
 					"error", err,
 				)

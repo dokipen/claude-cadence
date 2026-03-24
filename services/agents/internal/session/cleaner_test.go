@@ -326,21 +326,47 @@ func TestCleaner_ReapsErrorSessionPastErrorTTL(t *testing.T) {
 
 func TestCleaner_SkipsErrorSessionWithinErrorTTL(t *testing.T) {
 	// StateError session within errorSessionTTL — should NOT be destroyed.
+	// Use distinct TTLs: staleTTL=30m, errorTTL=2h, age=1h.
+	// Session is past staleTTL but within errorTTL, so it should be skipped.
 	m := newTestManager(nil, nil)
-	errorTTL := time.Hour
+	staleTTL := 30 * time.Minute
+	errorTTL := 2 * time.Hour
 	sess := &Session{
 		ID:        "sess-err-ttl-within",
 		Name:      "test-err-ttl-within",
 		State:     StateError,
-		CreatedAt: time.Now().Add(-30 * time.Minute),
+		CreatedAt: time.Now().Add(-time.Hour), // 1h old: past staleTTL but within errorTTL
 	}
 	m.store.Add(sess)
 
-	cleaner := NewCleaner(m, time.Hour, time.Minute, 0, errorTTL)
+	cleaner := NewCleaner(m, staleTTL, time.Minute, 0, errorTTL)
 	cleaner.cleanup()
 
 	if _, ok := m.store.Get("sess-err-ttl-within"); !ok {
 		t.Error("expected StateError session within errorSessionTTL to NOT be destroyed")
+	}
+}
+
+func TestCleaner_ReapsErrorSessionPastErrorTTLWithinStaleTTL(t *testing.T) {
+	// errorSessionTTL takes precedence over staleTTL:
+	// staleTTL=2h, errorTTL=30m, age=1h — past errorTTL but within staleTTL.
+	// Session should be destroyed because errorSessionTTL is the effective TTL.
+	m := newTestManager(nil, nil)
+	staleTTL := 2 * time.Hour
+	errorTTL := 30 * time.Minute
+	sess := &Session{
+		ID:        "sess-err-ttl-precedence",
+		Name:      "test-err-ttl-precedence",
+		State:     StateError,
+		CreatedAt: time.Now().Add(-time.Hour), // 1h old: past errorTTL, within staleTTL
+	}
+	m.store.Add(sess)
+
+	cleaner := NewCleaner(m, staleTTL, time.Minute, 0, errorTTL)
+	cleaner.cleanup()
+
+	if _, ok := m.store.Get("sess-err-ttl-precedence"); ok {
+		t.Error("expected StateError session past errorSessionTTL to be destroyed even though within staleTTL")
 	}
 }
 

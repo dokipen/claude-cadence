@@ -404,6 +404,27 @@ func TestCleanupConfig_Validate_NegativeCreatingSessionTTL(t *testing.T) {
 	}
 }
 
+func TestCleanupConfig_Validate_NegativeErrorSessionTTL(t *testing.T) {
+	cfg := &Config{
+		Auth:     AuthConfig{Mode: "none"},
+		Profiles: validProfiles(),
+		Cleanup: CleanupConfig{
+			StaleSessionTTL: time.Hour,
+			ReapInterval:    30 * time.Second,
+			ErrorSessionTTL: -1,
+		},
+		PTY: validPTY(),
+	}
+	err := validate(cfg)
+	if err == nil {
+		t.Fatal("expected error for negative ErrorSessionTTL")
+	}
+	want := "cleanup.error_session_ttl must be >= 0 (0 means disabled)"
+	if err.Error() != want {
+		t.Errorf("error = %q, want %q", err.Error(), want)
+	}
+}
+
 func TestPTYConfig_Validate_ZeroMaxSessions(t *testing.T) {
 	cfg := &Config{
 		Auth:     AuthConfig{Mode: "none"},
