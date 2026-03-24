@@ -79,7 +79,7 @@ func main() {
 	}
 
 	// Create components.
-	ptyManager := pty.NewPTYManager(pty.PTYConfig{BufferSize: cfg.PTY.BufferSize})
+	ptyManager := pty.NewPTYManager(pty.PTYConfig{BufferSize: cfg.PTY.BufferSize, MaxSessions: cfg.PTY.MaxSessions})
 	var store *session.Store
 	if persister != nil {
 		store = session.NewStoreWithPersister(persister)
@@ -99,7 +99,7 @@ func main() {
 		}
 		vaultClient = vc
 	}
-	manager := session.NewManager(store, ptyManager, gitClient, vaultClient, cfg.Profiles)
+	manager := session.NewManager(store, ptyManager, gitClient, vaultClient, cfg.Profiles, cfg.PTY.MaxSessions)
 
 	// Restore persisted sessions from disk before starting background workers.
 	if persister != nil {
@@ -110,7 +110,7 @@ func main() {
 	}
 
 	// Start background stale session cleaner.
-	cleaner := session.NewCleaner(manager, cfg.Cleanup.StaleSessionTTL, cfg.Cleanup.ReapInterval)
+	cleaner := session.NewCleaner(manager, cfg.Cleanup.StaleSessionTTL, cfg.Cleanup.ReapInterval, cfg.Cleanup.CreatingSessionTTL)
 	cleaner.Start()
 
 	// Start background idle input monitor.

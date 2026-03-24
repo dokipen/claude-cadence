@@ -35,7 +35,7 @@ func TestCleaner_ImmediateDestroyOnProcessExit(t *testing.T) {
 	}
 	m.store.Add(sess)
 
-	cleaner := NewCleaner(m, time.Hour, time.Minute)
+	cleaner := NewCleaner(m, time.Hour, time.Minute, 0)
 	cleaner.cleanup()
 
 	// Session should be gone from the store.
@@ -60,7 +60,7 @@ func TestCleaner_ImmediateDestroyOnPTYGone(t *testing.T) {
 	}
 	m.store.Add(sess)
 
-	cleaner := NewCleaner(m, time.Hour, time.Minute)
+	cleaner := NewCleaner(m, time.Hour, time.Minute, 0)
 	cleaner.cleanup()
 
 	if _, ok := m.store.Get("sess-2"); ok {
@@ -83,7 +83,7 @@ func TestCleaner_ImmediateDestroyOnCreatingProcessExit(t *testing.T) {
 	}
 	m.store.Add(sess)
 
-	cleaner := NewCleaner(m, time.Hour, time.Minute)
+	cleaner := NewCleaner(m, time.Hour, time.Minute, 0)
 	cleaner.cleanup()
 
 	if _, ok := m.store.Get("sess-3"); ok {
@@ -106,7 +106,7 @@ func TestCleaner_SkipsRunningSessionWithAliveProcess(t *testing.T) {
 	}
 	m.store.Add(sess)
 
-	cleaner := NewCleaner(m, time.Hour, time.Minute)
+	cleaner := NewCleaner(m, time.Hour, time.Minute, 0)
 	cleaner.cleanup()
 
 	if _, ok := m.store.Get("sess-4"); !ok {
@@ -128,7 +128,7 @@ func TestCleaner_DestroysStoppedSessionPastTTL(t *testing.T) {
 	}
 	m.store.Add(sess)
 
-	cleaner := NewCleaner(m, time.Hour, time.Minute)
+	cleaner := NewCleaner(m, time.Hour, time.Minute, 0)
 	cleaner.cleanup()
 
 	if _, ok := m.store.Get("sess-5"); ok {
@@ -148,7 +148,7 @@ func TestCleaner_SkipsStoppedSessionWithinTTL(t *testing.T) {
 	}
 	m.store.Add(sess)
 
-	cleaner := NewCleaner(m, time.Hour, time.Minute)
+	cleaner := NewCleaner(m, time.Hour, time.Minute, 0)
 	cleaner.cleanup()
 
 	if _, ok := m.store.Get("sess-6"); !ok {
@@ -168,7 +168,7 @@ func TestCleaner_DestroysErrorSessionPastTTL(t *testing.T) {
 	}
 	m.store.Add(sess)
 
-	cleaner := NewCleaner(m, time.Hour, time.Minute)
+	cleaner := NewCleaner(m, time.Hour, time.Minute, 0)
 	cleaner.cleanup()
 
 	if _, ok := m.store.Get("sess-7"); ok {
@@ -187,7 +187,7 @@ func TestCleaner_SkipsErrorSessionWithinTTL(t *testing.T) {
 	}
 	m.store.Add(sess)
 
-	cleaner := NewCleaner(m, time.Hour, time.Minute)
+	cleaner := NewCleaner(m, time.Hour, time.Minute, 0)
 	cleaner.cleanup()
 
 	if _, ok := m.store.Get("sess-8"); !ok {
@@ -198,14 +198,14 @@ func TestCleaner_SkipsErrorSessionWithinTTL(t *testing.T) {
 func TestCleaner_EmptyStoreNoOp(t *testing.T) {
 	// Empty store should not panic.
 	m := newTestManager(nil, nil)
-	cleaner := NewCleaner(m, time.Hour, time.Minute)
+	cleaner := NewCleaner(m, time.Hour, time.Minute, 0)
 	cleaner.cleanup() // must not panic
 }
 
 func TestCleaner_StartStop(t *testing.T) {
 	// Start and Stop should not block or panic.
 	m := newTestManager(nil, nil)
-	cleaner := NewCleaner(m, time.Hour, 10*time.Millisecond)
+	cleaner := NewCleaner(m, time.Hour, 10*time.Millisecond, 0)
 	cleaner.Start()
 	cleaner.Stop() // must return promptly
 }
@@ -228,11 +228,78 @@ func TestCleaner_SkipsCreatingSessionWithNoPTY(t *testing.T) {
 	}
 	m.store.Add(sess)
 
-	cleaner := NewCleaner(m, time.Hour, time.Minute)
+	cleaner := NewCleaner(m, time.Hour, time.Minute, 0)
 	cleaner.cleanup()
 
 	// Session must still be present — cleaner should have skipped it entirely.
 	if _, ok := m.store.Get("sess-race"); !ok {
 		t.Error("expected StateCreating session with no PTY and PID 0 to be skipped by cleaner, but it was destroyed")
+	}
+}
+
+func TestCleaner_SkipsCreatingSessionWithinTimeout(t *testing.T) {
+	// StateCreating + PID==0, session age < TTL — must NOT be reaped.
+	m := newTestManager(nil, nil)
+	sess := &Session{
+		ID:        "sess-ttl-within",
+		Name:      "test-ttl-within",
+		State:     StateCreating,
+		AgentPID:  0,
+		CreatedAt: time.Now().Add(-30 * time.Second), // 30s old
+	}
+	m.store.Add(sess)
+
+	ttl := time.Minute // 30s old < 1m TTL
+	cleaner := NewCleaner(m, time.Hour, time.Minute, ttl)
+	cleaner.cleanup()
+
+	if _, ok := m.store.Get("sess-ttl-within"); !ok {
+		t.Error("expected StateCreating session within TTL to NOT be reaped")
+	}
+}
+
+func TestCleaner_ReapsCreatingSessionPastTimeout(t *testing.T) {
+	// StateCreating + PID==0, session age > TTL — must be transitioned to StateError.
+	m := newTestManager(nil, nil)
+	ttl := time.Minute
+	sess := &Session{
+		ID:        "sess-ttl-past",
+		Name:      "test-ttl-past",
+		State:     StateCreating,
+		AgentPID:  0,
+		CreatedAt: time.Now().Add(-2 * ttl), // 2× TTL old — should be reaped
+	}
+	m.store.Add(sess)
+
+	cleaner := NewCleaner(m, time.Hour, time.Minute, ttl)
+	cleaner.cleanup()
+
+	// Session must still exist in store (transitioned, not deleted).
+	updated, ok := m.store.Get("sess-ttl-past")
+	if !ok {
+		t.Fatal("expected session to remain in store after reaping, but it was deleted")
+	}
+	if updated.State != StateError {
+		t.Errorf("session.State = %v, want StateError", updated.State)
+	}
+}
+
+func TestCleaner_SkipsCreatingSessionWhenTTLDisabled(t *testing.T) {
+	// StateCreating + PID==0, very old session, but creatingSessionTTL == 0 — must NOT be reaped.
+	m := newTestManager(nil, nil)
+	sess := &Session{
+		ID:        "sess-ttl-disabled",
+		Name:      "test-ttl-disabled",
+		State:     StateCreating,
+		AgentPID:  0,
+		CreatedAt: time.Now().Add(-24 * time.Hour), // very old
+	}
+	m.store.Add(sess)
+
+	cleaner := NewCleaner(m, time.Hour, time.Minute, 0) // 0 = TTL disabled
+	cleaner.cleanup()
+
+	if _, ok := m.store.Get("sess-ttl-disabled"); !ok {
+		t.Error("expected StateCreating session to NOT be reaped when creatingSessionTTL is disabled (0)")
 	}
 }

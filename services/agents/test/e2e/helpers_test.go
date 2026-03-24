@@ -25,7 +25,7 @@ func TestMain(m *testing.M) {
 	// Create components
 	ptyManager := pty.NewPTYManager(pty.PTYConfig{BufferSize: cfg.PTY.BufferSize})
 	store := session.NewStore()
-	testMgr = session.NewManager(store, ptyManager, nil, nil, cfg.Profiles)
+	testMgr = session.NewManager(store, ptyManager, nil, nil, cfg.Profiles, 0)
 
 	// Run tests
 	code := m.Run()

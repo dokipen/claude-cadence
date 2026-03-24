@@ -1,6 +1,7 @@
 package session
 
 import (
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -9,26 +10,29 @@ import (
 // Cleaner periodically destroys stale stopped sessions and immediately reaps
 // sessions whose agent process has exited.
 type Cleaner struct {
-	manager  *Manager
-	ttl      time.Duration
-	interval time.Duration
-	stopCh   chan struct{}
-	doneCh   chan struct{}
-	once     sync.Once
+	manager            *Manager
+	ttl                time.Duration
+	interval           time.Duration
+	creatingSessionTTL time.Duration
+	stopCh             chan struct{}
+	doneCh             chan struct{}
+	once               sync.Once
 }
 
 // NewCleaner creates a Cleaner that will:
 //   - Immediately destroy running/creating sessions whose agent process has exited
 //   - Destroy stopped/error sessions older than ttl
+//   - Reap StateCreating sessions with no PID that have exceeded creatingSessionTTL (0 = disabled)
 //
 // Both checks run on every interval tick.
-func NewCleaner(manager *Manager, ttl, interval time.Duration) *Cleaner {
+func NewCleaner(manager *Manager, ttl, interval, creatingSessionTTL time.Duration) *Cleaner {
 	return &Cleaner{
-		manager:  manager,
-		ttl:      ttl,
-		interval: interval,
-		stopCh:   make(chan struct{}),
-		doneCh:   make(chan struct{}),
+		manager:            manager,
+		ttl:                ttl,
+		interval:           interval,
+		creatingSessionTTL: creatingSessionTTL,
+		stopCh:             make(chan struct{}),
+		doneCh:             make(chan struct{}),
 	}
 }
 
@@ -78,6 +82,18 @@ func (c *Cleaner) cleanup() {
 		// If AgentPID is non-zero the process was actually started; reconcile
 		// can still detect a dead process and clean it up normally.
 		if sess.State == StateCreating && sess.AgentPID == 0 {
+			// Skip if no timeout configured OR session is within the timeout window.
+			if c.creatingSessionTTL == 0 || time.Since(sess.CreatedAt) < c.creatingSessionTTL {
+				continue
+			}
+			// Session stuck in StateCreating beyond timeout — transition to StateError.
+			age := time.Since(sess.CreatedAt).Round(time.Second)
+			errMsg := fmt.Sprintf("session stuck in creating state for %s; reaped by cleaner", age)
+			slog.Warn("reaping stuck StateCreating session", "id", sess.ID, "name", sess.Name, "age", age)
+			c.manager.store.Update(sess.ID, func(s *Session) {
+				s.State = StateError
+				s.ErrorMessage = errMsg
+			})
 			continue
 		}
 

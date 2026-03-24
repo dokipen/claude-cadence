@@ -59,7 +59,7 @@ func setupGitTestEnv(t *testing.T) *gitTestEnv {
 	ptyManager := pty.NewPTYManager(pty.PTYConfig{})
 	store := session.NewStore()
 	gitClient := git.NewClient(rootDir)
-	mgr := session.NewManager(store, ptyManager, gitClient, nil, profiles)
+	mgr := session.NewManager(store, ptyManager, gitClient, nil, profiles, 0)
 
 	return &gitTestEnv{
 		mgr:      mgr,

@@ -18,7 +18,7 @@ func newTestManager(t *testing.T) (*session.Manager, *session.Store) {
 	}
 	store := session.NewStore()
 	ptyManager := pty.NewPTYManager(pty.PTYConfig{BufferSize: 65536})
-	mgr := session.NewManager(store, ptyManager, nil, nil, profiles)
+	mgr := session.NewManager(store, ptyManager, nil, nil, profiles, 0)
 	return mgr, store
 }
 
@@ -63,7 +63,7 @@ func TestCleanup_StaleSessionDestroyed(t *testing.T) {
 	}
 
 	// Start a cleaner with a very short TTL (the session just stopped, so set TTL to 0).
-	cleaner := session.NewCleaner(mgr, 0, 100*time.Millisecond)
+	cleaner := session.NewCleaner(mgr, 0, 100*time.Millisecond, 0)
 	cleaner.Start()
 	defer cleaner.Stop()
 
@@ -97,7 +97,7 @@ func TestCleanup_RunningSessionNotDestroyed(t *testing.T) {
 	})
 
 	// Start a cleaner with zero TTL — should NOT destroy running sessions.
-	cleaner := session.NewCleaner(mgr, 0, 100*time.Millisecond)
+	cleaner := session.NewCleaner(mgr, 0, 100*time.Millisecond, 0)
 	cleaner.Start()
 
 	// Let the cleaner run a few cycles.

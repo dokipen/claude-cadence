@@ -120,7 +120,7 @@ func setupVaultTestEnv(t *testing.T, secrets map[string]map[string]interface{}, 
 	ptyManager := pty.NewPTYManager(pty.PTYConfig{})
 	store := session.NewStore()
 	gitClient := git.NewClient(rootDir)
-	mgr := session.NewManager(store, ptyManager, gitClient, vaultClient, profiles)
+	mgr := session.NewManager(store, ptyManager, gitClient, vaultClient, profiles, 0)
 
 	return &vaultTestEnv{
 		mgr:         mgr,

@@ -324,7 +324,7 @@ func newTestManagerWithPTY(t *testing.T) (*session.Manager, *pty.PTYManager) {
 	}
 	store := session.NewStore()
 	ptyMgr := pty.NewPTYManager(pty.PTYConfig{BufferSize: 65536})
-	mgr := session.NewManager(store, ptyMgr, nil, nil, profiles)
+	mgr := session.NewManager(store, ptyMgr, nil, nil, profiles, 0)
 	return mgr, ptyMgr
 }
 
@@ -445,7 +445,7 @@ func TestCleaner_PTYDestroyedAfterSessionStop(t *testing.T) {
 
 	// Start a cleaner with zero TTL and a short interval so it fires quickly.
 	cleanerInterval := 100 * time.Millisecond
-	cleaner := session.NewCleaner(mgr, 0, cleanerInterval)
+	cleaner := session.NewCleaner(mgr, 0, cleanerInterval, 0)
 	cleaner.Start()
 	defer cleaner.Stop()
 

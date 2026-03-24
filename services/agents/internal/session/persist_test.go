@@ -15,7 +15,7 @@ import (
 // newManagerWithStore creates a Manager with a specific store and injectable
 // PTY and process liveness functions, for tests that need to control the store.
 func newManagerWithStore(store *Store, ptySessions map[string]bool, alivePIDs map[int]bool) *Manager {
-	m := NewManager(store, nil, nil, nil, map[string]config.Profile{})
+	m := NewManager(store, nil, nil, nil, map[string]config.Profile{}, 0)
 	m.ptyHasSession = func(id string) bool { return ptySessions[id] }
 	m.processAlive = func(pid int) bool { return alivePIDs[pid] }
 	return m
