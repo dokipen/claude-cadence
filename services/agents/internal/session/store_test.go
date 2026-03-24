@@ -1,6 +1,7 @@
 package session
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 )
@@ -51,7 +52,7 @@ func TestStore_TryAdd_NoCap(t *testing.T) {
 	store := NewStore()
 	// maxSessions == 0 means unlimited.
 	for i := 0; i < 50; i++ {
-		sess := &Session{ID: "sess-" + string(rune('0'+i%10)) + string(rune('0'+i/10))}
+		sess := &Session{ID: fmt.Sprintf("sess-%d", i)}
 		if err := store.TryAdd(sess, 0); err != nil {
 			t.Fatalf("TryAdd() with maxSessions=0 returned error at i=%d: %v", i, err)
 		}

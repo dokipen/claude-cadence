@@ -273,16 +273,12 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	// Create PTY session. Use sessionID (UUID) as the PTY key so all
 	// subsequent lookups (Destroy, PID, Has) resolve to the same entry.
 	if err := m.pty.Create(sessionID, workdir, command, envSlice, 0, 0); err != nil {
-		errMsg := fmt.Sprintf("failed to create PTY session: %v", err)
-		m.store.Update(sessionID, func(s *Session) {
-			s.State = StateError
-			s.ErrorMessage = errMsg
-		})
-		retSess, getErr := m.mustGet(sessionID)
-		if getErr != nil {
-			return nil, fmt.Errorf("%s; %w", errMsg, getErr)
-		}
-		return retSess, &Error{Code: ErrInternal, Message: errMsg}
+		// Remove the session from the store immediately so the cap slot is
+		// freed. The session was never fully created, so leaving it as
+		// StateError would permanently occupy a cap slot (TTL=0 means no
+		// cleanup) and reintroduce the DoS surface.
+		m.store.Delete(sessionID)
+		return nil, &Error{Code: ErrInternal, Message: fmt.Sprintf("failed to create PTY session: %v", err)}
 	}
 
 	// Get PID of the child process.

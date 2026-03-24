@@ -99,11 +99,12 @@ type Config struct {
 
 // CleanupConfig holds stale session cleanup settings.
 type CleanupConfig struct {
-	StaleSessionTTL    time.Duration `yaml:"-"`
-	ReapInterval       time.Duration `yaml:"-"`
-	CreatingSessionTTL time.Duration `yaml:"creating_session_ttl"`
-	RawTTL             string        `yaml:"stale_session_ttl"`
-	RawReapInterval    string        `yaml:"session_reap_interval"`
+	StaleSessionTTL        time.Duration `yaml:"-"`
+	ReapInterval           time.Duration `yaml:"-"`
+	CreatingSessionTTL     time.Duration `yaml:"-"`
+	RawTTL                 string        `yaml:"stale_session_ttl"`
+	RawReapInterval        string        `yaml:"session_reap_interval"`
+	RawCreatingSessionTTL  string        `yaml:"creating_session_ttl"`
 }
 
 // TtydConfig holds ttyd websocket terminal settings.
@@ -210,6 +211,14 @@ func parseDurations(cfg *Config) error {
 			return fmt.Errorf("hub.reconnect_interval: %w", err)
 		}
 		cfg.Hub.ReconnectInterval = reconnect
+	}
+
+	if cfg.Cleanup.RawCreatingSessionTTL != "" {
+		creatingTTL, err := time.ParseDuration(cfg.Cleanup.RawCreatingSessionTTL)
+		if err != nil {
+			return fmt.Errorf("cleanup.creating_session_ttl: %w", err)
+		}
+		cfg.Cleanup.CreatingSessionTTL = creatingTTL
 	}
 
 	return nil
