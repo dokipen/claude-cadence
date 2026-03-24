@@ -77,11 +77,14 @@ If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, 
      --project $PROJECT \
      --title "Descriptive title" \
      --labels "BUG_LABEL_ID" \
-     --description "## Description
-   [Clear explanation of the work]
+     --description "$(cat <<'EOF'
+## Description
+[Clear explanation of the work]
 
-   ## Notes
-   [Any additional context]" \
+## Notes
+[Any additional context]
+EOF
+)" \
      --json
    ```
 
@@ -206,7 +209,10 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 
    **Issues API:**
    ```bash
-   issues comment add TICKET_ID --body "Starting work on issue #[N]. Branch: \`[BRANCH]\`" --json
+   issues comment add TICKET_ID --body "$(cat <<'EOF'
+Starting work on issue #[N]. Branch: `[BRANCH]`
+EOF
+)" --json
    ```
 
 ### Phase 1: Planning
@@ -233,9 +239,12 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 
    **Issues API:**
    ```bash
-   issues comment add TICKET_ID --body "## Plan
+   issues comment add TICKET_ID --body "$(cat <<'EOF'
+## Plan
 
-   [Task breakdown summary with approach and key decisions]" --json
+[Task breakdown summary with approach and key decisions]
+EOF
+)" --json
    ```
 
 ### Phase 1a: Design Review (for visual changes, if designer agent available)
@@ -283,11 +292,14 @@ For each task from the Phase 1 breakdown, delegate to an agent:
 
    **Issues API:**
    ```bash
-   issues comment add TICKET_ID --body "## Implementation complete
+   issues comment add TICKET_ID --body "$(cat <<'EOF'
+## Implementation complete
 
-   [Summary of changes made and files modified]
+[Summary of changes made and files modified]
 
-   Moving to verification." --json
+Moving to verification.
+EOF
+)" --json
    ```
 
 ### Phase 3: Pre-PR Verification
@@ -308,7 +320,10 @@ For each task from the Phase 1 breakdown, delegate to an agent:
 
    **Issues API:**
    ```bash
-   issues comment add TICKET_ID --body "PR created: #[PR-NUMBER] ([PR-URL])" --json
+   issues comment add TICKET_ID --body "$(cat <<'EOF'
+PR created: #[PR-NUMBER] ([PR-URL])
+EOF
+)" --json
    ```
 
 ### Phase 5: Code Review Gate
@@ -434,7 +449,10 @@ These services have hard host dependencies (the `claude` CLI, OS service integra
 
    **Issues API:**
    ```bash
-   issues comment add TICKET_ID --body "Issue completed. Merged via PR #[PR-NUMBER]." --json
+   issues comment add TICKET_ID --body "$(cat <<'EOF'
+Issue completed. Merged via PR #[PR-NUMBER].
+EOF
+)" --json
    ```
 7. Report completion
 
@@ -506,14 +524,17 @@ issues ticket create \
   --project $PROJECT \
   --title "[Phase title from plan]" \
   --labels "ENHANCEMENT_LABEL_ID" \
-  --description "## Description
+  --description "$(cat <<'EOF'
+## Description
 [Phase description from plan]
 
 ## Plan Reference
-Derived from the plan document: \`docs/plans/<slug>.md\` (plan ticket: #[NUMBER])
+Derived from the plan document: `docs/plans/<slug>.md` (plan ticket: #[NUMBER])
 
 ## Acceptance Criteria
-[Tasks and completion criteria from this phase]" \
+[Tasks and completion criteria from this phase]
+EOF
+)" \
   --json
 ```
 
@@ -604,14 +625,18 @@ gh issue close [NUMBER]
 
 **Issues API:**
 ```bash
-issues comment add TICKET_ID --body "## Planning complete
+issues comment add TICKET_ID --body "$(cat <<'EOF'
+## Planning complete
 
-Plan document: \`docs/plans/<slug>.md\`
+Plan document: `docs/plans/<slug>.md`
 
 Implementation tickets created:
-$(for each sub-ticket: "- #[SUB-NUMBER]: [title]")
+- #[SUB-NUMBER-1]: [title]
+- #[SUB-NUMBER-2]: [title]
 
-Closing plan ticket." --json
+Closing plan ticket.
+EOF
+)" --json
 issues ticket transition TICKET_ID --to CLOSED --json
 ```
 

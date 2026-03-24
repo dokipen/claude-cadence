@@ -59,8 +59,15 @@ The CLI can infer the project from the current directory's git remote origin URL
 issues ticket create \
   --title "Brief descriptive title" \
   --project PROJECT \
-  --description "Detailed description" \
-  --acceptance-criteria "- [ ] Criterion 1\n- [ ] Criterion 2" \
+  --description "$(cat <<'EOF'
+Detailed description
+EOF
+)" \
+  --acceptance-criteria "$(cat <<'EOF'
+- [ ] Criterion 1
+- [ ] Criterion 2
+EOF
+)" \
   --labels "bug,enhancement" \
   --assignee USER_ID \
   --points 5 \
@@ -103,8 +110,14 @@ issues ticket list -v --state REFINED     # verbose + filter
 
 ```bash
 issues ticket update TICKET_ID --title "New title" --json
-issues ticket update TICKET_ID --description "New description" --json
-issues ticket update TICKET_ID --acceptance-criteria "Updated criteria" --json
+issues ticket update TICKET_ID --description "$(cat <<'EOF'
+New description
+EOF
+)" --json
+issues ticket update TICKET_ID --acceptance-criteria "$(cat <<'EOF'
+Updated criteria
+EOF
+)" --json
 issues ticket update TICKET_ID --points 8 --json
 issues ticket update TICKET_ID --priority HIGH --json
 ```
@@ -196,16 +209,36 @@ Deletes a label entirely. If the label is attached to any tickets, it is automat
 
 ## Comments
 
+### Shell Safety: Always Use Heredocs for Body Content
+
+**IMPORTANT:** Always use `<<'EOF'` single-quoted heredocs for `--body`, `--description`, and `--acceptance-criteria` arguments. Inline double-quoted strings interpret backticks as shell command substitution, silently corrupting content that contains inline code spans or shell-like text.
+
+Use this pattern for all body content:
+```bash
+issues comment add TICKET_ID --body "$(cat <<'EOF'
+Comment text with `backticks` safe here.
+EOF
+)" --json
+```
+
+Single-quoted `<<'EOF'` prevents all variable expansion and command substitution inside the heredoc.
+
 ### Add a comment
 
 ```bash
-issues comment add TICKET_ID --body "Comment text" --json
+issues comment add TICKET_ID --body "$(cat <<'EOF'
+Comment text
+EOF
+)" --json
 ```
 
 ### Edit a comment
 
 ```bash
-issues comment edit COMMENT_ID --body "Updated text" --json
+issues comment edit COMMENT_ID --body "$(cat <<'EOF'
+Updated text
+EOF
+)" --json
 ```
 
 ### Delete a comment
