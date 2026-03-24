@@ -64,11 +64,14 @@ If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, 
    gh issue create \
      --title "Descriptive title" \
      --label "bug" \
-     --body "## Description
-   [Clear explanation of the work]
+     --body "$(cat <<'EOF'
+## Description
+[Clear explanation of the work]
 
-   ## Notes
-   [Any additional context]"
+## Notes
+[Any additional context]
+EOF
+)"
    ```
 
    **Issues API:**
@@ -161,7 +164,7 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 
 | Phase | Channel | Command (GitHub) | Command (Issues API) |
 |-------|---------|------------------|----------------------|
-| Pre-PR (research, planning, implementation) | Ticket | `gh issue comment [N] --body "..."` | `issues comment add TICKET_ID --body "..." --json` |
+| Pre-PR (research, planning, implementation) | Ticket | `gh issue comment [N] --body "$(cat <<'EOF'\n...\nEOF\n)"` | `issues comment add TICKET_ID --body "$(cat <<'EOF'\n...\nEOF\n)" --json` |
 | Post-PR (code review, QA feedback) | GitHub PR | `gh pr review [N] --comment --body "..."` | `gh pr review [N] --comment --body "..."` |
 
 **Markdown formatting:** All comments (issue and PR) are rendered as markdown. Use markdown links `[text](url)` instead of bare URLs, code fences for file names and code references, and bold/lists for structure.
@@ -508,14 +511,17 @@ For each phase in the plan document, create an implementation ticket:
 gh issue create \
   --title "[Phase title from plan]" \
   --label "enhancement" \
-  --body "## Description
+  --body "$(cat <<'EOF'
+## Description
 [Phase description from plan]
 
 ## Plan Reference
-Derived from the plan document: \`docs/plans/<slug>.md\` (plan ticket: #[NUMBER])
+Derived from the plan document: `docs/plans/<slug>.md` (plan ticket: #[NUMBER])
 
 ## Acceptance Criteria
-[Tasks and completion criteria from this phase]"
+[Tasks and completion criteria from this phase]
+EOF
+)"
 ```
 
 **Issues API:**
@@ -612,14 +618,18 @@ After all sub-tickets are created and the plan doc is committed:
 
 **GitHub (default):**
 ```bash
-gh issue comment [NUMBER] --body "## Planning complete
+gh issue comment [NUMBER] --body "$(cat <<'EOF'
+## Planning complete
 
-Plan document: \`docs/plans/<slug>.md\`
+Plan document: `docs/plans/<slug>.md`
 
 Implementation tickets created:
-$(for each sub-ticket: "- #[SUB-NUMBER]: [title]")
+- #[SUB-NUMBER-1]: [title]
+- #[SUB-NUMBER-2]: [title]
 
-Closing plan ticket."
+Closing plan ticket.
+EOF
+)"
 gh issue close [NUMBER]
 ```
 
