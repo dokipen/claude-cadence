@@ -14,6 +14,7 @@ type Cleaner struct {
 	ttl                time.Duration
 	interval           time.Duration
 	creatingSessionTTL time.Duration
+	errorSessionTTL    time.Duration
 	stopCh             chan struct{}
 	doneCh             chan struct{}
 	once               sync.Once
@@ -23,14 +24,16 @@ type Cleaner struct {
 //   - Immediately destroy running/creating sessions whose agent process has exited
 //   - Destroy stopped/error sessions older than ttl
 //   - Reap StateCreating sessions with no PID that have exceeded creatingSessionTTL (0 = disabled)
+//   - Destroy error sessions older than errorSessionTTL (0 = use stale TTL as fallback)
 //
 // Both checks run on every interval tick.
-func NewCleaner(manager *Manager, ttl, interval, creatingSessionTTL time.Duration) *Cleaner {
+func NewCleaner(manager *Manager, ttl, interval, creatingSessionTTL, errorSessionTTL time.Duration) *Cleaner {
 	return &Cleaner{
 		manager:            manager,
 		ttl:                ttl,
 		interval:           interval,
 		creatingSessionTTL: creatingSessionTTL,
+		errorSessionTTL:    errorSessionTTL,
 		stopCh:             make(chan struct{}),
 		doneCh:             make(chan struct{}),
 	}
@@ -123,9 +126,7 @@ func (c *Cleaner) cleanup() {
 				)
 			}
 
-		case sess.State == StateStopped || sess.State == StateError:
-			// Session was already stopped/errored before this tick.
-			// Reap it once it has been in this state longer than the TTL.
+		case sess.State == StateStopped:
 			age := ageOf(sess, now)
 			if age < c.ttl {
 				continue
@@ -138,6 +139,27 @@ func (c *Cleaner) cleanup() {
 			)
 			if err := c.manager.Destroy(sess.ID, true); err != nil {
 				slog.Warn("failed to destroy stale session",
+					"id", sess.ID,
+					"error", err,
+				)
+			}
+
+		case sess.State == StateError:
+			effectiveTTL := c.ttl
+			if c.errorSessionTTL > 0 {
+				effectiveTTL = c.errorSessionTTL
+			}
+			age := ageOf(sess, now)
+			if age < effectiveTTL {
+				continue
+			}
+			slog.Info("destroying error session",
+				"id", sess.ID,
+				"name", sess.Name,
+				"age", age.String(),
+			)
+			if err := c.manager.Destroy(sess.ID, true); err != nil {
+				slog.Warn("failed to destroy error session",
 					"id", sess.ID,
 					"error", err,
 				)
