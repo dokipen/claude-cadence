@@ -108,9 +108,11 @@ type CleanupConfig struct {
 	StaleSessionTTL        time.Duration `yaml:"-"`
 	ReapInterval           time.Duration `yaml:"-"`
 	CreatingSessionTTL     time.Duration `yaml:"-"`
+	ErrorSessionTTL        time.Duration `yaml:"-"`
 	RawTTL                 string        `yaml:"stale_session_ttl"`
 	RawReapInterval        string        `yaml:"session_reap_interval"`
 	RawCreatingSessionTTL  string        `yaml:"creating_session_ttl"`
+	RawErrorSessionTTL     string        `yaml:"error_session_ttl"`
 }
 
 // TtydConfig holds ttyd websocket terminal settings.
@@ -227,6 +229,14 @@ func parseDurations(cfg *Config) error {
 		cfg.Cleanup.CreatingSessionTTL = creatingTTL
 	}
 
+	if cfg.Cleanup.RawErrorSessionTTL != "" {
+		errorTTL, err := time.ParseDuration(cfg.Cleanup.RawErrorSessionTTL)
+		if err != nil {
+			return fmt.Errorf("cleanup.error_session_ttl: %w", err)
+		}
+		cfg.Cleanup.ErrorSessionTTL = errorTTL
+	}
+
 	return nil
 }
 
@@ -298,6 +308,9 @@ func validate(cfg *Config) error {
 	}
 	if cfg.Cleanup.CreatingSessionTTL < 0 {
 		return fmt.Errorf("cleanup.creating_session_ttl must be >= 0 (0 means disabled)")
+	}
+	if cfg.Cleanup.ErrorSessionTTL < 0 {
+		return fmt.Errorf("cleanup.error_session_ttl must be >= 0 (0 means disabled)")
 	}
 	switch cfg.PTY.WebSocketScheme {
 	case "ws", "wss":

@@ -445,7 +445,7 @@ func TestCleaner_PTYDestroyedAfterSessionStop(t *testing.T) {
 
 	// Start a cleaner with zero TTL and a short interval so it fires quickly.
 	cleanerInterval := 100 * time.Millisecond
-	cleaner := session.NewCleaner(mgr, 0, cleanerInterval, 0)
+	cleaner := session.NewCleaner(mgr, 0, cleanerInterval, 0, 0)
 	cleaner.Start()
 	defer cleaner.Stop()
 
