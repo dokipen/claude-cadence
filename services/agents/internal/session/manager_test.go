@@ -1,6 +1,7 @@
 package session
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
@@ -337,5 +338,93 @@ func TestCreate_ResourceExhausted(t *testing.T) {
 	sesErr, ok := err.(*Error)
 	if !ok || sesErr.Code != ErrResourceExhausted {
 		t.Errorf("Create() error = %v (%T), want *Error{Code: ErrResourceExhausted}", err, err)
+	}
+}
+
+func TestCreate_ConcurrentSameNameOnlyOneSucceeds(t *testing.T) {
+	profiles := map[string]config.Profile{
+		"default": {Command: "echo {{.SessionName}}"},
+	}
+
+	const goroutines = 10
+	m := newCreateTestManager(profiles)
+
+	var wg sync.WaitGroup
+	// passedUniquenessCheck counts goroutines that got past GetByName and TryAdd,
+	// evidenced by reaching the pty.Create call (which panics with nil pty).
+	// With the TOCTOU bug, multiple goroutines pass the uniqueness check before
+	// any of them inserts into the store.
+	type outcome int
+	const (
+		outcomeAlreadyExists outcome = iota
+		outcomePassedCheck            // passed uniqueness check (nil-pty panic or success)
+		outcomeOther
+	)
+	outcomes := make([]outcome, goroutines)
+
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		i := i
+		go func() {
+			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					// Panic from nil m.pty means the goroutine passed the
+					// name-uniqueness check and reached pty.Create: the race
+					// window was entered.
+					outcomes[i] = outcomePassedCheck
+				}
+			}()
+			_, err := m.Create(CreateRequest{
+				AgentProfile: "default",
+				SessionName:  "shared-name",
+			})
+			if err == nil {
+				outcomes[i] = outcomePassedCheck
+				return
+			}
+			sesErr, ok := err.(*Error)
+			if ok && sesErr.Code == ErrAlreadyExists {
+				outcomes[i] = outcomeAlreadyExists
+			} else {
+				outcomes[i] = outcomeOther
+			}
+		}()
+	}
+	wg.Wait()
+
+	var passedCheck, alreadyExists, other int
+	for _, o := range outcomes {
+		switch o {
+		case outcomePassedCheck:
+			passedCheck++
+		case outcomeAlreadyExists:
+			alreadyExists++
+		default:
+			other++
+		}
+	}
+
+	if other != 0 {
+		t.Errorf("unexpected outcomes: %d goroutines returned neither ErrAlreadyExists nor passed the check", other)
+	}
+	// With the TOCTOU bug, passedCheck > 1 because multiple goroutines both
+	// see the name as absent before either inserts.
+	if passedCheck != 1 {
+		t.Errorf("passedCheck = %d, want exactly 1 (TOCTOU: %d goroutines raced past the name-uniqueness check)", passedCheck, passedCheck)
+	}
+	if alreadyExists != goroutines-1 {
+		t.Errorf("alreadyExists = %d, want %d", alreadyExists, goroutines-1)
+	}
+
+	// Verify the store has exactly 1 session named "shared-name".
+	var namedCount int
+	for _, s := range m.store.List() {
+		if s.Name == "shared-name" {
+			namedCount++
+		}
+	}
+	if namedCount != 1 {
+		t.Errorf("store has %d sessions named \"shared-name\", want 1 (TOCTOU allowed duplicate inserts)", namedCount)
 	}
 }

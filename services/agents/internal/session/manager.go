@@ -112,11 +112,6 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		return nil, &Error{Code: ErrInvalidArgument, Message: "session name must be 200 characters or fewer"}
 	}
 
-	// Validate name is unique in store.
-	if _, exists := m.store.GetByName(sessionName); exists {
-		return nil, &Error{Code: ErrAlreadyExists, Message: fmt.Sprintf("session %q already exists", sessionName)}
-	}
-
 	// Validate baseRef before any state changes.
 	if err := git.ValidateRef(req.BaseRef); err != nil {
 		return nil, &Error{Code: ErrInvalidArgument, Message: fmt.Sprintf("invalid base_ref: %v", err)}

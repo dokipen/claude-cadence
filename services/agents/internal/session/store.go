@@ -74,6 +74,13 @@ func (s *Store) Add(session *Session) {
 func (s *Store) TryAdd(session *Session, maxSessions int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if session.Name != "" {
+		for _, existing := range s.sessions {
+			if existing.Name == session.Name {
+				return &Error{Code: ErrAlreadyExists, Message: "session name already exists"}
+			}
+		}
+	}
 	if maxSessions > 0 && len(s.sessions) >= maxSessions {
 		return &Error{Code: ErrResourceExhausted, Message: "max sessions reached"}
 	}
