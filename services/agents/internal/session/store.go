@@ -127,7 +127,10 @@ func (s *Store) GetByName(name string) (*Session, bool) {
 	if !ok {
 		return nil, false
 	}
-	sess := s.sessions[id]
+	sess, ok := s.sessions[id]
+	if !ok {
+		return nil, false
+	}
 	cp := *sess
 	return &cp, true
 }
