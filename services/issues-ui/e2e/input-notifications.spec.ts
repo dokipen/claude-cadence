@@ -113,15 +113,15 @@ test.describe("input notifications", () => {
     await expect(items.first()).toContainText("mac-mini-1");
   });
 
-  test("clicking notification navigates to ticket Agent tab", async ({ page }) => {
+  test("clicking notification navigates to agent terminal", async ({ page }) => {
     await page.goto("/");
     await page.getByTestId("notification-trigger").click();
     await expect(page.getByTestId("notification-dropdown")).toBeVisible();
 
-    // lead-109 should link to /ticket/109
+    // lead-109 on mac-mini-1 (session-1) should link to /agents with session param
     const item = page.getByTestId("notification-item").first();
     await item.click();
-    await expect(page).toHaveURL("/ticket/109");
+    await expect(page).toHaveURL("/agents?session=mac-mini-1:session-1");
   });
 
   test("badge clears when session resumes output", async ({ page }) => {

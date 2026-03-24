@@ -64,9 +64,28 @@ func main() {
 	// Warn about deprecated config fields.
 	cfg.LogDeprecations(slog.Default())
 
+	// Set up session persistence if configured.
+	var persister *session.Persister
+	if cfg.Session.Dir != "" {
+		p, err := session.NewPersister(cfg.Session.Dir)
+		if err != nil {
+			slog.Error("failed to create session persister", "error", err, "dir", cfg.Session.Dir)
+			os.Exit(1)
+		}
+		persister = p
+		slog.Info("session persistence enabled", "dir", cfg.Session.Dir)
+	} else {
+		slog.Info("session persistence disabled: set session.dir in config to enable")
+	}
+
 	// Create components.
 	ptyManager := pty.NewPTYManager(pty.PTYConfig{BufferSize: cfg.PTY.BufferSize, MaxSessions: cfg.PTY.MaxSessions})
-	store := session.NewStore()
+	var store *session.Store
+	if persister != nil {
+		store = session.NewStoreWithPersister(persister)
+	} else {
+		store = session.NewStore()
+	}
 	var gitClient *git.Client
 	if cfg.RootDir != "" {
 		gitClient = git.NewClient(cfg.RootDir)
@@ -81,6 +100,14 @@ func main() {
 		vaultClient = vc
 	}
 	manager := session.NewManager(store, ptyManager, gitClient, vaultClient, cfg.Profiles, cfg.PTY.MaxSessions)
+
+	// Restore persisted sessions from disk before starting background workers.
+	if persister != nil {
+		if err := manager.RestoreFromPersister(persister); err != nil {
+			slog.Warn("failed to restore persisted sessions", "error", err)
+			// non-fatal: continue without restored sessions
+		}
+	}
 
 	// Start background stale session cleaner.
 	cleaner := session.NewCleaner(manager, cfg.Cleanup.StaleSessionTTL, cfg.Cleanup.ReapInterval, cfg.Cleanup.CreatingSessionTTL)
@@ -151,5 +178,8 @@ func main() {
 	}
 	monitor.Stop()
 	cleaner.Stop()
+	if persister != nil {
+		persister.Stop()
+	}
 	slog.Info("agentd stopped")
 }

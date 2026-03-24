@@ -1,5 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type { Project } from "../types";
+import { useSearchParams } from "react-router";
 import { useAgents, normalizeRepo } from "../hooks/useAgents";
 import { SessionList, sessionKey } from "./SessionList";
 import { TilingLayout } from "./TilingLayout";
@@ -42,6 +43,35 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
       return next;
     });
   }, []);
+
+  const [searchParams] = useSearchParams();
+  const initialSessionKey = searchParams.get("session");
+  // useRef (not useState) so the one-shot guard doesn't trigger a re-render.
+  // The ref resets if the component is unmounted and remounted, which is fine —
+  // the URL param will still be present and the session will re-open.
+  const hasAutoOpened = useRef(false);
+
+  // Auto-open the session specified in the ?session= query param (set by notification links).
+  // Searches the unfiltered `sessions` prop intentionally: the notification link targets a
+  // specific session and should open it regardless of any active project filter.
+  useEffect(() => {
+    if (hasAutoOpened.current || !initialSessionKey) return;
+    const target = sessions.find((s) => sessionKey(s) === initialSessionKey);
+    if (!target) return;
+    hasAutoOpened.current = true;
+    setOpenWindows((prev) => {
+      if (prev.some((w) => w.key === initialSessionKey)) return prev;
+      return [
+        ...prev,
+        {
+          key: initialSessionKey,
+          session: target.session,
+          agentName: target.agentName,
+          projectId: selectedProject?.id,
+        },
+      ];
+    });
+  }, [initialSessionKey, sessions, selectedProject?.id]);
 
   const openKeys = new Set(openWindows.map((w) => w.key));
 
