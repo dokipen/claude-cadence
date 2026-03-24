@@ -144,6 +144,78 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Test 5 — Command inside fenced code block: extracts command not fence marker
+# ---------------------------------------------------------------------------
+echo "--- Test 5: Command inside fenced code block: extracts command not fence marker ---"
+
+TMPDIR_T5="$(mktemp -d)"
+CLEANUP_DIRS+=("$TMPDIR_T5")
+CLAUDE_T5="$TMPDIR_T5/CLAUDE.md"
+
+cat > "$CLAUDE_T5" << 'EOF'
+# Project
+
+## Verification
+```bash
+(cd subdir && make test)
+```
+EOF
+
+result_t5="$(run_awk "$CLAUDE_T5")"
+if [[ "$result_t5" = "(cd subdir && make test)" ]]; then
+    ok "Test5: correctly extracts command from fenced code block under ## Verification"
+else
+    fail "Test5: expected '(cd subdir && make test)', got '$result_t5'"
+fi
+
+# ---------------------------------------------------------------------------
+# Test 6 — Subshell command without fence: extracts subshell command directly
+# ---------------------------------------------------------------------------
+echo "--- Test 6: Subshell command without fence: extracts subshell command directly ---"
+
+TMPDIR_T6="$(mktemp -d)"
+CLEANUP_DIRS+=("$TMPDIR_T6")
+CLAUDE_T6="$TMPDIR_T6/CLAUDE.md"
+
+cat > "$CLAUDE_T6" << 'EOF'
+# Project
+
+## Verification
+(cd subdir && make test)
+EOF
+
+result_t6="$(run_awk "$CLAUDE_T6")"
+if [[ "$result_t6" = "(cd subdir && make test)" ]]; then
+    ok "Test6: correctly extracts subshell command without fence"
+else
+    fail "Test6: expected '(cd subdir && make test)', got '$result_t6'"
+fi
+
+# ---------------------------------------------------------------------------
+# Test 7 — Empty fenced block: returns empty VERIFY_CMD (not closing fence)
+# ---------------------------------------------------------------------------
+echo "--- Test 7: Empty fenced block: returns empty VERIFY_CMD ---"
+
+TMPDIR_T7="$(mktemp -d)"
+CLEANUP_DIRS+=("$TMPDIR_T7")
+CLAUDE_T7="$TMPDIR_T7/CLAUDE.md"
+
+cat > "$CLAUDE_T7" << 'EOF'
+# Project
+
+## Verification
+```bash
+```
+EOF
+
+result_t7="$(run_awk "$CLAUDE_T7")"
+if [[ -z "$result_t7" ]]; then
+    ok "Test7: empty fenced block returns empty VERIFY_CMD (not closing fence marker)"
+else
+    fail "Test7: expected empty string, got '$result_t7'"
+fi
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
