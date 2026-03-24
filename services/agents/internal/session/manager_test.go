@@ -350,10 +350,10 @@ func TestCreate_ConcurrentSameNameOnlyOneSucceeds(t *testing.T) {
 	m := newCreateTestManager(profiles)
 
 	var wg sync.WaitGroup
-	// passedUniquenessCheck counts goroutines that got past GetByName and TryAdd,
-	// evidenced by reaching the pty.Create call (which panics with nil pty).
-	// With the TOCTOU bug, multiple goroutines pass the uniqueness check before
-	// any of them inserts into the store.
+	// passedUniquenessCheck counts goroutines that got past the atomic TryAdd
+	// uniqueness check, evidenced by reaching the pty.Create call (which panics
+	// with nil pty). With the TOCTOU bug, multiple goroutines pass the
+	// uniqueness check before any of them inserts into the store.
 	type outcome int
 	const (
 		outcomeAlreadyExists outcome = iota
@@ -369,9 +369,10 @@ func TestCreate_ConcurrentSameNameOnlyOneSucceeds(t *testing.T) {
 			defer wg.Done()
 			defer func() {
 				if r := recover(); r != nil {
-					// Panic from nil m.pty means the goroutine passed the
-					// name-uniqueness check and reached pty.Create: the race
-					// window was entered.
+					// The nil PTY causes a panic here, which we recover from as
+					// evidence the goroutine passed the uniqueness gate. This is
+					// intentional — we only need to verify the gate behavior,
+					// not full session creation.
 					outcomes[i] = outcomePassedCheck
 				}
 			}()
@@ -418,6 +419,9 @@ func TestCreate_ConcurrentSameNameOnlyOneSucceeds(t *testing.T) {
 	}
 
 	// Verify the store has exactly 1 session named "shared-name".
+	// Sessions persist here because the nil-PTY panic unwinds the goroutine
+	// before any cleanup or delete runs — so the winning goroutine's session
+	// remains in the store after the test completes.
 	var namedCount int
 	for _, s := range m.store.List() {
 		if s.Name == "shared-name" {
