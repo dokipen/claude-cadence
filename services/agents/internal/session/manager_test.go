@@ -432,3 +432,99 @@ func TestCreate_ConcurrentSameNameOnlyOneSucceeds(t *testing.T) {
 		t.Errorf("store has %d sessions named \"shared-name\", want 1 (TOCTOU allowed duplicate inserts)", namedCount)
 	}
 }
+
+func TestCreate_ConcurrentAutoNameNeverCollides(t *testing.T) {
+	profiles := map[string]config.Profile{
+		"default": {Command: "echo {{.SessionName}}"},
+	}
+
+	const goroutines = 10
+	m := newCreateTestManager(profiles)
+
+	var wg sync.WaitGroup
+	// gate is closed once all goroutines are ready, ensuring maximum concurrency
+	// when auto-generating session names.
+	gate := make(chan struct{})
+
+	type outcome int
+	const (
+		outcomePassedCheck   outcome = iota // passed uniqueness check (nil-pty panic or success)
+		outcomeAlreadyExists                // got ErrAlreadyExists — means a name collision
+		outcomeOther
+	)
+	outcomes := make([]outcome, goroutines)
+
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		i := i
+		go func() {
+			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					// The nil PTY causes a panic after the store uniqueness gate,
+					// which we recover from as evidence the goroutine passed the
+					// gate with its auto-generated name.
+					outcomes[i] = outcomePassedCheck
+				}
+			}()
+			// Wait for all goroutines to be ready before proceeding.
+			<-gate
+			_, err := m.Create(CreateRequest{
+				AgentProfile: "default",
+				// SessionName intentionally empty — triggers auto-generation.
+			})
+			if err == nil {
+				outcomes[i] = outcomePassedCheck
+				return
+			}
+			sesErr, ok := err.(*Error)
+			if ok && sesErr.Code == ErrAlreadyExists {
+				outcomes[i] = outcomeAlreadyExists
+			} else {
+				outcomes[i] = outcomeOther
+			}
+		}()
+	}
+
+	// Release all goroutines simultaneously.
+	close(gate)
+	wg.Wait()
+
+	var passedCheck, alreadyExists, other int
+	for _, o := range outcomes {
+		switch o {
+		case outcomePassedCheck:
+			passedCheck++
+		case outcomeAlreadyExists:
+			alreadyExists++
+		default:
+			other++
+		}
+	}
+
+	if other != 0 {
+		t.Errorf("unexpected outcomes: %d goroutines returned an unexpected error (neither ErrAlreadyExists nor passed the check)", other)
+	}
+	// Auto-generated names must never collide: every goroutine should pass the
+	// uniqueness check. Any ErrAlreadyExists indicates two goroutines received
+	// identical auto-generated names.
+	if alreadyExists != 0 {
+		t.Errorf("alreadyExists = %d, want 0: auto-generated session names collided under concurrency", alreadyExists)
+	}
+	if passedCheck != goroutines {
+		t.Errorf("passedCheck = %d, want %d: not all goroutines passed the uniqueness gate", passedCheck, goroutines)
+	}
+
+	// Verify the store contains exactly 10 distinct session names.
+	sessions := m.store.List()
+	if len(sessions) != goroutines {
+		t.Errorf("store has %d sessions, want %d", len(sessions), goroutines)
+	}
+	seen := make(map[string]bool, goroutines)
+	for _, s := range sessions {
+		if seen[s.Name] {
+			t.Errorf("duplicate session name %q found in store", s.Name)
+		}
+		seen[s.Name] = true
+	}
+}
