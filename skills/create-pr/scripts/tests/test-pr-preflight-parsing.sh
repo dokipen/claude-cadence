@@ -192,6 +192,30 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Test 7 — Empty fenced block: returns empty VERIFY_CMD (not closing fence)
+# ---------------------------------------------------------------------------
+echo "--- Test 7: Empty fenced block: returns empty VERIFY_CMD ---"
+
+TMPDIR_T7="$(mktemp -d)"
+CLEANUP_DIRS+=("$TMPDIR_T7")
+CLAUDE_T7="$TMPDIR_T7/CLAUDE.md"
+
+cat > "$CLAUDE_T7" << 'EOF'
+# Project
+
+## Verification
+```bash
+```
+EOF
+
+result_t7="$(run_awk "$CLAUDE_T7")"
+if [[ -z "$result_t7" ]]; then
+    ok "Test7: empty fenced block returns empty VERIFY_CMD (not closing fence marker)"
+else
+    fail "Test7: expected empty string, got '$result_t7'"
+fi
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
