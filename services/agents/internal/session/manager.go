@@ -96,7 +96,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	}
 
 	// Validate name characters (URL path-safe) for caller-supplied names.
-	// Auto-generated names ("<profile>-<nanoseconds>") are always URL-path-safe.
+	// Auto-generated names ("<profile>-<uuid>") are always URL-path-safe.
 	if req.SessionName != "" && !sessionNameRe.MatchString(req.SessionName) {
 		return nil, &Error{Code: ErrInvalidArgument, Message: "session name contains invalid characters: must match [a-zA-Z0-9._~-]+"}
 	}
