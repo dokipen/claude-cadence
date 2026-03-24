@@ -620,7 +620,7 @@ func TestRestoreFromPersister_DuplicateName(t *testing.T) {
 func TestRestoreFromPersister_InvalidName(t *testing.T) {
 	dir := t.TempDir()
 
-	// Session with an invalid name (contains a control character and is oversized).
+	// Session with an invalid name (contains a space and control character).
 	invalid := makeSession(StateStopped)
 	invalid.Name = "bad name\x01"
 
