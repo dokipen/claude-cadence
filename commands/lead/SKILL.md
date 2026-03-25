@@ -713,10 +713,10 @@ issues ticket transition TICKET_ID --to CLOSED --json
 
 ### Human Activity Phase 2: Interactive Step Confirmation
 
-After presenting the full walkthrough, guide the human through each step **one at a time**:
+After presenting the full walkthrough, guide the human through each step **one at a time** — present a single step, wait for confirmation, then move to the next:
 
-1. Present the first step (or next uncompleted step).
-2. **Wait for the human to confirm completion** before proceeding to the next step. Ask explicitly: *"Let me know when you've completed this step."*
+1. Present the current step (starting with step 1).
+2. **Wait for the human to confirm completion** before presenting the next step. Ask explicitly: *"Let me know when you've completed this step."*
 3. If the human reports an issue or blocker on a step:
    - Offer clarification or alternative approaches if possible
    - If the step is truly blocked, help the human document what's needed and pause the workflow
@@ -730,7 +730,7 @@ Once all steps are confirmed complete:
 
    **GitHub (default):**
    ```bash
-   gh issue comment [N] --body "$(cat <<'EOF'
+   gh issue comment [NUMBER] --body "$(cat <<'EOF'
 ## Walkthrough complete
 
 All manual steps confirmed complete by the human operator.
@@ -753,6 +753,11 @@ EOF
    - **Issues API:** `issues ticket transition TICKET_ID --to CLOSED --json`
 
 3. Report completion to the user.
+
+### Human Activity Phase 4: Cleanup
+
+1. Return to default branch and pull latest (skip if `WORKTREE_PREEXISTING`)
+2. Clean up worktree using the `project-ops` skill's `cleanup-worktree.sh` script (skip if `WORKTREE_PREEXISTING`)
 
 ---
 
