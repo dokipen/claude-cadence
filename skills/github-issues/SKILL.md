@@ -95,7 +95,10 @@ gh issue edit 42 --add-label "priority:medium"
 ## Commenting
 
 ```bash
-gh issue comment 42 --body "Comment text"
+gh issue comment 42 --body "$(cat <<'EOF'
+Comment text
+EOF
+)"
 gh issue comment 42 --body "$(cat <<'EOF'
 ## Progress Update
 - [x] Completed initial research
@@ -130,18 +133,27 @@ Use closing keywords in PR descriptions:
 ```bash
 # Claim issue
 gh issue edit 42 --add-label "in-progress"
-gh issue comment 42 --body "Starting work on this issue."
+gh issue comment 42 --body "$(cat <<'EOF'
+Starting work on this issue.
+EOF
+)"
 
 # Progress update
-gh issue comment 42 --body "## Progress Update
+gh issue comment 42 --body "$(cat <<'EOF'
+## Progress Update
 **Status:** In Progress
 **Completed:** ...
-**Blockers:** None"
+**Blockers:** None
+EOF
+)"
 
 # Mark complete
-gh issue comment 42 --body "## Work Complete
+gh issue comment 42 --body "$(cat <<'EOF'
+## Work Complete
 **Summary:** ...
-**PR:** #50"
+**PR:** #50
+EOF
+)"
 ```
 
 ## JSON Output & Filtering
