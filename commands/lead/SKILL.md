@@ -105,7 +105,9 @@ EOF
    ```
    If the `state` field is not `REFINED` (or later), run `/refine [NUMBER]` before proceeding.
 
-5. **Detect ticket type**: Check if the ticket has a `plan` label.
+5. **Detect ticket type**: Check if the ticket has a special workflow label.
+
+   **Check for `plan` label:**
 
    **GitHub (default):**
    ```bash
@@ -120,6 +122,22 @@ EOF
    Returns `true` if the `plan` label is present.
 
    If `true`, skip to **[Plan Workflow](#plan-workflow)** after completing step 7 (claim). The standard implementation phases do not apply.
+
+   **Check for `human-activity` label:**
+
+   **GitHub (default):**
+   ```bash
+   gh issue view [NUMBER] --json labels --jq '[.labels[].name] | contains(["human-activity"])'
+   ```
+   Returns `true` if the `human-activity` label is present.
+
+   **Issues API:** (reuse the JSON already fetched in step 2):
+   ```bash
+   echo "$TICKET_JSON" | jq '[.labels[].name] | contains(["human-activity"])'
+   ```
+   Returns `true` if the `human-activity` label is present.
+
+   If `true`, skip to **[Human Activity Workflow](#human-activity-workflow)** after completing step 7 (claim). The standard implementation phases do not apply.
 
 6. **Check if work is already complete**:
    Before claiming, delegate to an appropriate specialist to verify the work isn't already done.
@@ -151,6 +169,7 @@ EOF
      ```
 
    **If the ticket has the `plan` label**, proceed to **[Plan Workflow](#plan-workflow)** instead of the standard phases.
+   **If the ticket has the `human-activity` label**, proceed to **[Human Activity Workflow](#human-activity-workflow)** instead of the standard phases.
 
 ---
 
@@ -655,6 +674,90 @@ issues ticket transition TICKET_ID --to CLOSED --json
 1. Return to default branch and pull latest (skip if `WORKTREE_PREEXISTING`)
 2. Clean up worktree using the `project-ops` skill's `cleanup-worktree.sh` script (skip if `WORKTREE_PREEXISTING`)
 3. Report completion with a summary of the plan doc path and all created tickets
+
+---
+
+## Human Activity Workflow
+
+> This section applies **only** when the ticket has the `human-activity` label. The standard implementation phases (2–7) are skipped entirely. No source code is changed — the lead presents a step-by-step walkthrough and guides the human through completing the required manual tasks.
+
+### Human Activity Phase 1: Build the Walkthrough
+
+1. Read the full ticket description and acceptance criteria to identify all required manual steps.
+2. Present the walkthrough to the user with a clear header and numbered steps. For each step, include:
+   - **What to do**: A clear, actionable instruction
+   - **Why**: The purpose or outcome of the step
+   - **How to verify**: How the human knows the step is complete (if applicable)
+
+   Example format:
+   ```
+   ## Walkthrough: [Ticket Title]
+
+   This ticket requires manual steps that cannot be automated. Walk through each step below and confirm completion before moving to the next.
+
+   ---
+
+   ### Step 1: [Step title]
+
+   **What to do:** [Clear instruction]
+
+   **Why:** [Purpose of this step]
+
+   **How to verify:** [Verification signal, if applicable]
+
+   ---
+
+   ### Step 2: [Step title]
+   ...
+   ```
+
+### Human Activity Phase 2: Interactive Step Confirmation
+
+After presenting the full walkthrough, guide the human through each step **one at a time** — present a single step, wait for confirmation, then move to the next:
+
+1. Present the current step (starting with step 1).
+2. **Wait for the human to confirm completion** before presenting the next step. Ask explicitly: *"Let me know when you've completed this step."*
+3. If the human reports an issue or blocker on a step:
+   - Offer clarification or alternative approaches if possible
+   - If the step is truly blocked, help the human document what's needed and pause the workflow
+4. Repeat until all steps are confirmed complete.
+
+### Human Activity Phase 3: Close the Ticket
+
+Once all steps are confirmed complete:
+
+1. Post a completion summary to the ticket:
+
+   **GitHub (default):**
+   ```bash
+   gh issue comment [NUMBER] --body "$(cat <<'EOF'
+## Walkthrough complete
+
+All manual steps confirmed complete by the human operator.
+EOF
+)"
+   ```
+
+   **Issues API:**
+   ```bash
+   issues comment add TICKET_ID --body "$(cat <<'EOF'
+## Walkthrough complete
+
+All manual steps confirmed complete by the human operator.
+EOF
+)" --json
+   ```
+
+2. Close the ticket:
+   - **GitHub (default):** `gh issue close [NUMBER]`
+   - **Issues API:** `issues ticket transition TICKET_ID --to CLOSED --json`
+
+3. Report completion to the user.
+
+### Human Activity Phase 4: Cleanup
+
+1. Return to default branch and pull latest (skip if `WORKTREE_PREEXISTING`)
+2. Clean up worktree using the `project-ops` skill's `cleanup-worktree.sh` script (skip if `WORKTREE_PREEXISTING`)
 
 ---
 
