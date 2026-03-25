@@ -39,11 +39,11 @@ When `provider: github` (or no config), use `gh` CLI commands. Refer to the `git
 |-----------|---------|
 | List tickets | `gh issue list [filters]` |
 | View ticket | `gh issue view N` |
-| Create ticket | `gh issue create --title "..." --body "..."` |
+| Create ticket | `gh issue create --title "..." --body "$(cat <<'EOF' ... EOF)"` |
 | Update ticket | `gh issue edit N [options]` |
 | Add label | `gh issue edit N --add-label "name"` |
 | Remove label | `gh issue edit N --remove-label "name"` |
-| Comment | `gh issue comment N --body "..."` |
+| Comment | `gh issue comment N --body "$(cat <<'EOF' ... EOF)"` |
 | Close ticket | `gh issue close N` |
 | Check blockers | `gh api repos/{owner}/{repo}/issues/N/dependencies/blocked_by` |
 | Check labels | `gh issue view N --json labels --jq '.labels[].name'` |
@@ -65,7 +65,7 @@ When `provider: issues-api`, use the `issues` CLI. Refer to the `issues-api` ski
 | Update ticket | `issues ticket update TICKET_ID [options] --json` |
 | Add label | `issues label add TICKET_ID --label LABEL_ID --json` |
 | Remove label | `issues label remove TICKET_ID --label LABEL_ID --json` |
-| Comment | `issues comment add TICKET_ID --body "..." --json` |
+| Comment | `issues comment add TICKET_ID --body "$(cat <<'EOF' ... EOF)" --json` |
 | Close ticket | `issues ticket transition TICKET_ID --to CLOSED --json` |
 | Check blockers | `issues ticket view N --project $PROJECT --json` (read `blockedBy` array) |
 | Check state | `issues ticket view N --project $PROJECT --json` (read `state` field) |
