@@ -209,6 +209,9 @@ func TestStore_Update_RenameToExistingNameReturnsError(t *testing.T) {
 	if !ok2 || sesErr.Code != ErrAlreadyExists {
 		t.Errorf("Update() error = %v, want *Error{Code: ErrAlreadyExists}", err)
 	}
+	if sesErr != nil && sesErr.Message != `session name "beta" is already in use` {
+		t.Errorf("Update() error message = %q, want %q", sesErr.Message, `session name "beta" is already in use`)
+	}
 	if ok {
 		t.Error("Update() = true on name collision, want false")
 	}
