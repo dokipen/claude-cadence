@@ -533,8 +533,9 @@ func (m *Manager) RestoreFromPersister(p *Persister) error {
 			continue
 		}
 		if len(sess.Name) > maxSessionNameLen {
+			truncated := sess.Name[:64] + "..."
 			slog.Warn("skipping session with name exceeding length limit on restore",
-				"id", sess.ID, "name", sess.Name)
+				"id", sess.ID, "name", truncated)
 			continue
 		}
 
