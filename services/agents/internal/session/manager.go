@@ -71,8 +71,9 @@ type CreateRequest struct {
 }
 
 const (
-	maxExtraArgs   = 64
-	maxExtraArgLen = 4096
+	maxExtraArgs      = 64
+	maxExtraArgLen    = 4096
+	maxSessionNameLen = 255
 )
 
 // Create validates inputs, creates PTY session, starts command, returns Session.
@@ -109,8 +110,8 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	}
 
 	// Validate name length.
-	if len(sessionName) > 200 {
-		return nil, &Error{Code: ErrInvalidArgument, Message: "session name must be 200 characters or fewer"}
+	if len(sessionName) > maxSessionNameLen {
+		return nil, &Error{Code: ErrInvalidArgument, Message: "session name must be 255 characters or fewer"}
 	}
 
 	// Validate baseRef before any state changes.
@@ -528,6 +529,11 @@ func (m *Manager) RestoreFromPersister(p *Persister) error {
 
 		if sess.Name != "" && !sessionNameRe.MatchString(sess.Name) {
 			slog.Warn("skipping session with invalid name on restore",
+				"id", sess.ID, "name", sess.Name)
+			continue
+		}
+		if len(sess.Name) > maxSessionNameLen {
+			slog.Warn("skipping session with name exceeding length limit on restore",
 				"id", sess.ID, "name", sess.Name)
 			continue
 		}

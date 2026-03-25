@@ -1,6 +1,7 @@
 package session
 
 import (
+	"strings"
 	"sync"
 	"testing"
 
@@ -93,6 +94,54 @@ func TestCreate_SessionNameInvalidCharsReturnErrInvalidArgument(t *testing.T) {
 		})
 	}
 }
+
+func TestCreate_SessionNameTooLong(t *testing.T) {
+	profiles := map[string]config.Profile{
+		"default": {Command: "echo {{.SessionName}}"},
+	}
+
+	// Build boundary-value names using only valid characters (all lowercase a).
+	// sessionNameRe requires the first char to be alphanumeric, which "a" satisfies.
+	name255 := strings.Repeat("a", 255)
+	name256 := strings.Repeat("a", 256)
+
+	t.Run("exactly 255 chars accepted", func(t *testing.T) {
+		m := newCreateTestManager(profiles)
+		// A 255-char name passes length validation; the nil PTY will cause a
+		// panic further down — recover to confirm we got past the length check.
+		defer func() {
+			if r := recover(); r != nil {
+				// Panic from nil PTY means the name cleared all validation gates.
+			}
+		}()
+		_, err := m.Create(CreateRequest{
+			AgentProfile: "default",
+			SessionName:  name255,
+		})
+		if err != nil {
+			sesErr, ok := err.(*Error)
+			if ok && sesErr.Code == ErrInvalidArgument {
+				t.Errorf("255-char name should not return ErrInvalidArgument, got: %v", err)
+			}
+		}
+	})
+
+	t.Run("256 chars rejected", func(t *testing.T) {
+		m := newCreateTestManager(profiles)
+		_, err := m.Create(CreateRequest{
+			AgentProfile: "default",
+			SessionName:  name256,
+		})
+		if err == nil {
+			t.Fatalf("expected ErrInvalidArgument for 256-char name, got nil")
+		}
+		sesErr, ok := err.(*Error)
+		if !ok || sesErr.Code != ErrInvalidArgument {
+			t.Errorf("expected ErrInvalidArgument for 256-char name, got %v", err)
+		}
+	})
+}
+
 
 func TestShellEscapeArg(t *testing.T) {
 	tests := []struct {

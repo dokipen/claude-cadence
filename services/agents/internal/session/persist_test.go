@@ -656,6 +656,45 @@ func TestRestoreFromPersister_InvalidName(t *testing.T) {
 	}
 }
 
+func TestRestoreFromPersister_NameTooLong(t *testing.T) {
+	dir := t.TempDir()
+
+	// Session with a name of 256 characters — valid chars but over the length cap.
+	tooLong := makeSession(StateStopped)
+	tooLong.Name = strings.Repeat("a", 256)
+
+	// Session with a valid name — must still be restored correctly.
+	valid := makeSession(StateStopped)
+
+	writeSessionFile(t, dir, tooLong)
+	writeSessionFile(t, dir, valid)
+
+	p, err := NewPersister(dir)
+	if err != nil {
+		t.Fatalf("NewPersister: %v", err)
+	}
+	defer p.Stop()
+
+	store := NewStore()
+	m := newManagerWithStore(store, map[string]bool{}, map[int]bool{})
+
+	if err := m.RestoreFromPersister(p); err != nil {
+		t.Fatalf("RestoreFromPersister returned unexpected error: %v", err)
+	}
+
+	all := store.List()
+	if len(all) != 1 {
+		t.Errorf("store contains %d sessions, want 1 (too-long name should be skipped)", len(all))
+	}
+
+	if _, ok := store.Get(valid.ID); !ok {
+		t.Errorf("valid session %q not found in store", valid.ID)
+	}
+	if _, ok := store.Get(tooLong.ID); ok {
+		t.Errorf("session with 256-char name must not be in store")
+	}
+}
+
 // --- Integration test: daemon restart simulation ---
 
 func TestDaemonRestart_Simulation(t *testing.T) {
