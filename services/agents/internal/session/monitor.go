@@ -111,7 +111,7 @@ func (m *Monitor) check() {
 				firstSeen:   now,
 			}
 			if sess.WaitingForInput {
-				m.manager.store.Update(sess.ID, func(s *Session) {
+				_, _ = m.manager.store.Update(sess.ID, func(s *Session) {
 					s.WaitingForInput = false
 					s.IdleSince = nil
 				})
@@ -124,7 +124,7 @@ func (m *Monitor) check() {
 		if lastLine == "" || !promptPatterns.MatchString(lastLine) {
 			// No prompt detected, clear waiting state if set.
 			if sess.WaitingForInput {
-				m.manager.store.Update(sess.ID, func(s *Session) {
+				_, _ = m.manager.store.Update(sess.ID, func(s *Session) {
 					s.WaitingForInput = false
 					s.IdleSince = nil
 				})
@@ -136,7 +136,7 @@ func (m *Monitor) check() {
 		idleDuration := now.Sub(snap.firstSeen)
 		if idleDuration >= idleThreshold && !sess.WaitingForInput {
 			idleSince := snap.firstSeen
-			m.manager.store.Update(sess.ID, func(s *Session) {
+			_, _ = m.manager.store.Update(sess.ID, func(s *Session) {
 				s.WaitingForInput = true
 				s.IdleSince = &idleSince
 			})

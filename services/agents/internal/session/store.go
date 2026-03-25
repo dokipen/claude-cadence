@@ -1,6 +1,7 @@
 package session
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -148,18 +149,27 @@ func (s *Store) List() []*Session {
 }
 
 // Update applies a mutation function to a session identified by ID.
-// Returns true if the session was found and updated.
-func (s *Store) Update(id string, fn func(*Session)) bool {
+// Returns (true, nil) if the session was found and updated.
+// Returns (false, nil) if the session was not found.
+// Returns (false, error) if the mutation would rename the session to a name
+// already held by a different session; in that case the mutation is rolled back.
+func (s *Store) Update(id string, fn func(*Session)) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sess, ok := s.sessions[id]
 	if !ok {
-		return false
+		return false, nil
 	}
 	oldName := sess.Name
 	fn(sess)
 	// Sync name index if the name changed.
 	if sess.Name != oldName {
+		// Guard against collisions: if the new name is already held by a
+		// different session, roll back and return an error.
+		if existingID, exists := s.names[sess.Name]; exists && existingID != id {
+			sess.Name = oldName // roll back mutation
+			return false, &Error{Code: ErrAlreadyExists, Message: fmt.Sprintf("session name %q is already in use", sess.Name)}
+		}
 		if oldName != "" {
 			delete(s.names, oldName)
 		}
@@ -170,7 +180,7 @@ func (s *Store) Update(id string, fn func(*Session)) bool {
 	if s.persister != nil {
 		s.persister.queue(*sess)
 	}
-	return true
+	return true, nil
 }
 
 // Delete removes a session from the store.

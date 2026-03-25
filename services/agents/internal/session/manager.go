@@ -136,7 +136,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	if profile.VaultSecret != "" {
 		if m.vault == nil {
 			errMsg := "vault client not configured but profile requires vault_secret"
-			m.store.Update(sessionID, func(s *Session) {
+			_, _ = m.store.Update(sessionID, func(s *Session) {
 				s.State = StateError
 				s.ErrorMessage = errMsg
 			})
@@ -150,7 +150,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		secrets, err := m.vault.GetSecret(profile.VaultSecret)
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to fetch vault secret: %v", err)
-			m.store.Update(sessionID, func(s *Session) {
+			_, _ = m.store.Update(sessionID, func(s *Session) {
 				s.State = StateError
 				s.ErrorMessage = errMsg
 			})
@@ -178,7 +178,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	if profile.Repo != "" {
 		if m.git == nil {
 			errMsg := "git client not configured but profile requires a repo"
-			m.store.Update(sessionID, func(s *Session) {
+			_, _ = m.store.Update(sessionID, func(s *Session) {
 				s.State = StateError
 				s.ErrorMessage = errMsg
 			})
@@ -192,7 +192,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		cloneDir, err := m.git.EnsureClone(profile.Repo, gitCreds)
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to clone repo: %v", err)
-			m.store.Update(sessionID, func(s *Session) {
+			_, _ = m.store.Update(sessionID, func(s *Session) {
 				s.State = StateError
 				s.ErrorMessage = errMsg
 			})
@@ -204,7 +204,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		}
 
 		workdir = cloneDir
-		m.store.Update(sessionID, func(s *Session) {
+		_, _ = m.store.Update(sessionID, func(s *Session) {
 			s.RepoURL = profile.Repo
 		})
 	}
@@ -213,7 +213,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	cmdStr, err := m.renderCommand(profile.Command, sess, req.ExtraArgs, profile.PluginDir)
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to render command: %v", err)
-		m.store.Update(sessionID, func(s *Session) {
+		_, _ = m.store.Update(sessionID, func(s *Session) {
 			s.State = StateError
 			s.ErrorMessage = errMsg
 		})
@@ -246,7 +246,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	for k, v := range req.Env {
 		if !envKeyRe.MatchString(k) {
 			errMsg := fmt.Sprintf("invalid env var key: %q", k)
-			m.store.Update(sessionID, func(s *Session) {
+			_, _ = m.store.Update(sessionID, func(s *Session) {
 				s.State = StateError
 				s.ErrorMessage = errMsg
 			})
@@ -285,7 +285,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		slog.Debug("session command exited immediately after launch", "session", sessionID, "name", req.SessionName, "command", cmdStr, "cwd", workdir)
 		slog.Info("session command exited immediately", "session", sessionID, "error", err)
 		_ = m.pty.Destroy(sessionID)
-		m.store.Update(sessionID, func(s *Session) {
+		_, _ = m.store.Update(sessionID, func(s *Session) {
 			s.State = StateStopped
 			s.StoppedAt = time.Now()
 		})
@@ -298,7 +298,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 
 	slog.Debug("session command running", "session", sessionID, "name", req.SessionName, "pid", pid)
 
-	m.store.Update(sessionID, func(s *Session) {
+	_, _ = m.store.Update(sessionID, func(s *Session) {
 		s.State = StateRunning
 		s.AgentPID = pid
 		s.WebsocketURL = ""
@@ -350,7 +350,7 @@ func (m *Manager) Destroy(id string, force bool) error {
 		return &Error{Code: ErrFailedPrecondition, Message: "session is running; use force=true to destroy"}
 	}
 
-	m.store.Update(id, func(s *Session) {
+	_, _ = m.store.Update(id, func(s *Session) {
 		s.State = StateDestroying
 	})
 
@@ -374,7 +374,7 @@ func (m *Manager) reconcile(sess *Session) {
 	// Check if PTY session still exists.
 	ptyExists := m.ptyHasSession(sess.ID)
 	if !ptyExists {
-		m.store.Update(sess.ID, func(s *Session) {
+		_, _ = m.store.Update(sess.ID, func(s *Session) {
 			s.State = StateStopped
 			s.StoppedAt = now
 		})
@@ -384,7 +384,7 @@ func (m *Manager) reconcile(sess *Session) {
 	}
 
 	if sess.AgentPID > 0 && !m.processAlive(sess.AgentPID) {
-		m.store.Update(sess.ID, func(s *Session) {
+		_, _ = m.store.Update(sess.ID, func(s *Session) {
 			s.State = StateStopped
 			s.StoppedAt = now
 		})
@@ -397,7 +397,7 @@ func (m *Manager) reconcile(sess *Session) {
 func (m *Manager) cleanup(sessionID, errMsg string) {
 	_ = m.pty.Destroy(sessionID)
 
-	m.store.Update(sessionID, func(s *Session) {
+	_, _ = m.store.Update(sessionID, func(s *Session) {
 		s.State = StateError
 		s.ErrorMessage = errMsg
 	})

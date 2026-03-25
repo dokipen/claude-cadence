@@ -93,7 +93,7 @@ func (c *Cleaner) cleanup() {
 			age := time.Since(sess.CreatedAt).Round(time.Second)
 			errMsg := fmt.Sprintf("session stuck in creating state for %s; reaped by cleaner", age)
 			slog.Warn("reaping stuck StateCreating session", "id", sess.ID, "name", sess.Name, "age", age)
-			c.manager.store.Update(sess.ID, func(s *Session) {
+			_, _ = c.manager.store.Update(sess.ID, func(s *Session) {
 				s.State = StateError
 				s.ErrorMessage = errMsg
 			})

@@ -159,10 +159,13 @@ func TestStore_NameIndex_UpdateNameConsistency(t *testing.T) {
 	sess := &Session{ID: "sess-1", Name: "old-name"}
 	store.Add(sess)
 
-	updated := store.Update("sess-1", func(s *Session) {
+	ok, err := store.Update("sess-1", func(s *Session) {
 		s.Name = "new-name"
 	})
-	if !updated {
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
 		t.Fatal("Update() = false, want true")
 	}
 
@@ -188,5 +191,46 @@ func TestStore_NameIndex_GetByName_UnknownName(t *testing.T) {
 	store.Add(&Session{ID: "sess-1", Name: "known-name"})
 	if _, ok := store.GetByName("other-name"); ok {
 		t.Error("GetByName(other-name) = _, true; want false for unknown name")
+	}
+}
+
+func TestStore_Update_RenameToExistingNameReturnsError(t *testing.T) {
+	store := NewStore()
+	store.Add(&Session{ID: "sess-1", Name: "alpha"})
+	store.Add(&Session{ID: "sess-2", Name: "beta"})
+
+	ok, err := store.Update("sess-1", func(s *Session) {
+		s.Name = "beta"
+	})
+	if err == nil {
+		t.Fatal("Update() rename to existing name = nil error, want ErrAlreadyExists")
+	}
+	sesErr, ok2 := err.(*Error)
+	if !ok2 || sesErr.Code != ErrAlreadyExists {
+		t.Errorf("Update() error = %v, want *Error{Code: ErrAlreadyExists}", err)
+	}
+	if ok {
+		t.Error("Update() = true on name collision, want false")
+	}
+
+	// sess-1 must still be reachable by its original name (mutation rolled back).
+	got1, found1 := store.GetByName("alpha")
+	if !found1 {
+		t.Fatal("GetByName(alpha) = _, false after collision; want true (rollback expected)")
+	}
+	if got1.ID != "sess-1" {
+		t.Errorf("GetByName(alpha).ID = %q, want sess-1", got1.ID)
+	}
+	if got1.Name != "alpha" {
+		t.Errorf("sess-1.Name = %q after rollback, want alpha", got1.Name)
+	}
+
+	// sess-2 index must be intact.
+	got2, found2 := store.GetByName("beta")
+	if !found2 {
+		t.Fatal("GetByName(beta) = _, false after collision; want true (index not corrupted)")
+	}
+	if got2.ID != "sess-2" {
+		t.Errorf("GetByName(beta).ID = %q, want sess-2", got2.ID)
 	}
 }
