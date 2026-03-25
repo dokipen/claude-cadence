@@ -59,7 +59,13 @@ VERIFY_CMD=""
 
 # Look for verification command in CLAUDE.md (skipping headings inside fenced code blocks)
 if [ -f "CLAUDE.md" ]; then
-  VERIFY_CMD=$(awk 'BEGIN{fence=0} /^```/{fence=!fence; next} !fence && /^## Verification[[:space:]]*$/{while ((getline line) > 0 && (line ~ /^[[:space:]]*$/ || line ~ /^[[:space:]]*#/ || line ~ /^```/)) {}; if (line !~ /^```/) print line; exit}' CLAUDE.md)
+  VERIFY_CMD=$(awk '
+    BEGIN { in_verify=0; in_code=0 }
+    /^## Verification[[:space:]]*$/ { in_verify=1; next }
+    in_verify && /^## / { exit }
+    in_verify && /^```/ { if (!in_code) { in_code=1; next } else { exit } }
+    in_verify && in_code && /[^[:space:]]/ { print; exit }
+  ' CLAUDE.md)
 fi
 
 if [ -n "$VERIFY_CMD" ]; then
