@@ -100,6 +100,8 @@ EOF
   --json
 ```
 
+> **Important (Issues API):** Always use `--acceptance-criteria` for acceptance criteria — never embed them inside `--description`. The `--description` flag maps to the ticket's description field, and `--acceptance-criteria` maps to its own dedicated field. Mixing them causes criteria to appear in the wrong field in the UI and API response.
+
 For Issues API, resolve label IDs first (labels are global — no `--project` flag needed):
 ```bash
 issues label list --json
