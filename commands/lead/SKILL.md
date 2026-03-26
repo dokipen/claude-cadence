@@ -555,9 +555,11 @@ issues ticket create \
 
 ## Plan Reference
 Derived from the plan document: `docs/plans/<slug>.md` (plan ticket: #[NUMBER])
-
-## Acceptance Criteria
-[Tasks and completion criteria from this phase]
+EOF
+)" \
+  --acceptance-criteria "$(cat <<'EOF'
+- [ ] [Criterion 1 from this phase]
+- [ ] [Criterion 2 from this phase]
 EOF
 )" \
   --json
