@@ -6,7 +6,7 @@ import styles from "../styles/dialog.module.css";
 interface CreateTicketDialogProps {
   open: boolean;
   onClose: () => void;
-  repoUrl: string;
+  repoUrl?: string;
 }
 
 export function CreateTicketDialog({
@@ -16,14 +16,18 @@ export function CreateTicketDialog({
 }: CreateTicketDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [prompt, setPrompt] = useState("");
+  // Generated once per open — stable for the lifetime of a single dialog session.
+  const sessionNameRef = useRef("ticket-" + Date.now());
 
   useEffect(() => {
     const el = dialogRef.current;
     if (!el) return;
 
     if (open && !el.open) {
+      sessionNameRef.current = "ticket-" + Date.now();
       el.showModal();
     } else if (!open && el.open) {
+      setPrompt("");
       el.close();
     }
 
@@ -53,6 +57,11 @@ export function CreateTicketDialog({
     },
     [handleClose],
   );
+
+  const trimmedPrompt = prompt.trim();
+  // Normalize whitespace before passing to the command to avoid newlines
+  // or other control characters reaching the PTY.
+  const normalizedPrompt = trimmedPrompt.replace(/\s+/g, " ");
 
   return (
     <dialog
@@ -87,17 +96,15 @@ export function CreateTicketDialog({
             onChange={(e) => setPrompt(e.target.value)}
           />
         </div>
-        {open && (
-          <fieldset disabled={prompt.trim() === ""} style={{ border: "none", padding: 0, margin: 0 }}>
-            <AgentLauncher
-              ticketNumber={0}
-              repoUrl={repoUrl}
-              onLaunched={handleLaunched}
-              command={"/create-ticket " + prompt.trim()}
-              sessionName={"ticket-" + Date.now()}
-              buttonLabel="Create Ticket"
-            />
-          </fieldset>
+        {open && trimmedPrompt !== "" && (
+          <AgentLauncher
+            ticketNumber={0}
+            repoUrl={repoUrl}
+            onLaunched={handleLaunched}
+            command={"/create-ticket " + normalizedPrompt}
+            sessionName={sessionNameRef.current}
+            buttonLabel="Create Ticket"
+          />
         )}
         <div className={styles.dialogActions}>
           <button

@@ -101,33 +101,16 @@ describe("CreateTicketDialog", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("disables submit when prompt is empty", () => {
+  it("does not render AgentLauncher when prompt is empty", () => {
     render(<CreateTicketDialog {...defaultProps} open={true} />);
 
-    // The textarea should be present and empty by default
-    const textarea = screen.getByTestId("ticket-prompt") as HTMLTextAreaElement;
-    expect(textarea.value).toBe("");
+    // Textarea starts empty — AgentLauncher should not be present
+    expect(screen.queryByTestId("agent-launcher")).toBeNull();
 
-    // When the prompt is empty, AgentLauncher should receive an empty-suffixed
-    // command or the launch button should be disabled.  Check both possibilities:
-    // either the agent-launcher is not rendered, or it receives a command ending
-    // with a bare space (no user text), or a dedicated submit button is disabled.
-    const launcher = screen.queryByTestId("agent-launcher");
-    if (launcher) {
-      // If AgentLauncher is always rendered, it should have an empty prompt appended
-      const cmd = launcher.getAttribute("data-command") ?? "";
-      // command should end with a space and no additional text
-      expect(cmd).toMatch(/\/create-ticket\s*$/);
-    } else {
-      // If AgentLauncher is conditionally rendered, the submit button should be
-      // disabled or absent when the prompt is empty.
-      const submitButton = screen.queryByTestId("dialog-submit");
-      if (submitButton) {
-        expect((submitButton as HTMLButtonElement).disabled).toBe(true);
-      }
-      // Either is acceptable — the component just should not allow launching
-      // with an empty prompt.
-    }
+    // Typing whitespace-only also should not show the launcher
+    const textarea = screen.getByTestId("ticket-prompt") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "   " } });
+    expect(screen.queryByTestId("agent-launcher")).toBeNull();
   });
 
   it("passes correct command with prompt to AgentLauncher", () => {
@@ -139,6 +122,18 @@ describe("CreateTicketDialog", () => {
     const launcher = screen.getByTestId("agent-launcher");
     expect(launcher.getAttribute("data-command")).toBe(
       "/create-ticket My ticket text",
+    );
+  });
+
+  it("normalizes whitespace in command (newlines become spaces)", () => {
+    render(<CreateTicketDialog {...defaultProps} open={true} />);
+
+    const textarea = screen.getByTestId("ticket-prompt") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "line one\nline two" } });
+
+    const launcher = screen.getByTestId("agent-launcher");
+    expect(launcher.getAttribute("data-command")).toBe(
+      "/create-ticket line one line two",
     );
   });
 

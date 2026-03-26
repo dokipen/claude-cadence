@@ -91,7 +91,7 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
     )}
     {state === "BACKLOG" && (
       <CreateTicketDialog
-        repoUrl={repoUrl ?? ""}
+        repoUrl={repoUrl}
         open={showCreateTicket}
         onClose={() => setShowCreateTicket(false)}
       />
