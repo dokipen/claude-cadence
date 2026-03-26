@@ -22,6 +22,15 @@ import {
   ME_QUERY,
 } from "../api/queries";
 
+// Evaluated once at module load — never changes at runtime
+const AUTH_BYPASS = import.meta.env.VITE_AUTH_BYPASS === "1";
+
+const BYPASS_USER: User = {
+  id: "dev",
+  login: "dev",
+  displayName: "Dev User",
+};
+
 interface AuthContextValue {
   user: User | null;
   token: string | null;
@@ -35,9 +44,9 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(getStoredToken);
-  const [isLoading, setIsLoading] = useState(() => !!getStoredToken());
+  const [user, setUser] = useState<User | null>(AUTH_BYPASS ? BYPASS_USER : null);
+  const [token, setToken] = useState<string | null>(AUTH_BYPASS ? "bypass" : getStoredToken);
+  const [isLoading, setIsLoading] = useState(() => AUTH_BYPASS ? false : !!getStoredToken());
 
   const handleAuthFailure = useCallback(() => {
     clearStoredTokens();
@@ -45,8 +54,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
-  // On mount, if we have a stored token, validate it by fetching the current user
+  // On mount, if we have a stored token, validate it by fetching the current user.
+  // Skipped entirely when AUTH_BYPASS is active.
   useEffect(() => {
+    if (AUTH_BYPASS) return;
+
     const storedToken = getStoredToken();
     if (!storedToken) {
       setIsLoading(false);
