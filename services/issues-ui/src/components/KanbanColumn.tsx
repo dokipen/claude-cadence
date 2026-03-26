@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Ticket, TicketState, ActiveSessionInfo } from "../types";
 import { TicketCard } from "./TicketCard";
 import { RefineAllDialog } from "./RefineAllDialog";
+import { CreateTicketDialog } from "./CreateTicketDialog";
 import styles from "../styles/board.module.css";
 
 const STATE_LABELS: Record<TicketState, string> = {
@@ -24,6 +25,7 @@ interface KanbanColumnProps {
 
 export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading, error, repoUrl, sessions }: KanbanColumnProps) {
   const [showRefineAll, setShowRefineAll] = useState(false);
+  const [showCreateTicket, setShowCreateTicket] = useState(false);
 
   const displayCount = loading
     ? "…"
@@ -36,6 +38,16 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
     <div className={styles.column} data-testid={`column-${state}`}>
       <div className={styles.columnHeader}>
         <span className={styles.columnTitle}>{STATE_LABELS[state]}</span>
+        {state === "BACKLOG" && (
+          <button
+            className={styles.createTicketButton}
+            onClick={() => setShowCreateTicket(true)}
+            data-testid="create-ticket-button"
+            title="Create ticket"
+          >
+            +
+          </button>
+        )}
         {state === "BACKLOG" && tickets.length > 0 && !loading && !hasNextPage && (
           <button
             className={styles.refineAllButton}
@@ -75,6 +87,13 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
         repoUrl={repoUrl}
         open={showRefineAll}
         onClose={() => setShowRefineAll(false)}
+      />
+    )}
+    {state === "BACKLOG" && (
+      <CreateTicketDialog
+        repoUrl={repoUrl ?? ""}
+        open={showCreateTicket}
+        onClose={() => setShowCreateTicket(false)}
       />
     )}
     </>
