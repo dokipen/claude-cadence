@@ -1,10 +1,7 @@
 # Dev/QA stack for Claude Cadence
 #
-# Default tier (issues + issues-ui + Caddy):
+# Full stack (issues + issues-ui + Caddy + agent-hub + agentd):
 #   docker compose -f docker-compose.dev.yml up
-#
-# Full stack including agent services:
-#   docker compose -f docker-compose.dev.yml --profile agents up
 #
 # Prerequisites:
 #   cp .env.dev.example .env.dev
@@ -69,7 +66,7 @@ services:
       - issues
       - issues-ui
 
-  # Agent services — opt-in via --profile agents
+  # Agent services — included in the default stack
   #
   # Both services are fully containerized. agentd mounts ~/.claude from the host
   # so the claude CLI can authenticate using the developer's existing credentials.
@@ -77,12 +74,8 @@ services:
   # Prerequisites:
   #   - Fill in HUB_API_TOKEN, HUB_AGENT_TOKEN, and AGENTD_TOKEN in .env.dev
   #   - Ensure ~/.claude exists with valid claude CLI credentials
-  #
-  # Start the full stack:
-  #   docker compose -f docker-compose.dev.yml --profile agents up --build
 
   agent-hub:
-    profiles: [agents]
     build:
       context: services
       dockerfile: agent-hub/Dockerfile
@@ -99,7 +92,6 @@ services:
       retries: 3
 
   agentd:
-    profiles: [agents]
     # hostname must match ttyd.advertise_address in config.container.yaml ("agentd:4142").
     # Docker adds the hostname → container-IP mapping to /etc/hosts so Go's net.Listen
     # resolves it for binding, and agent-hub resolves it via Docker DNS for proxying.

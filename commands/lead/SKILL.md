@@ -437,9 +437,9 @@ These services have hard host dependencies (the `claude` CLI, OS service integra
    ```
    See [`docs/dev-environment.md`](docs/dev-environment.md) and [`services/agents/docs/INSTALL.md`](services/agents/docs/INSTALL.md) for full configuration details.
 
-3. **Then start the compose stack with the `--profile agents` flag:**
+3. **Then start the compose stack:**
    ```bash
-   docker compose -f docker-compose.dev.yml --profile agents up --build
+   docker compose -f docker-compose.dev.yml up --build
    ```
 
 4. Wait for user feedback (user intervention required)
