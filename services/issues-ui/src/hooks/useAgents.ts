@@ -21,11 +21,10 @@ export function useAgents(repo?: string): UseAgentsResult {
 
   useEffect(() => {
     let cancelled = false;
-    hasFetchedRef.current = false;
-    const isInitialFetch = true;
     let consecutiveFailures = 0;
 
     const pollAgents = () => {
+      const isInitialFetch = !hasFetchedRef.current;
       if (isInitialFetch) {
         setLoading(true);
         setError(null);
@@ -59,7 +58,7 @@ export function useAgents(repo?: string): UseAgentsResult {
     };
 
     if (hidden) {
-      if (isInitialFetch) setLoading(false);
+      if (!hasFetchedRef.current) setLoading(false);
     } else {
       pollAgents();
     }

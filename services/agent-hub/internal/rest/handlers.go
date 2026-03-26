@@ -21,6 +21,10 @@ import (
 // at agent registration time.
 const maxRepoParamLen = 2048
 
+// NOTE: The ?repo= filter is a UI-scoping convenience, not a security boundary.
+// Any authenticated caller can omit the parameter and receive all profiles.
+// Do not rely on it for access control.
+
 // normalizeRepoFilter normalizes a repo identifier for comparison.
 // It lowercases the input, strips a .git suffix, strips a trailing slash,
 // and strips known GitHub HTTPS prefixes so that different representations
@@ -74,7 +78,7 @@ func handleListAgents(h *hub.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		agents := h.List()
 
-		if repo := r.URL.Query().Get("repo"); repo != "" {
+		if repo := strings.TrimSpace(r.URL.Query().Get("repo")); repo != "" {
 			if len(repo) > maxRepoParamLen {
 				writeJSONError(w, http.StatusBadRequest, "repo parameter too long")
 				return
@@ -199,7 +203,7 @@ func handleGetAgent(h *hub.Hub) http.HandlerFunc {
 		}
 
 		profiles := agent.Profiles
-		if repo := r.URL.Query().Get("repo"); repo != "" {
+		if repo := strings.TrimSpace(r.URL.Query().Get("repo")); repo != "" {
 			if len(repo) > maxRepoParamLen {
 				writeJSONError(w, http.StatusBadRequest, "repo parameter too long")
 				return
