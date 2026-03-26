@@ -28,10 +28,6 @@ info()  { printf "\033[1;34m==>\033[0m %s\n" "$1"; }
 warn()  { printf "\033[1;33mWarning:\033[0m %s\n" "$1"; }
 error() { printf "\033[1;31mError:\033[0m %s\n" "$1" >&2; exit 1; }
 
-sed_escape() {
-    printf '%s' "$1" | sed 's/[&/|\\]/\\&/g'
-}
-
 validate_yaml_string() {
     local value="$1" field="$2"
     if [[ "$value" == *'"'* || "$value" == *$'\n'* || "$value" == *$'\r'* || "$value" == *'\'* ]]; then
@@ -112,21 +108,22 @@ deploy_remote() {
     # Ensure config dir
     ssh "$HOST" "sudo mkdir -p $remote_config_dir"
 
-    # Write or update env file with hub token (preserve existing vars)
+    # Write or update env file with hub token (preserve existing vars).
+    # Pipe token via stdin to avoid shell quoting issues with special chars.
+    # Single SSH session avoids TOCTOU race between file-existence check and update.
     info "Updating env file..."
-    local escaped_token
-    escaped_token="$(sed_escape "$HUB_AGENT_TOKEN")"
-    if ssh "$HOST" "test -f $remote_env" 2>/dev/null; then
-        # Update HUB_AGENT_TOKEN in-place if present, append if not
-        if ssh "$HOST" "sudo grep -q '^HUB_AGENT_TOKEN=' $remote_env" 2>/dev/null; then
-            ssh "$HOST" "sudo sed -i 's|^HUB_AGENT_TOKEN=.*|HUB_AGENT_TOKEN=${escaped_token}|' $remote_env"
+    printf '%s\n' "$HUB_AGENT_TOKEN" | ssh "$HOST" "
+        token=\$(cat)
+        if sudo test -f $remote_env; then
+            tmp=\$(mktemp)
+            sudo grep -v '^HUB_AGENT_TOKEN=' $remote_env | sudo tee \"\$tmp\" > /dev/null || true
+            printf 'HUB_AGENT_TOKEN=%s\n' \"\$token\" | sudo tee -a \"\$tmp\" > /dev/null
+            sudo mv \"\$tmp\" $remote_env
         else
-            printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" | ssh "$HOST" "sudo tee -a $remote_env > /dev/null"
+            printf 'HUB_AGENT_TOKEN=%s\n' \"\$token\" | sudo tee $remote_env > /dev/null
         fi
-        ssh "$HOST" "sudo chmod 600 $remote_env"
-    else
-        printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" | ssh "$HOST" "sudo tee $remote_env > /dev/null && sudo chmod 600 $remote_env"
-    fi
+        sudo chmod 600 $remote_env
+    "
 
     # Add hub section to config if missing
     if ssh "$HOST" "grep -q '^hub:' $remote_config 2>/dev/null"; then
@@ -207,17 +204,16 @@ deploy_local() {
     cp "$binary" "$bin_dir/agentd"
     chmod 755 "$bin_dir/agentd"
 
-    # Write or update env file with hub token (preserve existing vars)
+    # Write or update env file with hub token (preserve existing vars).
+    # Note: deploy_local is macOS/launchd-only.
     info "Updating env file..."
-    local escaped_token
-    escaped_token="$(sed_escape "$HUB_AGENT_TOKEN")"
     if [[ -f "$env_file" ]]; then
-        # Update HUB_AGENT_TOKEN in-place if present, append if not
-        if grep -q '^HUB_AGENT_TOKEN=' "$env_file" 2>/dev/null; then
-            sed -i '' "s|^HUB_AGENT_TOKEN=.*|HUB_AGENT_TOKEN=${escaped_token}|" "$env_file"
-        else
-            printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" >> "$env_file"
-        fi
+        local tmp
+        tmp=$(mktemp)
+        grep -v '^HUB_AGENT_TOKEN=' "$env_file" > "$tmp" || true
+        printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" >> "$tmp"
+        chmod 600 "$tmp"
+        mv "$tmp" "$env_file"
     else
         install -m 600 /dev/null "$env_file"
         printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" > "$env_file"
