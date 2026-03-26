@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
 import { createSession } from "../api/agentHubClient";
-import { useAgentProfiles } from "../hooks/useAgents";
 import type { Agent, Session } from "../types";
 import styles from "../styles/agents.module.css";
 
@@ -17,8 +16,6 @@ export function AgentLaunchForm({ agents, onLaunched, repoUrl }: AgentLaunchForm
   const [launching, setLaunching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const filteredProfiles = useAgentProfiles(repoUrl, agents);
-
   useEffect(() => {
     setSelectedHost("");
     setSelectedProfile("");
@@ -27,13 +24,7 @@ export function AgentLaunchForm({ agents, onLaunched, repoUrl }: AgentLaunchForm
   const onlineAgents = agents.filter((a) => a.status === "online");
 
   const profileOptions = selectedHost
-    ? repoUrl
-      ? filteredProfiles
-          .filter((e) => e.agent === selectedHost)
-          .map((e) => e.profileName)
-      : Object.keys(
-          agents.find((a) => a.name === selectedHost)?.profiles ?? {},
-        )
+    ? Object.keys(agents.find((a) => a.name === selectedHost)?.profiles ?? {})
     : [];
 
   const handleHostChange = useCallback(

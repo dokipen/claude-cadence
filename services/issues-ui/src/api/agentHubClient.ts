@@ -73,8 +73,9 @@ function validateAgentsResponse(data: unknown): { agents: Agent[] } {
   return { agents: data.agents.map(parseAgent) };
 }
 
-export async function fetchAgents(): Promise<{ agents: Agent[] }> {
-  return hubFetch("/agents", undefined, validateAgentsResponse);
+export async function fetchAgents(repo?: string): Promise<{ agents: Agent[] }> {
+  const path = repo ? `/agents?repo=${encodeURIComponent(repo)}` : "/agents";
+  return hubFetch(path, undefined, validateAgentsResponse);
 }
 
 export const VALID_SESSION_STATES = ["creating", "running", "stopped", "error", "destroying"] as const;

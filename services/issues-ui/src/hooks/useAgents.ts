@@ -12,7 +12,7 @@ interface UseAgentsResult {
   error: string | null;
 }
 
-export function useAgents(): UseAgentsResult {
+export function useAgents(repo?: string): UseAgentsResult {
   const hidden = usePageVisibility();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,7 +30,7 @@ export function useAgents(): UseAgentsResult {
         setError(null);
       }
 
-      fetchAgents()
+      fetchAgents(repo)
         .then((result) => {
           if (!cancelled) {
             setAgents(result.agents);
@@ -68,7 +68,7 @@ export function useAgents(): UseAgentsResult {
       cancelled = true;
       if (interval) clearInterval(interval);
     };
-  }, [hidden]);
+  }, [hidden, repo]);
 
   return { agents, loading, error };
 }

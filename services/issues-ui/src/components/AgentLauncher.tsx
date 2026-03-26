@@ -23,7 +23,7 @@ export function AgentLauncher({
   sessionName = `lead-${ticketNumber}`,
   buttonLabel = "Lead",
 }: AgentLauncherProps) {
-  const { agents, loading: agentsLoading, error: agentsError } = useAgents();
+  const { agents, loading: agentsLoading, error: agentsError } = useAgents(repoUrl);
   const profiles = useAgentProfiles(repoUrl, agents);
   const singleMatch = profiles.length === 1;
 
