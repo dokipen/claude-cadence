@@ -10,10 +10,11 @@ A single-command local stack for manual PR QA.
 
 ```bash
 # 1. Copy the example env file and fill in your secrets
+#    (including HUB_API_TOKEN, HUB_AGENT_TOKEN, and AGENTD_TOKEN for agent services)
 cp .env.dev.example .env.dev
 $EDITOR .env.dev
 
-# 2. Start the core stack (issues API + issues UI + Caddy)
+# 2. Start the full stack (issues API + issues UI + Caddy + agent-hub + agentd)
 docker compose -f docker-compose.dev.yml up --build
 ```
 
@@ -65,18 +66,14 @@ All traffic goes through Caddy at `http://localhost`:
 | `/ws/terminal/*` | agent-hub WebSocket |
 | everything else | issues-ui Vite dev server (port 5173) |
 
-## Full Stack (Agent Services)
+## Agent Services
 
-The `--profile agents` flag adds `agentd` and `agent-hub` to the stack as fully containerized
-services. Both are built from source automatically — no manual installation required.
+`agentd` and `agent-hub` are included in the default stack as fully containerized services.
+Both are built from source automatically — no manual installation required.
 
 **Prerequisites:**
 - Fill in `HUB_API_TOKEN`, `HUB_AGENT_TOKEN`, and `AGENTD_TOKEN` in `.env.dev`
 - Ensure `~/.claude` exists with valid `claude` CLI credentials (agentd mounts this from the host)
-
-```bash
-docker compose -f docker-compose.dev.yml --profile agents up --build
-```
 
 agentd mounts `~/.claude` from your host so the `claude` CLI inside the container authenticates
 with your existing credentials — no separate secret management needed.
@@ -92,7 +89,7 @@ with your existing credentials — no separate secret management needed.
 
 2. Start the full stack:
    ```bash
-   docker compose -f docker-compose.dev.yml --profile agents up --build
+   docker compose -f docker-compose.dev.yml up --build
    ```
 
 3. Start a Claude Code session — it will register with agentd and appear in the UI.
