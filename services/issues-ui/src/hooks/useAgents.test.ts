@@ -136,6 +136,20 @@ describe("useAgentProfiles", () => {
     expect(result.current).toEqual([]);
   });
 
+  it("includes generic profiles with empty repo when repoUrl is set", () => {
+    const agents = [
+      makeAgent("agent1", "online", {
+        "generic": "",
+        "other-project": "https://github.com/other/project",
+      }),
+    ];
+    const { result } = renderHook(() =>
+      useAgentProfiles("https://github.com/owner/repo", agents),
+    );
+    expect(result.current).toHaveLength(1);
+    expect(result.current[0].profileName).toBe("generic");
+  });
+
   it("normalizes repoUrl formats when matching (SSH vs HTTPS)", () => {
     const agents = [
       makeAgent("agent1", "online", { default: "git@github.com:owner/repo.git" }),

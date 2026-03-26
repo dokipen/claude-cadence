@@ -21,7 +21,8 @@ export function useAgents(repo?: string): UseAgentsResult {
 
   useEffect(() => {
     let cancelled = false;
-    const isInitialFetch = !hasFetchedRef.current;
+    hasFetchedRef.current = false;
+    const isInitialFetch = true;
     let consecutiveFailures = 0;
 
     const pollAgents = () => {
@@ -113,7 +114,7 @@ export function useAgentProfiles(
     for (const agent of agents) {
       if (agent.status !== "online") continue;
       for (const [profileName, profile] of Object.entries(agent.profiles)) {
-        if (normalizeRepo(profile.repo) === normalizedUrl) {
+        if (!profile.repo || normalizeRepo(profile.repo) === normalizedUrl) {
           entries.push({ agent: agent.name, profileName, profile });
         }
       }

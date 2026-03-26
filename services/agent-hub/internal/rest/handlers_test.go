@@ -36,7 +36,10 @@ func TestNormalizeRepoFilter(t *testing.T) {
 		{"https://github.com/owner/repo", "owner/repo"},
 		{"https://github.com/owner/repo.git", "owner/repo"},
 		{"http://github.com/owner/repo", "owner/repo"},
-		{"git@github.com:owner/repo.git", "owner/repo"},
+		// SSH remotes are rejected by ValidateProfileRepo at registration; no
+		// stored profile can carry a git@ URL, so SSH normalization is not needed.
+		// The input passes through lowercased with .git stripped.
+		{"git@github.com:owner/repo.git", "git@github.com:owner/repo"},
 		{"https://gitlab.com/owner/repo.git", "https://gitlab.com/owner/repo"},
 		{"HTTPS://GITHUB.COM/Owner/Repo", "owner/repo"},
 		{"", ""},

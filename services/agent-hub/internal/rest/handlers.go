@@ -17,10 +17,18 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// maxRepoParamLen matches the repo length cap enforced by ValidateProfileRepo
+// at agent registration time.
+const maxRepoParamLen = 2048
+
 // normalizeRepoFilter normalizes a repo identifier for comparison.
 // It lowercases the input, strips a .git suffix, strips a trailing slash,
-// and strips known GitHub URL/SSH prefixes so that different representations
+// and strips known GitHub HTTPS prefixes so that different representations
 // of the same repository compare equal.
+//
+// Note: SSH remotes (git@github.com:) are intentionally omitted — they are
+// rejected by ValidateProfileRepo at registration time, so no stored profile
+// can carry an SSH repo URL.
 func normalizeRepoFilter(repo string) string {
 	s := strings.ToLower(repo)
 	s = strings.TrimSuffix(s, ".git")
@@ -28,7 +36,6 @@ func normalizeRepoFilter(repo string) string {
 	for _, prefix := range []string{
 		"https://github.com/",
 		"http://github.com/",
-		"git@github.com:",
 	} {
 		if strings.HasPrefix(s, prefix) {
 			s = s[len(prefix):]
@@ -68,6 +75,10 @@ func handleListAgents(h *hub.Hub) http.HandlerFunc {
 		agents := h.List()
 
 		if repo := r.URL.Query().Get("repo"); repo != "" {
+			if len(repo) > maxRepoParamLen {
+				writeJSONError(w, http.StatusBadRequest, "repo parameter too long")
+				return
+			}
 			agents = filterAgentsByRepo(agents, repo)
 		}
 
@@ -189,14 +200,17 @@ func handleGetAgent(h *hub.Hub) http.HandlerFunc {
 
 		profiles := agent.Profiles
 		if repo := r.URL.Query().Get("repo"); repo != "" {
-			normalized := normalizeRepoFilter(repo)
-			filtered := make(map[string]hub.ProfileInfo)
-			for pname, profile := range profiles {
-				if profile.Repo == "" || normalizeRepoFilter(profile.Repo) == normalized {
-					filtered[pname] = profile
-				}
+			if len(repo) > maxRepoParamLen {
+				writeJSONError(w, http.StatusBadRequest, "repo parameter too long")
+				return
 			}
-			profiles = filtered
+			info := filterAgentsByRepo([]hub.AgentInfo{{
+				Name:     agent.Name,
+				Profiles: agent.Profiles,
+				Status:   agent.Status(),
+				LastSeen: agent.LastSeen(),
+			}}, repo)
+			profiles = info[0].Profiles
 		}
 
 		w.Header().Set("Content-Type", "application/json")
