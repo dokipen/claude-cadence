@@ -422,11 +422,11 @@ const LAUNCH_FORM_AGENTS = {
       profiles: {
         default: {
           description: "Default profile",
-          repo: "https://github.com/test/repo",
+          repo: "test-org/test-repo",
         },
         fast: {
           description: "Fast profile",
-          repo: "https://github.com/test/repo",
+          repo: "test-org/test-repo",
         },
       },
       last_seen: "2026-01-01T00:00:00Z",
@@ -437,7 +437,7 @@ const LAUNCH_FORM_AGENTS = {
       profiles: {
         default: {
           description: "Default profile",
-          repo: "https://github.com/test/repo",
+          repo: "test-org/test-repo",
         },
       },
       last_seen: "2025-12-01T00:00:00Z",
