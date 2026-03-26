@@ -74,7 +74,7 @@ const MOCK_ALL_SESSIONS = {
 
 function setupMocks(page: import("@playwright/test").Page) {
   return Promise.all([
-    page.route("**/api/v1/agents", (route) => {
+    page.route(/\/api\/v1\/agents(\?.*)?$/, (route) => {
       if (route.request().method() === "GET") {
         route.fulfill({
           status: 200,
@@ -458,7 +458,7 @@ const LAUNCHED_SESSION = {
 
 function setupLaunchFormMocks(page: import("@playwright/test").Page) {
   return Promise.all([
-    page.route("**/api/v1/agents", (route) => {
+    page.route(/\/api\/v1\/agents(\?.*)?$/, (route) => {
       if (route.request().method() === "GET") {
         route.fulfill({
           status: 200,
