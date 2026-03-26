@@ -23,6 +23,8 @@ import {
 } from "../api/queries";
 
 // Evaluated once at module load — never changes at runtime
+// Client-side bypass only — the backend also requires AUTH_BYPASS=1 on the issues service.
+// Both must be set for a complete bypass; both are configured together in docker-compose.dev.yml.
 const AUTH_BYPASS = import.meta.env.VITE_AUTH_BYPASS === "1";
 
 const BYPASS_USER: User = {

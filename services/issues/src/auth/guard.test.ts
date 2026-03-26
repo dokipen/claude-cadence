@@ -103,24 +103,23 @@ describe("authGuardPlugin", () => {
   });
 
   describe("AUTH_BYPASS mode (AUTH_BYPASS=true)", () => {
-    it("returns a no-op plugin (no requestDidStart hook)", async () => {
+    it("returns a fully empty no-op plugin object", async () => {
       const authGuardPlugin = await loadGuardWithBypass(true);
       const plugin = authGuardPlugin();
-      expect((plugin as any).requestDidStart).toBeUndefined();
+      // The plugin must be an empty object — no hooks of any kind.
+      // toEqual({}) catches regressions where extra hooks are accidentally added.
+      expect(plugin).toEqual({});
+      expect(plugin).not.toHaveProperty("requestDidStart");
     });
 
-    it("allows unauthenticated requests for normally-protected fields", async () => {
+    it("bypasses all authentication regardless of query content", async () => {
       const authGuardPlugin = await loadGuardWithBypass(true);
       const plugin = authGuardPlugin();
-      // The plugin has no requestDidStart, so there are no hooks to invoke.
-      // Asserting requestDidStart is absent is the correct observable behavior.
-      expect((plugin as any).requestDidStart).toBeUndefined();
-    });
-
-    it("allows unauthenticated introspection queries", async () => {
-      const authGuardPlugin = await loadGuardWithBypass(true);
-      const plugin = authGuardPlugin();
-      expect((plugin as any).requestDidStart).toBeUndefined();
+      // With no requestDidStart hook, no request is ever inspected or blocked —
+      // whether it targets normally-protected fields (e.g. tickets) or introspection.
+      // Confirm the hook is absent by key presence, not just value, so a hook that
+      // returns undefined would still be caught.
+      expect(Object.prototype.hasOwnProperty.call(plugin, "requestDidStart")).toBe(false);
     });
   });
 

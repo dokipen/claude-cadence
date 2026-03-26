@@ -3,6 +3,11 @@ import { verifyToken } from "./jwt.js";
 
 export const AUTH_BYPASS = process.env.AUTH_BYPASS === "1";
 
+if (AUTH_BYPASS && process.env.NODE_ENV === "production") {
+  console.error("AUTH_BYPASS cannot be enabled in production");
+  process.exit(1);
+}
+
 const DEV_USER: User = {
   id: "dev-bypass",
   githubId: 0,
