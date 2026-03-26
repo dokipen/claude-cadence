@@ -27,11 +27,16 @@ vi.mock("../hooks/useAgents", () => ({
     loading: false,
   })),
   normalizeRepo: (repo: string) => repo,
+  useAgentProfiles: vi.fn(() => []),
 }));
 
-// Mock AgentLaunchForm
+// Capture repoUrl prop from AgentLaunchForm for assertions
+let capturedRepoUrl: string | undefined;
 vi.mock("./AgentLaunchForm", () => ({
-  AgentLaunchForm: () => <div data-testid="agent-launch-form" />,
+  AgentLaunchForm: ({ repoUrl }: { repoUrl?: string }) => {
+    capturedRepoUrl = repoUrl;
+    return <div data-testid="agent-launch-form" />;
+  },
 }));
 
 // Capture onMinimize from TilingLayout so the test can invoke it
@@ -48,6 +53,7 @@ import { AgentManager } from "./AgentManager";
 
 afterEach(() => {
   capturedOnMinimize = undefined;
+  capturedRepoUrl = undefined;
   cleanup();
 });
 
@@ -128,5 +134,26 @@ describe("AgentManager", () => {
       fireEvent.click(sessionBtn);
     });
     expect(sessionBtn.className).toContain("open");
+  });
+
+  it("passes selectedProject.repository as repoUrl to AgentLaunchForm", () => {
+    render(
+      <MemoryRouter>
+        <AgentManager
+          sessions={[]}
+          selectedProject={{ id: "p1", name: "my-project", repository: "https://github.com/owner/repo" }}
+        />
+      </MemoryRouter>,
+    );
+    expect(capturedRepoUrl).toBe("https://github.com/owner/repo");
+  });
+
+  it("passes undefined repoUrl to AgentLaunchForm when no project is selected", () => {
+    render(
+      <MemoryRouter>
+        <AgentManager sessions={[]} selectedProject={null} />
+      </MemoryRouter>,
+    );
+    expect(capturedRepoUrl).toBeUndefined();
   });
 });
