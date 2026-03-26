@@ -150,7 +150,7 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
 
   return (
     <div className={styles.agentManager} data-testid="agent-manager">
-      <AgentLaunchForm agents={agents} onLaunched={handleLaunched} />
+      <AgentLaunchForm agents={agents} onLaunched={handleLaunched} repoUrl={selectedProject?.repository} />
       <div className={styles.agentManagerBody}>
         <SessionList
           agents={agents}
