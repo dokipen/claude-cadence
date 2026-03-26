@@ -11,6 +11,7 @@ A single-command local stack for manual PR QA.
 
 ```bash
 # 1. Copy the example env file and fill in your secrets
+#    (including HUB_API_TOKEN, HUB_AGENT_TOKEN, and AGENTD_TOKEN for agent services)
 cp .env.dev.example .env.dev
 $EDITOR .env.dev
 
