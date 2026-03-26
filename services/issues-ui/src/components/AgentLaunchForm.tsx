@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { createSession } from "../api/agentHubClient";
 import { useAgentProfiles } from "../hooks/useAgents";
 import type { Agent, Session } from "../types";
@@ -18,6 +18,11 @@ export function AgentLaunchForm({ agents, onLaunched, repoUrl }: AgentLaunchForm
   const [error, setError] = useState<string | null>(null);
 
   const filteredProfiles = useAgentProfiles(repoUrl, agents);
+
+  useEffect(() => {
+    setSelectedHost("");
+    setSelectedProfile("");
+  }, [repoUrl]);
 
   const onlineAgents = agents.filter((a) => a.status === "online");
 
