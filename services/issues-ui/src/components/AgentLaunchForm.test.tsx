@@ -90,11 +90,11 @@ describe("AgentLaunchForm", () => {
     );
   });
 
-  it("shows only profiles matching the selected project for a given host", async () => {
+  it("shows profiles from pre-filtered agents (filtering is server-side)", async () => {
+    // The agents prop is already filtered server-side: only profile-match is present.
     const agents = [
       makeAgent("host-a", "online", {
         "profile-match": "https://github.com/org/repo-a",
-        "profile-other": "https://github.com/org/repo-b",
       }),
     ];
 
