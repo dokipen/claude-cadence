@@ -54,11 +54,35 @@ const MOCK_SESSION = {
 };
 
 function setupAgentMocks(page: import("@playwright/test").Page) {
-  return page.route("**/api/v1/agents", (route) => {
+  return page.route(/\/api\/v1\/agents(\?.*)?$/, (route) => {
+    const url = new URL(route.request().url());
+    const repoParam = url.searchParams.get("repo");
+
+    let agents = MOCK_AGENTS.agents;
+    if (repoParam) {
+      // Normalize the repo param: strip https://github.com/ prefix and .git suffix, lowercase
+      const normalizedParam = repoParam
+        .replace(/^https:\/\/github\.com\//, "")
+        .replace(/\.git$/, "")
+        .toLowerCase();
+
+      agents = agents
+        .map((agent) => {
+          const filteredProfiles = Object.fromEntries(
+            Object.entries(agent.profiles).filter(([, profile]) => {
+              const normalizedRepo = profile.repo.toLowerCase();
+              return normalizedRepo === normalizedParam || normalizedRepo === "";
+            }),
+          );
+          return { ...agent, profiles: filteredProfiles };
+        })
+        .filter((agent) => Object.keys(agent.profiles).length > 0);
+    }
+
     route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(MOCK_AGENTS),
+      body: JSON.stringify({ agents }),
     });
   });
 }
@@ -148,7 +172,7 @@ test.describe("launch agent dialog", () => {
 
   test("auto-selects when only one matching profile", async ({ page }) => {
     // Override with a single matching agent
-    await page.route("**/api/v1/agents", (route) => {
+    await page.route(/\/api\/v1\/agents(\?.*)?$/, (route) => {
       route.fulfill({
         status: 200,
         contentType: "application/json",
