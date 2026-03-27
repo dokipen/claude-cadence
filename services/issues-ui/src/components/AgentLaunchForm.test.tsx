@@ -146,4 +146,32 @@ describe("AgentLaunchForm", () => {
     expect(options).toContain("profile-x");
     expect(options).toContain("profile-y");
   });
+
+  it("shows profiles from the online agent, not the offline agent with the same name", async () => {
+    // The offline agent appears FIRST in the array and has "offline-profile".
+    // The online agent appears SECOND and has "online-profile".
+    // With the bug (agents.find instead of onlineAgents.find), the offline
+    // agent's profiles are returned because it is earlier in the array.
+    const agents = [
+      makeAgent("agent-1", "offline", { "offline-profile": "https://github.com/org/repo" }),
+      makeAgent("agent-1", "online",  { "online-profile":  "https://github.com/org/repo" }),
+    ];
+
+    const { getByTestId } = render(
+      <AgentLaunchForm agents={agents} onLaunched={vi.fn()} />,
+    );
+
+    await act(async () => {
+      fireEvent.change(getByTestId("host-select"), {
+        target: { value: "agent-1" },
+      });
+    });
+
+    const profileSelect = getByTestId("profile-select");
+    const options = Array.from(profileSelect.querySelectorAll("option")).map(
+      (o) => o.value,
+    );
+    expect(options).toContain("online-profile");
+    expect(options).not.toContain("offline-profile");
+  });
 });
