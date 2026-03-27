@@ -33,6 +33,11 @@ type Session struct {
 	BaseRef         string
 	WaitingForInput bool
 	IdleSince       *time.Time
+	// restoredFromDisk marks a session loaded from persistent storage on daemon
+	// startup. Ephemeral: never serialized. Used by reconcile() to avoid
+	// incorrectly stopping a restored Running session whose process is alive
+	// but whose PTY handle no longer exists in this daemon's lifetime.
+	restoredFromDisk bool
 }
 
 // Store is a thread-safe in-memory session store.

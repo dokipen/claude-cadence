@@ -778,3 +778,216 @@ func TestDaemonRestart_Simulation(t *testing.T) {
 
 	p2.Stop()
 }
+
+// --- Bug reproduction tests for issue #366: sessions lost on agentd restart ---
+
+// TestRestoreFromPersister_Creating_StatePersisted reproduces Bug 1:
+// A StateCreating session reconciled to StateError during RestoreFromPersister
+// must be written back to disk. Because TryAdd does not call the persister,
+// a second restart would reload the session as StateCreating instead of StateError.
+func TestRestoreFromPersister_Creating_StatePersisted(t *testing.T) {
+	dir := t.TempDir()
+
+	// Write a StateCreating session directly to disk (simulating a crash mid-create).
+	sess := makeSession(StateCreating)
+	sess.AgentPID = 0
+	writeSessionFile(t, dir, sess)
+
+	// First "boot": restore from persister. This should reconcile to StateError.
+	p1, err := NewPersister(dir)
+	if err != nil {
+		t.Fatalf("NewPersister p1: %v", err)
+	}
+
+	store1 := NewStoreWithPersister(p1)
+	m1 := newManagerWithStore(store1, map[string]bool{}, map[int]bool{})
+
+	if err := m1.RestoreFromPersister(p1); err != nil {
+		t.Fatalf("RestoreFromPersister: %v", err)
+	}
+
+	// Confirm the in-memory state is StateError.
+	got, ok := store1.Get(sess.ID)
+	if !ok {
+		t.Fatalf("session not found in store after restore")
+	}
+	if got.State != StateError {
+		t.Fatalf("expected in-memory state StateError, got %v", got.State)
+	}
+
+	// Flush all pending writes to disk.
+	p1.Stop()
+
+	// Second "boot": reload files from disk. The file should now show StateError.
+	p2, err := NewPersister(dir)
+	if err != nil {
+		t.Fatalf("NewPersister p2: %v", err)
+	}
+	defer p2.Stop()
+
+	sessions, err := p2.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll after second boot: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session on disk, got %d", len(sessions))
+	}
+
+	// BUG: TryAdd never calls the persister, so the file still has StateCreating.
+	// This assertion will FAIL until the bug is fixed.
+	if sessions[0].State != StateError {
+		t.Errorf("on-disk state = %v, want StateError (bug: reconciled state not persisted)", sessions[0].State)
+	}
+}
+
+// TestRestoreFromPersister_Running_DeadProcess_StatePersisted reproduces Bug 1
+// for the StateRunning→StateStopped transition: after a second restart the
+// session should still be StateStopped, not re-appear as StateRunning.
+func TestRestoreFromPersister_Running_DeadProcess_StatePersisted(t *testing.T) {
+	dir := t.TempDir()
+
+	// Write a StateRunning session with a dead PID.
+	sess := makeSession(StateRunning)
+	sess.AgentPID = 999999 // assumed dead
+	writeSessionFile(t, dir, sess)
+
+	// First "boot": restore. Dead PID → StateStopped.
+	p1, err := NewPersister(dir)
+	if err != nil {
+		t.Fatalf("NewPersister p1: %v", err)
+	}
+
+	store1 := NewStoreWithPersister(p1)
+	alivePIDs := map[int]bool{} // 999999 is dead
+	m1 := newManagerWithStore(store1, map[string]bool{}, alivePIDs)
+
+	if err := m1.RestoreFromPersister(p1); err != nil {
+		t.Fatalf("RestoreFromPersister: %v", err)
+	}
+
+	// Confirm in-memory state is StateStopped.
+	got, ok := store1.Get(sess.ID)
+	if !ok {
+		t.Fatalf("session not found in store after restore")
+	}
+	if got.State != StateStopped {
+		t.Fatalf("expected in-memory state StateStopped, got %v", got.State)
+	}
+
+	// Flush all pending writes.
+	p1.Stop()
+
+	// Second "boot": reload. File must reflect StateStopped.
+	p2, err := NewPersister(dir)
+	if err != nil {
+		t.Fatalf("NewPersister p2: %v", err)
+	}
+	defer p2.Stop()
+
+	sessions, err := p2.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll after second boot: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session on disk, got %d", len(sessions))
+	}
+
+	// BUG: TryAdd never calls the persister, so the file still has StateRunning.
+	// This assertion will FAIL until the bug is fixed.
+	if sessions[0].State != StateStopped {
+		t.Errorf("on-disk state = %v, want StateStopped (bug: reconciled state not persisted)", sessions[0].State)
+	}
+}
+
+// TestRestoreFromPersister_Running_AliveProcess_SurvivesGet reproduces Bug 2:
+// A StateRunning session with a live process is correctly restored as StateRunning,
+// but the first call to manager.Get() immediately transitions it to StateStopped
+// because reconcile() checks ptyHasSession first — which returns false after a
+// restart since there is no PTY handle.
+func TestRestoreFromPersister_Running_AliveProcess_SurvivesGet(t *testing.T) {
+	dir := t.TempDir()
+
+	// Write a StateRunning session with an "alive" PID.
+	sess := makeSession(StateRunning)
+	sess.AgentPID = 42
+	writeSessionFile(t, dir, sess)
+
+	p, err := NewPersister(dir)
+	if err != nil {
+		t.Fatalf("NewPersister: %v", err)
+	}
+	defer p.Stop()
+
+	store := NewStoreWithPersister(p)
+	// Process 42 is alive, but there is no PTY handle after restart.
+	alivePIDs := map[int]bool{42: true}
+	ptySessions := map[string]bool{} // no PTY — simulates post-restart state
+	m := newManagerWithStore(store, ptySessions, alivePIDs)
+
+	if err := m.RestoreFromPersister(p); err != nil {
+		t.Fatalf("RestoreFromPersister: %v", err)
+	}
+
+	// After restore the session should be StateRunning in memory.
+	inStore, ok := store.Get(sess.ID)
+	if !ok {
+		t.Fatalf("session not found in store after restore")
+	}
+	if inStore.State != StateRunning {
+		t.Fatalf("expected in-memory state StateRunning after restore, got %v", inStore.State)
+	}
+
+	// Now call Get — this triggers reconcile(). With the bug, reconcile() sees
+	// ptyHasSession==false and immediately sets state to StateStopped, undoing
+	// the restore.
+	//
+	// BUG: this assertion will FAIL until Bug 2 is fixed.
+	retrieved, err := m.Get(sess.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if retrieved.State != StateRunning {
+		t.Errorf("after Get, state = %v, want StateRunning (bug: reconcile() kills restored sessions with no PTY)", retrieved.State)
+	}
+}
+
+// TestRestoreFromPersister_Creating_NonZeroPID_KillsProcess reproduces Bug 3:
+// A StateCreating session with a non-zero AgentPID may have an orphaned process
+// still running. RestoreFromPersister must kill that process, but currently it
+// only marks the session as StateError without sending any signal.
+func TestRestoreFromPersister_Creating_NonZeroPID_KillsProcess(t *testing.T) {
+	dir := t.TempDir()
+
+	// Write a StateCreating session with a non-zero PID (process may be alive).
+	sess := makeSession(StateCreating)
+	sess.AgentPID = 42
+	writeSessionFile(t, dir, sess)
+
+	p, err := NewPersister(dir)
+	if err != nil {
+		t.Fatalf("NewPersister: %v", err)
+	}
+	defer p.Stop()
+
+	store := NewStore()
+	// PID 42 is alive.
+	alivePIDs := map[int]bool{42: true}
+	m := newManagerWithStore(store, map[string]bool{}, alivePIDs)
+
+	// Track whether killProcess was called and with which PID.
+	var killedPID int
+	m.killProcess = func(pid int) error {
+		killedPID = pid
+		return nil
+	}
+
+	if err := m.RestoreFromPersister(p); err != nil {
+		t.Fatalf("RestoreFromPersister: %v", err)
+	}
+
+	// BUG: RestoreFromPersister never calls killProcess, so killedPID remains 0.
+	// This assertion will FAIL until Bug 3 is fixed.
+	if killedPID != 42 {
+		t.Errorf("killProcess called with PID %d, want 42 (bug: orphaned process not killed during StateCreating restore)", killedPID)
+	}
+}
