@@ -27,8 +27,14 @@ const maxRepoParamLen = 2048
 
 // normalizeRepoFilter normalizes a repo identifier for comparison.
 // It lowercases the input, strips a .git suffix, strips a trailing slash,
-// and strips known GitHub HTTPS prefixes so that different representations
-// of the same repository compare equal.
+// and strips URL prefixes so that different representations of the same
+// repository compare equal.
+//
+// GitHub URLs additionally have the host stripped (e.g.
+// "https://github.com/owner/repo" → "owner/repo") to preserve backward
+// compatibility with callers that pass bare "owner/repo" strings. For all
+// other HTTPS hosts only the scheme is stripped, so
+// "https://gitlab.com/owner/repo" → "gitlab.com/owner/repo".
 //
 // Note: SSH remotes (git@github.com:) are intentionally omitted — they are
 // rejected by ValidateProfileRepo at registration time, so no stored profile
@@ -37,9 +43,19 @@ func normalizeRepoFilter(repo string) string {
 	s := strings.ToLower(repo)
 	s = strings.TrimSuffix(s, ".git")
 	s = strings.TrimSuffix(s, "/")
+	// GitHub: strip host + scheme for backward compat with bare "owner/repo".
 	for _, prefix := range []string{
 		"https://github.com/",
 		"http://github.com/",
+	} {
+		if strings.HasPrefix(s, prefix) {
+			return s[len(prefix):]
+		}
+	}
+	// Non-GitHub: strip scheme only so any host/path is preserved.
+	for _, prefix := range []string{
+		"https://",
+		"http://",
 	} {
 		if strings.HasPrefix(s, prefix) {
 			s = s[len(prefix):]

@@ -40,7 +40,11 @@ func TestNormalizeRepoFilter(t *testing.T) {
 		// stored profile can carry a git@ URL, so SSH normalization is not needed.
 		// The input passes through lowercased with .git stripped.
 		{"git@github.com:owner/repo.git", "git@github.com:owner/repo"},
-		{"https://gitlab.com/owner/repo.git", "https://gitlab.com/owner/repo"},
+		// Non-GitHub HTTPS hosts: strip scheme only, preserve host.
+		{"https://gitlab.com/owner/repo.git", "gitlab.com/owner/repo"},
+		{"https://gitlab.com/owner/repo", "gitlab.com/owner/repo"},
+		{"http://gitlab.com/owner/repo", "gitlab.com/owner/repo"},
+		{"https://gitea.example.com/owner/repo.git", "gitea.example.com/owner/repo"},
 		{"HTTPS://GITHUB.COM/Owner/Repo", "owner/repo"},
 		{"", ""},
 	}
@@ -146,6 +150,40 @@ func TestFilterAgentsByRepo(t *testing.T) {
 		alphaProfiles := result[0].Profiles
 		if _, ok := alphaProfiles["match"]; !ok {
 			t.Error("expected 'match' profile to be kept when repo param uses full HTTPS URL")
+		}
+	})
+
+	t.Run("non-GitHub HTTPS host matches full URL", func(t *testing.T) {
+		gitlabAgents := []hub.AgentInfo{
+			{
+				Name: "alpha",
+				Profiles: map[string]hub.ProfileInfo{
+					"match":   {Description: "gitlab repo", Repo: "https://gitlab.com/owner/repo"},
+					"nomatch": {Description: "different repo", Repo: "https://gitlab.com/other/repo"},
+				},
+			},
+		}
+		result := filterAgentsByRepo(gitlabAgents, "https://gitlab.com/owner/repo")
+		if _, ok := result[0].Profiles["match"]; !ok {
+			t.Error("expected 'match' profile to be kept for non-GitHub HTTPS URL")
+		}
+		if _, ok := result[0].Profiles["nomatch"]; ok {
+			t.Error("expected 'nomatch' profile to be removed for non-GitHub HTTPS URL")
+		}
+	})
+
+	t.Run("non-GitHub HTTPS host matches with .git suffix stripped", func(t *testing.T) {
+		gitlabAgents := []hub.AgentInfo{
+			{
+				Name: "alpha",
+				Profiles: map[string]hub.ProfileInfo{
+					"match": {Description: "gitlab repo with .git", Repo: "https://gitlab.com/owner/repo.git"},
+				},
+			},
+		}
+		result := filterAgentsByRepo(gitlabAgents, "https://gitlab.com/owner/repo")
+		if _, ok := result[0].Profiles["match"]; !ok {
+			t.Error("expected 'match' profile to be kept when stored with .git suffix")
 		}
 	})
 }
