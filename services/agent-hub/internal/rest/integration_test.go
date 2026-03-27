@@ -762,3 +762,316 @@ func TestIntegration_OversizedBody(t *testing.T) {
 		t.Fatalf("expected 413, got %d: %s", resp.StatusCode, body)
 	}
 }
+
+// simulateAgentWithProfiles connects a simulated agentd to the hub and
+// registers with the provided profiles map.
+func simulateAgentWithProfiles(t *testing.T, baseURL, agentToken, name string, profiles map[string]hub.ProfileInfo) {
+	t.Helper()
+
+	wsURL := "ws" + strings.TrimPrefix(baseURL, "http") + "/ws/agent"
+	ctx := context.Background()
+
+	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+		HTTPHeader: http.Header{
+			"Authorization": {"Bearer " + agentToken},
+		},
+	})
+	if err != nil {
+		t.Fatalf("dial hub: %v", err)
+	}
+	t.Cleanup(func() { conn.Close(websocket.StatusNormalClosure, "test done") })
+
+	regReq, _ := hub.NewRequest("reg-1", "register", &hub.RegisterParams{
+		Name:     name,
+		Profiles: profiles,
+	})
+	data, _ := json.Marshal(regReq)
+	if err := conn.Write(ctx, websocket.MessageText, data); err != nil {
+		t.Fatalf("write register: %v", err)
+	}
+
+	// Read register ack.
+	_, _, err = conn.Read(ctx)
+	if err != nil {
+		t.Fatalf("read register ack: %v", err)
+	}
+
+	// Echo loop.
+	go func() {
+		for {
+			_, data, err := conn.Read(context.Background())
+			if err != nil {
+				return
+			}
+			var req hub.Request
+			json.Unmarshal(data, &req)
+			var resp *hub.Response
+			if req.Method == "ping" {
+				resp, _ = hub.NewResponse(req.ID, map[string]bool{"pong": true})
+			} else {
+				resp, _ = hub.NewResponse(req.ID, map[string]string{"echo": req.Method})
+			}
+			respData, _ := json.Marshal(resp)
+			conn.Write(context.Background(), websocket.MessageText, respData)
+		}
+	}()
+}
+
+// TestIntegration_ListAgents_NoRepoFilter checks that GET /api/v1/agents with
+// no ?repo= query param returns all profiles unfiltered.
+func TestIntegration_ListAgents_NoRepoFilter(t *testing.T) {
+	apiToken := "test-api-token"
+	agentToken := "test-agent-token"
+	cfg := testConfig(apiToken, agentToken)
+
+	h, baseURL := startIntegrationServer(t, cfg)
+
+	profiles := map[string]hub.ProfileInfo{
+		"project-a": {Description: "profile for project a", Repo: "https://github.com/owner/repo-a"},
+		"project-b": {Description: "profile for project b", Repo: "https://github.com/owner/repo-b"},
+		"generic":   {Description: "generic profile", Repo: ""},
+	}
+	simulateAgentWithProfiles(t, baseURL, agentToken, "filter-agent", profiles)
+	waitForAgent(t, h, "filter-agent")
+
+	req, _ := http.NewRequest("GET", baseURL+"/api/v1/agents", nil)
+	req.Header.Set("Authorization", "Bearer "+apiToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("list agents: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Agents []struct {
+			Name     string                     `json:"name"`
+			Profiles map[string]json.RawMessage `json:"profiles"`
+		} `json:"agents"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(body.Agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(body.Agents))
+	}
+	agent := body.Agents[0]
+	if len(agent.Profiles) != 3 {
+		t.Errorf("expected all 3 profiles without ?repo= filter, got %d", len(agent.Profiles))
+	}
+	for _, name := range []string{"project-a", "project-b", "generic"} {
+		if _, ok := agent.Profiles[name]; !ok {
+			t.Errorf("expected profile %q to be present", name)
+		}
+	}
+}
+
+// TestIntegration_ListAgents_RepoFilter checks that GET /api/v1/agents?repo=<url>
+// returns only profiles matching that repo (plus generic profiles with empty Repo).
+func TestIntegration_ListAgents_RepoFilter(t *testing.T) {
+	apiToken := "test-api-token"
+	agentToken := "test-agent-token"
+	cfg := testConfig(apiToken, agentToken)
+
+	h, baseURL := startIntegrationServer(t, cfg)
+
+	profiles := map[string]hub.ProfileInfo{
+		"match":   {Description: "matches target repo", Repo: "https://github.com/owner/target"},
+		"nomatch": {Description: "different repo", Repo: "https://github.com/owner/other"},
+		"generic": {Description: "generic profile", Repo: ""},
+	}
+	simulateAgentWithProfiles(t, baseURL, agentToken, "filter-agent", profiles)
+	waitForAgent(t, h, "filter-agent")
+
+	req, _ := http.NewRequest("GET", baseURL+"/api/v1/agents?repo=https://github.com/owner/target", nil)
+	req.Header.Set("Authorization", "Bearer "+apiToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("list agents: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Agents []struct {
+			Name     string                     `json:"name"`
+			Profiles map[string]json.RawMessage `json:"profiles"`
+		} `json:"agents"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(body.Agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(body.Agents))
+	}
+	agent := body.Agents[0]
+
+	if _, ok := agent.Profiles["match"]; !ok {
+		t.Error("expected 'match' profile to be present")
+	}
+	if _, ok := agent.Profiles["generic"]; !ok {
+		t.Error("expected 'generic' profile (empty Repo) to be present")
+	}
+	if _, ok := agent.Profiles["nomatch"]; ok {
+		t.Error("expected 'nomatch' profile to be excluded")
+	}
+}
+
+// TestIntegration_GetAgent_RepoFilter checks that GET /api/v1/agents/{name}?repo=<url>
+// returns only profiles matching the given repo for the single agent.
+func TestIntegration_GetAgent_RepoFilter(t *testing.T) {
+	apiToken := "test-api-token"
+	agentToken := "test-agent-token"
+	cfg := testConfig(apiToken, agentToken)
+
+	h, baseURL := startIntegrationServer(t, cfg)
+
+	profiles := map[string]hub.ProfileInfo{
+		"match":   {Description: "matches target repo", Repo: "https://github.com/owner/target"},
+		"nomatch": {Description: "different repo", Repo: "https://github.com/owner/other"},
+		"generic": {Description: "generic profile", Repo: ""},
+	}
+	simulateAgentWithProfiles(t, baseURL, agentToken, "filter-agent", profiles)
+	waitForAgent(t, h, "filter-agent")
+
+	req, _ := http.NewRequest("GET", baseURL+"/api/v1/agents/filter-agent?repo=https://github.com/owner/target", nil)
+	req.Header.Set("Authorization", "Bearer "+apiToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("get agent: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Name     string                     `json:"name"`
+		Profiles map[string]json.RawMessage `json:"profiles"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Name != "filter-agent" {
+		t.Errorf("expected name filter-agent, got %q", body.Name)
+	}
+	if _, ok := body.Profiles["match"]; !ok {
+		t.Error("expected 'match' profile to be present")
+	}
+	if _, ok := body.Profiles["generic"]; !ok {
+		t.Error("expected 'generic' profile (empty Repo) to be present")
+	}
+	if _, ok := body.Profiles["nomatch"]; ok {
+		t.Error("expected 'nomatch' profile to be excluded")
+	}
+}
+
+// TestIntegration_ListAgents_RepoFilter_NoMatch checks that when ?repo= matches
+// no profiles, the agent is still returned with an empty profiles map.
+func TestIntegration_ListAgents_RepoFilter_NoMatch(t *testing.T) {
+	apiToken := "test-api-token"
+	agentToken := "test-agent-token"
+	cfg := testConfig(apiToken, agentToken)
+
+	h, baseURL := startIntegrationServer(t, cfg)
+
+	// Agent has only a repo-specific profile; no generic profiles.
+	profiles := map[string]hub.ProfileInfo{
+		"specific": {Description: "specific to a different repo", Repo: "https://github.com/owner/other"},
+	}
+	simulateAgentWithProfiles(t, baseURL, agentToken, "filter-agent", profiles)
+	waitForAgent(t, h, "filter-agent")
+
+	req, _ := http.NewRequest("GET", baseURL+"/api/v1/agents?repo=https://github.com/owner/target", nil)
+	req.Header.Set("Authorization", "Bearer "+apiToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("list agents: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Agents []struct {
+			Name     string                     `json:"name"`
+			Profiles map[string]json.RawMessage `json:"profiles"`
+		} `json:"agents"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	// The agent should still be present (filterAgentsByRepo keeps all agents).
+	if len(body.Agents) != 1 {
+		t.Fatalf("expected 1 agent (with empty profiles), got %d", len(body.Agents))
+	}
+	agent := body.Agents[0]
+	if agent.Name != "filter-agent" {
+		t.Errorf("expected agent name filter-agent, got %q", agent.Name)
+	}
+	if len(agent.Profiles) != 0 {
+		t.Errorf("expected empty profiles map when no profiles match, got %d", len(agent.Profiles))
+	}
+}
+
+// TestIntegration_ListAgents_WhitespaceRepoParam checks that a ?repo= param
+// containing only whitespace is treated as absent (no filtering applied).
+func TestIntegration_ListAgents_WhitespaceRepoParam(t *testing.T) {
+	apiToken := "test-api-token"
+	agentToken := "test-agent-token"
+	cfg := testConfig(apiToken, agentToken)
+
+	h, baseURL := startIntegrationServer(t, cfg)
+
+	profiles := map[string]hub.ProfileInfo{
+		"project-a": {Description: "profile for project a", Repo: "https://github.com/owner/repo-a"},
+		"project-b": {Description: "profile for project b", Repo: "https://github.com/owner/repo-b"},
+	}
+	simulateAgentWithProfiles(t, baseURL, agentToken, "filter-agent", profiles)
+	waitForAgent(t, h, "filter-agent")
+
+	// URL-encode a whitespace-only repo param ("   " → "%20%20%20").
+	req, _ := http.NewRequest("GET", baseURL+"/api/v1/agents?repo=%20%20%20", nil)
+	req.Header.Set("Authorization", "Bearer "+apiToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("list agents: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Agents []struct {
+			Name     string                     `json:"name"`
+			Profiles map[string]json.RawMessage `json:"profiles"`
+		} `json:"agents"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(body.Agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(body.Agents))
+	}
+	// Whitespace-only param is treated as absent → both profiles returned.
+	if len(body.Agents[0].Profiles) != 2 {
+		t.Errorf("expected both profiles when repo param is whitespace-only, got %d", len(body.Agents[0].Profiles))
+	}
+}

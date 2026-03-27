@@ -21,7 +21,7 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
         (s) => normalizeRepo(s.session.repoUrl) === normalizeRepo(selectedProject.repository)
       )
     : sessions;
-  const { agents, loading: agentsLoading } = useAgents();
+  const { agents, loading: agentsLoading } = useAgents(selectedProject?.repository);
   const [openWindows, setOpenWindows] = useState<TiledWindow[]>([]);
   const [minimizedKeys, setMinimizedKeys] = useState<Set<string>>(new Set());
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {

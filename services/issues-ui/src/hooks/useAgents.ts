@@ -12,7 +12,7 @@ interface UseAgentsResult {
   error: string | null;
 }
 
-export function useAgents(): UseAgentsResult {
+export function useAgents(repo?: string): UseAgentsResult {
   const hidden = usePageVisibility();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,16 +21,16 @@ export function useAgents(): UseAgentsResult {
 
   useEffect(() => {
     let cancelled = false;
-    const isInitialFetch = !hasFetchedRef.current;
     let consecutiveFailures = 0;
 
     const pollAgents = () => {
+      const isInitialFetch = !hasFetchedRef.current;
       if (isInitialFetch) {
         setLoading(true);
         setError(null);
       }
 
-      fetchAgents()
+      fetchAgents(repo)
         .then((result) => {
           if (!cancelled) {
             setAgents(result.agents);
@@ -58,7 +58,7 @@ export function useAgents(): UseAgentsResult {
     };
 
     if (hidden) {
-      if (isInitialFetch) setLoading(false);
+      if (!hasFetchedRef.current) setLoading(false);
     } else {
       pollAgents();
     }
@@ -68,7 +68,7 @@ export function useAgents(): UseAgentsResult {
       cancelled = true;
       if (interval) clearInterval(interval);
     };
-  }, [hidden]);
+  }, [hidden, repo]);
 
   return { agents, loading, error };
 }
@@ -113,7 +113,7 @@ export function useAgentProfiles(
     for (const agent of agents) {
       if (agent.status !== "online") continue;
       for (const [profileName, profile] of Object.entries(agent.profiles)) {
-        if (normalizeRepo(profile.repo) === normalizedUrl) {
+        if (!profile.repo || normalizeRepo(profile.repo) === normalizedUrl) {
           entries.push({ agent: agent.name, profileName, profile });
         }
       }

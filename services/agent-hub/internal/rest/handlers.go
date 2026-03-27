@@ -17,10 +17,74 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// maxRepoParamLen matches the repo length cap enforced by ValidateProfileRepo
+// at agent registration time.
+const maxRepoParamLen = 2048
+
+// NOTE: The ?repo= filter is a UI-scoping convenience, not a security boundary.
+// Any authenticated caller can omit the parameter and receive all profiles.
+// Do not rely on it for access control.
+
+// normalizeRepoFilter normalizes a repo identifier for comparison.
+// It lowercases the input, strips a .git suffix, strips a trailing slash,
+// and strips known GitHub HTTPS prefixes so that different representations
+// of the same repository compare equal.
+//
+// Note: SSH remotes (git@github.com:) are intentionally omitted — they are
+// rejected by ValidateProfileRepo at registration time, so no stored profile
+// can carry an SSH repo URL.
+func normalizeRepoFilter(repo string) string {
+	s := strings.ToLower(repo)
+	s = strings.TrimSuffix(s, ".git")
+	s = strings.TrimSuffix(s, "/")
+	for _, prefix := range []string{
+		"https://github.com/",
+		"http://github.com/",
+	} {
+		if strings.HasPrefix(s, prefix) {
+			s = s[len(prefix):]
+			break
+		}
+	}
+	return s
+}
+
+// filterAgentsByRepo returns a copy of agents with each agent's Profiles map
+// filtered to only those profiles whose Repo matches repo (after normalization)
+// or whose Repo is empty (generic profiles that match any project).
+// All agents are returned even if their filtered Profiles map is empty.
+func filterAgentsByRepo(agents []hub.AgentInfo, repo string) []hub.AgentInfo {
+	normalized := normalizeRepoFilter(repo)
+	result := make([]hub.AgentInfo, len(agents))
+	for i, agent := range agents {
+		filtered := make(map[string]hub.ProfileInfo)
+		for name, profile := range agent.Profiles {
+			if profile.Repo == "" || normalizeRepoFilter(profile.Repo) == normalized {
+				filtered[name] = profile
+			}
+		}
+		result[i] = hub.AgentInfo{
+			Name:     agent.Name,
+			Profiles: filtered,
+			Status:   agent.Status,
+			LastSeen: agent.LastSeen,
+		}
+	}
+	return result
+}
+
 // handleListAgents returns all registered agents.
 func handleListAgents(h *hub.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		agents := h.List()
+
+		if repo := strings.TrimSpace(r.URL.Query().Get("repo")); repo != "" {
+			if len(repo) > maxRepoParamLen {
+				writeJSONError(w, http.StatusBadRequest, "repo parameter too long")
+				return
+			}
+			agents = filterAgentsByRepo(agents, repo)
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]any{
@@ -138,10 +202,25 @@ func handleGetAgent(h *hub.Hub) http.HandlerFunc {
 			return
 		}
 
+		profiles := agent.Profiles
+		if repo := strings.TrimSpace(r.URL.Query().Get("repo")); repo != "" {
+			if len(repo) > maxRepoParamLen {
+				writeJSONError(w, http.StatusBadRequest, "repo parameter too long")
+				return
+			}
+			info := filterAgentsByRepo([]hub.AgentInfo{{
+				Name:     agent.Name,
+				Profiles: agent.Profiles,
+				Status:   agent.Status(),
+				LastSeen: agent.LastSeen(),
+			}}, repo)
+			profiles = info[0].Profiles
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
 			"name":      agent.Name,
-			"profiles":  agent.Profiles,
+			"profiles":  profiles,
 			"status":    agent.Status(),
 			"last_seen": agent.LastSeen(),
 		})

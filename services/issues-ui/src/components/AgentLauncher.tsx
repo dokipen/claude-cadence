@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { createSession } from "../api/agentHubClient";
-import { useAgents, useAgentProfiles } from "../hooks/useAgents";
+import { useAgents } from "../hooks/useAgents";
+import type { AgentProfileEntry } from "../hooks/useAgents";
 import type { Session } from "../types";
 import styles from "../styles/agents.module.css";
 
@@ -23,8 +24,20 @@ export function AgentLauncher({
   sessionName = `lead-${ticketNumber}`,
   buttonLabel = "Lead",
 }: AgentLauncherProps) {
-  const { agents, loading: agentsLoading, error: agentsError } = useAgents();
-  const profiles = useAgentProfiles(repoUrl, agents);
+  const { agents, loading: agentsLoading, error: agentsError } = useAgents(repoUrl);
+  const profiles = useMemo<AgentProfileEntry[]>(
+    () =>
+      agents
+        .filter((a) => a.status === "online")
+        .flatMap((a) =>
+          Object.entries(a.profiles).map(([profileName, profile]) => ({
+            agent: a.name,
+            profileName,
+            profile,
+          })),
+        ),
+    [agents],
+  );
   const singleMatch = profiles.length === 1;
 
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
