@@ -1,12 +1,14 @@
 package hub
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/dokipen/claude-cadence/services/agents/internal/logparse"
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
 )
 
@@ -24,12 +26,14 @@ type Dispatcher struct {
 	manager          *session.Manager
 	advertiseAddress string
 	webSocketScheme  string
+	logPath          string
 }
 
 // NewDispatcher creates a Dispatcher backed by the given session manager.
 // advertiseAddress enables the getTerminalEndpoint RPC method.
-func NewDispatcher(manager *session.Manager, advertiseAddress string, webSocketScheme string) *Dispatcher {
-	return &Dispatcher{manager: manager, advertiseAddress: advertiseAddress, webSocketScheme: webSocketScheme}
+// logPath is the path to agentd's stderr log file; empty means journald on Linux.
+func NewDispatcher(manager *session.Manager, advertiseAddress string, webSocketScheme string, logPath string) *Dispatcher {
+	return &Dispatcher{manager: manager, advertiseAddress: advertiseAddress, webSocketScheme: webSocketScheme, logPath: logPath}
 }
 
 // CreateSession handles the createSession JSON-RPC method.
@@ -281,6 +285,117 @@ func mapSessionError(err error) *rpcError {
 	default:
 		return &rpcError{Code: rpcErrInternal, Message: sessErr.Message}
 	}
+}
+
+// GetDiagnostics handles the getDiagnostics JSON-RPC method.
+// It reads log events since the requested window and returns them alongside current session state.
+func (d *Dispatcher) GetDiagnostics(params json.RawMessage) (json.RawMessage, *rpcError) {
+	var p getDiagnosticsParams
+	if len(params) > 0 {
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, &rpcError{Code: rpcErrInvalidArgument, Message: "invalid params: " + err.Error()}
+		}
+	}
+	if p.SinceMinutes <= 0 {
+		p.SinceMinutes = 10080 // default: 7 days
+	}
+
+	since := time.Now().Add(-time.Duration(p.SinceMinutes) * time.Minute)
+
+	events, err := logparse.ParseLogs(context.Background(), d.logPath, since)
+	if err != nil {
+		slog.Warn("getDiagnostics: failed to parse logs", "error", err)
+	}
+	if events == nil {
+		events = []logparse.DiagnosticEvent{}
+	}
+
+	sessions, err := d.manager.List("")
+	if err != nil {
+		return nil, mapSessionError(err)
+	}
+
+	var byState sessionsByState
+	byState.Running = []sessionInfo{}
+	byState.Stopped = []sessionInfo{}
+	byState.Error = []sessionInfo{}
+	byState.Creating = []sessionInfo{}
+
+	for _, s := range sessions {
+		info := toSessionInfo(s)
+		switch s.State {
+		case session.StateRunning:
+			byState.Running = append(byState.Running, info)
+		case session.StateStopped:
+			byState.Stopped = append(byState.Stopped, info)
+		case session.StateError:
+			byState.Error = append(byState.Error, info)
+		case session.StateCreating:
+			byState.Creating = append(byState.Creating, info)
+		}
+	}
+
+	summary := diagnosticsSummary{
+		SinceMinutes:  p.SinceMinutes,
+		TotalSessions: len(sessions),
+	}
+	for _, ev := range events {
+		switch ev.Type {
+		case logparse.EventSessionDeath:
+			summary.DeathCount++
+		case logparse.EventFastExit:
+			summary.FastExitCount++
+		case logparse.EventStuckCreating:
+			summary.StuckCreatingCount++
+		case logparse.EventStaleTTL:
+			summary.StaleTTLCount++
+		case logparse.EventHubDisconnect:
+			summary.HubDisconnectCount++
+		}
+	}
+	for _, s := range sessions {
+		switch s.State {
+		case session.StateRunning:
+			summary.RunningCount++
+		case session.StateError:
+			summary.ErrorCount++
+		}
+	}
+
+	return marshalResult(diagnosticsResult{
+		Events:   events,
+		Sessions: byState,
+		Summary:  summary,
+	})
+}
+
+type getDiagnosticsParams struct {
+	SinceMinutes int `json:"since_minutes"`
+}
+
+type diagnosticsResult struct {
+	Events   []logparse.DiagnosticEvent `json:"events"`
+	Sessions sessionsByState            `json:"sessions"`
+	Summary  diagnosticsSummary         `json:"summary"`
+}
+
+type sessionsByState struct {
+	Running  []sessionInfo `json:"running"`
+	Stopped  []sessionInfo `json:"stopped"`
+	Error    []sessionInfo `json:"error"`
+	Creating []sessionInfo `json:"creating"`
+}
+
+type diagnosticsSummary struct {
+	SinceMinutes       int `json:"since_minutes"`
+	DeathCount         int `json:"death_count"`
+	FastExitCount      int `json:"fast_exit_count"`
+	StuckCreatingCount int `json:"stuck_creating_count"`
+	StaleTTLCount      int `json:"stale_ttl_count"`
+	HubDisconnectCount int `json:"hub_disconnect_count"`
+	TotalSessions      int `json:"total_sessions"`
+	RunningCount       int `json:"running_count"`
+	ErrorCount         int `json:"error_count"`
 }
 
 func marshalResult(v any) (json.RawMessage, *rpcError) {
