@@ -554,6 +554,7 @@ test.describe("agent launch form", () => {
 
   test("profile select is populated with the selected host's profiles", async ({ page }) => {
     await page.goto("/agents");
+    await page.waitForLoadState("networkidle");
 
     await page.getByTestId("host-select").selectOption("test-agent");
 
@@ -629,6 +630,7 @@ test.describe("agent launch form", () => {
     });
 
     await page.goto("/agents");
+    await page.waitForLoadState("networkidle");
 
     await page.getByTestId("host-select").selectOption("test-agent");
     await page.getByTestId("profile-select").selectOption("default");
@@ -663,6 +665,7 @@ test.describe("agent launch form", () => {
     });
 
     await page.goto("/agents");
+    await page.waitForLoadState("networkidle");
 
     await page.getByTestId("host-select").selectOption("test-agent");
     await page.getByTestId("profile-select").selectOption("default");
@@ -693,6 +696,7 @@ test.describe("agent launch form", () => {
     });
 
     await page.goto("/agents");
+    await page.waitForLoadState("networkidle");
 
     await page.getByTestId("host-select").selectOption("test-agent");
     await page.getByTestId("profile-select").selectOption("default");
