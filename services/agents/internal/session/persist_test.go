@@ -250,6 +250,39 @@ func TestPersister_LoadAll_SkipsTmpFiles(t *testing.T) {
 	}
 }
 
+func TestLoadAll_DeletesTmpFiles(t *testing.T) {
+	dir := t.TempDir()
+
+	// Write a .json.tmp file (simulate unclean shutdown orphan).
+	tmpPath := filepath.Join(dir, uuid.New().String()+".json.tmp")
+	sess := makeSession(StateStopped)
+	data, _ := json.Marshal(sessionToRecord(*sess))
+	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
+		t.Fatalf("WriteFile tmp: %v", err)
+	}
+
+	p, err := NewPersister(dir)
+	if err != nil {
+		t.Fatalf("NewPersister: %v", err)
+	}
+	defer p.Stop()
+
+	sessions, err := p.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+
+	// The tmp file is not a real session — no sessions should be loaded.
+	if len(sessions) != 0 {
+		t.Errorf("LoadAll returned %d sessions for tmp file, want 0", len(sessions))
+	}
+
+	// The tmp file must be deleted from disk.
+	if _, statErr := os.Stat(tmpPath); !os.IsNotExist(statErr) {
+		t.Errorf("expected tmp file to be deleted after LoadAll, but it still exists")
+	}
+}
+
 func TestPersister_LoadAll_EmptyDir(t *testing.T) {
 	dir := t.TempDir()
 	p, err := NewPersister(dir)

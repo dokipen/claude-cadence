@@ -381,6 +381,8 @@ func (m *Manager) reconcile(sess *Session) {
 		// is still alive, we have no PTY handle to reconnect but the agent is
 		// still running. Keep the session as StateRunning.
 		// Only transition to StateStopped if the process is also dead (or has no PID).
+		// AgentPID == 0 means the process never started (create was in-flight at shutdown).
+		// Fall through to the StateStopped transition below.
 		if sess.restoredFromDisk && sess.AgentPID > 0 && m.processAlive(sess.AgentPID) {
 			return
 		}
@@ -523,9 +525,10 @@ func (m *Manager) RestoreFromPersister(p *Persister) error {
 			//                  The process may or may not still be running, but
 			//                  we have no PTY handle to reconnect to it, so treat
 			//                  it as an error in both cases.
-			if sess.AgentPID != 0 {
-				// Kill any orphaned process; ignore error (may already be dead).
-				_ = m.killProcess(sess.AgentPID)
+			if sess.AgentPID != 0 && m.processAlive(sess.AgentPID) {
+				if err := m.killProcess(sess.AgentPID); err != nil {
+					slog.Warn("failed to kill orphaned process on restore", "pid", sess.AgentPID, "err", err)
+				}
 			}
 			sess.State = StateError
 			sess.ErrorMessage = "session interrupted during creation (daemon restart)"
