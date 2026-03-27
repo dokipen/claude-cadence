@@ -45,6 +45,7 @@ func TestNormalizeRepoFilter(t *testing.T) {
 		{"https://gitlab.com/owner/repo", "gitlab.com/owner/repo"},
 		{"http://gitlab.com/owner/repo", "gitlab.com/owner/repo"},
 		{"https://gitea.example.com/owner/repo.git", "gitea.example.com/owner/repo"},
+		{"https://gitea.example.com:3000/owner/repo.git", "gitea.example.com:3000/owner/repo"},
 		{"HTTPS://GITHUB.COM/Owner/Repo", "owner/repo"},
 		{"", ""},
 	}
@@ -169,6 +170,21 @@ func TestFilterAgentsByRepo(t *testing.T) {
 		}
 		if _, ok := result[0].Profiles["nomatch"]; ok {
 			t.Error("expected 'nomatch' profile to be removed for non-GitHub HTTPS URL")
+		}
+	})
+
+	t.Run("non-GitHub HTTPS host with port matches full URL", func(t *testing.T) {
+		portAgents := []hub.AgentInfo{
+			{
+				Name: "alpha",
+				Profiles: map[string]hub.ProfileInfo{
+					"match": {Description: "self-hosted with port", Repo: "https://gitea.example.com:3000/owner/repo"},
+				},
+			},
+		}
+		result := filterAgentsByRepo(portAgents, "https://gitea.example.com:3000/owner/repo")
+		if _, ok := result[0].Profiles["match"]; !ok {
+			t.Error("expected 'match' profile to be kept for HTTPS URL with port")
 		}
 	})
 
