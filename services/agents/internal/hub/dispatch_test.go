@@ -16,7 +16,7 @@ func newFakeManager() *session.Manager {
 }
 
 func newTestDispatcher() *Dispatcher {
-	return NewDispatcher(newFakeManager(), "127.0.0.1", "ws")
+	return NewDispatcher(newFakeManager(), "127.0.0.1", "ws", "")
 }
 
 func TestDispatcher_CreateSession_InvalidParams(t *testing.T) {
@@ -102,7 +102,7 @@ func TestDispatcher_GetTerminalEndpoint_RelayWhenNoAdvertiseAddress(t *testing.T
 	store := session.NewStore()
 	store.Add(&session.Session{ID: "550e8400-e29b-41d4-a716-446655440001", State: session.StateStopped})
 	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{}, 0)
-	d := NewDispatcher(mgr, "", "ws") // empty advertise address → relay path
+	d := NewDispatcher(mgr, "", "ws", "") // empty advertise address → relay path
 
 	result, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"550e8400-e29b-41d4-a716-446655440001"}`))
 	if rpcErr != nil {
@@ -125,7 +125,7 @@ func TestDispatcher_GetTerminalEndpoint_Success(t *testing.T) {
 	store := session.NewStore()
 	store.Add(&session.Session{ID: "550e8400-e29b-41d4-a716-446655440002", State: session.StateStopped})
 	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{}, 0)
-	d := NewDispatcher(mgr, "192.168.1.10", "ws")
+	d := NewDispatcher(mgr, "192.168.1.10", "ws", "")
 
 	result, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"550e8400-e29b-41d4-a716-446655440002"}`))
 	if rpcErr != nil {
@@ -149,7 +149,7 @@ func TestDispatcher_GetTerminalEndpoint_WSSScheme(t *testing.T) {
 	store := session.NewStore()
 	store.Add(&session.Session{ID: "550e8400-e29b-41d4-a716-446655440003", State: session.StateStopped})
 	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{}, 0)
-	d := NewDispatcher(mgr, "example.com", "wss")
+	d := NewDispatcher(mgr, "example.com", "wss", "")
 
 	result, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"550e8400-e29b-41d4-a716-446655440003"}`))
 	if rpcErr != nil {
@@ -221,7 +221,7 @@ func TestDispatcher_GetTerminalEndpoint_URNFormNormalized(t *testing.T) {
 	store := session.NewStore()
 	store.Add(&session.Session{ID: canonicalID, State: session.StateStopped})
 	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{}, 0)
-	d := NewDispatcher(mgr, "192.168.1.10", "ws")
+	d := NewDispatcher(mgr, "192.168.1.10", "ws", "")
 
 	urnForm := "urn:uuid:" + canonicalID
 	params, _ := json.Marshal(map[string]string{"session_id": urnForm})

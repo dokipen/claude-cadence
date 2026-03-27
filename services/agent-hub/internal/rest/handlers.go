@@ -8,12 +8,14 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/coder/websocket"
 	"github.com/dokipen/claude-cadence/services/agent-hub/internal/hub"
+	"github.com/dokipen/claude-cadence/services/agent-hub/internal/logparse"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -115,6 +117,10 @@ func handleListAgents(h *hub.Hub) http.HandlerFunc {
 // Without this, worst-case latency is ceil(N/16)*5s (e.g. 160 agents → 50s),
 // which exceeds the HTTP server's 35s WriteTimeout. Chosen to be safely under WriteTimeout.
 const listAllSessionsDeadline = 28 * time.Second
+
+// diagnosticsDeadline caps the total fan-out time for handleGetDiagnostics.
+// Set equal to listAllSessionsDeadline since the per-agent RPC is similarly lightweight.
+const diagnosticsDeadline = listAllSessionsDeadline
 
 // handleListAllSessions returns sessions across all online agents.
 func handleListAllSessions(h *hub.Hub, overallDeadline time.Duration) http.HandlerFunc {
@@ -360,6 +366,159 @@ func handleDestroySession(h *hub.Hub) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(result)
+	}
+}
+
+// handleGetDiagnostics fans out getDiagnostics to all online agents, reads hub-side log
+// events, and returns a merged diagnostic view including offline agents.
+func handleGetDiagnostics(h *hub.Hub, logPath string, overallDeadline time.Duration) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		sinceMinutes := 10080
+		if s := r.URL.Query().Get("since_minutes"); s != "" {
+			if n, err := strconv.Atoi(s); err == nil && n > 0 {
+				sinceMinutes = n
+			}
+		}
+		if sinceMinutes > 525960 {
+			sinceMinutes = 525960
+		}
+
+		since := time.Now().Add(-time.Duration(sinceMinutes) * time.Minute)
+
+		allAgents := h.List()
+
+		type agentDiagnostics struct {
+			Status      string          `json:"status"`
+			LastSeen    time.Time       `json:"last_seen"`
+			Diagnostics json.RawMessage `json:"diagnostics"`
+		}
+
+		// Pre-populate with all agents (online and offline) so offline agents appear in the response.
+		agentMap := make(map[string]agentDiagnostics, len(allAgents))
+		var mapMu sync.Mutex
+		for _, info := range allAgents {
+			agentMap[info.Name] = agentDiagnostics{
+				Status:   string(info.Status),
+				LastSeen: info.LastSeen,
+			}
+		}
+
+		// Fan out getDiagnostics to online agents.
+		sem := make(chan struct{}, MaxAgentFanOut)
+
+		fanOutCtx, cancel := context.WithTimeout(r.Context(), overallDeadline)
+		defer cancel()
+
+		eg, egCtx := errgroup.WithContext(fanOutCtx)
+	loop:
+		for _, info := range allAgents {
+			if info.Status != hub.StatusOnline {
+				continue
+			}
+			agent, ok := h.Get(info.Name)
+			if !ok {
+				continue
+			}
+			select {
+			case sem <- struct{}{}:
+			case <-egCtx.Done():
+				break loop
+			}
+			agentName := info.Name
+			eg.Go(func() error {
+				defer func() { <-sem }()
+				callCtx, callCancel := context.WithTimeout(egCtx, listAllSessionsTimeout)
+				defer callCancel()
+
+				result, err := h.Call(callCtx, agent, "getDiagnostics", map[string]any{
+					"since_minutes": sinceMinutes,
+				})
+				if err != nil {
+					slog.Debug("failed to get diagnostics from agent", "agent", agentName, "error", err)
+					return nil
+				}
+
+				mapMu.Lock()
+				if existing, ok := agentMap[agentName]; ok {
+					existing.Diagnostics = result
+					agentMap[agentName] = existing
+				}
+				mapMu.Unlock()
+				return nil
+			})
+		}
+		eg.Wait() //nolint:errcheck // goroutines only return nil
+
+		if errors.Is(egCtx.Err(), context.DeadlineExceeded) {
+			writeJSONError(w, http.StatusGatewayTimeout, "fan-out deadline exceeded")
+			return
+		}
+
+		// Read hub-side log events with a bounded timeout so log parsing cannot
+		// consume remaining WriteTimeout budget after a slow fan-out.
+		logCtx, logCancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer logCancel()
+		hubEvents, err := logparse.ParseLogs(logCtx, logPath, since)
+		if err != nil {
+			slog.Warn("getDiagnostics: failed to parse hub logs", "error", err)
+		}
+		if hubEvents == nil {
+			hubEvents = []logparse.DiagnosticEvent{}
+		}
+
+		// Compute combined summary across all agents.
+		type combinedSummary struct {
+			TotalDeathCount    int `json:"total_death_count"`
+			FastExitCount      int `json:"fast_exit_count"`
+			StuckCreatingCount int `json:"stuck_creating_count"`
+			HubTimeoutCount    int `json:"hub_timeout_count"`
+			OfflineAgentCount  int `json:"offline_agent_count"`
+			ErrorSessionCount  int `json:"error_session_count"`
+		}
+
+		summary := combinedSummary{}
+
+		for _, info := range allAgents {
+			if info.Status != hub.StatusOnline {
+				summary.OfflineAgentCount++
+			}
+		}
+		for _, ev := range hubEvents {
+			if ev.Type == logparse.EventHubTimeout {
+				summary.HubTimeoutCount++
+			}
+		}
+
+		for _, ad := range agentMap {
+			if ad.Diagnostics == nil {
+				continue
+			}
+			var diag struct {
+				Summary struct {
+					DeathCount         int `json:"death_count"`
+					FastExitCount      int `json:"fast_exit_count"`
+					StuckCreatingCount int `json:"stuck_creating_count"`
+					ErrorCount         int `json:"error_count"`
+				} `json:"summary"`
+			}
+			if err := json.Unmarshal(ad.Diagnostics, &diag); err == nil {
+				summary.TotalDeathCount += diag.Summary.DeathCount
+				summary.FastExitCount += diag.Summary.FastExitCount
+				summary.StuckCreatingCount += diag.Summary.StuckCreatingCount
+				summary.ErrorSessionCount += diag.Summary.ErrorCount
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"collected_at":     time.Now().UTC().Format(time.RFC3339),
+			"since_minutes":    sinceMinutes,
+			"agents":           agentMap,
+			"hub_events":       hubEvents,
+			"combined_summary": summary,
+		}); err != nil {
+			slog.Error("failed to encode diagnostics response", "error", err)
+		}
 	}
 }
 

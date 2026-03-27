@@ -135,6 +135,7 @@ type PTYConfig struct {
 type LogConfig struct {
 	Level  string `yaml:"level"`
 	Format string `yaml:"format"`
+	Path   string `yaml:"path"` // path to stderr log file; empty = use journald on Linux
 }
 
 // Profile defines an agent profile with its command and repo.

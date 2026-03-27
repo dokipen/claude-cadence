@@ -93,6 +93,7 @@ type HeartbeatConfig struct {
 type LogConfig struct {
 	Level  string `yaml:"level"`
 	Format string `yaml:"format"`
+	Path   string `yaml:"path"` // path to stderr log file; empty = use journald on Linux
 }
 
 // Load reads and validates a YAML config file.
