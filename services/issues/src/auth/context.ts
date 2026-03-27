@@ -1,6 +1,23 @@
 import type { PrismaClient, User } from "@prisma/client";
 import { verifyToken } from "./jwt.js";
 
+export const AUTH_BYPASS = process.env.AUTH_BYPASS === "1";
+
+if (AUTH_BYPASS && process.env.NODE_ENV === "production") {
+  console.error("AUTH_BYPASS cannot be enabled in production");
+  process.exit(1);
+}
+
+const DEV_USER: User = {
+  id: "dev-bypass",
+  githubId: 0,
+  login: "dev",
+  displayName: "Dev User",
+  avatarUrl: null,
+  createdAt: new Date(0),
+  updatedAt: new Date(0),
+};
+
 export interface AuthContext {
   currentUser: User | null;
   accessToken?: string;
@@ -15,6 +32,10 @@ export async function buildAuthContext(
   req: { headers: { authorization?: string } },
   prisma: PrismaClient
 ): Promise<AuthContext> {
+  if (AUTH_BYPASS) {
+    return { currentUser: DEV_USER };
+  }
+
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
     return { currentUser: null };

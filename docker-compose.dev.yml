@@ -21,6 +21,7 @@ services:
       - DATABASE_URL=file:/app/data/issues.db
       - PORT=4000
       - DEV_SEED=1
+      - AUTH_BYPASS=1 # dev only — bypasses login
     healthcheck:
       # Use node (available in the Node.js image) to avoid BusyBox wget
       # limitations with --header/--post-data flags.
@@ -48,6 +49,7 @@ services:
       # for non-Docker local dev.
       - VITE_API_HOST=issues
       - VITE_AGENT_HUB_HOST=agent-hub
+      - VITE_AUTH_BYPASS=1 # dev only — bypasses login
     depends_on:
       issues:
         condition: service_healthy

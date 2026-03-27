@@ -4,9 +4,24 @@ import { parse } from "graphql";
 /**
  * Helper: imports authGuardPlugin with a fresh module graph so the
  * module-level PUBLIC_FIELDS set picks up the mocked isProduction value.
+ * Mocks ./context.js with AUTH_BYPASS=false to prevent the real context
+ * module from loading jwt.ts (which throws when JWT_SECRET is absent in
+ * production).
  */
 async function loadGuard(isProduction: boolean) {
   vi.doMock("../env.js", () => ({ isProduction }));
+  vi.doMock("./context.js", () => ({ AUTH_BYPASS: false }));
+  const { authGuardPlugin } = await import("./guard.js");
+  return authGuardPlugin;
+}
+
+/**
+ * Helper: imports authGuardPlugin with a fresh module graph so the
+ * module-level AUTH_BYPASS constant picks up the mocked value from context.
+ */
+async function loadGuardWithBypass(authBypass: boolean) {
+  vi.doMock("../env.js", () => ({ isProduction: true }));
+  vi.doMock("./context.js", () => ({ AUTH_BYPASS: authBypass }));
   const { authGuardPlugin } = await import("./guard.js");
   return authGuardPlugin;
 }
@@ -75,6 +90,53 @@ describe("authGuardPlugin", () => {
 
     it("allows introspection for authenticated users", async () => {
       const authGuardPlugin = await loadGuard(true);
+      const plugin = authGuardPlugin();
+      const hooks = await (plugin as any).requestDidStart!({} as any);
+      await expect(
+        hooks.didResolveOperation(
+          makeRequestContext("{ __schema { types { name } } }", {
+            id: "user-1",
+          }),
+        ),
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  describe("AUTH_BYPASS mode (AUTH_BYPASS=true)", () => {
+    it("returns a fully empty no-op plugin object", async () => {
+      const authGuardPlugin = await loadGuardWithBypass(true);
+      const plugin = authGuardPlugin();
+      // The plugin must be an empty object — no hooks of any kind.
+      // toEqual({}) catches regressions where extra hooks are accidentally added.
+      expect(plugin).toEqual({});
+      expect(plugin).not.toHaveProperty("requestDidStart");
+    });
+
+    it("bypasses all authentication regardless of query content", async () => {
+      const authGuardPlugin = await loadGuardWithBypass(true);
+      const plugin = authGuardPlugin();
+      // With no requestDidStart hook, no request is ever inspected or blocked —
+      // whether it targets normally-protected fields (e.g. tickets) or introspection.
+      // Confirm the hook is absent by key presence, not just value, so a hook that
+      // returns undefined would still be caught.
+      expect(Object.prototype.hasOwnProperty.call(plugin, "requestDidStart")).toBe(false);
+    });
+  });
+
+  describe("AUTH_BYPASS disabled (AUTH_BYPASS=false)", () => {
+    it("still enforces authentication in production", async () => {
+      const authGuardPlugin = await loadGuardWithBypass(false);
+      const plugin = authGuardPlugin();
+      const hooks = await (plugin as any).requestDidStart!({} as any);
+      await expect(
+        hooks.didResolveOperation(
+          makeRequestContext("{ __schema { types { name } } }"),
+        ),
+      ).rejects.toThrow("Authentication required");
+    });
+
+    it("still allows authenticated requests in production", async () => {
+      const authGuardPlugin = await loadGuardWithBypass(false);
       const plugin = authGuardPlugin();
       const hooks = await (plugin as any).requestDidStart!({} as any);
       await expect(

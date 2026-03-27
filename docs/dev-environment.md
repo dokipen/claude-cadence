@@ -5,7 +5,6 @@ A single-command local stack for manual PR QA.
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) with the Compose plugin (`docker compose`)
-- A [GitHub OAuth app](https://github.com/settings/developers) configured for local use
 
 ## Quick Start
 
@@ -29,16 +28,15 @@ The dev environment automatically seeds a `claude-cadence` project on startup vi
 After `docker compose -f docker-compose.dev.yml up`, the `claude-cadence` project is immediately
 available in the UI — no manual database surgery needed for basic usage.
 
-## GitHub OAuth App Setup
+## Authentication
 
-Create a GitHub OAuth app at https://github.com/settings/developers:
+Auth is bypassed by default in the dev stack. `docker-compose.dev.yml` sets `AUTH_BYPASS=1`
+on the `issues` service and `VITE_AUTH_BYPASS=1` on `issues-ui`, so no GitHub OAuth app is
+required for local development.
 
-| Field | Value |
-|-------|-------|
-| Homepage URL | `http://localhost` |
-| Authorization callback URL | `http://localhost/auth/github/callback` |
-
-Copy the **Client ID** and **Client Secret** into `.env.dev`.
+If you need to test the full OAuth login flow, remove those env vars and set
+`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and `JWT_SECRET` in `.env.dev` (see
+`.env.dev.example` for details).
 
 ## Testing a PR Branch
 
@@ -108,13 +106,15 @@ docker compose -f docker-compose.dev.yml down -v
 
 ## Environment Variables
 
-See `.env.dev.example` for the full list of variables with descriptions. Required variables:
+See `.env.dev.example` for the full list of variables with descriptions.
 
-| Variable | Service | Description |
-|----------|---------|-------------|
-| `JWT_SECRET` | issues | Signs JWTs — generate with `openssl rand -hex 32` |
-| `GITHUB_CLIENT_ID` | issues | GitHub OAuth app client ID |
-| `GITHUB_CLIENT_SECRET` | issues | GitHub OAuth app client secret |
-| `HUB_API_TOKEN` | agent-hub | Bearer token for REST API clients |
-| `HUB_AGENT_TOKEN` | agent-hub | Bearer token for agentd registration |
-| `AGENTD_TOKEN` | agentd | gRPC API bearer token |
+| Variable | Service | Required | Description |
+|----------|---------|----------|-------------|
+| `JWT_SECRET` | issues | Optional* | Signs JWTs — generate with `openssl rand -hex 32` |
+| `GITHUB_CLIENT_ID` | issues | Optional* | GitHub OAuth app client ID |
+| `GITHUB_CLIENT_SECRET` | issues | Optional* | GitHub OAuth app client secret |
+| `HUB_API_TOKEN` | agent-hub | `--profile agents` | Bearer token for REST API clients |
+| `HUB_AGENT_TOKEN` | agent-hub | `--profile agents` | Bearer token for agentd registration |
+| `AGENTD_TOKEN` | agentd | `--profile agents` | gRPC API bearer token |
+
+\* Not required when `AUTH_BYPASS=1` (the default in `docker-compose.dev.yml`).

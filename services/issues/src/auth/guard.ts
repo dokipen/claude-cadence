@@ -2,6 +2,7 @@ import type { ApolloServerPlugin } from "@apollo/server";
 import { GraphQLError } from "graphql";
 import { isProduction } from "../env.js";
 import type { AuthenticatedContext } from "../schema/resolvers/auth.js";
+import { AUTH_BYPASS } from "./context.js";
 
 // Root fields that don't require authentication.
 // __typename is always public (used by health checks and Apollo client).
@@ -25,6 +26,10 @@ const PUBLIC_FIELDS = new Set([
  * This prevents bypass via anonymous operations or mixed queries.
  */
 export function authGuardPlugin(): ApolloServerPlugin<AuthenticatedContext> {
+  if (AUTH_BYPASS) {
+    return {};
+  }
+
   return {
     async requestDidStart() {
       return {
