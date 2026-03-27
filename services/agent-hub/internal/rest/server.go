@@ -34,7 +34,7 @@ func New(h *hub.Hub, cfg *config.Config) *Server {
 	apiMux.HandleFunc("GET /api/v1/agents", handleListAgents(h))
 	apiMux.HandleFunc("GET /api/v1/agents/{name}", handleGetAgent(h))
 	apiMux.HandleFunc("GET /api/v1/sessions", handleListAllSessions(h, listAllSessionsDeadline))
-	apiMux.HandleFunc("GET /api/v1/diagnostics", handleGetDiagnostics(h, cfg.Log.Path, listAllSessionsDeadline))
+	apiMux.HandleFunc("GET /api/v1/diagnostics", handleGetDiagnostics(h, cfg.Log.Path, diagnosticsDeadline))
 	apiMux.HandleFunc("POST /api/v1/agents/{name}/sessions", handleCreateSession(h))
 	apiMux.HandleFunc("GET /api/v1/agents/{name}/sessions", handleListSessions(h))
 	apiMux.HandleFunc("GET /api/v1/agents/{name}/sessions/{id}", handleGetSession(h))

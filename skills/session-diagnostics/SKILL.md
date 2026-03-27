@@ -18,7 +18,7 @@ curl -sf \
   "https://cadence.whatisbackdoor.com/api/v1/diagnostics?since_minutes=10080"
 ```
 
-If `$HUB_API_TOKEN` is not set, look for it in the project's `CLAUDE.md` or environment.
+If `$HUB_API_TOKEN` is not set, check the environment or `.env.dev`.
 Default window is 7 days (10080 minutes). Pass `?since_minutes=N` to narrow the window.
 
 The response shape:

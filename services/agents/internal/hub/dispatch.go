@@ -299,10 +299,17 @@ func (d *Dispatcher) GetDiagnostics(params json.RawMessage) (json.RawMessage, *r
 	if p.SinceMinutes <= 0 {
 		p.SinceMinutes = 10080 // default: 7 days
 	}
+	if p.SinceMinutes > 525960 {
+		p.SinceMinutes = 525960
+	}
 
 	since := time.Now().Add(-time.Duration(p.SinceMinutes) * time.Minute)
 
-	events, err := logparse.ParseLogs(context.Background(), d.logPath, since)
+	// The SessionDispatcher interface does not thread a caller context, so use a
+	// 30s hard limit to prevent a runaway journalctl process from outliving the RPC call.
+	diagCtx, diagCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer diagCancel()
+	events, err := logparse.ParseLogs(diagCtx, d.logPath, since)
 	if err != nil {
 		slog.Warn("getDiagnostics: failed to parse logs", "error", err)
 	}

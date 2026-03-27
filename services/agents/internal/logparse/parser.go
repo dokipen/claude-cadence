@@ -6,13 +6,13 @@ package logparse
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
-	"strings"
 	"time"
 )
 
@@ -65,6 +65,8 @@ func ParseLogs(ctx context.Context, logPath string, since time.Time) ([]Diagnost
 }
 
 // readFile scans a slog JSON log file and returns events at or after `since`.
+// It seeks to the end of the file and scans backwards, stopping once it finds
+// a line before `since`, so only the relevant tail is processed.
 func readFile(logPath string, since time.Time) ([]DiagnosticEvent, error) {
 	f, err := os.Open(logPath)
 	if err != nil {
@@ -72,22 +74,85 @@ func readFile(logPath string, since time.Time) ([]DiagnosticEvent, error) {
 	}
 	defer f.Close()
 
-	var events []DiagnosticEvent
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 1<<20), 1<<20) // 1 MiB per line
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("stat log file: %w", err)
+	}
+
+	const chunkSize = 256 * 1024 // 256 KiB
+	size := fi.Size()
+	offset := size
+
+	var (
+		pending []byte
+		events  []DiagnosticEvent
+		done    bool
+	)
+
+	for offset > 0 && !done {
+		readSize := int64(chunkSize)
+		if readSize > offset {
+			readSize = offset
 		}
-		ev, ok := parseLine(line, since)
+		offset -= readSize
+
+		buf := make([]byte, readSize)
+		if _, err := f.ReadAt(buf, offset); err != nil {
+			return nil, fmt.Errorf("read log file: %w", err)
+		}
+
+		// Prepend the leftover bytes from the previous iteration that form
+		// the right half of a line split at a chunk boundary.
+		chunk := append(buf, pending...)
+		pending = nil
+
+		// Split on newlines. The first element may be a partial line
+		// (its left half is in the next chunk to the left) — save it.
+		lines := bytes.Split(chunk, []byte("\n"))
+		partial := lines[0]
+		lines = lines[1:]
+
+		// Process lines right-to-left (newest first within this chunk).
+		for i := len(lines) - 1; i >= 0; i-- {
+			line := bytes.TrimSpace(lines[i])
+			if len(line) == 0 {
+				continue
+			}
+			ev, ok := parseLine(line, since)
+			if !ok {
+				// Check if this line's timestamp is before since — if so, stop.
+				var entry map[string]any
+				if json.Unmarshal(line, &entry) == nil {
+					if tsStr, ok := entry["time"].(string); ok {
+						if ts, err := time.Parse(time.RFC3339Nano, tsStr); err == nil {
+							if ts.Before(since) {
+								done = true
+								break
+							}
+						}
+					}
+				}
+				continue
+			}
+			events = append(events, ev)
+		}
+
+		pending = partial
+	}
+
+	// Process the final partial line (leftmost bytes of the file, if any).
+	if !done && len(bytes.TrimSpace(pending)) > 0 {
+		ev, ok := parseLine(bytes.TrimSpace(pending), since)
 		if ok {
 			events = append(events, ev)
 		}
 	}
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("scan log file: %w", err)
+
+	// Events were collected newest-first; reverse to restore ascending order.
+	for i, j := 0, len(events)-1; i < j; i, j = i+1, j-1 {
+		events[i], events[j] = events[j], events[i]
 	}
+
 	return events, nil
 }
 
@@ -101,24 +166,25 @@ func readJournald(ctx context.Context, since time.Time) ([]DiagnosticEvent, erro
 		"--no-pager",
 		"-n", "10000",
 	)
-	out, err := cmd.Output()
+
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		// Exit code 1 with empty output means no matching entries — not an error.
-		if len(out) == 0 {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("journalctl: %w", err)
+		return nil, fmt.Errorf("journalctl stdout pipe: %w", err)
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("journalctl start: %w", err)
 	}
 
 	var events []DiagnosticEvent
-	for _, line := range strings.Split(string(out), "\n") {
-		line = strings.TrimSpace(line)
+	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 1<<20), 1<<20)
+	for scanner.Scan() {
+		line := bytes.TrimSpace(scanner.Bytes())
 		if len(line) == 0 {
 			continue
 		}
-		// Extract MESSAGE field from journald JSON envelope.
 		var envelope map[string]any
-		if err := json.Unmarshal([]byte(line), &envelope); err != nil {
+		if err := json.Unmarshal(line, &envelope); err != nil {
 			continue
 		}
 		msg, ok := envelope["MESSAGE"].(string)
@@ -129,6 +195,11 @@ func readJournald(ctx context.Context, since time.Time) ([]DiagnosticEvent, erro
 		if ok {
 			events = append(events, ev)
 		}
+	}
+
+	if err := cmd.Wait(); err != nil {
+		// journalctl exits 0 when there are no matching entries.
+		return nil, fmt.Errorf("journalctl: %w", err)
 	}
 	return events, nil
 }

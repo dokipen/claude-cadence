@@ -38,6 +38,10 @@ func handleListAgents(h *hub.Hub) http.HandlerFunc {
 // which exceeds the HTTP server's 35s WriteTimeout. Chosen to be safely under WriteTimeout.
 const listAllSessionsDeadline = 28 * time.Second
 
+// diagnosticsDeadline caps the total fan-out time for handleGetDiagnostics.
+// Set equal to listAllSessionsDeadline since the per-agent RPC is similarly lightweight.
+const diagnosticsDeadline = listAllSessionsDeadline
+
 // handleListAllSessions returns sessions across all online agents.
 func handleListAllSessions(h *hub.Hub, overallDeadline time.Duration) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -280,6 +284,9 @@ func handleGetDiagnostics(h *hub.Hub, logPath string, overallDeadline time.Durat
 				sinceMinutes = n
 			}
 		}
+		if sinceMinutes > 525960 {
+			sinceMinutes = 525960
+		}
 
 		since := time.Now().Add(-time.Duration(sinceMinutes) * time.Minute)
 
@@ -352,8 +359,11 @@ func handleGetDiagnostics(h *hub.Hub, logPath string, overallDeadline time.Durat
 			return
 		}
 
-		// Read hub-side log events.
-		hubEvents, err := logparse.ParseLogs(r.Context(), logPath, since)
+		// Read hub-side log events with a bounded timeout so log parsing cannot
+		// consume remaining WriteTimeout budget after a slow fan-out.
+		logCtx, logCancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer logCancel()
+		hubEvents, err := logparse.ParseLogs(logCtx, logPath, since)
 		if err != nil {
 			slog.Warn("getDiagnostics: failed to parse hub logs", "error", err)
 		}
