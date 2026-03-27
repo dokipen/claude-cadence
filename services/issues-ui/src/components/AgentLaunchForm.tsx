@@ -24,7 +24,7 @@ export function AgentLaunchForm({ agents, onLaunched, repoUrl }: AgentLaunchForm
   const onlineAgents = agents.filter((a) => a.status === "online");
 
   const profileOptions = selectedHost
-    ? Object.keys(agents.find((a) => a.name === selectedHost)?.profiles ?? {})
+    ? Object.keys(onlineAgents.find((a) => a.name === selectedHost)?.profiles ?? {})
     : [];
 
   const handleHostChange = useCallback(
