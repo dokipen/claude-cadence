@@ -187,7 +187,15 @@ func (p *Persister) LoadAll() ([]*Session, error) {
 	var sessions []*Session
 	for _, entry := range entries {
 		name := entry.Name()
-		if !strings.HasSuffix(name, ".json") || strings.HasSuffix(name, ".json.tmp") {
+		// Clean up orphaned .json.tmp files left by unclean shutdown.
+		if strings.HasSuffix(name, ".json.tmp") {
+			tmpPath := filepath.Join(p.dir, name)
+			if err := os.Remove(tmpPath); err != nil && !os.IsNotExist(err) {
+				slog.Warn("persist: failed to remove orphaned tmp file on load", "file", name, "error", err)
+			}
+			continue
+		}
+		if !strings.HasSuffix(name, ".json") {
 			continue
 		}
 		path := filepath.Join(p.dir, name)

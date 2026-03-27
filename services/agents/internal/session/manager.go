@@ -34,6 +34,7 @@ type Manager struct {
 	maxSessions  int
 	ptyHasSession func(id string) bool // injectable for tests; defaults to checking pty.PID
 	processAlive  func(pid int) bool
+	killProcess   func(pid int) error // injectable for tests; defaults to sending SIGKILL
 }
 
 // NewManager creates a new session Manager.
@@ -58,6 +59,7 @@ func NewManager(store *Store, ptyManager *pty.PTYManager, gitClient *git.Client,
 		m.ptyHasSession = func(id string) bool { return false }
 	}
 	m.processAlive = isProcessAlive
+	m.killProcess = killProcessDefault
 	return m
 }
 
@@ -375,6 +377,15 @@ func (m *Manager) reconcile(sess *Session) {
 	// Check if PTY session still exists.
 	ptyExists := m.ptyHasSession(sess.ID)
 	if !ptyExists {
+		// If the session was restored from disk after a restart and the process
+		// is still alive, we have no PTY handle to reconnect but the agent is
+		// still running. Keep the session as StateRunning.
+		// Only transition to StateStopped if the process is also dead (or has no PID).
+		// AgentPID == 0 means the process never started (create was in-flight at shutdown).
+		// Fall through to the StateStopped transition below.
+		if sess.restoredFromDisk && sess.AgentPID > 0 && m.processAlive(sess.AgentPID) {
+			return
+		}
 		_, _ = m.store.Update(sess.ID, func(s *Session) {
 			s.State = StateStopped
 			s.StoppedAt = now
@@ -479,6 +490,10 @@ func isProcessAlive(pid int) bool {
 	return syscall.Kill(pid, 0) == nil
 }
 
+func killProcessDefault(pid int) error {
+	return syscall.Kill(pid, syscall.SIGKILL)
+}
+
 // RestoreFromPersister loads persisted sessions from disk into the store and
 // reconciles them against live process state. Call once at startup before
 // starting the Cleaner and Monitor.
@@ -493,6 +508,7 @@ func (m *Manager) RestoreFromPersister(p *Persister) error {
 	}
 
 	for _, sess := range sessions {
+		needsPersist := false
 		switch sess.State {
 		case StateDestroying:
 			// Daemon died mid-destroy. Clean up the file directly (not via the
@@ -509,8 +525,14 @@ func (m *Manager) RestoreFromPersister(p *Persister) error {
 			//                  The process may or may not still be running, but
 			//                  we have no PTY handle to reconnect to it, so treat
 			//                  it as an error in both cases.
+			if sess.AgentPID != 0 && m.processAlive(sess.AgentPID) {
+				if err := m.killProcess(sess.AgentPID); err != nil {
+					slog.Warn("failed to kill orphaned process on restore", "pid", sess.AgentPID, "err", err)
+				}
+			}
 			sess.State = StateError
 			sess.ErrorMessage = "session interrupted during creation (daemon restart)"
+			needsPersist = true
 			slog.Info("marking mid-create session as error on restore", "id", sess.ID, "pid", sess.AgentPID)
 
 		case StateRunning:
@@ -519,6 +541,11 @@ func (m *Manager) RestoreFromPersister(p *Persister) error {
 				if sess.StoppedAt.IsZero() {
 					sess.StoppedAt = time.Now()
 				}
+				needsPersist = true
+			} else {
+				// Process is alive; mark this session as restored so reconcile()
+				// does not mistake the missing PTY handle for a dead session.
+				sess.restoredFromDisk = true
 			}
 			slog.Info("restored session", "id", sess.ID, "state", sess.State, "pid", sess.AgentPID)
 
@@ -547,6 +574,19 @@ func (m *Manager) RestoreFromPersister(p *Persister) error {
 				continue
 			}
 			return fmt.Errorf("restore session %s: %w", sess.ID, err)
+		}
+		// If reconciliation changed the state (StateCreating→StateError or
+		// StateRunning→StateStopped), persist the new state to disk.
+		// TryAdd bypasses the persister, so we must call Update explicitly.
+		if needsPersist {
+			finalState := sess.State
+			finalStopped := sess.StoppedAt
+			finalErrMsg := sess.ErrorMessage
+			_, _ = m.store.Update(sess.ID, func(s *Session) {
+				s.State = finalState
+				s.StoppedAt = finalStopped
+				s.ErrorMessage = finalErrMsg
+			})
 		}
 	}
 
