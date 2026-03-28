@@ -143,7 +143,7 @@
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  min-width: 260px;
+  min-width: 320px;
   max-height: 360px;
   overflow-y: auto;
   background: var(--surface);
@@ -198,4 +198,85 @@
   color: var(--amber);
   font-size: 0.7rem;
   font-weight: 600;
+}
+
+.notificationItemBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.notificationProjectBadge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.notificationTicketTitle {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notificationPromptText {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.78rem;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  background: var(--surface-raised, var(--surface));
+  border-radius: 4px;
+  padding: 0.3rem 0.4rem;
+}
+
+.notificationControlsRow {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.notificationControlBtn {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.78rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.notificationControlBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.notificationControlBtnPrimary {
+  background: var(--accent, var(--brand));
+  color: #fff;
+  border-color: transparent;
+}
+
+.notificationInputRow {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.notificationTextInput {
+  flex: 1;
+  font-size: 0.78rem;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
 }

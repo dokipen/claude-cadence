@@ -158,7 +158,11 @@ export function AppShell() {
           <Link to="/agents" className={layoutStyles.navLink} data-testid="agents-nav-link">
             Agents
           </Link>
-          <NotificationDropdown waitingSessions={waitingSessions} />
+          <NotificationDropdown
+            waitingSessions={waitingSessions}
+            projectId={effectiveProjectId}
+            projectName={selectedProject?.name ?? null}
+          />
         </div>
         <div className={layoutStyles.headerRight}>
           {user && (
