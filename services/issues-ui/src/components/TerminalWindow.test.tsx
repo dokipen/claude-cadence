@@ -516,3 +516,185 @@ describe("handleResumeSession", () => {
     expect(capturedTerminalProps.onResumeSession).toBeUndefined();
   });
 });
+
+describe("handleResumeSession validation guard", () => {
+  beforeEach(() => {
+    mockHubFetch.mockReset();
+    mockCreateSession.mockReset();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    cleanup();
+    capturedTerminalProps.onResumeSession = undefined;
+    vi.restoreAllMocks();
+  });
+
+  it("does not call createSession when session.id contains an invalid character (space)", () => {
+    const invalidIdSession = create(SessionSchema, {
+      id: "invalid id",
+      name: "myproject-lead-42",
+      state: "running",
+      agentProfile: "default",
+      createdAt: "2026-01-01T00:00:00Z",
+      agentPid: 1234,
+      baseRef: "main",
+      waitingForInput: false,
+    });
+
+    render(
+      <TerminalWindow
+        session={invalidIdSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    expect(capturedTerminalProps.onResumeSession).toBeDefined();
+    capturedTerminalProps.onResumeSession!();
+
+    expect(mockCreateSession).not.toHaveBeenCalled();
+  });
+
+  it("does not call createSession when session.id contains a $ character", () => {
+    const invalidIdSession = create(SessionSchema, {
+      id: "$(rm -rf .)",
+      name: "myproject-lead-42",
+      state: "running",
+      agentProfile: "default",
+      createdAt: "2026-01-01T00:00:00Z",
+      agentPid: 1234,
+      baseRef: "main",
+      waitingForInput: false,
+    });
+
+    render(
+      <TerminalWindow
+        session={invalidIdSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    expect(capturedTerminalProps.onResumeSession).toBeDefined();
+    capturedTerminalProps.onResumeSession!();
+
+    expect(mockCreateSession).not.toHaveBeenCalled();
+  });
+
+  it("does not call createSession when session.agentProfile contains an invalid character", () => {
+    const invalidProfileSession = create(SessionSchema, {
+      id: "sess-valid-123",
+      name: "myproject-lead-42",
+      state: "running",
+      agentProfile: "bad/profile",
+      createdAt: "2026-01-01T00:00:00Z",
+      agentPid: 1234,
+      baseRef: "main",
+      waitingForInput: false,
+    });
+
+    render(
+      <TerminalWindow
+        session={invalidProfileSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    expect(capturedTerminalProps.onResumeSession).toBeDefined();
+    capturedTerminalProps.onResumeSession!();
+
+    expect(mockCreateSession).not.toHaveBeenCalled();
+  });
+
+  it("calls console.warn when session.id is invalid", () => {
+    const invalidIdSession = create(SessionSchema, {
+      id: "bad id with spaces",
+      name: "myproject-lead-42",
+      state: "running",
+      agentProfile: "default",
+      createdAt: "2026-01-01T00:00:00Z",
+      agentPid: 1234,
+      baseRef: "main",
+      waitingForInput: false,
+    });
+
+    render(
+      <TerminalWindow
+        session={invalidIdSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    capturedTerminalProps.onResumeSession!();
+
+    expect(console.warn).toHaveBeenCalled();
+  });
+
+  it("calls console.warn when session.agentProfile is invalid", () => {
+    const invalidProfileSession = create(SessionSchema, {
+      id: "sess-valid-123",
+      name: "myproject-lead-42",
+      state: "running",
+      agentProfile: "$bad",
+      createdAt: "2026-01-01T00:00:00Z",
+      agentPid: 1234,
+      baseRef: "main",
+      waitingForInput: false,
+    });
+
+    render(
+      <TerminalWindow
+        session={invalidProfileSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    capturedTerminalProps.onResumeSession!();
+
+    expect(console.warn).toHaveBeenCalled();
+  });
+
+  it("calls createSession normally when both session.id and agentProfile are valid (regression)", () => {
+    mockCreateSession.mockResolvedValue({});
+
+    const validSession = create(SessionSchema, {
+      id: "cmnae8t2h0027qv01erwytyz0",
+      name: "myproject-lead-42",
+      state: "running",
+      agentProfile: "default",
+      createdAt: "2026-01-01T00:00:00Z",
+      agentPid: 1234,
+      baseRef: "main",
+      waitingForInput: false,
+    });
+
+    render(
+      <TerminalWindow
+        session={validSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    expect(capturedTerminalProps.onResumeSession).toBeDefined();
+    capturedTerminalProps.onResumeSession!();
+
+    expect(mockCreateSession).toHaveBeenCalledWith(
+      "agent-1",
+      "default",
+      expect.stringMatching(/^resume-[\w-]+-\d+$/),
+      ["/resume cmnae8t2h0027qv01erwytyz0"],
+    );
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+});
