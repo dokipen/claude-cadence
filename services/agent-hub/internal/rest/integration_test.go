@@ -1075,3 +1075,62 @@ func TestIntegration_ListAgents_WhitespaceRepoParam(t *testing.T) {
 		t.Errorf("expected both profiles when repo param is whitespace-only, got %d", len(body.Agents[0].Profiles))
 	}
 }
+
+func TestIntegration_RejectInvalidProfileType(t *testing.T) {
+	apiToken := "api-tok"
+	agentToken := "agent-tok"
+	cfg := testConfig(apiToken, agentToken)
+
+	_, baseURL := startIntegrationServer(t, cfg)
+
+	wsURL := "ws" + strings.TrimPrefix(baseURL, "http") + "/ws/agent"
+	ctx := context.Background()
+
+	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+		HTTPHeader: http.Header{
+			"Authorization": {"Bearer " + agentToken},
+		},
+	})
+	if err != nil {
+		t.Fatalf("dial hub: %v", err)
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "test done")
+
+	// Send a register message with an invalid profile type.
+	regReq, _ := hub.NewRequest("reg-bad", "register", &hub.RegisterParams{
+		Name: "bad-agent",
+		Profiles: map[string]hub.ProfileInfo{
+			"default": {Description: "test profile", Type: "invalid-type"},
+		},
+	})
+	data, _ := json.Marshal(regReq)
+	if err := conn.Write(ctx, websocket.MessageText, data); err != nil {
+		t.Fatalf("write register: %v", err)
+	}
+
+	// The hub should close the connection — any read must return an error.
+	_, _, readErr := conn.Read(ctx)
+	if readErr == nil {
+		t.Fatal("expected connection to be closed after invalid profile type rejection, but read succeeded")
+	}
+
+	// Verify the agent did NOT end up in the hub's agent list.
+	req, _ := http.NewRequest("GET", baseURL+"/api/v1/agents", nil)
+	req.Header.Set("Authorization", "Bearer "+apiToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("list agents: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 from /agents, got %d", resp.StatusCode)
+	}
+
+	var agentsBody map[string][]json.RawMessage
+	json.NewDecoder(resp.Body).Decode(&agentsBody)
+	if len(agentsBody["agents"]) != 0 {
+		t.Fatalf("expected 0 agents after invalid type rejection, got %d", len(agentsBody["agents"]))
+	}
+}

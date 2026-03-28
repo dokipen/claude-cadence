@@ -744,6 +744,12 @@ func handleAgentWebSocket(h *hub.Hub, agentToken string) http.HandlerFunc {
 				conn.Close(websocket.StatusPolicyViolation, err.Error())
 				return
 			}
+			if err := hub.ValidateProfileType(profile.Type); err != nil {
+				slog.Warn("rejecting agent registration: invalid profile type",
+					"agent", params.Name, "profile", name, "error", err)
+				conn.Close(websocket.StatusPolicyViolation, err.Error())
+				return
+			}
 		}
 
 		// Attempt registration before sending the acknowledgment so we can
