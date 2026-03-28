@@ -86,6 +86,7 @@ export function AgentLaunchForm({ agents, onLaunched, repoUrl }: AgentLaunchForm
             className={styles.select}
             value={selectedHost}
             onChange={handleHostChange}
+            autoComplete="off"
             data-testid="host-select"
           >
             <option value="">— select host —</option>
@@ -110,6 +111,7 @@ export function AgentLaunchForm({ agents, onLaunched, repoUrl }: AgentLaunchForm
             value={selectedProfile}
             onChange={(e) => setSelectedProfile(e.target.value)}
             disabled={!selectedHost}
+            autoComplete="off"
             data-testid="profile-select"
           >
             <option value="">— select profile —</option>
@@ -133,6 +135,7 @@ export function AgentLaunchForm({ agents, onLaunched, repoUrl }: AgentLaunchForm
             onChange={(e) => setName(e.target.value)}
             placeholder="Session name"
             maxLength={100}
+            autoComplete="off"
             data-testid="name-input"
           />
         </div>

@@ -283,3 +283,19 @@ describe("FilterBar — returning to form mode resets filters", () => {
     expect(calls[calls.length - 1][0]).toEqual({});
   });
 });
+
+// ---------------------------------------------------------------------------
+// FilterBar — autocomplete attributes
+// ---------------------------------------------------------------------------
+
+describe("FilterBar — autocomplete attributes", () => {
+  it("cql-input has autocomplete=off", () => {
+    const onChange = vi.fn();
+    const { getByText, getByTestId } = render(
+      <FilterBar filters={{}} onChange={onChange} />,
+    );
+    fireEvent.click(getByText("CQL"));
+    const cqlInput = getByTestId("cql-input");
+    expect(cqlInput).toHaveAttribute("autocomplete", "off");
+  });
+});

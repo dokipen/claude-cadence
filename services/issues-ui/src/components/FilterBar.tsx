@@ -115,6 +115,7 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
             aria-label="CQL filter query"
             aria-describedby={cqlErrors.length > 0 ? cqlErrorsId : undefined}
             aria-invalid={cqlErrors.length > 0}
+            autoComplete="off"
             data-testid="cql-input"
           />
           {cqlErrors.length > 0 && (
@@ -140,6 +141,7 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
               onChange={(e) =>
                 onChange({ ...filters, labelName: e.target.value || undefined })
               }
+              autoComplete="off"
               data-testid="filter-label"
             >
               <option value="">All</option>
@@ -193,6 +195,7 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
                     : undefined,
                 });
               }}
+              autoComplete="off"
               data-testid="filter-priority"
             >
               <option value="">All</option>

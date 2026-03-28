@@ -174,6 +174,25 @@ describe("AgentLaunchForm", () => {
     expect(options).toContain("online-profile");
     expect(options).not.toContain("offline-profile");
   });
+
+  it("name input has autocomplete=off", () => {
+    const agents = [
+      makeAgent("host-a", "online", {
+        "profile-a": "https://github.com/org/repo-a",
+      }),
+    ];
+
+    const { getByTestId } = render(
+      <AgentLaunchForm
+        agents={agents}
+        onLaunched={vi.fn()}
+        repoUrl="https://github.com/org/repo-a"
+      />,
+    );
+
+    const nameInput = getByTestId("name-input");
+    expect(nameInput).toHaveAttribute("autocomplete", "off");
+  });
 });
 
 describe("AgentLaunchForm profile filtering by repoUrl", () => {

@@ -102,6 +102,7 @@ export function AgentLauncher({
             className={styles.select}
             value={selectedIndex}
             onChange={(e) => setSelectedIndex(Number(e.target.value))}
+            autoComplete="off"
             data-testid="profile-select"
           >
             {profiles.map((entry, i) => (
