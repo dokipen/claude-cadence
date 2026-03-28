@@ -6,21 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"os/exec"
-	"regexp"
-	"strconv"
 	"sync"
 	"syscall"
-	"unsafe"
 
 	"github.com/coder/websocket"
 	"github.com/creack/pty"
 )
-
-// validSlavePath matches only Linux PTY slave device paths (e.g. /dev/pts/0).
-var validSlavePath = regexp.MustCompile(`^/dev/pts/[0-9]+$`)
 
 // defaultBufferSize is 1 byte less than 1 MB so that a ttyd replay frame
 // (1-byte type prefix + buffer contents) fits within the hub proxy's
@@ -225,19 +218,6 @@ func (m *PTYManager) WaitError(id string) (error, error) {
 	default:
 		return nil, fmt.Errorf("pty: session %q has not exited", id)
 	}
-}
-
-// masterSlavePath returns the /dev/pts/N path of the slave side of the PTY
-// for the given master file. Uses TIOCGPTN ioctl on Linux. Returns an empty
-// string if the path cannot be determined.
-func masterSlavePath(master *os.File) string {
-	var n uint32
-	// TIOCGPTN is the Linux ioctl to get the PTY number from the master fd.
-	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, master.Fd(), syscall.TIOCGPTN, uintptr(unsafe.Pointer(&n))); errno != 0 { //nolint:gosec // Expected unsafe pointer for Syscall call.
-		slog.Warn("pty: failed to get slave path via TIOCGPTN", "error", errno)
-		return ""
-	}
-	return "/dev/pts/" + strconv.FormatUint(uint64(n), 10)
 }
 
 // GetSlavePath returns the /dev/pts/N slave path for the given session, or
