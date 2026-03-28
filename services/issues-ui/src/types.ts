@@ -77,4 +77,6 @@ export type SessionState = "creating" | "running" | "stopped" | "error" | "destr
 export interface ActiveSessionInfo {
   name: string;
   state: SessionState;
+  sessionId?: string;   // the session UUID, for fetching output
+  agentName?: string;   // the agentd instance name, for fetching output
 }

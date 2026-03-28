@@ -22,6 +22,15 @@ import (
 var (
 	envKeyRe      = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 	sessionNameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._~-]*$`)
+	// ansiEscapeRe matches ANSI/VT escape sequences and non-printable control
+	// characters so they can be stripped from PTY output.
+	ansiEscapeRe = regexp.MustCompile(
+		`\x1b\[[0-9;?]*[A-Za-z]` + // CSI sequences (ESC [ ... final)
+			`|\x1b[()][0-9A-Za-z]` + // 3-char charset designators (ESC ( B, ESC ) 0, …)
+			`|\x1b[][PX^_][^\x1b\x9c]*[\x1b\x9c]?` + // OSC/DCS/APC/SOS/PM (ESC ] ... BEL/ST)
+			`|\x1b[^\x1b]` + // other two-byte ESC sequences
+			`|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]`, // control chars except \t \n \r
+	)
 )
 
 // Manager orchestrates session lifecycle using Store and pty.PTYManager.
@@ -383,6 +392,35 @@ func (m *Manager) Destroy(id string, force bool) error {
 
 	m.store.Delete(id)
 	return nil
+}
+
+// ReadOutput returns the last n lines of PTY output for the session, with ANSI
+// escape sequences stripped. Returns an error if the session is not found or
+// has no PTY buffer.
+func (m *Manager) ReadOutput(sessionID string, lines int) (string, error) {
+	if m.pty == nil {
+		return "", &Error{Code: ErrNotFound, Message: fmt.Sprintf("session %q output not found: no PTY manager", sessionID)}
+	}
+	raw, err := m.pty.ReadBuffer(sessionID)
+	if err != nil {
+		return "", &Error{Code: ErrNotFound, Message: fmt.Sprintf("session %q output not found: %v", sessionID, err)}
+	}
+
+	// Strip ANSI escape sequences and non-printable control characters.
+	// Normalize CRLF to LF first so lines don't carry trailing \r artifacts.
+	normalized := bytes.ReplaceAll(raw, []byte("\r\n"), []byte("\n"))
+	clean := ansiEscapeRe.ReplaceAll(normalized, nil)
+
+	// Split into lines, drop empty trailing lines, take last n.
+	all := strings.Split(string(clean), "\n")
+	// Trim trailing empty lines.
+	for len(all) > 0 && all[len(all)-1] == "" {
+		all = all[:len(all)-1]
+	}
+	if len(all) > lines {
+		all = all[len(all)-lines:]
+	}
+	return strings.Join(all, "\n"), nil
 }
 
 func (m *Manager) reconcile(sess *Session) {

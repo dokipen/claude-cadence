@@ -1,9 +1,16 @@
 package rest
 
 import (
+	"context"
+	"encoding/json"
+	"io"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/coder/websocket"
 	"github.com/dokipen/claude-cadence/services/agent-hub/internal/hub"
 )
 
@@ -154,6 +161,7 @@ func TestFilterAgentsByRepo(t *testing.T) {
 		}
 	})
 
+
 	t.Run("non-GitHub HTTPS host matches full URL", func(t *testing.T) {
 		gitlabAgents := []hub.AgentInfo{
 			{
@@ -202,4 +210,174 @@ func TestFilterAgentsByRepo(t *testing.T) {
 			t.Error("expected 'match' profile to be kept when stored with .git suffix")
 		}
 	})
+}
+
+// startTestHubWithAgent creates a hub and connects a simulated agent that echoes
+// RPC method names back as {"echo": "<method>"}.  It returns the hub and a
+// cleanup function that tears down the agent connection and hub.
+func startTestHubWithAgent(t *testing.T, agentName string) *hub.Hub {
+	t.Helper()
+
+	h := hub.New(30*time.Second, 5*time.Second, 0, 5*time.Minute, 0)
+	h.Start()
+	t.Cleanup(h.Stop)
+
+	// Spin up an in-process HTTP server so the simulated agent can dial the
+	// WebSocket endpoint using the real hub.HandleAgentConnection path.
+	agentToken := "test-agent-token"
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ws/agent", handleAgentWebSocket(h, agentToken))
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws/agent"
+	conn, _, err := websocket.Dial(context.Background(), wsURL, &websocket.DialOptions{
+		HTTPHeader: http.Header{"Authorization": {"Bearer " + agentToken}},
+	})
+	if err != nil {
+		t.Fatalf("dial agent ws: %v", err)
+	}
+	t.Cleanup(func() { conn.Close(websocket.StatusNormalClosure, "test done") })
+
+	// Register the agent.
+	regReq, _ := hub.NewRequest("reg-1", "register", &hub.RegisterParams{
+		Name: agentName,
+		Profiles: map[string]hub.ProfileInfo{
+			"default": {Description: "test", Repo: "https://github.com/test/repo"},
+		},
+	})
+	data, _ := json.Marshal(regReq)
+	if err := conn.Write(context.Background(), websocket.MessageText, data); err != nil {
+		t.Fatalf("write register: %v", err)
+	}
+	if _, _, err := conn.Read(context.Background()); err != nil {
+		t.Fatalf("read register ack: %v", err)
+	}
+
+	// Echo loop: respond with {"echo": "<method>"} for any RPC call.
+	go func() {
+		for {
+			_, msg, err := conn.Read(context.Background())
+			if err != nil {
+				return
+			}
+			var req hub.Request
+			json.Unmarshal(msg, &req)
+			var resp *hub.Response
+			if req.Method == "ping" {
+				resp, _ = hub.NewResponse(req.ID, map[string]bool{"pong": true})
+			} else {
+				resp, _ = hub.NewResponse(req.ID, map[string]string{"echo": req.Method})
+			}
+			respData, _ := json.Marshal(resp)
+			conn.Write(context.Background(), websocket.MessageText, respData)
+		}
+	}()
+
+	// Wait for the agent to appear in the hub.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, ok := h.Get(agentName); ok {
+			return h
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("agent %q did not register in time", agentName)
+	return nil
+}
+
+func TestHandleGetSessionOutput_CallsRPCAndReturnsResult(t *testing.T) {
+	h := startTestHubWithAgent(t, "output-agent")
+
+	handler := handleGetSessionOutput(h)
+
+	req := httptest.NewRequest("GET", "/api/v1/agents/output-agent/sessions/sess-123/output", nil)
+	req.SetPathValue("name", "output-agent")
+	req.SetPathValue("id", "sess-123")
+	rw := httptest.NewRecorder()
+
+	handler.ServeHTTP(rw, req)
+
+	resp := rw.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+	}
+
+	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %q", ct)
+	}
+
+	var result map[string]string
+	json.NewDecoder(resp.Body).Decode(&result)
+	if result["echo"] != "getSessionOutput" {
+		t.Errorf("expected echo=getSessionOutput, got %v", result)
+	}
+}
+
+func TestHandleGetSessionOutput_OfflineAgentReturns502(t *testing.T) {
+	h := hub.New(30*time.Second, 5*time.Second, 0, 5*time.Minute, 0)
+	h.Start()
+	t.Cleanup(h.Stop)
+
+	// No agent connected — hub has no agents at all, so resolveAgent returns 404.
+	// To get a 502 we need the agent registered but offline. Register it by
+	// connecting and immediately disconnecting so the hub marks it offline.
+	agentToken := "test-agent-token"
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ws/agent", handleAgentWebSocket(h, agentToken))
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws/agent"
+	conn, _, err := websocket.Dial(context.Background(), wsURL, &websocket.DialOptions{
+		HTTPHeader: http.Header{"Authorization": {"Bearer " + agentToken}},
+	})
+	if err != nil {
+		t.Fatalf("dial agent ws: %v", err)
+	}
+
+	// Register.
+	regReq, _ := hub.NewRequest("reg-1", "register", &hub.RegisterParams{
+		Name:     "offline-agent",
+		Profiles: map[string]hub.ProfileInfo{"default": {Description: "test"}},
+	})
+	data, _ := json.Marshal(regReq)
+	conn.Write(context.Background(), websocket.MessageText, data)
+	conn.Read(context.Background()) // ack
+
+	// Wait for hub to see the agent as online.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if a, ok := h.Get("offline-agent"); ok && a.Status() == hub.StatusOnline {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// Now disconnect the agent to make it go offline.
+	conn.Close(websocket.StatusNormalClosure, "going offline")
+
+	// Wait for hub to mark it offline.
+	deadline = time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if a, ok := h.Get("offline-agent"); ok && a.Status() != hub.StatusOnline {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	handler := handleGetSessionOutput(h)
+	req := httptest.NewRequest("GET", "/api/v1/agents/offline-agent/sessions/sess-1/output", nil)
+	req.SetPathValue("name", "offline-agent")
+	req.SetPathValue("id", "sess-1")
+	rw := httptest.NewRecorder()
+
+	handler.ServeHTTP(rw, req)
+
+	if rw.Code != http.StatusBadGateway {
+		t.Errorf("expected 502 for offline agent, got %d", rw.Code)
+	}
 }

@@ -110,66 +110,66 @@ const makeTicket = (overrides: Partial<Ticket> = {}): Ticket => ({
 // ---------------------------------------------------------------------------
 
 describe("hasActiveSession", () => {
-  it("returns false when sessions array is empty", () => {
-    expect(hasActiveSession([], 5)).toBe(false);
+  it("returns null when sessions array is empty", () => {
+    expect(hasActiveSession([], 5)).toBeNull();
   });
 
-  it("returns false when no session matches the ticket number", () => {
+  it("returns null when no session matches the ticket number", () => {
     const sessions = [
       makeSession("lead-99", "running"),
       makeSession("refine-10", "running"),
     ];
-    expect(hasActiveSession(sessions, 5)).toBe(false);
+    expect(hasActiveSession(sessions, 5)).toBeNull();
   });
 
-  it("returns false when session name matches but state is 'stopped'", () => {
+  it("returns null when session name matches but state is 'stopped'", () => {
     const sessions = [makeSession("lead-5", "stopped")];
-    expect(hasActiveSession(sessions, 5)).toBe(false);
+    expect(hasActiveSession(sessions, 5)).toBeNull();
   });
 
-  it("returns false when session name matches but state is 'error'", () => {
+  it("returns null when session name matches but state is 'error'", () => {
     const sessions = [makeSession("refine-5", "error")];
-    expect(hasActiveSession(sessions, 5)).toBe(false);
+    expect(hasActiveSession(sessions, 5)).toBeNull();
   });
 
-  it("returns true for lead-N with state 'running'", () => {
+  it("returns the session for lead-N with state 'running'", () => {
     const sessions = [makeSession("lead-5", "running")];
-    expect(hasActiveSession(sessions, 5)).toBe(true);
+    expect(hasActiveSession(sessions, 5)).not.toBeNull();
   });
 
-  it("returns true for refine-N with state 'running'", () => {
+  it("returns the session for refine-N with state 'running'", () => {
     const sessions = [makeSession("refine-5", "running")];
-    expect(hasActiveSession(sessions, 5)).toBe(true);
+    expect(hasActiveSession(sessions, 5)).not.toBeNull();
   });
 
-  it("returns true for discuss-N with state 'running'", () => {
+  it("returns the session for discuss-N with state 'running'", () => {
     const sessions = [makeSession("discuss-5", "running")];
-    expect(hasActiveSession(sessions, 5)).toBe(true);
+    expect(hasActiveSession(sessions, 5)).not.toBeNull();
   });
 
-  it("returns true for any matching name with state 'creating'", () => {
-    expect(hasActiveSession([makeSession("lead-5", "creating")], 5)).toBe(true);
-    expect(hasActiveSession([makeSession("refine-5", "creating")], 5)).toBe(true);
-    expect(hasActiveSession([makeSession("discuss-5", "creating")], 5)).toBe(true);
+  it("returns the session for any matching name with state 'creating'", () => {
+    expect(hasActiveSession([makeSession("lead-5", "creating")], 5)).not.toBeNull();
+    expect(hasActiveSession([makeSession("refine-5", "creating")], 5)).not.toBeNull();
+    expect(hasActiveSession([makeSession("discuss-5", "creating")], 5)).not.toBeNull();
   });
 
-  it("returns false when session name partially matches (lead-12 should not match ticket 1)", () => {
+  it("returns null when session name partially matches (lead-12 should not match ticket 1)", () => {
     const sessions = [makeSession("lead-12", "running")];
-    expect(hasActiveSession(sessions, 1)).toBe(false);
+    expect(hasActiveSession(sessions, 1)).toBeNull();
   });
 
-  it("returns true for matching name with state 'destroying'", () => {
-    expect(hasActiveSession([makeSession("lead-5", "destroying")], 5)).toBe(true);
+  it("returns the session for matching name with state 'destroying'", () => {
+    expect(hasActiveSession([makeSession("lead-5", "destroying")], 5)).not.toBeNull();
   });
 
   it("matches prefixed session names when projectId is provided", () => {
-    expect(hasActiveSession([makeSession("myproject-lead-5", "running")], 5, "myproject")).toBe(true);
-    expect(hasActiveSession([makeSession("myproject-refine-5", "running")], 5, "myproject")).toBe(true);
-    expect(hasActiveSession([makeSession("myproject-discuss-5", "running")], 5, "myproject")).toBe(true);
+    expect(hasActiveSession([makeSession("myproject-lead-5", "running")], 5, "myproject")).not.toBeNull();
+    expect(hasActiveSession([makeSession("myproject-refine-5", "running")], 5, "myproject")).not.toBeNull();
+    expect(hasActiveSession([makeSession("myproject-discuss-5", "running")], 5, "myproject")).not.toBeNull();
   });
 
   it("does not match a session from a different project when projectId is provided", () => {
-    expect(hasActiveSession([makeSession("other-lead-5", "running")], 5, "myproject")).toBe(false);
+    expect(hasActiveSession([makeSession("other-lead-5", "running")], 5, "myproject")).toBeNull();
   });
 });
 
