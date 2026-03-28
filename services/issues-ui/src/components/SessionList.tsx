@@ -19,10 +19,12 @@ function sessionKey(s: AgentSession): string {
 // Set to true to show session state and source for debugging
 const DEBUG_SESSION_STATE = false;
 
+// Session names are formatted as "{projectId}-{sessionName}" where projectId is a 25-char CUID.
 function stripProjectPrefix(name: string): string {
-  const slashIndex = name.indexOf("/");
-  if (slashIndex === -1 || slashIndex === name.length - 1) return name;
-  return name.slice(slashIndex + 1);
+  if (name.length > 26 && name[25] === "-") {
+    return name.slice(26);
+  }
+  return name;
 }
 
 export function SessionList({ agents, sessions, openKeys, minimizedKeys, onSessionClick, isCollapsed, onToggle }: SessionListProps) {
