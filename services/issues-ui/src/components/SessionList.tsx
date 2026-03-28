@@ -6,6 +6,7 @@ interface SessionListProps {
   agents: Agent[];
   sessions: AgentSession[];
   openKeys: Set<string>;
+  minimizedKeys: Set<string>;
   onSessionClick: (session: AgentSession) => void;
   isCollapsed: boolean;
   onToggle: () => void;
@@ -18,7 +19,7 @@ function sessionKey(s: AgentSession): string {
 // Set to true to show session state and source for debugging
 const DEBUG_SESSION_STATE = false;
 
-export function SessionList({ agents, sessions, openKeys, onSessionClick, isCollapsed, onToggle }: SessionListProps) {
+export function SessionList({ agents, sessions, openKeys, minimizedKeys, onSessionClick, isCollapsed, onToggle }: SessionListProps) {
   // Group sessions by agent
   const sessionsByAgent = new Map<string, AgentSession[]>();
   for (const s of sessions) {
@@ -60,20 +61,21 @@ export function SessionList({ agents, sessions, openKeys, onSessionClick, isColl
                 {agentSessions.map((as) => {
                   const key = sessionKey(as);
                   const isOpen = openKeys.has(key);
+                  const isMinimized = minimizedKeys.has(key);
                   const isRunning = as.session.state === "running";
                   const isDestroying = as.session.state === "destroying";
                   const isCreating = as.session.state === "creating";
                   return (
                     <button
                       key={as.session.id}
-                      className={`${styles.sidebarSession} ${isOpen ? styles.sidebarSessionOpen : ""} ${!isRunning && !isDestroying && !isCreating ? styles.sidebarSessionStopped : ""} ${isDestroying && !as.session.waitingForInput ? styles.sidebarSessionDestroying : ""} ${isCreating && !as.session.waitingForInput ? styles.sidebarSessionCreating : ""} ${as.session.waitingForInput ? styles.sidebarSessionWaiting : ""}`}
+                      className={`${styles.sidebarSession} ${isOpen ? styles.sidebarSessionOpen : ""} ${!isRunning && !isDestroying && !isCreating ? styles.sidebarSessionStopped : ""} ${isDestroying && !as.session.waitingForInput ? styles.sidebarSessionDestroying : ""} ${isCreating && !as.session.waitingForInput ? styles.sidebarSessionCreating : ""} ${as.session.waitingForInput ? styles.sidebarSessionWaiting : ""} ${isMinimized ? styles.sidebarSessionMinimized : ""}`}
                       onClick={() => !isDestroying && onSessionClick(as)}
                       disabled={isDestroying}
                       data-testid="sidebar-session"
                       title={`${as.session.name} (${as.session.state})`}
                     >
                       <span className={styles.sessionDot}>
-                        {as.session.waitingForInput ? "◉" : isCreating ? "◌" : isRunning || isDestroying ? "●" : "○"}
+                        {as.session.waitingForInput ? "◉" : isMinimized ? "▼" : isCreating ? "◌" : isRunning || isDestroying ? "●" : "○"}
                       </span>
                       <span className={styles.sessionName}>
                         {as.session.name}

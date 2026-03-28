@@ -669,6 +669,11 @@
   }
 }
 
+.sidebarSessionMinimized {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 /* Spinner for terminal connecting overlay */
 @keyframes spin {
   to {

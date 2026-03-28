@@ -41,6 +41,7 @@ const defaultProps = {
   agents: [],
   sessions: [],
   openKeys: new Set<string>(),
+  minimizedKeys: new Set<string>(),
   onSessionClick: vi.fn(),
   isCollapsed: false,
   onToggle: vi.fn(),
