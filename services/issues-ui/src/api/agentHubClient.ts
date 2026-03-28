@@ -144,6 +144,17 @@ export async function deleteSession(agentName: string, sessionId: string): Promi
   }
 }
 
+export async function sendSessionInput(
+  agentName: string,
+  sessionId: string,
+  text: string,
+): Promise<void> {
+  await hubFetch(`/agents/${encodeURIComponent(agentName)}/sessions/${encodeURIComponent(sessionId)}/input`, {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
+}
+
 export async function createSession(
   agentName: string,
   profile: string,

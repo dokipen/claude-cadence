@@ -1,11 +1,15 @@
 import { useState, useRef, useEffect } from "react";
 import { Link } from "react-router";
 import type { AgentSession } from "../hooks/useAllSessions";
+import { useTicketByNumber } from "../hooks/useTicketByNumber";
+import { sendSessionInput } from "../api/agentHubClient";
 import layoutStyles from "../styles/layout.module.css";
 import { stripProjectPrefix } from "../utils/sessionName";
 
 interface NotificationDropdownProps {
   waitingSessions: AgentSession[];
+  projectId: string | undefined;
+  projectName: string | null;
 }
 
 function formatIdleDuration(idleSince: string | undefined): string {
@@ -18,7 +22,176 @@ function formatIdleDuration(idleSince: string | undefined): string {
   return `${hours}h ${minutes % 60}m`;
 }
 
-export function NotificationDropdown({ waitingSessions }: NotificationDropdownProps) {
+function parseTicketNumber(sessionName: string): number | null {
+  const match = sessionName.match(/^lead-(\d+)/);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+function parseSelectPrompt(context: string): { question: string; options: string[]; currentIndex: number } {
+  const lines = context.split("\n").filter((l) => l.trim());
+  const questionIdx = lines.findIndex((l) => l.trimStart().startsWith("?"));
+  const optionLines = lines.slice(questionIdx + 1);
+  const options = optionLines.map((l) => l.replace(/^[\s❯]+/, "").trim()).filter(Boolean);
+  const currentIndex = optionLines.findIndex((l) => l.includes("❯"));
+  const safeCurrentIndex = currentIndex === -1 ? 0 : currentIndex;
+  const question = questionIdx >= 0 ? lines[questionIdx].replace(/^\?+\s*/, "") : "";
+  return { question, options, currentIndex: safeCurrentIndex };
+}
+
+interface NotificationItemProps {
+  ws: AgentSession;
+  projectId: string | undefined;
+  projectName: string | null;
+  onClose: () => void;
+}
+
+function NotificationItem({ ws, projectId, projectName, onClose }: NotificationItemProps) {
+  const [sent, setSent] = useState(false);
+  const [textInput, setTextInput] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const ticketNumber = parseTicketNumber(ws.session.name);
+  const { ticket } = useTicketByNumber(projectId, ticketNumber ?? undefined);
+
+  const linkTo = `/agents?session=${encodeURIComponent(ws.agentName)}:${encodeURIComponent(ws.session.id)}`;
+
+  const promptContext = ws.session.promptContext ?? "";
+  const promptType = ws.session.promptType ?? "";
+
+  async function handleSend(text: string) {
+    setError(null);
+    try {
+      await sendSessionInput(ws.agentName, ws.session.id, text);
+      setSent(true);
+      setTimeout(() => setSent(false), 1000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send");
+    }
+  }
+
+  function buildSelectInput(targetIndex: number): string {
+    const { currentIndex: safeCurrentIndex, options } = parseSelectPrompt(promptContext);
+    const delta = targetIndex - safeCurrentIndex;
+    if (delta === 0) return "\r";
+    const key = delta > 0 ? "\x1b[B" : "\x1b[A";
+    const cappedAbs = Math.min(Math.abs(delta), options.length - 1);
+    return key.repeat(cappedAbs) + "\r";
+  }
+
+  // Link covers only the header row — controls are siblings, not children of <a>,
+  // avoiding invalid nested interactive content that causes browsers to fire navigation
+  // even when stopPropagation is called on button clicks.
+  return (
+    <div className={layoutStyles.notificationItem} data-testid="notification-item">
+      <Link
+        to={linkTo}
+        className={layoutStyles.notificationItemLink}
+        onClick={onClose}
+        data-testid="notification-item-link"
+      >
+        <div className={layoutStyles.notificationItemTitleRow}>
+          {projectName && (
+            <span className={layoutStyles.notificationProjectBadge}>
+              {projectName}
+            </span>
+          )}
+          <span className={layoutStyles.notificationTicketTitle}>
+            {ticket ? `#${ticket.number} ${ticket.title}` : stripProjectPrefix(ws.session.name)}
+          </span>
+        </div>
+        <div className={layoutStyles.notificationItemMetaRow}>
+          <span className={layoutStyles.notificationSessionName}>
+            {stripProjectPrefix(ws.session.name)}
+          </span>
+          <span className={layoutStyles.notificationAgent}>
+            {ws.agentName}
+          </span>
+          {ws.session.idleSince && (
+            <span className={layoutStyles.notificationIdle}>
+              {formatIdleDuration(ws.session.idleSince)}
+            </span>
+          )}
+        </div>
+      </Link>
+      {promptContext && (
+        <pre className={layoutStyles.notificationPromptText}>
+          {promptContext}
+        </pre>
+      )}
+      {promptType === "yesno" && (
+        <div className={layoutStyles.notificationControlsRow}>
+          <button
+            className={`${layoutStyles.notificationControlBtn} ${layoutStyles.notificationControlBtnPrimary}`}
+            disabled={sent}
+            onClick={() => void handleSend("y\n")}
+            data-testid="btn-yes"
+          >
+            {sent ? "Sent" : "Yes"}
+          </button>
+          <button
+            className={layoutStyles.notificationControlBtn}
+            disabled={sent}
+            onClick={() => void handleSend("n\n")}
+            data-testid="btn-no"
+          >
+            {sent ? "Sent" : "No"}
+          </button>
+        </div>
+      )}
+      {promptType === "select" && (
+        <div className={layoutStyles.notificationControlsRow}>
+          {parseSelectPrompt(promptContext).options.map((option, idx) => (
+            <button
+              key={idx}
+              className={layoutStyles.notificationControlBtn}
+              disabled={sent}
+              onClick={() => void handleSend(buildSelectInput(idx))}
+              data-testid={`btn-option-${idx}`}
+            >
+              {sent ? "Sent" : option}
+            </button>
+          ))}
+        </div>
+      )}
+      {(promptType === "text" || promptType === "shell" || promptType === "") && (
+        <div className={layoutStyles.notificationInputRow}>
+          <input
+            className={layoutStyles.notificationTextInput}
+            type="text"
+            value={textInput}
+            disabled={sent}
+            onChange={(e) => { setTextInput(e.target.value); setError(null); }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                void handleSend(textInput + "\n");
+                setTextInput("");
+              }
+            }}
+            data-testid="text-input"
+          />
+          <button
+            className={layoutStyles.notificationControlBtn}
+            disabled={sent}
+            onClick={() => {
+              void handleSend(textInput + "\n");
+              setTextInput("");
+            }}
+            data-testid="btn-send"
+          >
+            {sent ? "Sent" : "Send"}
+          </button>
+        </div>
+      )}
+      {error && (
+        <div className={layoutStyles.notificationError} data-testid="send-error">
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function NotificationDropdown({ waitingSessions, projectId, projectName }: NotificationDropdownProps) {
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -53,30 +226,15 @@ export function NotificationDropdown({ waitingSessions }: NotificationDropdownPr
           <div className={layoutStyles.notificationHeader}>
             Waiting for input
           </div>
-          {waitingSessions.map((ws) => {
-            const linkTo = `/agents?session=${encodeURIComponent(ws.agentName)}:${encodeURIComponent(ws.session.id)}`;
-            return (
-              <Link
-                key={`${ws.agentName}:${ws.session.id}`}
-                to={linkTo}
-                className={layoutStyles.notificationItem}
-                onClick={() => setOpen(false)}
-                data-testid="notification-item"
-              >
-                <span className={layoutStyles.notificationSessionName}>
-                  {stripProjectPrefix(ws.session.name)}
-                </span>
-                <span className={layoutStyles.notificationAgent}>
-                  {ws.agentName}
-                </span>
-                {ws.session.idleSince && (
-                  <span className={layoutStyles.notificationIdle}>
-                    {formatIdleDuration(ws.session.idleSince)}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
+          {waitingSessions.map((ws) => (
+            <NotificationItem
+              key={`${ws.agentName}:${ws.session.id}`}
+              ws={ws}
+              projectId={projectId}
+              projectName={projectName}
+              onClose={() => setOpen(false)}
+            />
+          ))}
         </div>
       )}
     </div>

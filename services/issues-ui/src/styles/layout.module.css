@@ -143,7 +143,7 @@
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  min-width: 260px;
+  min-width: 320px;
   max-height: 360px;
   overflow-y: auto;
   background: var(--surface);
@@ -165,11 +165,7 @@
 
 .notificationItem {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  text-decoration: none;
-  color: var(--text);
+  flex-direction: column;
   font-size: 0.8rem;
   border-bottom: 1px solid var(--border);
 }
@@ -178,8 +174,31 @@
   border-bottom: none;
 }
 
-.notificationItem:hover {
+/* Clickable header — only this area navigates to the session */
+.notificationItemLink {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.5rem 0.75rem 0.4rem;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.notificationItemLink:hover {
   background: rgba(128, 128, 128, 0.08);
+}
+
+.notificationItemTitleRow {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  overflow: hidden;
+}
+
+.notificationItemMetaRow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .notificationSessionName {
@@ -198,4 +217,108 @@
   color: var(--amber);
   font-size: 0.7rem;
   font-weight: 600;
+}
+
+.notificationProjectBadge {
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: rgba(128, 128, 128, 0.12);
+  border-radius: 3px;
+  padding: 0.1rem 0.35rem;
+}
+
+.notificationTicketTitle {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.notificationPromptText {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.75rem;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  background: rgba(128, 128, 128, 0.08);
+  border-left: 2px solid var(--border);
+  border-radius: 0 4px 4px 0;
+  margin: 0 0.75rem;
+  padding: 0.3rem 0.5rem;
+}
+
+.notificationControlsRow {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  padding: 0.35rem 0.75rem 0.5rem;
+}
+
+.notificationControlBtn {
+  padding: 0.2rem 0.65rem;
+  font-size: 0.78rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: rgba(128, 128, 128, 0.1);
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.notificationControlBtn:hover:not(:disabled) {
+  background: rgba(128, 128, 128, 0.2);
+}
+
+.notificationControlBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.notificationControlBtnPrimary {
+  background: var(--accent, var(--brand, #6366f1));
+  color: #fff;
+  border-color: transparent;
+}
+
+.notificationControlBtnPrimary:hover:not(:disabled) {
+  opacity: 0.9;
+  background: var(--accent, var(--brand, #6366f1));
+}
+
+.notificationInputRow {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem 0.5rem;
+}
+
+.notificationTextInput {
+  flex: 1;
+  font-size: 0.78rem;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.notificationTextInput:focus {
+  outline: none;
+  border-color: var(--accent, var(--brand, #6366f1));
+}
+
+.notificationError {
+  font-size: 0.72rem;
+  color: var(--error, #ef4444);
+  padding: 0 0.75rem 0.4rem;
 }
