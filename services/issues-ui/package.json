@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node -e \"const{writeFileSync}=require('fs');writeFileSync('dist/version.json',JSON.stringify({sha:process.env.BUILD_SHA||'dev'}))\"",
     "typecheck": "tsc -b",
     "preview": "vite preview",
     "test": "vitest run",

@@ -12,6 +12,9 @@ const agentHubToken = process.env.HUB_API_TOKEN || process.env.AGENT_HUB_TOKEN |
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __BUILD_SHA__: JSON.stringify(process.env.BUILD_SHA ?? 'dev'),
+  },
   test: {
     exclude: ["e2e/**", "node_modules/**"],
   },
