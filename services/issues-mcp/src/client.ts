@@ -87,6 +87,32 @@ export function getRetryAfterMs(error: unknown): number | null {
   return null;
 }
 
+/**
+ * Exchanges a GitHub PAT for API tokens and stores them in memory.
+ * Returns the new auth token on success, null if no PAT is available or the exchange fails.
+ */
+async function exchangeGhPat(url: string): Promise<string | null> {
+  const ghPat = getGhPat();
+  if (!ghPat) return null;
+
+  try {
+    const unauthClient = createRawClient(url);
+    const result = await unauthClient.request<{ authenticateWithGitHubPAT: { token: string; refreshToken: string } }>(
+      AUTHENTICATE_WITH_PAT,
+      { token: ghPat }
+    );
+    const newToken = result.authenticateWithGitHubPAT.token;
+    setResolvedAuthToken(newToken);
+    setResolvedRefreshToken(result.authenticateWithGitHubPAT.refreshToken);
+    return newToken;
+  } catch (error) {
+    if (process.env.DEBUG) {
+      process.stderr.write(`Auth refresh failed: ${error instanceof Error ? error.message : String(error)}\n`);
+    }
+    return null;
+  }
+}
+
 async function tryAuth(url: string): Promise<string | null> {
   // Try refresh token first
   const refreshToken = getRefreshToken();
@@ -101,28 +127,16 @@ async function tryAuth(url: string): Promise<string | null> {
       setResolvedAuthToken(newToken);
       setResolvedRefreshToken(result.refreshToken.refreshToken);
       return newToken;
-    } catch {
+    } catch (error) {
+      if (process.env.DEBUG) {
+        process.stderr.write(`Auth refresh failed: ${error instanceof Error ? error.message : String(error)}\n`);
+      }
       // Fall through to gh auth token
     }
   }
 
-  // Fall back to gh auth token
-  const ghPat = getGhPat();
-  if (!ghPat) return null;
-
-  try {
-    const unauthClient = createRawClient(url);
-    const result = await unauthClient.request<{ authenticateWithGitHubPAT: { token: string; refreshToken: string } }>(
-      AUTHENTICATE_WITH_PAT,
-      { token: ghPat }
-    );
-    const newToken = result.authenticateWithGitHubPAT.token;
-    setResolvedAuthToken(newToken);
-    setResolvedRefreshToken(result.authenticateWithGitHubPAT.refreshToken);
-    return newToken;
-  } catch {
-    return null;
-  }
+  // Fall back to gh auth token via PAT exchange
+  return exchangeGhPat(url);
 }
 
 /**
@@ -134,20 +148,8 @@ export async function bootstrapAuth(): Promise<boolean> {
   if (getAuthToken()) return true;
 
   const url = getApiUrl();
-  const ghPat = getGhPat();
-  if (!ghPat) return false;
-
-  try {
-    const unauthClient = createRawClient(url);
-    const result = await unauthClient.request<{
-      authenticateWithGitHubPAT: { token: string; refreshToken: string };
-    }>(AUTHENTICATE_WITH_PAT, { token: ghPat });
-    setResolvedAuthToken(result.authenticateWithGitHubPAT.token);
-    setResolvedRefreshToken(result.authenticateWithGitHubPAT.refreshToken);
-    return true;
-  } catch {
-    return false;
-  }
+  const newToken = await exchangeGhPat(url);
+  return newToken !== null;
 }
 
 /**
@@ -166,6 +168,7 @@ export function getClient(): GraphQLClient {
   (client as any).request = async (documentOrOptions: any, variables?: any, requestHeaders?: any) => {
     let attempt = 0;
     let currentRequest = originalRequest;
+    let authRetried = false;
 
     while (true) {
       try {
@@ -188,6 +191,8 @@ export function getClient(): GraphQLClient {
           throw error;
         }
 
+        if (authRetried) throw error; // don't retry auth more than once
+        authRetried = true;
         const newToken = await tryAuth(url);
         if (!newToken) {
           throw error;

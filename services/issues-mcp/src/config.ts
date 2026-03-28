@@ -48,6 +48,8 @@ export function getDefaultProjectName(): string | undefined {
 
 export function getGhPat(): string | undefined {
   try {
+    // Safety: the command string is a constant — never interpolate user input here,
+    // as that would create a command injection vector.
     const token = execSync("gh auth token", { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
     return token || undefined;
   } catch {
