@@ -33,6 +33,8 @@ type Session struct {
 	BaseRef         string
 	WaitingForInput bool
 	IdleSince       *time.Time
+	PromptContext   string // ANSI-stripped visible lines around the prompt
+	PromptType      string // "yesno" | "select" | "text" | "shell"
 	// PTYSlavePath is the /dev/pts/N path of the slave side of the PTY,
 	// captured at session creation time and persisted so that on daemon
 	// restart the PTY can be reconnected by re-opening the slave device.

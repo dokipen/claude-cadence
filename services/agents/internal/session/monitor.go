@@ -16,6 +16,13 @@ var promptPatterns = regexp.MustCompile(
 	`(\?\s*$|>\s*$|\(y/n\)\s*$|\(Y/n\)\s*$|\(yes/no\)\s*$|❯|[$#]\s*$)`,
 )
 
+var (
+	ansiEscape        = regexp.MustCompile(`\x1b(?:\[[0-9;?<>]*[A-Za-z]|[()][0-9A-Za-z]|\][^\x07\x1b]*(?:\x07|\x1b\\))`)
+	yesnoPattern      = regexp.MustCompile(`(?i)(?:[\[(][yn]\/[yn][\])]|\(yes\/no\))`)
+	textPromptPattern = regexp.MustCompile(`[?]\s*$|>\s*$`)
+	shellPattern      = regexp.MustCompile(`[$#]\s*$`)
+)
+
 // idleThreshold is how long content must be unchanged with a prompt before
 // marking the session as waiting for input.
 const idleThreshold = 10 * time.Second
@@ -114,6 +121,8 @@ func (m *Monitor) check() {
 				_, _ = m.manager.store.Update(sess.ID, func(s *Session) {
 					s.WaitingForInput = false
 					s.IdleSince = nil
+					s.PromptContext = ""
+					s.PromptType = ""
 				})
 			}
 			continue
@@ -127,6 +136,8 @@ func (m *Monitor) check() {
 				_, _ = m.manager.store.Update(sess.ID, func(s *Session) {
 					s.WaitingForInput = false
 					s.IdleSince = nil
+					s.PromptContext = ""
+					s.PromptType = ""
 				})
 			}
 			continue
@@ -136,9 +147,13 @@ func (m *Monitor) check() {
 		idleDuration := now.Sub(snap.firstSeen)
 		if idleDuration >= idleThreshold && !sess.WaitingForInput {
 			idleSince := snap.firstSeen
+			ctx := lastNLines(stripANSI(content), 15)
+			promptType := classifyPromptType(ctx)
 			_, _ = m.manager.store.Update(sess.ID, func(s *Session) {
 				s.WaitingForInput = true
 				s.IdleSince = &idleSince
+				s.PromptContext = ctx
+				s.PromptType = promptType
 			})
 			slog.Info("session waiting for input",
 				"session", sess.Name,
@@ -153,6 +168,48 @@ func (m *Monitor) check() {
 			delete(m.snapshots, id)
 		}
 	}
+}
+
+func stripANSI(s string) string {
+	return ansiEscape.ReplaceAllString(s, "")
+}
+
+func lastNLines(s string, n int) string {
+	lines := strings.Split(s, "\n")
+	var nonEmpty []string
+	for _, l := range lines {
+		if strings.TrimSpace(l) != "" {
+			nonEmpty = append(nonEmpty, l)
+		}
+	}
+	if len(nonEmpty) > n {
+		nonEmpty = nonEmpty[len(nonEmpty)-n:]
+	}
+	return strings.Join(nonEmpty, "\n")
+}
+
+func classifyPromptType(context string) string {
+	lines := strings.Split(context, "\n")
+	for _, line := range lines {
+		if yesnoPattern.MatchString(line) {
+			return "yesno"
+		}
+	}
+	for _, line := range lines {
+		if strings.Contains(line, "❯") {
+			return "select"
+		}
+	}
+	if len(lines) > 0 {
+		last := lines[len(lines)-1]
+		if textPromptPattern.MatchString(last) {
+			return "text"
+		}
+		if shellPattern.MatchString(last) {
+			return "shell"
+		}
+	}
+	return ""
 }
 
 // lastNonEmptyLine returns the last line with non-whitespace content.
