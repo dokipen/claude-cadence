@@ -17,7 +17,7 @@ export function RefineAllDialog({
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   const command = "/refine";
-  const sessionName = "refine-all";
+  const sessionNameRef = useRef("refine-all-" + Date.now());
   const buttonLabel = "Refine All";
 
   useEffect(() => {
@@ -25,6 +25,7 @@ export function RefineAllDialog({
     if (!el) return;
 
     if (open && !el.open) {
+      sessionNameRef.current = "refine-all-" + Date.now();
       el.showModal();
     } else if (!open && el.open) {
       el.close();
@@ -83,7 +84,7 @@ export function RefineAllDialog({
             repoUrl={repoUrl}
             onLaunched={handleLaunched}
             command={command}
-            sessionName={sessionName}
+            sessionName={sessionNameRef.current}
             buttonLabel={buttonLabel}
           />
         )}
