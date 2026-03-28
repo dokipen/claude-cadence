@@ -49,7 +49,7 @@ export function TerminalWindow({
   const { ticket } = useTicketByNumber(projectId, ticketNumber);
 
   const resumeCallback = useCallback(() => {
-    const newSessionName = `resume-${session.id.slice(0, 8)}`;
+    const newSessionName = `resume-${session.id.slice(0, 8)}-${Date.now()}`;
     createSession(agentName, session.agentProfile, newSessionName, [`/resume ${session.id}`]).catch(console.error);
   }, [agentName, session.id, session.agentProfile]);
   const handleResumeSession = session.agentProfile ? resumeCallback : undefined;
