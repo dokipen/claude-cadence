@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 
 // Mock CSS modules
 vi.mock("../styles/agents.module.css", () => ({ default: {} }));
@@ -69,15 +69,16 @@ describe("AgentTab", () => {
     render(<AgentTab {...defaultProps} />);
 
     // Wait for discovery to complete and the destroy button to appear
-    await waitFor(() => expect(screen.getByTestId("destroy-session")).toBeDefined());
+    const destroyBtn = await screen.findByTestId("destroy-session");
 
     mockHubFetch.mockReset();
-    fireEvent.click(screen.getByTestId("destroy-session"));
+    fireEvent.click(destroyBtn);
 
     expect(warnSpy).toHaveBeenCalledWith(
       "[AgentTab] Refusing to delete session: invalid id",
     );
     expect(mockHubFetch).not.toHaveBeenCalled();
+    expect(mockOptimisticSetDestroying).not.toHaveBeenCalled();
 
     warnSpy.mockRestore();
   });
