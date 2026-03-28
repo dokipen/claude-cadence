@@ -163,7 +163,7 @@ func (m *PTYManager) Get(id string) (*session, error) {
 	defer m.mu.RUnlock()
 	sess, ok := m.sessions[id]
 	if !ok {
-		return nil, fmt.Errorf("pty: session %q not found", id)
+		return nil, fmt.Errorf("pty: session %q not found: %w", id, ErrSessionNotFound)
 	}
 	return sess, nil
 }
@@ -174,7 +174,7 @@ func (m *PTYManager) WriteInput(id string, data []byte) error {
 	defer m.mu.RUnlock()
 	sess, ok := m.sessions[id]
 	if !ok {
-		return fmt.Errorf("pty: session %q not found", id)
+		return fmt.Errorf("pty: session %q not found: %w", id, ErrSessionNotFound)
 	}
 	_, err := sess.master.Write(data)
 	return err
@@ -198,7 +198,7 @@ func (m *PTYManager) Destroy(id string) error {
 	sess, ok := m.sessions[id]
 	if !ok {
 		m.mu.Unlock()
-		return fmt.Errorf("pty: session %q not found", id)
+		return fmt.Errorf("pty: session %q not found: %w", id, ErrSessionNotFound)
 	}
 	delete(m.sessions, id)
 	m.mu.Unlock()
@@ -222,7 +222,7 @@ func (m *PTYManager) WaitError(id string) (error, error) {
 	sess, ok := m.sessions[id]
 	m.mu.RUnlock()
 	if !ok {
-		return nil, fmt.Errorf("pty: session %q not found", id)
+		return nil, fmt.Errorf("pty: session %q not found: %w", id, ErrSessionNotFound)
 	}
 	select {
 	case <-sess.done:
