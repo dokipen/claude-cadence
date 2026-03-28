@@ -6,13 +6,21 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
+	"regexp"
+	"strconv"
 	"sync"
+	"syscall"
+	"unsafe"
 
 	"github.com/coder/websocket"
 	"github.com/creack/pty"
 )
+
+// validSlavePath matches only Linux PTY slave device paths (e.g. /dev/pts/0).
+var validSlavePath = regexp.MustCompile(`^/dev/pts/[0-9]+$`)
 
 // defaultBufferSize is 1 byte less than 1 MB so that a ttyd replay frame
 // (1-byte type prefix + buffer contents) fits within the hub proxy's
@@ -32,15 +40,16 @@ type PTYConfig struct {
 
 // session holds per-session PTY state.
 type session struct {
-	id      string
-	cmd     *exec.Cmd
-	master  *os.File     // PTY master
-	rb      *RingBuffer
-	writers []io.Writer  // active WS writers (stub for future broadcast)
-	done    chan struct{} // closed when PTY read goroutine exits AND cmd.Wait() has returned
-	waitOnce sync.Once   // ensures cmd.Wait() is called exactly once
-	waitErr  error       // result of cmd.Wait(), set by waitOnce
-	mu      sync.Mutex
+	id        string
+	cmd       *exec.Cmd
+	master    *os.File    // PTY master
+	rb        *RingBuffer
+	writers   []io.Writer // active WS writers (stub for future broadcast)
+	done      chan struct{} // closed when PTY read goroutine exits AND cmd.Wait() has returned
+	waitOnce  sync.Once   // ensures cmd.Wait() is called exactly once
+	waitErr   error       // result of cmd.Wait(), set by waitOnce
+	mu        sync.Mutex
+	slavePath string      // /dev/pts/N path of the slave side of the PTY
 }
 
 // PTYManager manages PTY sessions.
@@ -101,12 +110,15 @@ func (m *PTYManager) Create(id, workdir string, command []string, env []string, 
 		return fmt.Errorf("pty: start: %w", err)
 	}
 
+	slavePath := masterSlavePath(master)
+
 	sess := &session{
-		id:     id,
-		cmd:    cmd,
-		master: master,
-		rb:     NewRingBuffer(m.cfg.BufferSize),
-		done:   make(chan struct{}),
+		id:        id,
+		cmd:       cmd,
+		master:    master,
+		rb:        NewRingBuffer(m.cfg.BufferSize),
+		done:      make(chan struct{}),
+		slavePath: slavePath,
 	}
 	m.sessions[id] = sess
 
@@ -159,7 +171,7 @@ func (m *PTYManager) PID(id string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if sess.cmd.Process == nil {
+	if sess.cmd == nil || sess.cmd.Process == nil {
 		return 0, fmt.Errorf("pty: session %q has no process", id)
 	}
 	return sess.cmd.Process.Pid, nil
@@ -176,12 +188,14 @@ func (m *PTYManager) Destroy(id string) error {
 	delete(m.sessions, id)
 	m.mu.Unlock()
 
-	if sess.cmd.Process != nil {
+	if sess.cmd != nil && sess.cmd.Process != nil {
 		_ = sess.cmd.Process.Kill()
 	}
 	_ = sess.master.Close()
 	<-sess.done // wait for read goroutine to exit (it calls cmd.Wait via waitOnce)
-	sess.waitOnce.Do(func() { sess.waitErr = sess.cmd.Wait() }) // no-op if goroutine already reaped
+	if sess.cmd != nil {
+		sess.waitOnce.Do(func() { sess.waitErr = sess.cmd.Wait() }) // no-op if goroutine already reaped
+	}
 	return nil
 }
 
@@ -201,6 +215,86 @@ func (m *PTYManager) WaitError(id string) (error, error) {
 	default:
 		return nil, fmt.Errorf("pty: session %q has not exited", id)
 	}
+}
+
+// masterSlavePath returns the /dev/pts/N path of the slave side of the PTY
+// for the given master file. Uses TIOCGPTN ioctl on Linux. Returns an empty
+// string if the path cannot be determined.
+func masterSlavePath(master *os.File) string {
+	var n uint32
+	// TIOCGPTN is the Linux ioctl to get the PTY number from the master fd.
+	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, master.Fd(), syscall.TIOCGPTN, uintptr(unsafe.Pointer(&n))); errno != 0 { //nolint:gosec // Expected unsafe pointer for Syscall call.
+		slog.Warn("pty: failed to get slave path via TIOCGPTN", "error", errno)
+		return ""
+	}
+	return "/dev/pts/" + strconv.FormatUint(uint64(n), 10)
+}
+
+// GetSlavePath returns the /dev/pts/N slave path for the given session, or
+// an empty string if the session does not exist or has no slave path recorded.
+func (p *PTYManager) GetSlavePath(id string) string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	if s, ok := p.sessions[id]; ok {
+		return s.slavePath
+	}
+	return ""
+}
+
+// Reattach opens the slave PTY device at slavePath and creates a new session
+// entry for id backed by that device. This is used on daemon restart to
+// reconnect to a PTY whose underlying process is still alive.
+// Returns an error if slavePath cannot be opened or id already exists.
+func (p *PTYManager) Reattach(id, slavePath string) error {
+	if !validSlavePath.MatchString(slavePath) {
+		return fmt.Errorf("pty: reattach: invalid slave path %q", slavePath)
+	}
+	master, err := os.OpenFile(slavePath, os.O_RDWR|syscall.O_NOCTTY|syscall.O_NOFOLLOW, 0) //nolint:gosec // Expected Open from a variable.
+	if err != nil {
+		return fmt.Errorf("pty: reattach: open slave %q: %w", slavePath, err)
+	}
+
+	sess := &session{
+		id:        id,
+		master:    master,
+		rb:        NewRingBuffer(p.cfg.BufferSize),
+		done:      make(chan struct{}),
+		slavePath: slavePath,
+	}
+
+	p.mu.Lock()
+	if _, exists := p.sessions[id]; exists {
+		p.mu.Unlock()
+		_ = master.Close()
+		return fmt.Errorf("pty: reattach: session %q already exists", id)
+	}
+	p.sessions[id] = sess
+	p.mu.Unlock()
+
+	// Read goroutine: fan PTY output to ring buffer and active writers.
+	go func() {
+		defer close(sess.done)
+		defer sess.master.Close()
+		buf := make([]byte, 4096)
+		for {
+			n, readErr := master.Read(buf)
+			if n > 0 {
+				chunk := make([]byte, n)
+				copy(chunk, buf[:n])
+				_, _ = sess.rb.Write(chunk)
+				sess.mu.Lock()
+				for _, w := range sess.writers {
+					_, _ = w.Write(chunk)
+				}
+				sess.mu.Unlock()
+			}
+			if readErr != nil {
+				return
+			}
+		}
+	}()
+
+	return nil
 }
 
 // ReadBuffer returns a snapshot of the ring buffer for the given session.

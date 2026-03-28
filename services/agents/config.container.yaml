@@ -1,4 +1,6 @@
 root_dir: /var/lib/agentd
+session:
+  dir: /var/lib/agentd/sessions
 auth:
   mode: token
   token_env_var: AGENTD_TOKEN
@@ -18,3 +20,6 @@ profiles:
   bash:
     repo: "https://github.com/dokipen/claude-cadence.git"
     command: bash
+  bash-nohup:
+    repo: "https://github.com/dokipen/claude-cadence.git"
+    command: "bash -c 'trap \"\" HUP; exec bash'"
