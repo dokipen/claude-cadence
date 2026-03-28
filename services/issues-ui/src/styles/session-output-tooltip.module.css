@@ -24,7 +24,6 @@
   color: #d4d4d4;
   white-space: pre-wrap;
   word-break: break-all;
-  max-height: 300px;
-  overflow-y: auto;
+  overflow-y: hidden;
   pointer-events: auto;
 }

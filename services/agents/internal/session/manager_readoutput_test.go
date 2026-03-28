@@ -342,3 +342,50 @@ func TestReadOutput_SpinnerFiltering(t *testing.T) {
 		}
 	})
 }
+
+// TestReadOutput_MultiCharCROverwrite verifies that multi-character progress-bar
+// frames separated by bare \r are collapsed to only the final overwritten state.
+// Single-rune spinner filtering does not cover these lines; the CR-fold logic must.
+func TestReadOutput_MultiCharCROverwrite(t *testing.T) {
+	ptyMgr := pty.NewPTYManager(pty.PTYConfig{BufferSize: 65536})
+	sessID := "readoutput-croverwrite"
+
+	// Simulate a progress bar with multi-character frames: each \r overwrites
+	// the previous frame on the same terminal line.
+	script := `printf 'Building (1/3)\rBuilding (2/3)\rBuilding (3/3)\nDone\n'; sleep 3600`
+	err := ptyMgr.Create(sessID, t.TempDir(),
+		[]string{"sh", "-c", script},
+		nil, 80, 24)
+	if err != nil {
+		t.Fatalf("PTY Create failed: %v", err)
+	}
+	t.Cleanup(func() { ptyMgr.Destroy(sessID) })
+
+	waitForContent(t, ptyMgr, sessID, "Done")
+
+	m := newReadOutputTestManager(ptyMgr)
+	out, err := m.ReadOutput(sessID, 50)
+	if err != nil {
+		t.Fatalf("ReadOutput error: %v", err)
+	}
+
+	t.Run("intermediate_frames_removed", func(t *testing.T) {
+		for _, frame := range []string{"Building (1/3)", "Building (2/3)"} {
+			if strings.Contains(out, frame) {
+				t.Errorf("intermediate CR frame %q should be removed, got: %q", frame, out)
+			}
+		}
+	})
+
+	t.Run("final_frame_preserved", func(t *testing.T) {
+		if !strings.Contains(out, "Building (3/3)") {
+			t.Errorf("expected final frame 'Building (3/3)' in output, got: %q", out)
+		}
+	})
+
+	t.Run("done_line_preserved", func(t *testing.T) {
+		if !strings.Contains(out, "Done") {
+			t.Errorf("expected 'Done' in output, got: %q", out)
+		}
+	})
+}

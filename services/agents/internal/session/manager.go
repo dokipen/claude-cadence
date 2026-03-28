@@ -414,10 +414,20 @@ func (m *Manager) ReadOutput(sessionID string, lines int) (string, error) {
 	cleaned = strings.ReplaceAll(cleaned, "\r\n", "\n")
 
 	// Apply carriage-return folding: bare \r (without \n) means "overwrite from
-	// start of line", as terminals do for spinners/progress bars. Treat each
-	// bare \r as a line break so that only the final overwrite survives after
-	// we drop empty/spinner lines below.
-	cleaned = strings.ReplaceAll(cleaned, "\r", "\n")
+	// start of line", as terminals do for spinners/progress bars. For each
+	// \n-delimited segment, keep only the content after the last \r — this
+	// discards all intermediate overwrite frames (including multi-character
+	// progress-bar lines like "Building (3/10)\rBuilding (10/10)") while
+	// preserving the final overwritten state.
+	{
+		segments := strings.Split(cleaned, "\n")
+		for i, seg := range segments {
+			if idx := strings.LastIndex(seg, "\r"); idx >= 0 {
+				segments[i] = seg[idx+1:]
+			}
+		}
+		cleaned = strings.Join(segments, "\n")
+	}
 
 	// Split into lines, drop empty and spinner-only lines.
 	all := strings.Split(cleaned, "\n")

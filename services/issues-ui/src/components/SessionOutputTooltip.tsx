@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import type { ActiveSessionInfo } from "../types";
 import { fetchSessionOutput } from "../api/agentHubClient";
@@ -9,10 +9,16 @@ interface SessionOutputTooltipProps {
   children: React.ReactNode;
 }
 
+// Matches CSS: font-size 11px × line-height 1.4
+const LINE_HEIGHT_PX = 11 * 1.4;
+// Matches CSS: padding 8px top + 8px bottom
+const PADDING_PX = 16;
+
 export function SessionOutputTooltip({ session, children }: SessionOutputTooltipProps) {
   const [visible, setVisible] = useState(false);
   const [output, setOutput] = useState<string | null | undefined>(undefined);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const [maxLines, setMaxLines] = useState(0);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -24,6 +30,8 @@ export function SessionOutputTooltip({ session, children }: SessionOutputTooltip
       const centered = rect.left + rect.width / 2 - tooltipWidth / 2;
       const left = Math.max(margin, Math.min(centered, window.innerWidth - tooltipWidth - margin));
       setCoords({ top: rect.bottom + 4, left });
+      const availableHeight = window.innerHeight - (rect.bottom + 4) - margin;
+      setMaxLines(Math.max(1, Math.floor((availableHeight - PADDING_PX) / LINE_HEIGHT_PX)));
     }
     setVisible(true);
   }, []);
@@ -63,6 +71,13 @@ export function SessionOutputTooltip({ session, children }: SessionOutputTooltip
     }
   }, [visible]);
 
+  const displayOutput = useMemo(() => {
+    if (typeof output !== "string" || maxLines <= 0) return output;
+    const lines = output.split("\n");
+    if (lines.length <= maxLines) return output;
+    return lines.slice(-maxLines).join("\n");
+  }, [output, maxLines]);
+
   return (
     <div
       ref={wrapperRef}
@@ -78,11 +93,11 @@ export function SessionOutputTooltip({ session, children }: SessionOutputTooltip
           style={{ top: coords.top, left: coords.left }}
         >
           <pre className={styles.output} data-testid="session-output-content">
-            {output === undefined
+            {displayOutput === undefined
               ? "Loading..."
-              : output === null
+              : displayOutput === null
                 ? "Output unavailable"
-                : output}
+                : displayOutput}
           </pre>
         </div>,
         document.body
