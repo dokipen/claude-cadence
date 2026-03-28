@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { Terminal } from "./Terminal";
 import { hubFetch, HubError, createSession } from "../api/agentHubClient";
 import { useTicketByNumber } from "../hooks/useTicketByNumber";
+import { useSessionsContext } from "../hooks/SessionsContext";
 import type { Session } from "../types";
 import styles from "../styles/agents.module.css";
 
@@ -54,7 +55,10 @@ export function TerminalWindow({
   }, [agentName, session.id, session.agentProfile]);
   const handleResumeSession = session.agentProfile ? resumeCallback : undefined;
 
+  const { optimisticSetDestroying } = useSessionsContext();
+
   const handleTerminate = async () => {
+    optimisticSetDestroying(session.id);
     try {
       await hubFetch(
         `/agents/${encodeURIComponent(agentName)}/sessions/${encodeURIComponent(session.id)}?force=true`,
