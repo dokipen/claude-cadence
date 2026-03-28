@@ -39,6 +39,8 @@ PROVIDER=$(printf '%s' "$_parsed" | cut -f1)
 PROJECT=$(printf '%s' "$_parsed"  | cut -f2)
 API_URL=$(printf '%s' "$_parsed"  | cut -f3)
 PROVIDER="${PROVIDER:-github}"
+# Env var takes precedence over CLAUDE.md value
+API_URL="${ISSUES_API_URL:-$API_URL}"
 
 jq -n \
   --arg provider "$PROVIDER" \
