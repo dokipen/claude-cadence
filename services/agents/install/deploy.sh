@@ -8,7 +8,7 @@ set -euo pipefail
 #   --name       Agent name for hub registration (e.g., bootsy, mac)
 #   --host       SSH hostname for remote deploy. Omit for local macOS install.
 #   --hub-url    Hub WebSocket URL (default: ws://127.0.0.1:4200/ws/agent for local,
-#                wss://cadence.bootsy.internal/ws/agent for remote)
+#                wss://cadence.whatisbackdoor.com/ws/agent for remote)
 #   --hub-env    Path to agent-hub env file to read HUB_AGENT_TOKEN from.
 #                For remote: reads from --hub-host:/etc/agent-hub/env
 #   --hub-host   SSH host where agent-hub runs, for reading tokens (default: bootsy)
@@ -69,7 +69,7 @@ if [[ -n "$HOST" ]]; then
     [[ -z "$HUB_URL" ]] && HUB_URL="ws://127.0.0.1:4200/ws/agent"
 else
     MODE="local"
-    [[ -z "$HUB_URL" ]] && HUB_URL="wss://cadence.bootsy.internal/ws/agent"
+    [[ -z "$HUB_URL" ]] && HUB_URL="wss://cadence.whatisbackdoor.com/ws/agent"
 fi
 
 validate_yaml_string "$HUB_URL" "hub-url"

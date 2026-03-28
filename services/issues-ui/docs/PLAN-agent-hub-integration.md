@@ -17,7 +17,7 @@ Agents are launched _from_ tickets, not managed as a separate concern.
 ```
 Browser (issues-ui SPA)
         |
-      Caddy (cadence.bootsy.internal)
+      Caddy (cadence.whatisbackdoor.com)
         |
    +---------+----------+-----------+
    |         |          |           |

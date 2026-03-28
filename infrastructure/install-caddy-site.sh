@@ -19,7 +19,7 @@ Options:
   -h, --help Show this help message
 
 Example:
-  $(basename "$0") cadence.bootsy.internal
+  $(basename "$0") cadence.whatisbackdoor.com
 
 The site block is installed to ${CONF_DIR}/${SITE_FILE} and Caddy is
 reloaded. Requires sudo for writing to ${CONF_DIR}.

@@ -2,7 +2,7 @@
 
 ## Problem
 
-agentd instances run independently with static YAML config and a local gRPC API. There is no way to manage multiple agentd instances from a single control plane. As the number of agent machines grows, we need centralized management accessible from `cadence.bootsy.internal` and eventually the web frontend.
+agentd instances run independently with static YAML config and a local gRPC API. There is no way to manage multiple agentd instances from a single control plane. As the number of agent machines grows, we need centralized management accessible from `cadence.whatisbackdoor.com` and eventually the web frontend.
 
 ## Solution
 
@@ -16,7 +16,7 @@ A new Go service (**agent-hub**) that:
 ```
 Browser (REST / WS terminal)
         |
-      Caddy (cadence.bootsy.internal)
+      Caddy (cadence.whatisbackdoor.com)
         |
    +---------+--------+----------+
    |         |        |          |
@@ -121,7 +121,7 @@ Add optional `hub` config section to agentd (`services/agents/internal/config/co
 
 ```yaml
 hub:
-  url: "wss://cadence.bootsy.internal/ws/agent"
+  url: "wss://cadence.whatisbackdoor.com/ws/agent"
   name: "mac-mini-1"
   token: ""
   token_env_var: "HUB_AGENT_TOKEN"

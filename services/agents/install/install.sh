@@ -138,7 +138,7 @@ setup_hub() {
     echo
     info "Hub configuration (optional — connects this agent to an agent-hub)"
     if confirm "Connect this agent to an agent-hub?"; then
-        prompt HUB_URL "Hub WebSocket URL" "wss://cadence.bootsy.internal/ws/agent"
+        prompt HUB_URL "Hub WebSocket URL" "wss://cadence.whatisbackdoor.com/ws/agent"
         validate_yaml_string "$HUB_URL" "hub.url"
         prompt HUB_NAME "Agent name (identifier for this machine)" "$(hostname -s)"
         validate_yaml_string "$HUB_NAME" "hub.name"

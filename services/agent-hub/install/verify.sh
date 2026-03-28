@@ -9,7 +9,7 @@ set -euo pipefail
 #   --smoke-test  Launch a test session to verify end-to-end
 
 HOST="bootsy"
-HUB_URL="https://cadence.bootsy.internal"
+HUB_URL="https://cadence.whatisbackdoor.com"
 SMOKE_TEST=false
 
 # --- Helpers ---
