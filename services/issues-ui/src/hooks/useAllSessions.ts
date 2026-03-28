@@ -17,6 +17,7 @@ interface UseAllSessionsResult {
   loading: boolean;
   error: string | null;
   optimisticSetDestroying: (sessionId: string) => void;
+  optimisticResetState: (sessionId: string, state: Session["state"]) => void;
   optimisticAddSession: (session: Session, agentName: string) => void;
 }
 
