@@ -107,18 +107,22 @@ export function TicketCard({
   const handleKillClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setKillError(null);
-    setShowKillConfirm(true);
-  }, []);
-
-  const handleConfirmKill = useCallback(async () => {
-    if (!activeSession) return;
-    const { agentName, sessionId, state: originalState } = activeSession;
-    if (!agentName || !sessionId || !validateAgentProfile(agentName) || !validateSessionId(sessionId)) {
-      setKillError("Invalid session");
-      setShowKillConfirm(false);
+    if (!activeSession?.agentName || !activeSession?.sessionId) return;
+    try {
+      validateAgentProfile(activeSession.agentName);
+      validateSessionId(activeSession.sessionId);
+    } catch (err) {
+      console.warn("Kill session: invalid session data", err);
       return;
     }
+    setKillError(null);
+    setShowKillConfirm(true);
+  }, [activeSession]);
+
+  const handleConfirmKill = useCallback(async () => {
+    if (killing) return;
+    if (!activeSession) return;
+    const { agentName, sessionId, state: originalState } = activeSession;
     setShowKillConfirm(false);
     setKilling(true);
     setKillError(null);
@@ -131,7 +135,7 @@ export function TicketCard({
     } finally {
       setKilling(false);
     }
-  }, [activeSession, optimisticSetDestroying, optimisticResetState]);
+  }, [killing, activeSession, optimisticSetDestroying, optimisticResetState]);
 
   const handleCancelKill = useCallback(() => {
     setShowKillConfirm(false);

@@ -78,10 +78,12 @@ vi.mock("../api/agentHubClient", () => ({
     }
   },
   deleteSession: async (agentName: string, sessionId: string) => {
-    await mockHubFetch(
-      `/agents/${encodeURIComponent(agentName)}/sessions/${encodeURIComponent(sessionId)}?force=true`,
-      { method: "DELETE" },
-    );
+    try {
+      await mockHubFetch(`/agents/${agentName}/sessions/${sessionId}?force=true`, { method: "DELETE" });
+    } catch (err) {
+      if (err instanceof HubError && err.status === 404) return;
+      throw err;
+    }
   },
 }));
 
