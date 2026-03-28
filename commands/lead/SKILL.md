@@ -406,9 +406,9 @@ Run **both** applicable sub-sections below. A PR that touches both agent-service
 
    **What requires a rebuild vs. what picks up automatically:**
    - Changes to `services/issues-ui/` (frontend) are reflected immediately via Vite HMR — no rebuild needed.
-   - Changes to `services/issues/` (backend) require a container rebuild. Use the project name printed by the script:
+   - Changes to `services/issues/` (backend) require a container rebuild. Use the project name printed by the script (e.g. `cadence-qa-5173`):
      ```bash
-     docker compose -p cadence-qa-PORT up --build issues
+     docker compose -p cadence-qa-<PORT> up --build issues
      ```
 2. Wait for user feedback (user intervention required)
 3. Address issues if reported, return to Phase 5 after fixes
