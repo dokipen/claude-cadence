@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.cadence.agentd-cleanup</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__CLEANUP_SCRIPT_PATH__</string>
+        <string>--repos-dir</string>
+        <string>__ROOT_DIR__/repos</string>
+    </array>
+
+    <key>UserName</key>
+    <string>__USER__</string>
+
+    <key>WorkingDirectory</key>
+    <string>__ROOT_DIR__</string>
+
+    <!-- Run every hour -->
+    <key>StartInterval</key>
+    <integer>3600</integer>
+
+    <key>StandardOutPath</key>
+    <string>__LOG_DIR__/agentd-cleanup.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__LOG_DIR__/agentd-cleanup.log</string>
+
+    <!-- Do not run immediately at load — wait for the first interval -->
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__DAEMON_PATH__</string>
+    </dict>
+</dict>
+</plist>

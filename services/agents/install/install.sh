@@ -5,7 +5,9 @@ set -euo pipefail
 # Installs the agent service as a system daemon using launchd (macOS) or systemd (Linux).
 
 LABEL="com.cadence.agentd"
+CLEANUP_LABEL="com.cadence.agentd-cleanup"
 BINARY_NAME="agentd"
+CLEANUP_BINARY_NAME="agentd-cleanup"
 DEFAULT_ROOT_DIR="/var/lib/agentd"
 DEFAULT_CONFIG_DIR=""
 DEFAULT_LOG_DIR=""
@@ -260,6 +262,24 @@ install_binary() {
     info "Binary installed to $INSTALL_DIR/$BINARY_NAME"
 }
 
+install_cleanup_binary() {
+    local script_dir
+    script_dir="$(cd "$(dirname "$0")" && pwd)"
+    local plugin_scripts_dir
+    plugin_scripts_dir="$(cd "$script_dir/../../../../skills/project-ops/scripts" 2>/dev/null && pwd)" || plugin_scripts_dir=""
+    local src_script="${plugin_scripts_dir:+$plugin_scripts_dir/cleanup-worktrees-scheduled.sh}"
+
+    if [[ -n "$src_script" && -f "$src_script" ]]; then
+        info "Installing cleanup script to $INSTALL_DIR/$CLEANUP_BINARY_NAME..."
+        sudo cp "$src_script" "$INSTALL_DIR/$CLEANUP_BINARY_NAME"
+    else
+        error "Cleanup script not found at $src_script. Ensure you are running install.sh from the claude-cadence repo."
+    fi
+
+    sudo chmod 755 "$INSTALL_DIR/$CLEANUP_BINARY_NAME"
+    info "Cleanup script installed to $INSTALL_DIR/$CLEANUP_BINARY_NAME"
+}
+
 # --- Template rendering ---
 
 sed_escape() {
@@ -276,9 +296,10 @@ xml_encode() {
 
 render_template() {
     local template="$1" output="$2" use_xml="${3:-false}"
-    local binary_path config_path user group root_dir log_dir daemon_path
+    local binary_path cleanup_script_path config_path user group root_dir log_dir daemon_path
     if [[ "$use_xml" == "true" ]]; then
         binary_path=$(xml_encode "$INSTALL_DIR/$BINARY_NAME")
+        cleanup_script_path=$(xml_encode "$INSTALL_DIR/$CLEANUP_BINARY_NAME")
         config_path=$(xml_encode "$AGENTD_CONFIG_DIR/config.yaml")
         user=$(xml_encode "$AGENTD_USER")
         group=$(xml_encode "$AGENTD_GROUP")
@@ -287,6 +308,7 @@ render_template() {
         daemon_path=$(xml_encode "$DAEMON_PATH")
     else
         binary_path="$INSTALL_DIR/$BINARY_NAME"
+        cleanup_script_path="$INSTALL_DIR/$CLEANUP_BINARY_NAME"
         config_path="$AGENTD_CONFIG_DIR/config.yaml"
         user="$AGENTD_USER"
         group="$AGENTD_GROUP"
@@ -296,6 +318,7 @@ render_template() {
     fi
     sed \
         -e "s|__BINARY_PATH__|$(sed_escape "$binary_path")|g" \
+        -e "s|__CLEANUP_SCRIPT_PATH__|$(sed_escape "$cleanup_script_path")|g" \
         -e "s|__CONFIG_PATH__|$(sed_escape "$config_path")|g" \
         -e "s|__USER__|$(sed_escape "$user")|g" \
         -e "s|__GROUP__|$(sed_escape "$group")|g" \
@@ -362,6 +385,59 @@ install_systemd() {
     info "systemd service installed, enabled, and started."
 }
 
+# --- Cleanup service installation ---
+
+install_cleanup_launchd() {
+    local script_dir
+    script_dir="$(cd "$(dirname "$0")" && pwd)"
+    local plist_tmpl="$script_dir/com.cadence.agentd-cleanup.plist.tmpl"
+    local plist_dest="$HOME/Library/LaunchAgents/$CLEANUP_LABEL.plist"
+
+    if [[ ! -f "$plist_tmpl" ]]; then
+        error "launchd cleanup template not found: $plist_tmpl"
+    fi
+
+    info "Installing launchd cleanup timer..."
+    mkdir -p "$HOME/Library/LaunchAgents"
+    render_template "$plist_tmpl" "$plist_dest" "true"
+    chmod 600 "$plist_dest"
+
+    launchctl bootout "gui/$(id -u)/$CLEANUP_LABEL" 2>/dev/null || true
+    launchctl bootstrap "gui/$(id -u)" "$plist_dest"
+    info "launchd cleanup timer installed and loaded."
+}
+
+install_cleanup_systemd() {
+    local script_dir
+    script_dir="$(cd "$(dirname "$0")" && pwd)"
+    local service_tmpl="$script_dir/agentd-cleanup.service.tmpl"
+    local timer_tmpl="$script_dir/agentd-cleanup.timer.tmpl"
+    local service_dest="/etc/systemd/system/agentd-cleanup.service"
+    local timer_dest="/etc/systemd/system/agentd-cleanup.timer"
+
+    if [[ ! -f "$service_tmpl" ]]; then
+        error "systemd cleanup service template not found: $service_tmpl"
+    fi
+    if [[ ! -f "$timer_tmpl" ]]; then
+        error "systemd cleanup timer template not found: $timer_tmpl"
+    fi
+
+    info "Installing systemd cleanup timer..."
+    local rendered_service rendered_timer
+    rendered_service="$(mktemp)"
+    rendered_timer="$(mktemp)"
+    render_template "$service_tmpl" "$rendered_service"
+    render_template "$timer_tmpl" "$rendered_timer"
+    sudo cp "$rendered_service" "$service_dest"
+    sudo cp "$rendered_timer" "$timer_dest"
+    rm -f "$rendered_service" "$rendered_timer"
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable agentd-cleanup.timer
+    sudo systemctl start agentd-cleanup.timer
+    info "systemd cleanup timer installed, enabled, and started."
+}
+
 # --- Health check ---
 
 health_check() {
@@ -396,11 +472,18 @@ main() {
     setup_directories "$os"
     setup_hub
     install_binary
+    install_cleanup_binary
     generate_config "$os"
 
     case "$os" in
-        darwin) install_launchd ;;
-        linux)  install_systemd ;;
+        darwin)
+            install_launchd
+            install_cleanup_launchd
+            ;;
+        linux)
+            install_systemd
+            install_cleanup_systemd
+            ;;
     esac
 
     health_check || true

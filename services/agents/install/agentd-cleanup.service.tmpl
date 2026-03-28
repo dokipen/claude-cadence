@@ -1,0 +1,17 @@
+[Unit]
+Description=Cadence Agent Worktree Cleanup
+Documentation=https://github.com/dokipen/claude-cadence
+After=network.target
+
+[Service]
+Type=oneshot
+User=__USER__
+Group=__GROUP__
+ExecStart=__CLEANUP_SCRIPT_PATH__ --repos-dir __ROOT_DIR__/repos
+WorkingDirectory=__ROOT_DIR__
+
+Environment=PATH=__DAEMON_PATH__
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=agentd-cleanup
