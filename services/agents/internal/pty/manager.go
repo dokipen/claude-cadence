@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"sync"
 	"syscall"
@@ -17,6 +18,9 @@ import (
 	"github.com/coder/websocket"
 	"github.com/creack/pty"
 )
+
+// validSlavePath matches only Linux PTY slave device paths (e.g. /dev/pts/0).
+var validSlavePath = regexp.MustCompile(`^/dev/pts/[0-9]+$`)
 
 // defaultBufferSize is 1 byte less than 1 MB so that a ttyd replay frame
 // (1-byte type prefix + buffer contents) fits within the hub proxy's
@@ -167,7 +171,7 @@ func (m *PTYManager) PID(id string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if sess.cmd.Process == nil {
+	if sess.cmd == nil || sess.cmd.Process == nil {
 		return 0, fmt.Errorf("pty: session %q has no process", id)
 	}
 	return sess.cmd.Process.Pid, nil
@@ -184,12 +188,14 @@ func (m *PTYManager) Destroy(id string) error {
 	delete(m.sessions, id)
 	m.mu.Unlock()
 
-	if sess.cmd.Process != nil {
+	if sess.cmd != nil && sess.cmd.Process != nil {
 		_ = sess.cmd.Process.Kill()
 	}
 	_ = sess.master.Close()
 	<-sess.done // wait for read goroutine to exit (it calls cmd.Wait via waitOnce)
-	sess.waitOnce.Do(func() { sess.waitErr = sess.cmd.Wait() }) // no-op if goroutine already reaped
+	if sess.cmd != nil {
+		sess.waitOnce.Do(func() { sess.waitErr = sess.cmd.Wait() }) // no-op if goroutine already reaped
+	}
 	return nil
 }
 
@@ -240,7 +246,10 @@ func (p *PTYManager) GetSlavePath(id string) string {
 // reconnect to a PTY whose underlying process is still alive.
 // Returns an error if slavePath cannot be opened or id already exists.
 func (p *PTYManager) Reattach(id, slavePath string) error {
-	master, err := os.OpenFile(slavePath, os.O_RDWR|syscall.O_NOCTTY, 0) //nolint:gosec // Expected Open from a variable.
+	if !validSlavePath.MatchString(slavePath) {
+		return fmt.Errorf("pty: reattach: invalid slave path %q", slavePath)
+	}
+	master, err := os.OpenFile(slavePath, os.O_RDWR|syscall.O_NOCTTY|syscall.O_NOFOLLOW, 0) //nolint:gosec // Expected Open from a variable.
 	if err != nil {
 		return fmt.Errorf("pty: reattach: open slave %q: %w", slavePath, err)
 	}
@@ -265,6 +274,7 @@ func (p *PTYManager) Reattach(id, slavePath string) error {
 	// Read goroutine: fan PTY output to ring buffer and active writers.
 	go func() {
 		defer close(sess.done)
+		defer sess.master.Close()
 		buf := make([]byte, 4096)
 		for {
 			n, readErr := master.Read(buf)

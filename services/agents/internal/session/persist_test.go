@@ -88,6 +88,7 @@ func TestPersister_RoundTrip(t *testing.T) {
 		WorktreePath:    "/tmp/worktree",
 		RepoURL:         "https://github.com/example/repo",
 		BaseRef:         "main",
+		PTYSlavePath:    "/dev/pts/42",
 		// Ephemeral fields — must NOT appear in JSON.
 		WaitingForInput: true,
 		IdleSince:       &now,
@@ -138,6 +139,9 @@ func TestPersister_RoundTrip(t *testing.T) {
 	}
 	if got.BaseRef != sess.BaseRef {
 		t.Errorf("BaseRef: got %q, want %q", got.BaseRef, sess.BaseRef)
+	}
+	if got.PTYSlavePath != sess.PTYSlavePath {
+		t.Errorf("PTYSlavePath: got %q, want %q", got.PTYSlavePath, sess.PTYSlavePath)
 	}
 
 	// Ephemeral fields must NOT be persisted: they should be zero after reload.
