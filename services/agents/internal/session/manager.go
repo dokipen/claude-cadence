@@ -418,24 +418,33 @@ func (m *Manager) ReadOutput(sessionID string, lines int) (string, error) {
 		all = all[:len(all)-1]
 	}
 
-	// Slice to the tail before joining and normalizing so that the
-	// subsequent ReplaceAll calls operate on ~N*lineWidth bytes instead of
-	// the full ~1 MB snapshot, eliminating the two large intermediate
-	// allocations from the previous implementation.
+	// Slice to the tail before CR processing so subsequent work operates on
+	// ~N*lineWidth bytes instead of the full snapshot.
 	if len(all) > lines {
 		all = all[len(all)-lines:]
 	}
 
-	// Normalize CRs on the small tail string only, then re-split.
-	tail := strings.Join(all, "\n")
-	tail = strings.ReplaceAll(tail, "\r\n", "\n")
-	tail = strings.ReplaceAll(tail, "\r", "\n")
-	sublines := strings.Split(tail, "\n")
+	// Apply CR-fold per segment: split each \n-delimited segment on \r and
+	// keep the last non-empty part. This correctly handles both:
+	//   - CRLF lines (trailing \r because \r\n was split at the \n delimiter)
+	//   - multi-character progress-bar overwrites like "frame1\rframe2\rfinal"
+	// Single-rune spinner chars (✻ ✶ ·) are caught by the filter below.
+	for i, seg := range all {
+		parts := strings.Split(seg, "\r")
+		final := ""
+		for j := len(parts) - 1; j >= 0; j-- {
+			if parts[j] != "" {
+				final = parts[j]
+				break
+			}
+		}
+		all[i] = final
+	}
 
-	// Drop empty and spinner-only lines. filtered aliases sublines's backing
+	// Drop empty and spinner-only lines. filtered aliases all's backing
 	// array — write index is always ≤ read index, so this is safe in-place.
-	filtered := sublines[:0]
-	for _, line := range sublines {
+	filtered := all[:0]
+	for _, line := range all {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
 			continue
@@ -448,8 +457,8 @@ func (m *Manager) ReadOutput(sessionID string, lines int) (string, error) {
 		filtered = append(filtered, line)
 	}
 
-	// Re-apply the lines limit: bare-\r expansion inside the tail window can
-	// produce more sublines than the N LF-segments that were sliced.
+	// Re-apply the lines limit as a safety clamp (CR-fold can expose more
+	// content-bearing lines than the initial LF-segment count).
 	if len(filtered) > lines {
 		filtered = filtered[len(filtered)-lines:]
 	}

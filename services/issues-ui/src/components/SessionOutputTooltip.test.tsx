@@ -217,4 +217,41 @@ describe("SessionOutputTooltip", () => {
     await act(async () => { await Promise.resolve(); });
     expect(mockFetchSessionOutput).not.toHaveBeenCalled();
   });
+
+  it("truncates output to lines that fit the available viewport height", async () => {
+    const session = makeSession({ state: "stopped" });
+    const lines = Array.from({ length: 10 }, (_, i) => `line${i + 1}`);
+    mockFetchSessionOutput.mockResolvedValue(lines.join("\n"));
+
+    const { getByTestId, container } = render(
+      <SessionOutputTooltip session={session}>
+        <span>icon</span>
+      </SessionOutputTooltip>,
+    );
+
+    // Position the wrapper near the bottom of the viewport so only 4 lines fit.
+    // availableHeight = window.innerHeight - (bottom + 4) - 8
+    // With bottom = window.innerHeight - 100: availableHeight = 88
+    // maxLines = floor((88 - 16) / 15.4) = floor(72 / 15.4) = 4
+    const wrapper = container.firstChild as HTMLElement;
+    vi.spyOn(wrapper, "getBoundingClientRect").mockReturnValue({
+      bottom: window.innerHeight - 100,
+      top: 0, left: 0, right: 0, width: 0, height: 0, x: 0, y: 0,
+      toJSON: () => ({}),
+    });
+
+    await act(async () => {
+      fireEvent.mouseEnter(wrapper);
+    });
+    await act(async () => { await Promise.resolve(); });
+
+    const content = getByTestId("session-output-content").textContent ?? "";
+    const renderedLines = content.split("\n");
+    expect(renderedLines.length).toBe(4);
+    expect(renderedLines[renderedLines.length - 1]).toBe("line10");
+    // Verify early lines are excluded (line1–line6 should not appear)
+    for (const excluded of ["line1", "line2", "line3", "line4", "line5", "line6"]) {
+      expect(renderedLines).not.toContain(excluded);
+    }
+  });
 });
