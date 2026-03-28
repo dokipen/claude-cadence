@@ -126,6 +126,30 @@ describe("TerminalWindow", () => {
     expect(onTerminated).not.toHaveBeenCalled();
   });
 
+  it("skips DELETE and warns when agentName is invalid", async () => {
+    const onTerminated = vi.fn();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    render(
+      <TerminalWindow
+        session={baseSession}
+        agentName="bad agent name"
+        onMinimize={vi.fn()}
+        onTerminated={onTerminated}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("tile-terminate"));
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[TerminalWindow] Refusing to terminate session: invalid id or agentName",
+    );
+    expect(mockHubFetch).not.toHaveBeenCalled();
+    expect(onTerminated).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
+  });
+
   it("renders maximize button with data-testid and title 'Maximize' by default", () => {
     render(
       <TerminalWindow

@@ -67,8 +67,8 @@ export function TerminalWindow({
   const { optimisticSetDestroying, optimisticResetState } = useSessionsContext();
 
   const handleTerminate = async () => {
-    if (!validateSessionId(session.id)) {
-      console.warn("[TerminalWindow] Refusing to terminate session: invalid id");
+    if (!validateSessionId(session.id) || !validateAgentProfile(agentName)) {
+      console.warn("[TerminalWindow] Refusing to terminate session: invalid id or agentName");
       return;
     }
     const originalState = session.state;
