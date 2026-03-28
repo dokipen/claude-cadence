@@ -31,7 +31,6 @@ type SessionDispatcher interface {
 	ListSessions(params json.RawMessage) (json.RawMessage, *rpcError)
 	DestroySession(params json.RawMessage) (json.RawMessage, *rpcError)
 	GetTerminalEndpoint(params json.RawMessage) (json.RawMessage, *rpcError)
-	GetSessionOutput(params json.RawMessage) (json.RawMessage, *rpcError)
 	GetDiagnostics(ctx context.Context, params json.RawMessage) (json.RawMessage, *rpcError)
 	SendInput(params json.RawMessage) (json.RawMessage, *rpcError)
 }
@@ -289,8 +288,6 @@ func (c *Client) dispatchSessionAsync(ctx context.Context, conn *websocket.Conn,
 		fn = c.dispatcher.DestroySession
 	case "getTerminalEndpoint":
 		fn = c.dispatcher.GetTerminalEndpoint
-	case "getSessionOutput":
-		fn = c.dispatcher.GetSessionOutput
 	case "getDiagnostics":
 		fn = func(params json.RawMessage) (json.RawMessage, *rpcError) {
 			return c.dispatcher.GetDiagnostics(ctx, params)

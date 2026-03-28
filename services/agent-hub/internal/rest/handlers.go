@@ -351,27 +351,6 @@ func handleGetSession(h *hub.Hub) http.HandlerFunc {
 	}
 }
 
-// handleGetSessionOutput forwards a GetSessionOutput request to the target agentd.
-func handleGetSessionOutput(h *hub.Hub) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		agent, ok := resolveAgent(h, w, r)
-		if !ok {
-			return
-		}
-
-		sessionID := r.PathValue("id")
-		params := map[string]any{"session_id": sessionID, "lines": 50}
-
-		result, err := callAgent(r.Context(), h, agent, "getSessionOutput", params, w)
-		if err != nil {
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(result)
-	}
-}
-
 // handleSendInput forwards a SendInput request to the target agentd.
 func handleSendInput(h *hub.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
