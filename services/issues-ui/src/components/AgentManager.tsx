@@ -24,6 +24,11 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
     : sessions;
   const { agents, loading: agentsLoading } = useAgents(selectedProject?.repository);
   const [openWindows, setOpenWindows] = useState<TiledWindow[]>([]);
+  // Ref kept in sync with openWindows state so callbacks can read current value
+  // without listing openWindows in their dep arrays (which would invalidate
+  // stable references on every window change).
+  const openWindowsRef = useRef<TiledWindow[]>([]);
+  openWindowsRef.current = openWindows;
   const [minimizedKeys, setMinimizedKeys] = useState<Set<string>>(new Set());
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     try {
@@ -94,8 +99,10 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
       return;
     }
 
-    // If already open, minimize it (toggle off)
-    if (openWindows.some((w) => w.key === key)) {
+    // If already open, minimize it (toggle off).
+    // Read from ref instead of state so openWindows is not needed in the dep
+    // array, keeping this callback reference stable across unrelated state changes.
+    if (openWindowsRef.current.some((w) => w.key === key)) {
       setMinimizedKeys((prev) => new Set(prev).add(key));
       setOpenWindows((prev) => prev.filter((w) => w.key !== key));
       return;
@@ -106,7 +113,7 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
       ...prev,
       { key, session: as.session, agentName: as.agentName, projectId: selectedProject?.id },
     ]);
-  }, [openWindows, minimizedKeys, selectedProject]);
+  }, [minimizedKeys, selectedProject]);
 
   const handleMinimize = useCallback((key: string) => {
     setMinimizedKeys((prev) => new Set(prev).add(key));
