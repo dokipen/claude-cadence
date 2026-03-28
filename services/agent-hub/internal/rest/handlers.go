@@ -119,8 +119,9 @@ func handleListAgents(h *hub.Hub) http.HandlerFunc {
 const listAllSessionsDeadline = 28 * time.Second
 
 // diagnosticsDeadline caps the total fan-out time for handleGetDiagnostics.
-// Set equal to listAllSessionsDeadline since the per-agent RPC is similarly lightweight.
-const diagnosticsDeadline = listAllSessionsDeadline
+// getDiagnostics runs journalctl on each agent (up to 60s each), so the overall
+// deadline must be larger than the per-agent diagnosticsTimeout to be meaningful.
+const diagnosticsDeadline = 90 * time.Second
 
 // handleListAllSessions returns sessions across all online agents.
 func handleListAllSessions(h *hub.Hub, overallDeadline time.Duration) http.HandlerFunc {
@@ -255,6 +256,11 @@ const rpcCallTimeout = 30 * time.Second
 // listAllSessionsTimeout is a tighter timeout for the fan-out polling endpoint,
 // where each RPC is a lightweight in-memory query on the agent side.
 const listAllSessionsTimeout = 5 * time.Second
+
+// diagnosticsTimeout is the per-agent timeout for getDiagnostics fan-out calls.
+// getDiagnostics runs journalctl on the agent side which can take up to 30s,
+// so a longer budget is needed compared to the lightweight listSessions RPC.
+const diagnosticsTimeout = 60 * time.Second
 
 // MaxAgentFanOut bounds the number of concurrent RPCs in handleListAllSessions
 // to limit goroutine pressure when many agents are online.
@@ -427,7 +433,7 @@ func handleGetDiagnostics(h *hub.Hub, logPath string, overallDeadline time.Durat
 			agentName := info.Name
 			eg.Go(func() error {
 				defer func() { <-sem }()
-				callCtx, callCancel := context.WithTimeout(egCtx, listAllSessionsTimeout)
+				callCtx, callCancel := context.WithTimeout(egCtx, diagnosticsTimeout)
 				defer callCancel()
 
 				result, err := h.Call(callCtx, agent, "getDiagnostics", map[string]any{

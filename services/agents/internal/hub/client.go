@@ -31,7 +31,7 @@ type SessionDispatcher interface {
 	ListSessions(params json.RawMessage) (json.RawMessage, *rpcError)
 	DestroySession(params json.RawMessage) (json.RawMessage, *rpcError)
 	GetTerminalEndpoint(params json.RawMessage) (json.RawMessage, *rpcError)
-	GetDiagnostics(params json.RawMessage) (json.RawMessage, *rpcError)
+	GetDiagnostics(ctx context.Context, params json.RawMessage) (json.RawMessage, *rpcError)
 }
 
 // Client manages the WebSocket connection from agentd to the hub.
@@ -288,7 +288,9 @@ func (c *Client) dispatchSessionAsync(ctx context.Context, conn *websocket.Conn,
 	case "getTerminalEndpoint":
 		fn = c.dispatcher.GetTerminalEndpoint
 	case "getDiagnostics":
-		fn = c.dispatcher.GetDiagnostics
+		fn = func(params json.RawMessage) (json.RawMessage, *rpcError) {
+			return c.dispatcher.GetDiagnostics(ctx, params)
+		}
 	}
 
 	resp := c.dispatchSession(req.ID, req.Params, fn)

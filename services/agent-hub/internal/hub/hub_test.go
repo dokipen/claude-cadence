@@ -1063,3 +1063,85 @@ func TestHandleAgentConnection_UnknownBinaryFrameType(t *testing.T) {
 		t.Fatalf("write after unknown frame failed — connection was closed: %v", err)
 	}
 }
+
+// connectPingOnlyAgent dials the test server, registers, then reads messages
+// and only responds to "ping" — all other RPC calls are silently dropped.
+// This allows heartbeat to succeed while RPC calls time out.
+func connectPingOnlyAgent(t *testing.T, url, name string) {
+	t.Helper()
+
+	wsURL := "ws" + strings.TrimPrefix(url, "http")
+	conn, _, err := websocket.Dial(context.Background(), wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+
+	// Send register.
+	regReq, _ := NewRequest("reg-1", "register", &RegisterParams{
+		Name:     name,
+		Profiles: map[string]ProfileInfo{"default": {Description: "test", Repo: "https://github.com/test/repo"}},
+	})
+	data, _ := json.Marshal(regReq)
+	conn.Write(context.Background(), websocket.MessageText, data)
+
+	// Read register ack.
+	conn.Read(context.Background())
+
+	// Read loop: only respond to ping; drop everything else.
+	go func() {
+		for {
+			_, data, err := conn.Read(context.Background())
+			if err != nil {
+				return
+			}
+			var req Request
+			if err := json.Unmarshal(data, &req); err != nil {
+				continue
+			}
+			if req.Method != "ping" {
+				// Silently drop non-ping requests (simulates hung RPC).
+				continue
+			}
+			result, _ := json.Marshal(map[string]string{"pong": "ok"})
+			resp := &Response{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Result:  result,
+			}
+			respData, _ := json.Marshal(resp)
+			conn.Write(context.Background(), websocket.MessageText, respData)
+		}
+	}()
+}
+
+func TestRPCTimeoutDemotesAgent(t *testing.T) {
+	// Use a long heartbeat interval so heartbeats don't interfere with the test.
+	h, url := startTestHubWithHeartbeat(t, 30*time.Second, 5*time.Second)
+
+	connectPingOnlyAgent(t, url, "rpc-timeout-agent")
+	agent := waitForAgent(t, h, "rpc-timeout-agent")
+
+	if agent.Status() != StatusOnline {
+		t.Fatalf("expected agent to start online, got %s", agent.Status())
+	}
+
+	// Make 3 RPC calls with a short timeout. The agent will not respond to
+	// getDiagnostics, so each call should time out after ~200ms.
+	for i := 0; i < 3; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		_, err := h.Call(ctx, agent, "getDiagnostics", map[string]string{})
+		cancel()
+
+		if err == nil {
+			t.Fatalf("call %d: expected timeout error, got nil", i+1)
+		}
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("call %d: expected DeadlineExceeded, got: %v", i+1, err)
+		}
+	}
+
+	// After 3 consecutive deadline-exceeded timeouts, the agent should be offline.
+	if agent.Status() != StatusOffline {
+		t.Errorf("expected agent to be offline after 3 consecutive RPC timeouts, got %s", agent.Status())
+	}
+}

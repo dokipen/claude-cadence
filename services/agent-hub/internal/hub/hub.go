@@ -19,6 +19,11 @@ import (
 // to change its AdvertiseAddress.
 var ErrAdvertiseAddressChanged = errors.New("advertise address changed on re-registration")
 
+// maxConsecutiveRPCFailures is the number of consecutive RPC timeout/deadline
+// failures before the agent is demoted to offline. Only deadline-exceeded errors
+// count; business-logic errors (e.g. rpcErrNotFound) do not.
+const maxConsecutiveRPCFailures = 3
+
 // MaxMessageSize is the maximum allowed WebSocket message size for relay
 // (binary) frames (1 MiB). Sized for PTY burst output from terminal relay.
 // This is the connection-level read limit applied via SetReadLimit.
@@ -279,11 +284,22 @@ func (h *Hub) Call(ctx context.Context, agent *ConnectedAgent, method string, pa
 
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		callErr := ctx.Err()
+		if errors.Is(callErr, context.DeadlineExceeded) {
+			if n := agent.incRPCFailures(); n >= maxConsecutiveRPCFailures {
+				slog.Warn("agent demoted: too many consecutive RPC timeouts",
+					"agent", agent.Name,
+					"consecutive_failures", n,
+				)
+				h.markOfflineIfCurrent(agent.Name, agent)
+			}
+		}
+		return nil, callErr
 	case resp := <-respCh:
 		if resp.Error != nil {
 			return nil, &CallError{RPCError: resp.Error}
 		}
+		agent.resetRPCFailures()
 		return resp.Result, nil
 	}
 }
