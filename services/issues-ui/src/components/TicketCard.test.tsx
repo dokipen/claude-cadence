@@ -7,11 +7,22 @@ import type { ActiveSessionInfo, SessionState, Ticket } from "../types";
 // ---------------------------------------------------------------------------
 // Hoisted mutable state shared between mock factories and tests
 // ---------------------------------------------------------------------------
-const { mockHubFetch, mockOptimisticSetDestroying, mockOptimisticResetState } = vi.hoisted(() => ({
-  mockHubFetch: vi.fn(),
-  mockOptimisticSetDestroying: vi.fn(),
-  mockOptimisticResetState: vi.fn(),
-}));
+const { mockHubFetch, mockOptimisticSetDestroying, mockOptimisticResetState, MockHubError } = vi.hoisted(() => {
+  class MockHubError extends Error {
+    status: number;
+    constructor(status: number, message: string) {
+      super(message);
+      this.name = "HubError";
+      this.status = status;
+    }
+  }
+  return {
+    mockHubFetch: vi.fn(),
+    mockOptimisticSetDestroying: vi.fn(),
+    mockOptimisticResetState: vi.fn(),
+    MockHubError,
+  };
+});
 
 // Mock CSS modules
 vi.mock("../styles/card.module.css", () => ({ default: {} }));
@@ -69,19 +80,12 @@ vi.mock("./LabelBadge", () => ({
 // ---------------------------------------------------------------------------
 vi.mock("../api/agentHubClient", () => ({
   hubFetch: mockHubFetch,
-  HubError: class HubError extends Error {
-    status: number;
-    constructor(status: number, message: string) {
-      super(message);
-      this.name = "HubError";
-      this.status = status;
-    }
-  },
+  HubError: MockHubError,
   deleteSession: async (agentName: string, sessionId: string) => {
     try {
       await mockHubFetch(`/agents/${agentName}/sessions/${sessionId}?force=true`, { method: "DELETE" });
     } catch (err) {
-      if (err instanceof HubError && err.status === 404) return;
+      if (err instanceof MockHubError && err.status === 404) return;
       throw err;
     }
   },
@@ -570,8 +574,7 @@ describe("kill session", () => {
   });
 
   it("shows error when kill API fails", async () => {
-    const { HubError } = await import("../api/agentHubClient");
-    mockHubFetch.mockRejectedValue(new HubError(500, "server error"));
+    mockHubFetch.mockRejectedValue(new MockHubError(500, "server error"));
 
     const ticket = makeTicket({ number: 5 });
     const sessions = [

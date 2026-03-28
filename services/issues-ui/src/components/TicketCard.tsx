@@ -123,6 +123,7 @@ export function TicketCard({
     if (killing) return;
     if (!activeSession) return;
     const { agentName, sessionId, state: originalState } = activeSession;
+    if (!agentName || !sessionId) return;
     setShowKillConfirm(false);
     setKilling(true);
     setKillError(null);
