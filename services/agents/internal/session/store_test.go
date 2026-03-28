@@ -237,3 +237,168 @@ func TestStore_Update_RenameToExistingNameReturnsError(t *testing.T) {
 		t.Errorf("GetByName(beta).ID = %q, want sess-2", got2.ID)
 	}
 }
+
+// --- State machine tests ---
+
+func TestSessionState_String(t *testing.T) {
+	cases := []struct {
+		state SessionState
+		want  string
+	}{
+		{StateCreating, "creating"},
+		{StateRunning, "running"},
+		{StateStopped, "stopped"},
+		{StateError, "error"},
+		{StateDestroying, "destroying"},
+		{SessionState(99), "unknown(99)"},
+	}
+	for _, tc := range cases {
+		if got := tc.state.String(); got != tc.want {
+			t.Errorf("SessionState(%d).String() = %q, want %q", int(tc.state), got, tc.want)
+		}
+	}
+}
+
+func TestStore_Transition_ValidPaths(t *testing.T) {
+	cases := []struct {
+		from SessionState
+		to   SessionState
+	}{
+		{StateCreating, StateRunning},
+		{StateCreating, StateStopped},
+		{StateCreating, StateError},
+		{StateCreating, StateDestroying},
+		{StateRunning, StateStopped},
+		{StateRunning, StateDestroying},
+		{StateStopped, StateDestroying},
+		{StateError, StateDestroying},
+	}
+	for _, tc := range cases {
+		t.Run(tc.from.String()+"→"+tc.to.String(), func(t *testing.T) {
+			store := NewStore()
+			store.Add(&Session{ID: "s", State: tc.from})
+			if err := store.Transition("s", tc.to); err != nil {
+				t.Errorf("Transition(%s→%s) = %v, want nil", tc.from, tc.to, err)
+			}
+			got, _ := store.Get("s")
+			if got.State != tc.to {
+				t.Errorf("state after Transition = %s, want %s", got.State, tc.to)
+			}
+		})
+	}
+}
+
+func TestStore_Transition_InvalidPaths(t *testing.T) {
+	cases := []struct {
+		from SessionState
+		to   SessionState
+	}{
+		{StateRunning, StateCreating},
+		{StateRunning, StateError},
+		{StateStopped, StateCreating},
+		{StateStopped, StateRunning},
+		{StateStopped, StateError},
+		{StateError, StateCreating},
+		{StateError, StateRunning},
+		{StateError, StateStopped},
+		{StateDestroying, StateCreating},
+		{StateDestroying, StateRunning},
+		{StateDestroying, StateStopped},
+		{StateDestroying, StateError},
+		{StateDestroying, StateDestroying},
+	}
+	for _, tc := range cases {
+		t.Run(tc.from.String()+"→"+tc.to.String(), func(t *testing.T) {
+			store := NewStore()
+			store.Add(&Session{ID: "s", State: tc.from})
+			err := store.Transition("s", tc.to)
+			if err == nil {
+				t.Fatalf("Transition(%s→%s) = nil, want *InvalidTransitionError", tc.from, tc.to)
+			}
+			if _, ok := err.(*InvalidTransitionError); !ok {
+				t.Errorf("Transition(%s→%s) error type = %T, want *InvalidTransitionError", tc.from, tc.to, err)
+			}
+			// State must be unchanged.
+			got, _ := store.Get("s")
+			if got.State != tc.from {
+				t.Errorf("state after rejected Transition = %s, want %s (unchanged)", got.State, tc.from)
+			}
+		})
+	}
+}
+
+func TestStore_Transition_NotFound(t *testing.T) {
+	store := NewStore()
+	err := store.Transition("nonexistent", StateRunning)
+	if err == nil {
+		t.Fatal("Transition on missing session = nil, want *Error{Code: ErrNotFound}")
+	}
+	sessErr, ok := err.(*Error)
+	if !ok || sessErr.Code != ErrNotFound {
+		t.Errorf("Transition error = %v (%T), want *Error{Code: ErrNotFound}", err, err)
+	}
+}
+
+func TestStore_Transition_AppliesAdditionalFields(t *testing.T) {
+	store := NewStore()
+	store.Add(&Session{ID: "s", State: StateCreating})
+	err := store.Transition("s", StateError, func(s *Session) {
+		s.ErrorMessage = "boom"
+	})
+	if err != nil {
+		t.Fatalf("Transition() = %v, want nil", err)
+	}
+	got, _ := store.Get("s")
+	if got.State != StateError {
+		t.Errorf("state = %s, want error", got.State)
+	}
+	if got.ErrorMessage != "boom" {
+		t.Errorf("ErrorMessage = %q, want %q", got.ErrorMessage, "boom")
+	}
+}
+
+func TestStore_Transition_CallbackCannotOverrideState(t *testing.T) {
+	// A callback that tries to overwrite State must be silently corrected by
+	// the re-assertion in Transition.
+	store := NewStore()
+	store.Add(&Session{ID: "s", State: StateCreating})
+	err := store.Transition("s", StateRunning, func(s *Session) {
+		s.State = StateError // attempt to override — must be ignored
+	})
+	if err != nil {
+		t.Fatalf("Transition() = %v, want nil", err)
+	}
+	got, _ := store.Get("s")
+	if got.State != StateRunning {
+		t.Errorf("state = %s after callback override attempt, want running (re-assertion must win)", got.State)
+	}
+}
+
+func TestStore_Transition_QueuesPersister(t *testing.T) {
+	const id = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+	dir := t.TempDir()
+	p, err := NewPersister(dir)
+	if err != nil {
+		t.Fatalf("NewPersister: %v", err)
+	}
+
+	store := NewStoreWithPersister(p)
+	store.Add(&Session{ID: id, Name: "sess", State: StateCreating})
+	if err := store.Transition(id, StateRunning); err != nil {
+		t.Fatalf("Transition() = %v, want nil", err)
+	}
+
+	p.Stop() // flush pending writes
+
+	// Re-read from disk to verify the persisted state.
+	sessions, err := p.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("LoadAll: got %d sessions, want 1", len(sessions))
+	}
+	if sessions[0].State != StateRunning {
+		t.Errorf("persisted state = %s, want running", sessions[0].State)
+	}
+}

@@ -158,8 +158,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	if profile.VaultSecret != "" {
 		if m.vault == nil {
 			errMsg := "vault client not configured but profile requires vault_secret"
-			_, _ = m.store.Update(sessionID, func(s *Session) {
-				s.State = StateError
+			_ = m.store.Transition(sessionID, StateError, func(s *Session) {
 				s.ErrorMessage = errMsg
 			})
 			sess, getErr := m.mustGet(sessionID)
@@ -172,8 +171,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		secrets, err := m.vault.GetSecret(profile.VaultSecret)
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to fetch vault secret: %v", err)
-			_, _ = m.store.Update(sessionID, func(s *Session) {
-				s.State = StateError
+			_ = m.store.Transition(sessionID, StateError, func(s *Session) {
 				s.ErrorMessage = errMsg
 			})
 			sess, getErr := m.mustGet(sessionID)
@@ -200,8 +198,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	if profile.Repo != "" {
 		if m.git == nil {
 			errMsg := "git client not configured but profile requires a repo"
-			_, _ = m.store.Update(sessionID, func(s *Session) {
-				s.State = StateError
+			_ = m.store.Transition(sessionID, StateError, func(s *Session) {
 				s.ErrorMessage = errMsg
 			})
 			sess, getErr := m.mustGet(sessionID)
@@ -214,8 +211,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		cloneDir, err := m.git.EnsureClone(profile.Repo, gitCreds)
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to clone repo: %v", err)
-			_, _ = m.store.Update(sessionID, func(s *Session) {
-				s.State = StateError
+			_ = m.store.Transition(sessionID, StateError, func(s *Session) {
 				s.ErrorMessage = errMsg
 			})
 			sess, getErr := m.mustGet(sessionID)
@@ -235,8 +231,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	cmdStr, err := m.renderCommand(profile.Command, sess, req.ExtraArgs, profile.PluginDir)
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to render command: %v", err)
-		_, _ = m.store.Update(sessionID, func(s *Session) {
-			s.State = StateError
+		_ = m.store.Transition(sessionID, StateError, func(s *Session) {
 			s.ErrorMessage = errMsg
 		})
 		retSess, getErr := m.mustGet(sessionID)
@@ -268,8 +263,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	for k, v := range req.Env {
 		if !envKeyRe.MatchString(k) {
 			errMsg := fmt.Sprintf("invalid env var key: %q", k)
-			_, _ = m.store.Update(sessionID, func(s *Session) {
-				s.State = StateError
+			_ = m.store.Transition(sessionID, StateError, func(s *Session) {
 				s.ErrorMessage = errMsg
 			})
 			retSess, getErr := m.mustGet(sessionID)
@@ -314,8 +308,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		slog.Debug("session command exited immediately after launch", "session", sessionID, "name", req.SessionName, "command", cmdStr, "cwd", workdir)
 		slog.Info("session command exited immediately", "session", sessionID, "error", err)
 		_ = m.pty.Destroy(sessionID)
-		_, _ = m.store.Update(sessionID, func(s *Session) {
-			s.State = StateStopped
+		_ = m.store.Transition(sessionID, StateStopped, func(s *Session) {
 			s.StoppedAt = time.Now()
 		})
 		sess, getErr := m.mustGet(sessionID)
@@ -327,8 +320,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 
 	slog.Debug("session command running", "session", sessionID, "name", req.SessionName, "pid", pid)
 
-	_, _ = m.store.Update(sessionID, func(s *Session) {
-		s.State = StateRunning
+	_ = m.store.Transition(sessionID, StateRunning, func(s *Session) {
 		s.AgentPID = pid
 		s.WebsocketURL = ""
 		s.PTYSlavePath = ptySlavePath
@@ -380,9 +372,7 @@ func (m *Manager) Destroy(id string, force bool) error {
 		return &Error{Code: ErrFailedPrecondition, Message: "session is running; use force=true to destroy"}
 	}
 
-	_, _ = m.store.Update(id, func(s *Session) {
-		s.State = StateDestroying
-	})
+	_ = m.store.Transition(id, StateDestroying)
 
 	if m.pty != nil {
 		if err := m.pty.Destroy(sess.ID); err != nil {
@@ -512,33 +502,28 @@ func (m *Manager) reconcile(sess *Session) {
 		if sess.restoredFromDisk && sess.AgentPID > 0 && m.processAlive(sess.AgentPID) {
 			return
 		}
-		_, _ = m.store.Update(sess.ID, func(s *Session) {
-			s.State = StateStopped
+		if err := m.store.Transition(sess.ID, StateStopped, func(s *Session) {
 			s.StoppedAt = now
-		})
-		sess.State = StateStopped
-		sess.StoppedAt = now
+		}); err == nil {
+			sess.State = StateStopped
+			sess.StoppedAt = now
+		} else {
+			slog.Warn("reconcile: unexpected transition rejection", "id", sess.ID, "error", err)
+		}
 		return
 	}
 
 	if sess.AgentPID > 0 && !m.processAlive(sess.AgentPID) {
-		_, _ = m.store.Update(sess.ID, func(s *Session) {
-			s.State = StateStopped
+		if err := m.store.Transition(sess.ID, StateStopped, func(s *Session) {
 			s.StoppedAt = now
-		})
-		sess.State = StateStopped
-		sess.StoppedAt = now
+		}); err == nil {
+			sess.State = StateStopped
+			sess.StoppedAt = now
+		} else {
+			slog.Warn("reconcile: unexpected transition rejection", "id", sess.ID, "error", err)
+		}
 		return
 	}
-}
-
-func (m *Manager) cleanup(sessionID, errMsg string) {
-	_ = m.pty.Destroy(sessionID)
-
-	_, _ = m.store.Update(sessionID, func(s *Session) {
-		s.State = StateError
-		s.ErrorMessage = errMsg
-	})
 }
 
 func (m *Manager) mustGet(id string) (*Session, error) {
@@ -725,6 +710,10 @@ func (m *Manager) RestoreFromPersister(p *Persister) error {
 			finalState := sess.State
 			finalStopped := sess.StoppedAt
 			finalErrMsg := sess.ErrorMessage
+			// Use Update (not Transition) here: the session was added via TryAdd
+			// with the already-reconciled state, so from-state == to-state.
+			// This call's sole purpose is to trigger the persister so the
+			// reconciled state is written to disk. TryAdd bypasses the persister.
 			_, _ = m.store.Update(sess.ID, func(s *Session) {
 				s.State = finalState
 				s.StoppedAt = finalStopped
