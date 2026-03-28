@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -239,5 +240,18 @@ func TestParseLogsJournaldEnvelope(t *testing.T) {
 	}
 	if ev.Type != EventHubDisconnect {
 		t.Errorf("type = %q, want %q", ev.Type, EventHubDisconnect)
+	}
+}
+
+func TestParseLogsNoLogSource(t *testing.T) {
+	if runtime.GOOS == "linux" {
+		t.Skip("journald path, skipping on Linux")
+	}
+	events, err := ParseLogs(context.Background(), "", time.Now().Add(-1*time.Hour))
+	if err != nil {
+		t.Fatalf("expected nil error, got: %v", err)
+	}
+	if events != nil {
+		t.Fatalf("expected nil events, got: %v", events)
 	}
 }

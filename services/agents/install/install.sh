@@ -128,6 +128,7 @@ setup_directories() {
     prompt AGENTD_ROOT_DIR "Root directory for repos and worktrees" "$DEFAULT_ROOT_DIR"
     prompt AGENTD_CONFIG_DIR "Config directory" "$DEFAULT_CONFIG_DIR"
     prompt AGENTD_LOG_DIR "Log directory" "$DEFAULT_LOG_DIR"
+    validate_yaml_string "$AGENTD_LOG_DIR" "log.path"
 
     info "Creating directories..."
     sudo mkdir -p "$AGENTD_ROOT_DIR/repos" "$AGENTD_ROOT_DIR/worktrees"
@@ -186,6 +187,7 @@ is_lan_url() {
 # --- Config generation ---
 
 generate_config() {
+    local os="$1"
     local config_path="$AGENTD_CONFIG_DIR/config.yaml"
 
     if [[ -f "$config_path" ]]; then
@@ -205,6 +207,15 @@ root_dir: "$AGENTD_ROOT_DIR"
 log:
   level: "info"
   format: "json"
+EOF
+
+    if [[ "$os" == "darwin" ]]; then
+        cat >> "$config_path" <<EOF
+  path: "$AGENTD_LOG_DIR/agentd.log"
+EOF
+    fi
+
+    cat >> "$config_path" <<EOF
 
 # Add agent profiles below:
 profiles: {}
@@ -385,7 +396,7 @@ main() {
     setup_directories "$os"
     setup_hub
     install_binary
-    generate_config
+    generate_config "$os"
 
     case "$os" in
         darwin) install_launchd ;;
