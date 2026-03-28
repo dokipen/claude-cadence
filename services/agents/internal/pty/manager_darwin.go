@@ -24,14 +24,15 @@ const _TIOCPTYGNAME = 0x40807453
 // if the path cannot be determined.
 func masterSlavePath(master *os.File) string {
 	var buf [128]byte
-	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, master.Fd(), _TIOCPTYGNAME, uintptr(unsafe.Pointer(&buf[0]))); errno != 0 { //nolint:gosec // Expected unsafe pointer for Syscall call.
+	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, master.Fd(), _TIOCPTYGNAME, uintptr(unsafe.Pointer(&buf[0]))) //nolint:gosec // Expected unsafe pointer for Syscall call.
+	runtime.KeepAlive(master)                                                                                        // prevent GC from finalizing master (closing fd) before Syscall completes
+	if errno != 0 {
 		slog.Warn("pty: failed to get slave path via TIOCPTYGNAME", "error", errno)
 		return ""
 	}
-	runtime.KeepAlive(master) // prevent GC from finalizing master (closing fd) before Syscall completes
 	// buf is a NUL-terminated C string; trim at first NUL byte.
-	if i := bytes.IndexByte(buf[:], 0); i > 0 {
+	if i := bytes.IndexByte(buf[:], 0); i >= 0 {
 		return string(buf[:i])
 	}
-	return string(buf[:])
+	return ""
 }
