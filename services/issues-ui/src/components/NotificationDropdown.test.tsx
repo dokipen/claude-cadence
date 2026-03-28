@@ -504,6 +504,7 @@ describe("NotificationDropdown — ticket title", () => {
     );
     fireEvent.click(getByTestId("notification-trigger"));
 
+    expect(vi.mocked(useTicketByNumber)).toHaveBeenCalledWith("proj-1", 42);
     expect(getByTestId("notification-item").textContent).toContain("Add sound effects");
   });
 
