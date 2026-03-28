@@ -91,7 +91,7 @@ function ProjectRedirect() {
   );
 }
 
-function AppShell() {
+export function AppShell() {
   const { user, logout } = useAuth();
   const { projects } = useProjects();
   const { sessions, waitingSessions, optimisticSetDestroying, optimisticResetState, optimisticAddSession } = useAllSessions();
@@ -101,6 +101,7 @@ function AppShell() {
   const navigate = useNavigate();
   const boardMatch = useMatch("/projects/:projectId/*");
   const projectId = boardMatch?.params.projectId ?? null;
+  const projectIdInvalid = projectId !== null && !PROJECT_ID_RE.test(projectId);
   const [globalProjectId, setGlobalProjectId] = useState<string | null>(() => {
     try {
       const saved = sessionStorage.getItem(STORAGE_KEY);
@@ -108,14 +109,14 @@ function AppShell() {
     } catch { return null; }
   });
   const [filters, setFilters] = useState<TicketFilters>({});
-  const showFilters = projectId && !location.pathname.startsWith("/ticket/") && !location.pathname.startsWith("/agents");
+  const showFilters = projectId && !projectIdInvalid && !location.pathname.startsWith("/ticket/") && !location.pathname.startsWith("/agents");
 
   useEffect(() => {
-    if (projectId) {
+    if (projectId && !projectIdInvalid) {
       setGlobalProjectId(projectId);
       try { sessionStorage.setItem(STORAGE_KEY, projectId); } catch { /* storage unavailable */ }
     }
-  }, [projectId]);
+  }, [projectId, projectIdInvalid]);
 
   // Use URL-derived projectId when on a board route (immediate), fall back to globalProjectId (e.g. agents page)
   const effectiveProjectId = projectId ?? globalProjectId;
@@ -183,7 +184,10 @@ function AppShell() {
           <Route path="/agents" element={<AgentManager sessions={sessions} selectedProject={selectedProject} />} />
           <Route
             path="/projects/:projectId/*"
-            element={<KanbanBoard projectId={projectId} filters={filters} repoUrl={repoUrl} sessions={activeSessions} />}
+            element={projectIdInvalid
+              ? <div data-testid="invalid-project-id-error" style={loadingStyle}><p style={{ color: "var(--text-muted)" }}>Invalid project ID in URL</p></div>
+              : <KanbanBoard projectId={projectId} filters={filters} repoUrl={repoUrl} sessions={activeSessions} />
+            }
           />
           <Route path="/ticket/:id" element={<TicketDetail />} />
           <Route path="/*" element={<ProjectRedirect />} />
