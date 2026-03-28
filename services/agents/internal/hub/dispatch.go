@@ -289,7 +289,7 @@ func mapSessionError(err error) *rpcError {
 
 // GetDiagnostics handles the getDiagnostics JSON-RPC method.
 // It reads log events since the requested window and returns them alongside current session state.
-func (d *Dispatcher) GetDiagnostics(params json.RawMessage) (json.RawMessage, *rpcError) {
+func (d *Dispatcher) GetDiagnostics(ctx context.Context, params json.RawMessage) (json.RawMessage, *rpcError) {
 	var p getDiagnosticsParams
 	if len(params) > 0 {
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -305,9 +305,10 @@ func (d *Dispatcher) GetDiagnostics(params json.RawMessage) (json.RawMessage, *r
 
 	since := time.Now().Add(-time.Duration(p.SinceMinutes) * time.Minute)
 
-	// The SessionDispatcher interface does not thread a caller context, so use a
-	// 30s hard limit to prevent a runaway journalctl process from outliving the RPC call.
-	diagCtx, diagCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// Cap the journalctl subprocess at 30s on agentd's end. When the hub-side
+	// timeout fires sooner, ctx is already cancelled and diagCtx inherits that
+	// cancellation immediately.
+	diagCtx, diagCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer diagCancel()
 	events, err := logparse.ParseLogs(diagCtx, d.logPath, since)
 	if err != nil {

@@ -30,11 +30,12 @@ type ConnectedAgent struct {
 	Profiles   map[string]ProfileInfo `json:"profiles"`
 	TtydConfig TtydInfo               `json:"ttyd"`
 
-	mu       sync.Mutex
-	status   AgentStatus
-	lastSeen time.Time
-	conn     *websocket.Conn
-	pending  map[string]chan *Response
+	mu                    sync.Mutex
+	status                AgentStatus
+	lastSeen              time.Time
+	conn                  *websocket.Conn
+	pending               map[string]chan *Response
+	consecutiveRPCFailures int
 
 	terminalMu       sync.Mutex
 	terminalChannels map[uuid.UUID]chan []byte
@@ -80,6 +81,21 @@ func (a *ConnectedAgent) SetStatus(s AgentStatus) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.status = s
+}
+
+// incRPCFailures increments the consecutive RPC failure counter and returns the new value.
+func (a *ConnectedAgent) incRPCFailures() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.consecutiveRPCFailures++
+	return a.consecutiveRPCFailures
+}
+
+// resetRPCFailures resets the consecutive RPC failure counter to zero.
+func (a *ConnectedAgent) resetRPCFailures() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.consecutiveRPCFailures = 0
 }
 
 // Touch updates the agent's last-seen timestamp.
