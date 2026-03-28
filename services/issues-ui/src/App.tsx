@@ -160,7 +160,7 @@ export function AppShell() {
           </Link>
           <NotificationDropdown
             waitingSessions={waitingSessions}
-            projectId={effectiveProjectId}
+            projectId={effectiveProjectId ?? undefined}
             projectName={selectedProject?.name ?? null}
           />
         </div>
