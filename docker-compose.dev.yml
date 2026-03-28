@@ -1,6 +1,11 @@
 # Dev/QA stack for Claude Cadence
 #
-# Full stack (issues + issues-ui + Caddy + agent-hub + agentd):
+# All services share a private bridge network (cadence-dev). Only the Vite dev
+# server (port 5173) is exposed to the host. Inter-service communication uses
+# Docker DNS names. Vite proxies /graphql → issues and /api/v1, /ws/terminal →
+# agent-hub (with HUB_API_TOKEN injection), so no Caddy reverse proxy is needed.
+#
+# Full stack (issues + issues-ui + agent-hub + agentd):
 #   docker compose -f docker-compose.dev.yml up
 #
 # Prerequisites:
@@ -12,8 +17,8 @@ services:
     build:
       context: services/issues
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:4000:4000"
+    networks:
+      - cadence-dev
     volumes:
       - issues-data:/app/data
     env_file: .env.dev
@@ -36,8 +41,10 @@ services:
       context: services/issues-ui
       dockerfile: Dockerfile.dev
     restart: unless-stopped
+    networks:
+      - cadence-dev
     ports:
-      - "127.0.0.1:5173:5173"
+      - "5173:5173"
     volumes:
       # Bind-mount source for hot reload; anonymous volume preserves node_modules
       - ./services/issues-ui:/app
@@ -50,23 +57,10 @@ services:
       - VITE_API_HOST=issues
       - VITE_AGENT_HUB_HOST=agent-hub
       - VITE_AUTH_BYPASS=1 # dev only — bypasses login
+      - CHOKIDAR_USEPOLLING=true
     depends_on:
       issues:
         condition: service_healthy
-
-  caddy:
-    image: caddy:2
-    restart: unless-stopped
-    ports:
-      - "80:80"
-    volumes:
-      - ./infrastructure/Caddyfile.dev:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-    env_file: .env.dev
-    depends_on:
-      - issues
-      - issues-ui
 
   # Agent services — included in the default stack
   #
@@ -82,6 +76,8 @@ services:
       context: services
       dockerfile: agent-hub/Dockerfile
     restart: unless-stopped
+    networks:
+      - cadence-dev
     env_file: .env.dev
     depends_on:
       - issues
@@ -102,6 +98,8 @@ services:
       context: services
       dockerfile: agents/Dockerfile
     restart: unless-stopped
+    networks:
+      - cadence-dev
     volumes:
       - agentd-data:/var/lib/agentd
       # Mount ~/.claude read-write: the claude CLI writes session data here.
@@ -118,8 +116,10 @@ services:
       agent-hub:
         condition: service_healthy
 
+networks:
+  cadence-dev:
+    driver: bridge
+
 volumes:
   issues-data:
-  caddy-data:
-  caddy-config:
   agentd-data:

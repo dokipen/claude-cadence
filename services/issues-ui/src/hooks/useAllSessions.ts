@@ -8,6 +8,7 @@ const POLL_INTERVAL_MS = 10_000;
 export interface AgentSession {
   session: Session;
   agentName: string;
+  stateSource?: "U" | "A";
 }
 
 interface UseAllSessionsResult {
@@ -44,7 +45,7 @@ export function useAllSessions(): UseAllSessionsResult {
           const results: AgentSession[] = [];
           for (const agent of agentSessions) {
             for (const session of agent.sessions) {
-              results.push({ session, agentName: agent.agentName });
+              results.push({ session, agentName: agent.agentName, stateSource: "A" });
             }
           }
           setSessions(results);
@@ -88,7 +89,7 @@ export function useAllSessions(): UseAllSessionsResult {
     setSessions(prev =>
       prev.map(s =>
         s.session.id === sessionId
-          ? { ...s, session: { ...s.session, state: "destroying" as const } }
+          ? { ...s, session: { ...s.session, state: "destroying" as const }, stateSource: "U" }
           : s
       )
     );
@@ -97,7 +98,7 @@ export function useAllSessions(): UseAllSessionsResult {
   const optimisticAddSession = useCallback((session: Session, agentName: string) => {
     setSessions(prev => {
       if (prev.some(s => s.session.id === session.id)) return prev;
-      return [{ session, agentName }, ...prev];
+      return [{ session, agentName, stateSource: "U" }, ...prev];
     });
   }, []);
 

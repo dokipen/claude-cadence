@@ -15,6 +15,9 @@ function sessionKey(s: AgentSession): string {
   return `${s.agentName}:${s.session.id}`;
 }
 
+// Set to true to show session state and source for debugging
+const DEBUG_SESSION_STATE = false;
+
 export function SessionList({ agents, sessions, openKeys, onSessionClick, isCollapsed, onToggle }: SessionListProps) {
   // Group sessions by agent
   const sessionsByAgent = new Map<string, AgentSession[]>();
@@ -64,14 +67,18 @@ export function SessionList({ agents, sessions, openKeys, onSessionClick, isColl
                     <button
                       key={as.session.id}
                       className={`${styles.sidebarSession} ${isOpen ? styles.sidebarSessionOpen : ""} ${!isRunning && !isDestroying && !isCreating ? styles.sidebarSessionStopped : ""} ${isDestroying && !as.session.waitingForInput ? styles.sidebarSessionDestroying : ""} ${isCreating && !as.session.waitingForInput ? styles.sidebarSessionCreating : ""} ${as.session.waitingForInput ? styles.sidebarSessionWaiting : ""}`}
-                      onClick={() => onSessionClick(as)}
+                      onClick={() => !isDestroying && onSessionClick(as)}
+                      disabled={isDestroying}
                       data-testid="sidebar-session"
                       title={`${as.session.name} (${as.session.state})`}
                     >
                       <span className={styles.sessionDot}>
                         {as.session.waitingForInput ? "◉" : isCreating ? "◌" : isRunning || isDestroying ? "●" : "○"}
                       </span>
-                      <span className={styles.sessionName}>{as.session.name}</span>
+                      <span className={styles.sessionName}>
+                        {as.session.name}
+                        {DEBUG_SESSION_STATE && ` [${as.session.state}][${as.stateSource ?? "?"}]`}
+                      </span>
                     </button>
                   );
                 })}
