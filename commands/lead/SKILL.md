@@ -32,9 +32,9 @@ If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, 
 
 To target a QA or local `issues-api` instance without modifying `CLAUDE.md`, prefix the invocation with `ISSUES_API_URL`:
 ```bash
-ISSUES_API_URL=http://192.168.86.96:5173/graphql /lead 123
+ISSUES_API_URL=http://192.168.1.100:5173/graphql /lead 123
 ```
-This overrides the `api_url` configured in `CLAUDE.md`.
+This overrides the `api_url` configured in `CLAUDE.md`. Has no effect when provider is `github`.
 
 ### Before Any Work Begins
 
