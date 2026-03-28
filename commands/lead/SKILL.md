@@ -406,9 +406,9 @@ Run **both** applicable sub-sections below. A PR that touches both agent-service
 
    **What requires a rebuild vs. what picks up automatically:**
    - Changes to `services/issues-ui/` (frontend) are reflected immediately via Vite HMR — no rebuild needed.
-   - Changes to `services/issues/` (backend) require a container rebuild. Use the project name printed by the script (e.g. `cadence-qa-5173`):
+   - Changes to `services/issues/` (backend) require a container rebuild. Note the project name printed by the script (e.g. `cadence-qa-5173`) and substitute it below:
      ```bash
-     docker compose -p cadence-qa-<PORT> up --build issues
+     docker compose -p <PROJECT_NAME> up --build issues
      ```
 2. Wait for user feedback (user intervention required)
 3. Address issues if reported, return to Phase 5 after fixes
@@ -436,9 +436,9 @@ These services have hard host dependencies (the `claude` CLI, OS service integra
    ```
    See [`docs/dev-environment.md`](docs/dev-environment.md) and [`services/agents/docs/INSTALL.md`](services/agents/docs/INSTALL.md) for full configuration details.
 
-3. **Then start the compose stack:**
+3. **Start the compose stack.** If the Visual/UI section above already ran the `start-qa-env.sh` script, that stack is already running — skip this step and use the URL it printed. Otherwise, run the script now:
    ```bash
-   docker compose -f docker-compose.dev.yml up --build
+   bash "$WORKTREE_DIR/commands/lead/scripts/start-qa-env.sh" "$WORKTREE_DIR"
    ```
 
 4. Wait for user feedback (user intervention required)
