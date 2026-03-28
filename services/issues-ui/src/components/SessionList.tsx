@@ -1,6 +1,7 @@
 import type { Agent } from "../types";
 import type { AgentSession } from "../hooks/useAllSessions";
 import styles from "../styles/agents.module.css";
+import { stripProjectPrefix } from "../utils/sessionName";
 
 interface SessionListProps {
   agents: Agent[];
@@ -19,11 +20,6 @@ function sessionKey(s: AgentSession): string {
 // Set to true to show session state and source for debugging
 const DEBUG_SESSION_STATE = false;
 
-function stripProjectPrefix(name: string): string {
-  const slashIndex = name.indexOf("/");
-  if (slashIndex === -1 || slashIndex === name.length - 1) return name;
-  return name.slice(slashIndex + 1);
-}
 
 export function SessionList({ agents, sessions, openKeys, minimizedKeys, onSessionClick, isCollapsed, onToggle }: SessionListProps) {
   // Group sessions by agent

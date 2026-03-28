@@ -211,10 +211,11 @@ describe("SessionList", () => {
     expect(stoppedBtn?.textContent).toContain("○");
   });
 
-  it("strips project prefix from session name display", () => {
+  it("strips CUID project prefix from session name display", () => {
     const agents = [makeAgent("my-agent")];
     const session = makeSession("s1", "my-agent");
-    session.session.name = "myproject/lead-42";
+    // 25-char CUID + "-" + session name
+    session.session.name = "cmmryin270000ny01dc2msx3t-lead-42";
     const { getByText, queryByText } = render(
       <SessionList
         {...defaultProps}
@@ -224,10 +225,10 @@ describe("SessionList", () => {
       />,
     );
     expect(getByText("lead-42")).toBeTruthy();
-    expect(queryByText("myproject/lead-42")).toBeNull();
+    expect(queryByText("cmmryin270000ny01dc2msx3t-lead-42")).toBeNull();
   });
 
-  it("displays session name as-is when there is no project prefix", () => {
+  it("displays session name as-is when there is no CUID prefix", () => {
     const agents = [makeAgent("my-agent")];
     const session = makeSession("s1", "my-agent");
     session.session.name = "lead-42";
@@ -242,10 +243,11 @@ describe("SessionList", () => {
     expect(getByText("lead-42")).toBeTruthy();
   });
 
-  it("displays full name when prefix stripping would produce an empty string (trailing slash)", () => {
+  it("displays full name when string is exactly 26 chars (no session name after prefix)", () => {
     const agents = [makeAgent("my-agent")];
     const session = makeSession("s1", "my-agent");
-    session.session.name = "myproject/";
+    // Exactly 26 chars: 25-char CUID + "-" with nothing after — not long enough to strip
+    session.session.name = "cmmryin270000ny01dc2msx3t-";
     const { getByText } = render(
       <SessionList
         {...defaultProps}
@@ -254,7 +256,7 @@ describe("SessionList", () => {
         isCollapsed={false}
       />,
     );
-    expect(getByText("myproject/")).toBeTruthy();
+    expect(getByText("cmmryin270000ny01dc2msx3t-")).toBeTruthy();
   });
 
   it("inert is removed from content after collapse then expand (bug repro: transitionend never fires in jsdom)", () => {
