@@ -294,3 +294,42 @@ describe("TicketCard close button", () => {
     expect(getByTestId("confirm-dialog")).toBeTruthy();
   });
 });
+
+// ---------------------------------------------------------------------------
+// TicketCard blocked badge — rendering
+// ---------------------------------------------------------------------------
+
+describe("TicketCard blocked badge", () => {
+  it("shows blocked badge when blockedBy has an open ticket", () => {
+    const ticket = makeTicket({
+      blockedBy: [{ id: "blocker-1", state: "IN_PROGRESS" }],
+    });
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={[]} />);
+    expect(getByTestId("blocked-badge")).toBeTruthy();
+  });
+
+  it("does not show blocked badge when all blockers are CLOSED", () => {
+    const ticket = makeTicket({
+      blockedBy: [{ id: "blocker-1", state: "CLOSED" }],
+    });
+    const { queryByTestId } = render(<TicketCard ticket={ticket} sessions={[]} />);
+    expect(queryByTestId("blocked-badge")).toBeNull();
+  });
+
+  it("does not show blocked badge when blockedBy is empty", () => {
+    const ticket = makeTicket({ blockedBy: [] });
+    const { queryByTestId } = render(<TicketCard ticket={ticket} sessions={[]} />);
+    expect(queryByTestId("blocked-badge")).toBeNull();
+  });
+
+  it("shows blocked badge when at least one blocker is not CLOSED", () => {
+    const ticket = makeTicket({
+      blockedBy: [
+        { id: "blocker-1", state: "CLOSED" },
+        { id: "blocker-2", state: "REFINED" },
+      ],
+    });
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={[]} />);
+    expect(getByTestId("blocked-badge")).toBeTruthy();
+  });
+});

@@ -50,7 +50,6 @@
 .cardFooter {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   margin-top: 0.125rem;
 }
 
@@ -144,14 +143,11 @@
 }
 
 .cardActionsOverlay {
-  position: absolute;
-  bottom: 0.5rem;
-  right: 0.75rem;
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  z-index: 1;
-  pointer-events: auto;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .storyPoints {
