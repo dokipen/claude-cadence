@@ -3,10 +3,11 @@
 package pty
 
 import (
+	"bytes"
 	"log/slog"
 	"os"
 	"regexp"
-	"strings"
+	"runtime"
 	"syscall"
 	"unsafe"
 )
@@ -27,10 +28,10 @@ func masterSlavePath(master *os.File) string {
 		slog.Warn("pty: failed to get slave path via TIOCPTYGNAME", "error", errno)
 		return ""
 	}
+	runtime.KeepAlive(master) // prevent GC from finalizing master (closing fd) before Syscall completes
 	// buf is a NUL-terminated C string; trim at first NUL byte.
-	name := string(buf[:])
-	if i := strings.IndexByte(name, 0); i >= 0 {
-		name = name[:i]
+	if i := bytes.IndexByte(buf[:], 0); i > 0 {
+		return string(buf[:i])
 	}
-	return name
+	return string(buf[:])
 }
