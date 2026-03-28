@@ -5,6 +5,7 @@ import { useTicketByNumber } from "../hooks/useTicketByNumber";
 import { useSessionsContext } from "../hooks/SessionsContext";
 import type { Session } from "../types";
 import styles from "../styles/agents.module.css";
+import { validateSessionId, validateAgentProfile } from "../utils/validateSession";
 
 interface TerminalWindowProps {
   session: Session;
@@ -50,6 +51,13 @@ export function TerminalWindow({
   const { ticket } = useTicketByNumber(projectId, ticketNumber);
 
   const resumeCallback = useCallback(() => {
+    if (!validateSessionId(session.id) || !validateAgentProfile(session.agentProfile)) {
+      console.warn(
+        `[TerminalWindow] Refusing to resume session: invalid id or agentProfile`,
+        { id: session.id, agentProfile: session.agentProfile }
+      );
+      return;
+    }
     const newSessionName = `resume-${session.id.slice(0, 8)}-${Date.now()}`;
     createSession(agentName, session.agentProfile, newSessionName, [`/resume ${session.id}`]).catch(console.error);
   }, [agentName, session.id, session.agentProfile]);
