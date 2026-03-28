@@ -46,10 +46,10 @@ type Hub struct {
 	termSessions        map[string]context.CancelFunc
 	maxTerminalSessions int
 
-	heartbeatInterval  time.Duration
-	heartbeatTimeout   time.Duration
-	keepaliveInterval  time.Duration
-	agentTTL           time.Duration
+	heartbeatInterval time.Duration
+	heartbeatTimeout  time.Duration
+	keepaliveInterval time.Duration
+	agentTTL          time.Duration
 
 	cancel context.CancelFunc
 	done   chan struct{}

@@ -83,12 +83,12 @@ func (h *HubAuthConfig) ResolveToken() string {
 
 // HeartbeatConfig holds heartbeat timing settings.
 type HeartbeatConfig struct {
-	Interval            time.Duration `yaml:"-"`
-	Timeout             time.Duration `yaml:"-"`
-	KeepaliveInterval   time.Duration `yaml:"-"`
-	RawInterval         string        `yaml:"interval"`
-	RawTimeout          string        `yaml:"timeout"`
-	RawKeepaliveInterval string       `yaml:"keepalive_interval"`
+	Interval             time.Duration `yaml:"-"`
+	Timeout              time.Duration `yaml:"-"`
+	KeepaliveInterval    time.Duration `yaml:"-"`
+	RawInterval          string        `yaml:"interval"`
+	RawTimeout           string        `yaml:"timeout"`
+	RawKeepaliveInterval string        `yaml:"keepalive_interval"`
 }
 
 // LogConfig holds logging settings.
@@ -226,8 +226,11 @@ func validate(cfg *Config) error {
 	if cfg.Heartbeat.Timeout <= 0 {
 		return fmt.Errorf("heartbeat.timeout must be positive")
 	}
-if cfg.AgentTTL <= 0 {
+	if cfg.AgentTTL <= 0 {
 		return fmt.Errorf("agent_ttl must be positive")
+	}
+	if cfg.Heartbeat.KeepaliveInterval < 0 {
+		return fmt.Errorf("heartbeat.keepalive_interval must not be negative (set to 0 to disable)")
 	}
 	// Note: zero values are already replaced by applyDefaults, so a negative
 	// value here means the user explicitly set a nonsensical config.
