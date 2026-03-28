@@ -76,7 +76,7 @@ func TestTokenAuth(t *testing.T) {
 
 func TestHandleListAgents(t *testing.T) {
 	// Use a real hub with WebSocket connections to test the handler end-to-end.
-	h := hub.New(30*time.Second, 5*time.Second, 5*time.Minute, 0)
+	h := hub.New(30*time.Second, 5*time.Second, 15*time.Second, 5*time.Minute, 0)
 	h.Start()
 	t.Cleanup(h.Stop)
 

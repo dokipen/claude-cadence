@@ -83,10 +83,12 @@ func (h *HubAuthConfig) ResolveToken() string {
 
 // HeartbeatConfig holds heartbeat timing settings.
 type HeartbeatConfig struct {
-	Interval    time.Duration `yaml:"-"`
-	Timeout     time.Duration `yaml:"-"`
-	RawInterval string        `yaml:"interval"`
-	RawTimeout  string        `yaml:"timeout"`
+	Interval             time.Duration `yaml:"-"`
+	Timeout              time.Duration `yaml:"-"`
+	KeepaliveInterval    time.Duration `yaml:"-"`
+	RawInterval          string        `yaml:"interval"`
+	RawTimeout           string        `yaml:"timeout"`
+	RawKeepaliveInterval string        `yaml:"keepalive_interval"`
 }
 
 // LogConfig holds logging settings.
@@ -137,6 +139,9 @@ func applyDefaults(cfg *Config) {
 	if cfg.Heartbeat.RawTimeout == "" {
 		cfg.Heartbeat.RawTimeout = "10s"
 	}
+	if cfg.Heartbeat.RawKeepaliveInterval == "" {
+		cfg.Heartbeat.RawKeepaliveInterval = "15s"
+	}
 	if cfg.RawTTL == "" {
 		cfg.RawTTL = "5m"
 	}
@@ -166,6 +171,14 @@ func parseDurations(cfg *Config) error {
 		return fmt.Errorf("heartbeat.timeout: %w", err)
 	}
 	cfg.Heartbeat.Timeout = timeout
+
+	if cfg.Heartbeat.RawKeepaliveInterval != "" {
+		keepalive, err := time.ParseDuration(cfg.Heartbeat.RawKeepaliveInterval)
+		if err != nil {
+			return fmt.Errorf("heartbeat.keepalive_interval: %w", err)
+		}
+		cfg.Heartbeat.KeepaliveInterval = keepalive
+	}
 
 	ttl, err := time.ParseDuration(cfg.RawTTL)
 	if err != nil {
@@ -215,6 +228,9 @@ func validate(cfg *Config) error {
 	}
 	if cfg.AgentTTL <= 0 {
 		return fmt.Errorf("agent_ttl must be positive")
+	}
+	if cfg.Heartbeat.KeepaliveInterval < 0 {
+		return fmt.Errorf("heartbeat.keepalive_interval must not be negative (set to 0 to disable)")
 	}
 	// Note: zero values are already replaced by applyDefaults, so a negative
 	// value here means the user explicitly set a nonsensical config.

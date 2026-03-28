@@ -47,7 +47,7 @@ func testConfig(apiToken, agentToken string) *config.Config {
 func startIntegrationServer(t *testing.T, cfg *config.Config) (*hub.Hub, string) {
 	t.Helper()
 
-	h := hub.New(cfg.Heartbeat.Interval, cfg.Heartbeat.Timeout, cfg.AgentTTL, 0)
+	h := hub.New(cfg.Heartbeat.Interval, cfg.Heartbeat.Timeout, cfg.Heartbeat.KeepaliveInterval, cfg.AgentTTL, 0)
 	h.Start()
 	t.Cleanup(h.Stop)
 
@@ -379,7 +379,7 @@ func TestIntegration_GracefulShutdown(t *testing.T) {
 	cfg := testConfig(apiToken, agentToken)
 
 	// Don't use startIntegrationServer to avoid double-stop via t.Cleanup.
-	h := hub.New(cfg.Heartbeat.Interval, cfg.Heartbeat.Timeout, cfg.AgentTTL, 0)
+	h := hub.New(cfg.Heartbeat.Interval, cfg.Heartbeat.Timeout, cfg.Heartbeat.KeepaliveInterval, cfg.AgentTTL, 0)
 	h.Start()
 
 	srv := rest.New(h, cfg)

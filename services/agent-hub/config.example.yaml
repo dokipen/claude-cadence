@@ -17,6 +17,10 @@ hub_auth:
 heartbeat:
   interval: "30s"
   timeout: "10s"
+  # keepalive_interval controls how often protocol-level WebSocket pings (RFC 6455
+  # opcode 0x9) are sent on agent connections to prevent NAT/firewall devices from
+  # silently dropping idle TCP connections. Should be less than the interval.
+  keepalive_interval: "15s"
 
 agent_ttl: "5m"
 

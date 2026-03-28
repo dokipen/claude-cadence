@@ -48,6 +48,7 @@ type Hub struct {
 
 	heartbeatInterval time.Duration
 	heartbeatTimeout  time.Duration
+	keepaliveInterval time.Duration
 	agentTTL          time.Duration
 
 	cancel context.CancelFunc
@@ -56,13 +57,14 @@ type Hub struct {
 
 // New creates a new Hub. maxTerminalSessions sets the maximum number of
 // concurrent terminal proxy sessions; 0 means unlimited.
-func New(heartbeatInterval, heartbeatTimeout, agentTTL time.Duration, maxTerminalSessions int) *Hub {
+func New(heartbeatInterval, heartbeatTimeout, keepaliveInterval, agentTTL time.Duration, maxTerminalSessions int) *Hub {
 	return &Hub{
 		agents:              make(map[string]*ConnectedAgent),
 		termSessions:        make(map[string]context.CancelFunc),
 		maxTerminalSessions: maxTerminalSessions,
 		heartbeatInterval:   heartbeatInterval,
 		heartbeatTimeout:    heartbeatTimeout,
+		keepaliveInterval:   keepaliveInterval,
 		agentTTL:            agentTTL,
 		done:                make(chan struct{}),
 	}
@@ -316,6 +318,7 @@ func (h *Hub) HandleAgentConnection(ctx context.Context, agent *ConnectedAgent) 
 	agent.Conn().SetReadLimit(MaxMessageSize)
 
 	go h.heartbeatLoop(ctx, agent)
+	go h.wsKeepaliveLoop(ctx, agent)
 
 	for {
 		msgType, data, err := agent.Conn().Read(ctx)
@@ -446,6 +449,41 @@ func (h *Hub) heartbeatLoop(ctx context.Context, agent *ConnectedAgent) {
 				return
 			case <-respCh:
 				// Pong received, agent is alive.
+			}
+		}
+	}
+}
+
+// wsKeepaliveLoop sends periodic protocol-level WebSocket pings (RFC 6455 opcode
+// 0x9) on the agent connection to prevent NAT/firewall devices from silently
+// dropping idle TCP connections between application-level heartbeats. A zero
+// keepaliveInterval disables the loop.
+//
+// Ping requires that Read is being called concurrently on the connection so that
+// pong frames can be received — this is satisfied by HandleAgentConnection's read
+// loop running in the same goroutine scope.
+func (h *Hub) wsKeepaliveLoop(ctx context.Context, agent *ConnectedAgent) {
+	if h.keepaliveInterval <= 0 {
+		return
+	}
+	ticker := time.NewTicker(h.keepaliveInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			pingCtx, cancel := context.WithTimeout(ctx, h.keepaliveInterval)
+			err := agent.Conn().Ping(pingCtx)
+			cancel()
+			if err != nil {
+				if ctx.Err() != nil {
+					return
+				}
+				slog.Warn("ws keepalive ping failed", "agent", agent.Name, "error", err)
+				h.markOfflineIfCurrent(agent.Name, agent)
+				return
 			}
 		}
 	}
