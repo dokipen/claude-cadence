@@ -50,7 +50,7 @@ service (Linux).
 1. Build the binary: `make build`
 2. Copy to a directory on your `$PATH`: `sudo cp agentd /usr/local/bin/agentd`
 3. Create a config file (see Section 4)
-4. Run directly or register as a service (see Section 9)
+4. Run directly or register as a service (see Section 10)
 
 ---
 
@@ -221,7 +221,61 @@ interface.
 
 ---
 
-## 8. Vault Integration
+## 8. Git Credential Configuration
+
+agentd can authenticate git operations using the GitHub CLI (`gh`) credential helper.
+This is the recommended approach for GitHub repositories, as it reuses the existing
+`gh auth login` session without requiring Vault.
+
+### Setup
+
+1. **Install and authenticate gh:**
+   ```bash
+   brew install gh   # macOS
+   gh auth login
+   ```
+
+2. **Configure git to use gh as a credential helper** (add to `~/.gitconfig` or
+   the service account's gitconfig):
+   ```
+   [credential "https://github.com"]
+       helper = gh auth git-credential
+   ```
+   Or globally:
+   ```bash
+   git config --global credential.helper "gh auth git-credential"
+   ```
+
+3. **Ensure gh is on PATH for the agentd service:**
+   - **macOS (launchd):** The installer automatically detects `gh`'s location and
+     adds it to the `EnvironmentVariables.PATH` in the launchd plist. Re-run
+     `install/install.sh` if `gh` was installed after initial setup.
+   - **Linux (systemd):** Add `PATH=/path/to/gh/bin:...` to the environment file
+     referenced by `EnvironmentFile` in the service unit (typically `/etc/agentd/env`).
+
+4. **Omit `vault_secret` from your profile** — no token injection needed when
+   the gh credential helper is configured.
+
+### How it works
+
+When agentd runs a git clone or fetch, it sets up the command environment to include
+`gh`'s parent directory on `PATH`. Combined with the `credential.helper` in
+`~/.gitconfig`, git automatically calls `gh auth git-credential` to obtain tokens.
+No credentials are written to config files or temp files.
+
+### Vault as an alternative
+
+Vault integration (Section 9) remains available for:
+- Non-GitHub hosts requiring token management
+- Organizations that centrally manage repository credentials
+- Environments where `gh` is not available on the service host
+
+When a profile specifies `vault_secret`, Vault credentials take precedence over the
+gh credential helper for that profile's git operations.
+
+---
+
+## 9. Vault Integration
 
 HashiCorp Vault is used to supply credentials for private repositories at session
 start time. When a profile specifies `vault_secret`, agentd fetches the secret from
@@ -268,7 +322,7 @@ The value is the Vault KV path from which agentd reads credentials before clonin
 
 ---
 
-## 9. Agent Hub Integration
+## 10. Agent Hub Integration
 
 agentd can optionally connect to a central agent-hub, making it visible and dispatchable from the issues UI. The hub block is optional — agentd runs standalone without it.
 
@@ -340,7 +394,7 @@ The agent's name (e.g. `"mbp-bob"`) should appear with `"status": "online"`. It 
 
 ---
 
-## 10. Stale Session Cleanup
+## 11. Stale Session Cleanup
 
 agentd automatically tracks session state. When a PTY session stops (the agent
 process exits), the session transitions to a stopped state. The cleanup subsystem
@@ -358,7 +412,7 @@ cleanup:
 
 ---
 
-## 11. Service Management
+## 12. Service Management
 
 The interactive installer registers agentd as a system service automatically. For
 manual setups, use the templates in `install/`.
@@ -406,7 +460,7 @@ with a 5-second restart delay. Logs go to the journal (`SyslogIdentifier=agentd`
 
 ---
 
-## 12. Reverse Proxy (Caddy)
+## 13. Reverse Proxy (Caddy)
 
 A shared Caddyfile in `infrastructure/Caddyfile` provides a single entry point for both the issues and agents services. See the [Caddy setup section](../../../infrastructure/README.md) for full details.
 
@@ -414,7 +468,7 @@ When running behind Caddy, agent-hub traffic is proxied through the configured r
 
 ---
 
-## 13. Troubleshooting
+## 14. Troubleshooting
 
 ### Permission errors on root_dir
 

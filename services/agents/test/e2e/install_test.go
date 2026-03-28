@@ -25,6 +25,7 @@ func defaultVars() map[string]string {
 		"__ROOT_DIR__":        "/var/lib/agentd",
 		"__LOG_DIR__":         "/var/log/agentd",
 		"__HUB_AGENT_TOKEN__": "",
+		"__DAEMON_PATH__":     "/usr/bin:/bin:/usr/sbin:/sbin",
 	}
 }
 
@@ -133,6 +134,7 @@ func TestInstall_PlistCustomValues(t *testing.T) {
 		"__ROOT_DIR__":        "/data/agentd",
 		"__LOG_DIR__":         "/home/deploy/logs",
 		"__HUB_AGENT_TOKEN__": "",
+		"__DAEMON_PATH__":     "/usr/bin:/bin:/usr/sbin:/sbin",
 	}
 
 	rendered := renderTemplate(string(tmpl), vars)
