@@ -17,10 +17,27 @@
 
 set -euo pipefail
 
-PROVIDER=$(grep -A3 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'provider:' | tail -1 | awk '{print $2}') || true
+# Use an awk state-machine to parse the ## Ticket Provider section, tolerating
+# arbitrary field order, blank lines between fields, and additional fields.
+# Stops collecting at the next ## heading so adjacent sections are not included.
+_parsed=""
+if [ -f CLAUDE.md ]; then
+  _parsed=$(awk '
+    /^```/                { in_fence = !in_fence; next }
+    in_fence              { next }
+    /^## Ticket Provider/ { in_section=1; next }
+    in_section && /^## /  { in_section=0 }
+    in_section && /^provider:/   { provider=$2 }
+    in_section && /^project_id:/ { project=$2 }
+    in_section && /^api_url:/    { api_url=$2 }
+    END { print provider "\t" project "\t" api_url }
+  ' CLAUDE.md)
+fi
+
+PROVIDER=$(printf '%s' "$_parsed" | cut -f1)
+PROJECT=$(printf '%s' "$_parsed"  | cut -f2)
+API_URL=$(printf '%s' "$_parsed"  | cut -f3)
 PROVIDER="${PROVIDER:-github}"
-PROJECT=$(grep -A4 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'project_id:' | tail -1 | awk '{print $2}') || true
-API_URL=$(grep -A5 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'api_url:' | tail -1 | awk '{print $2}') || true
 
 jq -n \
   --arg provider "$PROVIDER" \
