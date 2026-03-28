@@ -332,3 +332,260 @@ func TestPromptPatterns(t *testing.T) {
 		})
 	}
 }
+
+// TestStripANSI verifies that stripANSI removes all supported escape sequences
+// while leaving plain text unchanged.
+func TestStripANSI(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "plain text passthrough",
+			input: "hello world",
+			want:  "hello world",
+		},
+		{
+			name:  "CSI color sequence",
+			input: "\x1b[31mred text\x1b[0m",
+			want:  "red text",
+		},
+		{
+			name:  "CSI bold sequence",
+			input: "\x1b[1mbold\x1b[22m",
+			want:  "bold",
+		},
+		{
+			name:  "CSI multi-param sequence",
+			input: "\x1b[1;32mgreen bold\x1b[0m",
+			want:  "green bold",
+		},
+		{
+			name:  "OSC sequence terminated by BEL",
+			input: "\x1b]0;window title\x07normal",
+			want:  "normal",
+		},
+		{
+			name:  "OSC sequence terminated by ST",
+			input: "\x1b]2;title\x1b\\after",
+			want:  "after",
+		},
+		{
+			name:  "charset designator G0",
+			input: "\x1b(Bplain",
+			want:  "plain",
+		},
+		{
+			name:  "charset designator G1",
+			input: "\x1b)0plain",
+			want:  "plain",
+		},
+		{
+			name:  "mixed sequences and text",
+			input: "\x1b[1mHello\x1b[0m, \x1b[32mworld\x1b[0m!",
+			want:  "Hello, world!",
+		},
+		{
+			name:  "empty string",
+			input: "",
+			want:  "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := stripANSI(tt.input)
+			if got != tt.want {
+				t.Errorf("stripANSI(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestLastNLines verifies that lastNLines returns the last n non-empty lines
+// and correctly skips blank/whitespace-only lines.
+func TestLastNLines(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		n     int
+		want  string
+	}{
+		{
+			name:  "empty input",
+			input: "",
+			n:     5,
+			want:  "",
+		},
+		{
+			name:  "fewer lines than N",
+			input: "line1\nline2",
+			n:     5,
+			want:  "line1\nline2",
+		},
+		{
+			name:  "exactly N lines",
+			input: "line1\nline2\nline3",
+			n:     3,
+			want:  "line1\nline2\nline3",
+		},
+		{
+			name:  "more than N lines returns last N",
+			input: "line1\nline2\nline3\nline4\nline5",
+			n:     3,
+			want:  "line3\nline4\nline5",
+		},
+		{
+			name:  "empty lines are skipped",
+			input: "line1\n\n\nline2\n\nline3",
+			n:     5,
+			want:  "line1\nline2\nline3",
+		},
+		{
+			name:  "whitespace-only lines are skipped",
+			input: "line1\n   \n\t\nline2",
+			n:     5,
+			want:  "line1\nline2",
+		},
+		{
+			name:  "empty lines skipped before taking last N",
+			input: "a\nb\nc\n\nd\n\ne",
+			n:     3,
+			want:  "c\nd\ne",
+		},
+		{
+			name:  "all blank lines",
+			input: "\n\n\n",
+			n:     5,
+			want:  "",
+		},
+		{
+			name:  "n=1 returns last non-empty line",
+			input: "first\nsecond\nthird",
+			n:     1,
+			want:  "third",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := lastNLines(tt.input, tt.n)
+			if got != tt.want {
+				t.Errorf("lastNLines(%q, %d) = %q, want %q", tt.input, tt.n, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestClassifyPromptType verifies that classifyPromptType returns the correct
+// prompt type string for each supported pattern.
+func TestClassifyPromptType(t *testing.T) {
+	tests := []struct {
+		name    string
+		context string
+		want    string
+	}{
+		// yesno variants
+		{
+			name:    "yesno lowercase (y/n)",
+			context: "Do you want to continue? (y/n)",
+			want:    "yesno",
+		},
+		{
+			name:    "yesno mixed (Y/n)",
+			context: "Overwrite file? (Y/n)",
+			want:    "yesno",
+		},
+		{
+			name:    "yesno bracket lowercase [y/N]",
+			context: "Accept changes [y/N]",
+			want:    "yesno",
+		},
+		{
+			name:    "yesno bracket mixed [Y/n]",
+			context: "Proceed [Y/n]",
+			want:    "yesno",
+		},
+		{
+			name:    "yesno in middle line takes priority",
+			context: "Some preamble\nAccept? (y/n)\n❯ option1",
+			want:    "yesno",
+		},
+		// select variant
+		{
+			name:    "select with unicode arrow",
+			context: "Pick one:\n❯ option1\n  option2",
+			want:    "select",
+		},
+		{
+			name:    "select arrow on its own line",
+			context: "❯",
+			want:    "select",
+		},
+		// text variants
+		{
+			name:    "text prompt ending with question mark",
+			context: "What is your name?",
+			want:    "text",
+		},
+		{
+			name:    "text prompt ending with question mark and space",
+			context: "What is your name? ",
+			want:    "text",
+		},
+		{
+			name:    "text prompt ending with greater-than",
+			context: "Enter value >",
+			want:    "text",
+		},
+		{
+			name:    "text prompt ending with greater-than and space",
+			context: "Enter value > ",
+			want:    "text",
+		},
+		// shell variants
+		{
+			name:    "shell prompt ending with dollar sign",
+			context: "user@host:~$",
+			want:    "shell",
+		},
+		{
+			name:    "shell prompt ending with dollar and space",
+			context: "user@host:~$ ",
+			want:    "shell",
+		},
+		{
+			name:    "shell prompt ending with hash",
+			context: "root@host:~#",
+			want:    "shell",
+		},
+		{
+			name:    "shell prompt ending with hash and space",
+			context: "root@host:~# ",
+			want:    "shell",
+		},
+		// empty / no match
+		{
+			name:    "plain text no matching pattern",
+			context: "Processing files...",
+			want:    "",
+		},
+		{
+			name:    "empty string",
+			context: "",
+			want:    "",
+		},
+		{
+			name:    "multi-line plain text no match",
+			context: "Starting job\nRunning step 1\nDone",
+			want:    "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := classifyPromptType(tt.context)
+			if got != tt.want {
+				t.Errorf("classifyPromptType(%q) = %q, want %q", tt.context, got, tt.want)
+			}
+		})
+	}
+}

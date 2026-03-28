@@ -224,6 +224,8 @@ type sessionInfo struct {
 	WebsocketURL    string  `json:"websocket_url,omitempty"`
 	WaitingForInput bool    `json:"waiting_for_input"`
 	IdleSince       *string `json:"idle_since,omitempty"`
+	PromptContext   string  `json:"prompt_context,omitempty"`
+	PromptType      string  `json:"prompt_type,omitempty"`
 }
 
 type sessionJSON struct {
@@ -251,6 +253,8 @@ func toSessionInfo(s *session.Session) sessionInfo {
 		AgentPID:        s.AgentPID,
 		WebsocketURL:    s.WebsocketURL,
 		WaitingForInput: s.WaitingForInput,
+		PromptContext:   s.PromptContext,
+		PromptType:      s.PromptType,
 	}
 	if s.IdleSince != nil {
 		t := s.IdleSince.Format(time.RFC3339)
