@@ -27,7 +27,7 @@ var (
 	ansiEscapeRe = regexp.MustCompile(
 		`\x1b\[[0-9;?]*[A-Za-z]` + // CSI sequences (ESC [ ... final)
 			`|\x1b[()][0-9A-Za-z]` + // 3-char charset designators (ESC ( B, ESC ) 0, …)
-			`|\x1b[][PX^_][^\x1b\x9c]*[\x1b\x9c]?` + // OSC/DCS/APC/SOS/PM (ESC ] ... BEL/ST)
+			`|\x1b[][PX^_][^\x1b\x9c\n]*[\x1b\x9c]?` + // OSC/DCS/APC/SOS/PM (ESC ] ... BEL/ST)
 			`|\x1b[^\x1b]` + // other two-byte ESC sequences
 			`|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]`, // control chars except \t \n \r
 	)

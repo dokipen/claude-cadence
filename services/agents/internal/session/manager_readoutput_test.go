@@ -80,9 +80,11 @@ func TestReadOutput_TrailingEmptyLinesDropped(t *testing.T) {
 	}
 	t.Cleanup(func() { ptyMgr.Destroy(sessID) })
 
-	waitForContent(t, ptyMgr, sessID, "content")
-	// Give the PTY a moment to flush the trailing newlines.
-	time.Sleep(50 * time.Millisecond)
+	// Wait until the trailing blank lines have also been flushed to the buffer.
+	// printf 'content\n\n\n\n' emits all bytes in one call, but the PTY layer
+	// may deliver them in multiple reads, so poll until at least two consecutive
+	// newlines follow "content".
+	waitForContent(t, ptyMgr, sessID, "content\r\n\r\n")
 
 	m := newReadOutputTestManager(ptyMgr)
 	out, err := m.ReadOutput(sessID, 50)
@@ -191,6 +193,57 @@ sleep 3600`
 			if !strings.Contains(out, want) {
 				t.Errorf("expected %q to survive ANSI strip, got: %q", want, out)
 			}
+		}
+	})
+}
+
+// TestReadOutput_OSCSequence_NoNewlineArtifacts verifies that an OSC sequence
+// whose body contains a literal newline does not leave stray ESC or BEL bytes
+// in the output after ReadOutput processes it.
+//
+// The PTY will convert the \n inside the OSC body to \r\n; after CRLF
+// normalisation the line is split at that point, so the OSC sequence body is
+// truncated at \n rather than spanning lines.  The \x07 BEL terminator then
+// falls on the next line and must be stripped by the control-character branch.
+func TestReadOutput_OSCSequence_NoNewlineArtifacts(t *testing.T) {
+	ptyMgr := pty.NewPTYManager(pty.PTYConfig{BufferSize: 65536})
+	sessID := "readoutput-osc-newline"
+
+	// Emit an OSC window-title sequence whose body contains a literal \n,
+	// followed by visible text on the same logical "line".
+	// printf interprets \033 as ESC, \007 as BEL, \n as newline.
+	script := `printf '\033]0;title\npart2\007some visible text\n'; sleep 3600`
+	err := ptyMgr.Create(sessID, t.TempDir(),
+		[]string{"sh", "-c", script},
+		nil, 80, 24)
+	if err != nil {
+		t.Fatalf("PTY Create failed: %v", err)
+	}
+	t.Cleanup(func() { ptyMgr.Destroy(sessID) })
+
+	waitForContent(t, ptyMgr, sessID, "some visible text")
+
+	m := newReadOutputTestManager(ptyMgr)
+	out, err := m.ReadOutput(sessID, 50)
+	if err != nil {
+		t.Fatalf("ReadOutput error: %v", err)
+	}
+
+	t.Run("no_ESC_bytes", func(t *testing.T) {
+		if strings.ContainsRune(out, '\x1b') {
+			t.Errorf("ESC byte remains in output: %q", out)
+		}
+	})
+
+	t.Run("no_BEL_bytes", func(t *testing.T) {
+		if strings.ContainsRune(out, '\x07') {
+			t.Errorf("BEL byte remains in output: %q", out)
+		}
+	})
+
+	t.Run("visible_text_present", func(t *testing.T) {
+		if !strings.Contains(out, "some visible text") {
+			t.Errorf("expected %q in output, got: %q", "some visible text", out)
 		}
 	})
 }

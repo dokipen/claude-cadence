@@ -33,8 +33,8 @@ func BenchmarkReadOutput_Current(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		normalized := bytes.ReplaceAll(raw, []byte("\r\n"), []byte("\n"))
-		clean := ansiEscapeRe.ReplaceAll(normalized, nil)
-		all := strings.Split(string(clean), "\n")
+		clean := ansiEscapeRe.ReplaceAllString(string(normalized), "")
+		all := strings.Split(clean, "\n")
 		for len(all) > 0 && all[len(all)-1] == "" {
 			all = all[:len(all)-1]
 		}
