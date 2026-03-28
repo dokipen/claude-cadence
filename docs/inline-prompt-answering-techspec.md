@@ -69,14 +69,19 @@ Field numbers 15 and 16 are unused (field 8 is reserved for the removed `tmux_se
 PTY buffers contain raw terminal escape sequences. Before storing `PromptContext`, strip ANSI codes:
 
 ```go
-var ansiEscape = regexp.MustCompile(`\x1b(?:\[[0-9;]*[A-Za-z]|[()][0-9A-Za-z])`)
+var ansiEscape = regexp.MustCompile(
+    `\x1b(?:\[[0-9;]*[A-Za-z]|[()][0-9A-Za-z]|\][^\x07\x1b]*(?:\x07|\x1b\\))`,
+)
 
 func stripANSI(s string) string {
     return ansiEscape.ReplaceAllString(s, "")
 }
 ```
 
-This covers CSI sequences (`ESC[...m`, `ESC[...J`, cursor movement) and character set designators. It does not handle all possible sequences (e.g., OSC window titles) but covers the common Claude Code / shell output cases.
+This covers:
+- CSI sequences (`ESC[...m`, `ESC[...J`, cursor movement, etc.)
+- Character set designators (`ESC(` / `ESC)`)
+- OSC sequences (`ESC]...BEL` and `ESC]...ST`) — window titles, hyperlinks, etc.
 
 ### Context Window
 
@@ -104,7 +109,7 @@ Applied to the extracted context window, checked in priority order:
 
 | Type | Detection | Example |
 |------|-----------|---------|
-| `yesno` | Any line matches `(?i)\(y/n\)\|\(Y/n\)\|\(yes/no\)\|\(N/y\)\|\(y/N\)` | `? Continue? (y/N)` |
+| `yesno` | Any line matches `(?i)[\[(][yn]\/[yn][\])]` and `yes/no` variants with round or square brackets | `? Continue? (y/N)`, `Proceed? [Y/n]` |
 | `select` | Any line contains `❯` | `❯ React` |
 | `text` | Last line matches `\?\s*$` or `>\s*$` | `? Enter a value:` |
 | `shell` | Last line matches `[$#]\s*$` | `$` |
@@ -273,17 +278,17 @@ The dropdown width will need to grow from `min-width: 260px` to accommodate the 
 
 ---
 
-## Open Questions / Research Items
+## Resolved Questions
 
-1. **ANSI stripping completeness**: The regex covers CSI sequences and character set designators. Verify it handles Claude Code's actual terminal output without leaving artifacts. OSC sequences (used for window titles, hyperlinks) are not stripped — check if they appear in the prompt context window.
+1. **inquirer select — arrow key reliability** ✅ CONFIRMED: Tested by writing `\x1b[B` directly to a PTY master running `@inquirer/select`. The selection moved from React → Vue and `\r` confirmed the selection. Arrow key sequences work identically whether sent by a human via terminal WebSocket or written programmatically to the PTY master.
 
-2. **inquirer select — arrow key reliability**: Confirm that sending `\x1b[B` sequences to a live `@inquirer/prompts` list in a PTY actually moves the selection. Test with a real Claude Code session.
+2. **y/n prompt detection breadth** ✅ RESOLVED: Session JSONL audit found `[Y/n]` square-bracket variant in use in cadence lead workflow scripts. Updated regex to include square-bracket forms — see prompt type classification section. Pattern: `(?i)[\[(]y[/|]n[\])]|[\[(]Y[/|]n[\])]|[\[(]yes[/|]no[\])]|[\[(]N[/|]y[\])]|[\[(]y[/|]N[\])]`.
 
-3. **y/n prompt detection breadth**: Claude Code may use variants not covered by the current regex (e.g., `(Yes/No)`, `[y/N]`). Audit actual Claude Code prompts and extend the pattern if needed.
+3. **Race condition on answer** ✅ ACCEPTED: This is a single-user application; concurrent input from terminal and notification popup is not a realistic scenario. `WriteInput` writes bytes to PTY master unconditionally — worst case stray characters appear at the next prompt, which is acceptable.
 
-4. **Race condition on answer**: The session could transition out of `waitingForInput` between the user clicking a button and the input arriving. The UI "Sent" state handles display-side, but the backend should handle writes to a non-waiting session gracefully (it will — `WriteInput` just writes bytes to the PTY master regardless of session state).
+4. **Multi-agent deployments** ✅ CONFIRMED: The frontend `AgentSession` already carries `agentName`, which is used to route the `sendInput` RPC to the correct agentd instance via agent-hub. No gaps.
 
-5. **Multi-agent deployments**: In the current architecture, the REST handler on agent-hub routes the RPC to the correct agentd by agent name. The frontend already has `agentName` from `AgentSession`, so this is handled correctly.
+5. **ANSI stripping completeness** ✅ RESOLVED: Regex extended to cover OSC sequences (window titles, hyperlinks) in addition to CSI and character set designators — see ANSI stripping section.
 
 ---
 
