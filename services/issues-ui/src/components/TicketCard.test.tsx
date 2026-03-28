@@ -1,8 +1,17 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/react";
+import { render, cleanup, fireEvent, act } from "@testing-library/react";
 import React, { useEffect, useRef } from "react";
 import type { ActiveSessionInfo, SessionState, Ticket } from "../types";
+
+// ---------------------------------------------------------------------------
+// Hoisted mutable state shared between mock factories and tests
+// ---------------------------------------------------------------------------
+const { mockHubFetch, mockOptimisticSetDestroying, mockOptimisticResetState } = vi.hoisted(() => ({
+  mockHubFetch: vi.fn(),
+  mockOptimisticSetDestroying: vi.fn(),
+  mockOptimisticResetState: vi.fn(),
+}));
 
 // Mock CSS modules
 vi.mock("../styles/card.module.css", () => ({ default: {} }));
@@ -11,8 +20,25 @@ vi.mock("../styles/animated-icon.module.css", () => ({ default: {} }));
 
 // Mock child components to keep tests focused
 vi.mock("./ConfirmDialog", () => ({
-  ConfirmDialog: ({ open }: { open: boolean }) =>
-    open ? <div data-testid="confirm-dialog" /> : null,
+  ConfirmDialog: ({
+    open,
+    onConfirm,
+    onCancel,
+  }: {
+    open: boolean;
+    onConfirm?: () => void;
+    onCancel?: () => void;
+  }) =>
+    open ? (
+      <div data-testid="confirm-dialog">
+        <button data-testid="confirm-dialog-confirm" onClick={onConfirm}>
+          Confirm
+        </button>
+        <button data-testid="confirm-dialog-cancel" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    ) : null,
 }));
 
 const mockTransition = vi.fn().mockResolvedValue(undefined);
@@ -36,6 +62,38 @@ vi.mock("./PriorityBadge", () => ({
 }));
 vi.mock("./LabelBadge", () => ({
   LabelBadge: () => null,
+}));
+
+// ---------------------------------------------------------------------------
+// agentHubClient — mock hubFetch and re-implement deleteSession on top of it
+// ---------------------------------------------------------------------------
+vi.mock("../api/agentHubClient", () => ({
+  hubFetch: mockHubFetch,
+  HubError: class HubError extends Error {
+    status: number;
+    constructor(status: number, message: string) {
+      super(message);
+      this.name = "HubError";
+      this.status = status;
+    }
+  },
+  deleteSession: async (agentName: string, sessionId: string) => {
+    await mockHubFetch(
+      `/agents/${encodeURIComponent(agentName)}/sessions/${encodeURIComponent(sessionId)}?force=true`,
+      { method: "DELETE" },
+    );
+  },
+}));
+
+// ---------------------------------------------------------------------------
+// SessionsContext — supply optimistic fn mocks
+// ---------------------------------------------------------------------------
+vi.mock("../hooks/SessionsContext", () => ({
+  useSessionsContext: vi.fn(() => ({
+    optimisticSetDestroying: mockOptimisticSetDestroying,
+    optimisticResetState: mockOptimisticResetState,
+    optimisticAddSession: vi.fn(),
+  })),
 }));
 
 const mockNavigate = vi.fn();
@@ -86,6 +144,9 @@ beforeEach(() => {
   mockNavigate.mockReset();
   mockTransition.mockReset();
   mockTransition.mockResolvedValue(undefined);
+  mockHubFetch.mockReset();
+  mockOptimisticSetDestroying.mockReset();
+  mockOptimisticResetState.mockReset();
 });
 
 // ---------------------------------------------------------------------------
@@ -414,5 +475,116 @@ describe("TicketCard active-session-logo click navigation", () => {
     const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
     fireEvent.click(getByTestId("active-session-logo"));
     expect(mockNavigate).toHaveBeenCalledWith("/ticket/ticket-1?tab=agent");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TicketCard kill session — button visibility and kill flow
+// ---------------------------------------------------------------------------
+
+describe("kill session", () => {
+  it("renders kill button when active session is running", () => {
+    const ticket = makeTicket({ number: 5 });
+    const sessions = [
+      makeSession("lead-5", "running", { agentName: "agent1", sessionId: "sess-run" }),
+    ];
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
+    expect(getByTestId("session-kill-button")).toBeTruthy();
+  });
+
+  it("does not render kill button when no active session", () => {
+    const ticket = makeTicket({ number: 5 });
+    const { queryByTestId } = render(<TicketCard ticket={ticket} sessions={[]} />);
+    expect(queryByTestId("session-kill-button")).toBeNull();
+  });
+
+  it("does not render kill button when session is destroying", () => {
+    const ticket = makeTicket({ number: 5 });
+    const sessions = [
+      makeSession("lead-5", "destroying", { agentName: "agent1", sessionId: "sess-destroying" }),
+    ];
+    const { queryByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
+    expect(queryByTestId("session-kill-button")).toBeNull();
+  });
+
+  it("clicking kill button opens confirm dialog", () => {
+    const ticket = makeTicket({ number: 5 });
+    const sessions = [
+      makeSession("lead-5", "running", { agentName: "agent1", sessionId: "sess-run" }),
+    ];
+    const { getByTestId, queryByTestId } = render(
+      <TicketCard ticket={ticket} sessions={sessions} />,
+    );
+    expect(queryByTestId("confirm-dialog")).toBeNull();
+    fireEvent.click(getByTestId("session-kill-button"));
+    expect(getByTestId("confirm-dialog")).toBeTruthy();
+  });
+
+  it("confirming kill calls optimisticSetDestroying and DELETE API", async () => {
+    mockHubFetch.mockResolvedValue(undefined);
+    const ticket = makeTicket({ number: 5 });
+    const sessions = [
+      makeSession("lead-5", "running", { agentName: "agent1", sessionId: "sess-kill" }),
+    ];
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
+
+    fireEvent.click(getByTestId("session-kill-button"));
+
+    await act(async () => {
+      fireEvent.click(getByTestId("confirm-dialog-confirm"));
+      await Promise.resolve();
+    });
+
+    expect(mockOptimisticSetDestroying).toHaveBeenCalledWith("sess-kill");
+    expect(mockHubFetch).toHaveBeenCalledWith(
+      expect.stringContaining("sess-kill"),
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("cancelling kill dialog does not call API", () => {
+    const ticket = makeTicket({ number: 5 });
+    const sessions = [
+      makeSession("lead-5", "running", { agentName: "agent1", sessionId: "sess-cancel" }),
+    ];
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
+
+    fireEvent.click(getByTestId("session-kill-button"));
+    fireEvent.click(getByTestId("confirm-dialog-cancel"));
+
+    expect(mockHubFetch).not.toHaveBeenCalled();
+  });
+
+  it("kill button does not trigger card navigation", () => {
+    const ticket = makeTicket({ number: 5 });
+    const sessions = [
+      makeSession("lead-5", "running", { agentName: "agent1", sessionId: "sess-nav" }),
+    ];
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
+
+    fireEvent.click(getByTestId("session-kill-button"));
+
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it("shows error when kill API fails", async () => {
+    const { HubError } = await import("../api/agentHubClient");
+    mockHubFetch.mockRejectedValue(new HubError(500, "server error"));
+
+    const ticket = makeTicket({ number: 5 });
+    const sessions = [
+      makeSession("lead-5", "running", { agentName: "agent1", sessionId: "sess-err" }),
+    ];
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
+
+    fireEvent.click(getByTestId("session-kill-button"));
+
+    await act(async () => {
+      fireEvent.click(getByTestId("confirm-dialog-confirm"));
+      await Promise.resolve();
+    });
+
+    expect(mockOptimisticResetState).toHaveBeenCalledWith("sess-err", "running");
+    expect(getByTestId("card-kill-error")).toBeTruthy();
   });
 });

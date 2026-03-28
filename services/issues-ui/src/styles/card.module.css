@@ -186,3 +186,24 @@
   text-align: right;
   padding-top: 0.125rem;
 }
+
+.sessionKillButton {
+  background: none;
+  border: 1px solid var(--error);
+  color: var(--error);
+  font-size: 0.8rem;
+  line-height: 1;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.sessionKillButton:hover:not(:disabled) {
+  background: var(--error);
+  color: #fff;
+}
+
+.sessionKillButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
