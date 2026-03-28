@@ -87,7 +87,8 @@ export function TilingLayout({ windows, onMinimize, onTerminated, onReorder, onR
       const stored = sessionStorage.getItem("cadence_window_ratios");
       if (!stored) return new Map();
       const entries: [string, number][] = JSON.parse(stored);
-      return new Map(entries.map(([k, v]) => [k, Math.max(MIN_RATIO, Math.min(MAX_RATIO, v))] as [string, number]));
+      if (!Array.isArray(entries)) return new Map();
+      return new Map(entries.map(([k, v]) => [k, Number.isFinite(v) ? Math.max(MIN_RATIO, Math.min(MAX_RATIO, v)) : MIN_RATIO] as [string, number]));
     } catch {
       return new Map();
     }
