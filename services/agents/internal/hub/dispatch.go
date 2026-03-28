@@ -422,7 +422,7 @@ func (d *Dispatcher) SendInput(params json.RawMessage) (json.RawMessage, *rpcErr
 		Text      string `json:"text"`
 	}
 	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, &rpcError{Code: rpcErrInvalidArgument, Message: err.Error()}
+		return nil, &rpcError{Code: rpcErrInvalidArgument, Message: "invalid params: " + err.Error()}
 	}
 	if d.pty == nil {
 		return nil, &rpcError{Code: rpcErrInternal, Message: "PTY manager not available"}
@@ -437,13 +437,15 @@ func mapPTYError(err error) *rpcError {
 	if errors.Is(err, pty.ErrSessionNotFound) {
 		return &rpcError{Code: rpcErrNotFound, Message: "pty session not found"}
 	}
+	slog.Error("unexpected PTY error", "error", err)
 	return &rpcError{Code: rpcErrInternal, Message: "internal error"}
 }
 
 func marshalResult(v any) (json.RawMessage, *rpcError) {
 	b, err := json.Marshal(v)
 	if err != nil {
-		return nil, &rpcError{Code: rpcErrInternal, Message: "marshal result: " + err.Error()}
+		slog.Error("marshal result failed", "error", err)
+	return nil, &rpcError{Code: rpcErrInternal, Message: "internal error"}
 	}
 	return b, nil
 }
