@@ -444,6 +444,14 @@ These services have hard host dependencies (the `claude` CLI, OS service integra
 4. Wait for user feedback (user intervention required)
 5. Address issues if reported, return to Phase 5 after fixes
 
+#### Teardown (after QA is confirmed)
+
+Once the user confirms QA passes, stop the compose stack using the project name printed by `start-qa-env.sh`:
+
+```bash
+docker compose -p <PROJECT_NAME> down
+```
+
 ### Phase 7: Merge and Cleanup
 
 1. Wait for PR checks to pass, then merge. Use a 10-minute timeout to avoid blocking on stuck checks (`--watch` returns immediately if checks are already green):
