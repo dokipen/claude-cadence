@@ -48,8 +48,7 @@ ENV_FILE="$REPO_ROOT/.env.dev"
 if [ ! -f "$ENV_FILE" ]; then
     if [ -f "$REPO_ROOT/.env.dev.example" ]; then
         cp "$REPO_ROOT/.env.dev.example" "$ENV_FILE"
-        echo "Created .env.dev from .env.dev.example — fill in secrets before proceeding." >&2
-        exit 1
+        echo "Created .env.dev from .env.dev.example — default values are sufficient for UI-only QA." >&2
     else
         echo "Error: .env.dev not found and no .env.dev.example to copy from." >&2
         exit 1
