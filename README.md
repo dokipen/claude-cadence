@@ -142,6 +142,10 @@ Then open **http://localhost**. See [docs/dev-environment.md](docs/dev-environme
 
 A GraphQL-based ticket tracking service with CLI client. See the [Issue Microservice Documentation](services/issues/docs/INDEX.md) for setup, deployment, and usage.
 
+### Issues MCP Server
+
+An MCP server that exposes the issues API as structured tools for Claude Code and other MCP-compatible agents — no CLI binary required. See [`services/issues-mcp/README.md`](services/issues-mcp/README.md) for setup and `.mcp.json` configuration.
+
 ## License
 
 MIT
