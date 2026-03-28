@@ -1,5 +1,5 @@
 import { Terminal } from "./Terminal";
-import { hubFetch, HubError } from "../api/agentHubClient";
+import { hubFetch, HubError, createSession } from "../api/agentHubClient";
 import { useTicketByNumber } from "../hooks/useTicketByNumber";
 import type { Session } from "../types";
 import styles from "../styles/agents.module.css";
@@ -46,6 +46,13 @@ export function TerminalWindow({
   const ticketMatch = session.name.match(/^lead-(\d+)$/);
   const ticketNumber = ticketMatch ? Number(ticketMatch[1]) : undefined;
   const { ticket } = useTicketByNumber(projectId, ticketNumber);
+
+  const handleResumeSession = session.agentProfile
+    ? () => {
+        const newSessionName = `resume-${session.id.slice(0, 8)}`;
+        createSession(agentName, session.agentProfile, newSessionName, [`/resume ${session.id}`]).catch(console.error);
+      }
+    : undefined;
 
   const handleTerminate = async () => {
     try {
@@ -128,7 +135,7 @@ export function TerminalWindow({
         </div>
       </div>
       <div className={styles.tileBody}>
-        <Terminal agentName={agentName} sessionId={session.id} />
+        <Terminal agentName={agentName} sessionId={session.id} onResumeSession={handleResumeSession} />
       </div>
     </div>
   );

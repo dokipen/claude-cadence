@@ -626,3 +626,105 @@ describe("clipboard copy trimming", () => {
     expect(setData).not.toHaveBeenCalled();
   });
 });
+
+describe("Resume Session button", () => {
+  beforeEach(() => {
+    MockWebSocket.instances = [];
+    xtermInstances.length = 0;
+    fitAddonInstances.length = 0;
+    vi.stubGlobal("WebSocket", MockWebSocket);
+    vi.stubGlobal("ResizeObserver", class {
+      observe = vi.fn();
+      unobserve = vi.fn();
+      disconnect = vi.fn();
+    });
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    cleanup();
+  });
+
+  // Helper: exhaust all reconnect retries after an initial successful connection
+  // (open→close×5), landing on the "disconnected" state.
+  function exhaustReconnectRetries() {
+    act(() => { MockWebSocket.instances[0].simulateOpen(); });
+    act(() => { MockWebSocket.instances[0].simulateClose(); });
+    act(() => { vi.advanceTimersByTime(2000); });
+    act(() => { MockWebSocket.instances[1].simulateClose(); });
+    act(() => { vi.advanceTimersByTime(4000); });
+    act(() => { MockWebSocket.instances[2].simulateClose(); });
+    act(() => { vi.advanceTimersByTime(8000); });
+    act(() => { MockWebSocket.instances[3].simulateClose(); });
+    act(() => { vi.advanceTimersByTime(16000); });
+    act(() => { MockWebSocket.instances[4].simulateClose(); });
+  }
+
+  // Helper: exhaust all initial connection retries (never-connected path),
+  // landing on the "error" state.
+  function exhaustInitialRetries() {
+    act(() => { MockWebSocket.instances[0].simulateClose(); });
+    act(() => { vi.advanceTimersByTime(2000); });
+    act(() => { MockWebSocket.instances[1].simulateClose(); });
+    act(() => { vi.advanceTimersByTime(4000); });
+    act(() => { MockWebSocket.instances[2].simulateClose(); });
+    act(() => { vi.advanceTimersByTime(8000); });
+    act(() => { MockWebSocket.instances[3].simulateClose(); });
+    act(() => { vi.advanceTimersByTime(16000); });
+    act(() => { MockWebSocket.instances[4].simulateClose(); });
+  }
+
+  // 1. disconnected state + onResumeSession provided → button visible, click calls prop
+  it("shows 'Resume Session' button in disconnected state when onResumeSession is provided and clicking calls it", () => {
+    const onResumeSession = vi.fn();
+    render(<Terminal agentName="agent-1" sessionId="sess-1" onResumeSession={onResumeSession} />);
+
+    exhaustReconnectRetries();
+
+    expect(screen.getByTestId("terminal-disconnected")).toBeDefined();
+    const btn = screen.getByTestId("terminal-resume-session");
+    expect(btn).toBeDefined();
+    expect(btn.textContent).toBe("Resume Session");
+
+    fireEvent.click(btn);
+    expect(onResumeSession).toHaveBeenCalledTimes(1);
+  });
+
+  // 2. disconnected state without onResumeSession → button NOT present
+  it("does not show 'Resume Session' button in disconnected state when onResumeSession is not provided", () => {
+    render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+
+    exhaustReconnectRetries();
+
+    expect(screen.getByTestId("terminal-disconnected")).toBeDefined();
+    expect(screen.queryByTestId("terminal-resume-session")).toBeNull();
+  });
+
+  // 3. error state + onResumeSession provided → button visible, click calls prop
+  it("shows 'Resume Session' button in error state when onResumeSession is provided and clicking calls it", () => {
+    const onResumeSession = vi.fn();
+    render(<Terminal agentName="agent-1" sessionId="sess-1" onResumeSession={onResumeSession} />);
+
+    exhaustInitialRetries();
+
+    expect(screen.getByTestId("terminal-error")).toBeDefined();
+    const btn = screen.getByTestId("terminal-resume-session");
+    expect(btn).toBeDefined();
+    expect(btn.textContent).toBe("Resume Session");
+
+    fireEvent.click(btn);
+    expect(onResumeSession).toHaveBeenCalledTimes(1);
+  });
+
+  // 4. error state without onResumeSession → button NOT present
+  it("does not show 'Resume Session' button in error state when onResumeSession is not provided", () => {
+    render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+
+    exhaustInitialRetries();
+
+    expect(screen.getByTestId("terminal-error")).toBeDefined();
+    expect(screen.queryByTestId("terminal-resume-session")).toBeNull();
+  });
+});

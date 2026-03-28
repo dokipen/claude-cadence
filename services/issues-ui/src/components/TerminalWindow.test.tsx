@@ -4,9 +4,16 @@ import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/re
 import { create } from "@bufbuild/protobuf";
 import { SessionSchema } from "../gen/hub/v1/hub_pb";
 
-// Mock Terminal to avoid xterm dependency
+// Mock Terminal to avoid xterm dependency — capture props for inspection
+const capturedTerminalProps = vi.hoisted(() => ({
+  onResumeSession: undefined as (() => void) | undefined,
+}));
+
 vi.mock("./Terminal", () => ({
-  Terminal: () => <div data-testid="terminal" />,
+  Terminal: (props: { agentName?: string; sessionId?: string; onResumeSession?: () => void }) => {
+    capturedTerminalProps.onResumeSession = props.onResumeSession;
+    return <div data-testid="terminal" />;
+  },
 }));
 
 // Mock CSS modules
@@ -19,10 +26,12 @@ vi.mock("../hooks/useTicketByNumber", () => ({
   useTicketByNumber: (...args: unknown[]) => mockUseTicketByNumber(...args),
 }));
 
-// Mock hubFetch
+// Mock hubFetch and createSession
 const mockHubFetch = vi.fn();
+const mockCreateSession = vi.fn();
 vi.mock("../api/agentHubClient", () => ({
   hubFetch: (...args: unknown[]) => mockHubFetch(...args),
+  createSession: (...args: unknown[]) => mockCreateSession(...args),
   HubError: class HubError extends Error {
     status: number;
     constructor(status: number, message: string) {
@@ -399,3 +408,76 @@ describe("ticket title in header", () => {
   });
 });
 
+
+describe("handleResumeSession", () => {
+  beforeEach(() => {
+    mockHubFetch.mockReset();
+    mockCreateSession.mockReset();
+    capturedTerminalProps.onResumeSession = undefined;
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("calls createSession with agentProfile, a resume-prefixed name, and /resume <sessionId> when agentProfile is set", () => {
+    mockCreateSession.mockResolvedValue({});
+
+    const sessionWithProfile = create(SessionSchema, {
+      id: "sess-abc",
+      name: "lead-42",
+      state: "running",
+      agentProfile: "default",
+      createdAt: "2026-01-01T00:00:00Z",
+      agentPid: 1234,
+      baseRef: "main",
+      waitingForInput: false,
+    });
+
+    render(
+      <TerminalWindow
+        session={sessionWithProfile}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    // onResumeSession should have been passed to Terminal
+    expect(capturedTerminalProps.onResumeSession).toBeDefined();
+
+    // Invoke the handler (simulates button click in Terminal)
+    capturedTerminalProps.onResumeSession!();
+
+    expect(mockCreateSession).toHaveBeenCalledWith(
+      "agent-1",
+      "default",
+      expect.stringContaining("resume-"),
+      ["/resume sess-abc"],
+    );
+  });
+
+  it("passes onResumeSession={undefined} to Terminal when agentProfile is empty", () => {
+    const sessionNoProfile = create(SessionSchema, {
+      id: "sess-xyz",
+      name: "work-session",
+      state: "running",
+      agentProfile: "",
+      createdAt: "2026-01-01T00:00:00Z",
+      agentPid: 5678,
+      baseRef: "main",
+      waitingForInput: false,
+    });
+
+    render(
+      <TerminalWindow
+        session={sessionNoProfile}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    expect(capturedTerminalProps.onResumeSession).toBeUndefined();
+  });
+});
