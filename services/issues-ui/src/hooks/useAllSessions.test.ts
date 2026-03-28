@@ -131,6 +131,13 @@ describe("useAllSessions", () => {
         await vi.advanceTimersByTimeAsync(1);
       });
       expect(result.current.error).toBe("Failed to fetch sessions");
+
+      // Advance past the poll interval — second fetch succeeds, error clears
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+      expect(result.current.error).toBeNull();
+      expect(result.current.sessions.length).toBe(1);
     });
   });
 
