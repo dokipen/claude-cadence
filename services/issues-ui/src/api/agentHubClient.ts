@@ -129,6 +129,21 @@ export async function fetchSessionOutput(
   return data.output as string;
 }
 
+export async function deleteSession(agentName: string, sessionId: string): Promise<void> {
+  try {
+    await hubFetch(
+      `/agents/${encodeURIComponent(agentName)}/sessions/${encodeURIComponent(sessionId)}?force=true`,
+      { method: "DELETE" },
+    );
+  } catch (err) {
+    if (err instanceof HubError && err.status === 404) {
+      // Session already gone — treat as success
+      return;
+    }
+    throw err;
+  }
+}
+
 export async function createSession(
   agentName: string,
   profile: string,

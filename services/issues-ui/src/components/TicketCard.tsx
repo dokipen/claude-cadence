@@ -7,12 +7,14 @@ import { LaunchAgentDialog } from "./LaunchAgentDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { getLaunchConfig } from "./launchConfig";
 import { useTransitionTicket } from "../hooks/useTransitionTicket";
+import { useSessionsContext } from "../hooks/SessionsContext";
 import type { ActiveSessionInfo } from "../types";
 import styles from "../styles/card.module.css";
 import agentStyles from "../styles/agents.module.css";
 import { AnimatedCadenceIcon } from "./AnimatedCadenceIcon";
 import { SessionOutputTooltip } from "./SessionOutputTooltip";
 import { validateAgentProfile, validateSessionId } from "../utils/validateSession";
+import { HubError, deleteSession } from "../api/agentHubClient";
 
 export function hasActiveSession(sessions: ActiveSessionInfo[], ticketNumber: number, projectId?: string): ActiveSessionInfo | null {
   const prefix = projectId ? `${projectId}-` : "";
@@ -37,8 +39,12 @@ export function TicketCard({
   const [anchorRect, setAnchorRect] = useState<DOMRect | undefined>(undefined);
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [closed, setClosed] = useState(false);
+  const [showKillConfirm, setShowKillConfirm] = useState(false);
+  const [killing, setKilling] = useState(false);
+  const [killError, setKillError] = useState<string | null>(null);
   const navigate = useNavigate();
   const { transition, error: transitionError } = useTransitionTicket();
+  const { optimisticSetDestroying, optimisticResetState } = useSessionsContext();
 
   const launchButtonLabel = getLaunchConfig(ticket.state).buttonLabel;
   const canClose = ticket.state === "BACKLOG" || ticket.state === "REFINED";
@@ -98,6 +104,44 @@ export function TicketCard({
     setConfirmCloseOpen(false);
   }, []);
 
+  const handleKillClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!activeSession?.agentName || !activeSession?.sessionId) return;
+    try {
+      validateAgentProfile(activeSession.agentName);
+      validateSessionId(activeSession.sessionId);
+    } catch (err) {
+      console.warn("Kill session: invalid session data", err);
+      return;
+    }
+    setKillError(null);
+    setShowKillConfirm(true);
+  }, [activeSession]);
+
+  const handleConfirmKill = useCallback(async () => {
+    if (killing) return;
+    if (!activeSession) return;
+    const { agentName, sessionId, state: originalState } = activeSession;
+    if (!agentName || !sessionId) return;
+    setShowKillConfirm(false);
+    setKilling(true);
+    setKillError(null);
+    optimisticSetDestroying(sessionId);
+    try {
+      await deleteSession(agentName, sessionId);
+    } catch (err) {
+      optimisticResetState(sessionId, originalState);
+      setKillError(err instanceof HubError ? err.message : "Failed to kill session");
+    } finally {
+      setKilling(false);
+    }
+  }, [killing, activeSession, optimisticSetDestroying, optimisticResetState]);
+
+  const handleCancelKill = useCallback(() => {
+    setShowKillConfirm(false);
+  }, []);
+
   if (closed) return null;
 
   return (
@@ -148,22 +192,36 @@ export function TicketCard({
               </button>
             )}
             {activeSession ? (
-              <button
-                type="button"
-                className={styles.activeSessionLogo}
-                data-testid="active-session-logo"
-                aria-label="Session in progress"
-                onClick={handleActiveSessionClick}
-                style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
-              >
-                {activeSession.sessionId && activeSession.agentName ? (
-                  <SessionOutputTooltip session={activeSession}>
-                    <AnimatedCadenceIcon />
-                  </SessionOutputTooltip>
-                ) : (
-                  <AnimatedCadenceIcon />
+              <>
+                {activeSession.state !== "destroying" && (
+                  <button
+                    type="button"
+                    className={styles.sessionKillButton}
+                    data-testid="session-kill-button"
+                    aria-label="Kill session"
+                    onClick={handleKillClick}
+                    disabled={killing}
+                  >
+                    &times;
+                  </button>
                 )}
-              </button>
+                <button
+                  type="button"
+                  className={styles.activeSessionLogo}
+                  data-testid="active-session-logo"
+                  aria-label="Session in progress"
+                  onClick={handleActiveSessionClick}
+                  style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+                >
+                  {activeSession.sessionId && activeSession.agentName ? (
+                    <SessionOutputTooltip session={activeSession}>
+                      <AnimatedCadenceIcon />
+                    </SessionOutputTooltip>
+                  ) : (
+                    <AnimatedCadenceIcon />
+                  )}
+                </button>
+              </>
             ) : (
               <button
                 type="button"
@@ -186,6 +244,11 @@ export function TicketCard({
             Failed to close
           </div>
         )}
+        {killError && (
+          <div className={styles.cardError} data-testid="card-kill-error">
+            {killError}
+          </div>
+        )}
       </div>
       <LaunchAgentDialog
         ticketNumber={ticket.number}
@@ -204,6 +267,14 @@ export function TicketCard({
         confirmLabel="Close ticket"
         onConfirm={handleConfirmClose}
         onCancel={handleCancelClose}
+      />
+      <ConfirmDialog
+        open={showKillConfirm}
+        title="Kill session?"
+        message="Kill session? This will terminate the agent immediately."
+        confirmLabel="Kill session"
+        onConfirm={handleConfirmKill}
+        onCancel={handleCancelKill}
       />
     </>
   );
