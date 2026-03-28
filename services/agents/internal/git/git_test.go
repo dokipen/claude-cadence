@@ -143,6 +143,26 @@ func TestEnsureOnPath_PrependsMissingDir(t *testing.T) {
 	}
 }
 
+func TestEnsureOnPath_NoSubstringFalsePositive(t *testing.T) {
+	// "/usr/bin" must not be considered present when PATH only contains "/usr/bin/vendor_perl".
+	env := []string{"PATH=/usr/bin/vendor_perl:/bin"}
+	result := ensureOnPath(env, "/usr/bin")
+
+	found := false
+	for _, e := range result {
+		if strings.HasPrefix(e, "PATH=") {
+			val := strings.TrimPrefix(e, "PATH=")
+			if strings.HasPrefix(val, "/usr/bin"+string(os.PathListSeparator)) {
+				found = true
+			}
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected /usr/bin prepended to PATH (substring match must not prevent prepend), got: %v", result)
+	}
+}
+
 func TestEnsureOnPath_SkipsExistingDir(t *testing.T) {
 	env := []string{"PATH=/opt/homebrew/bin:/usr/bin:/bin"}
 	result := ensureOnPath(env, "/opt/homebrew/bin")

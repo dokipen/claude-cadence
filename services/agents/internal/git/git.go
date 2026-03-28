@@ -184,14 +184,18 @@ func (c *Client) pullDefaultBranch(cloneDir string, creds *Credentials) error {
 }
 
 // ensureOnPath returns env with dir prepended to PATH if not already present.
-// It modifies env in place and returns it.
+// It modifies env in place and returns it. Membership is checked by exact
+// path-element comparison, not substring match.
 func ensureOnPath(env []string, dir string) []string {
 	for i, entry := range env {
 		if strings.HasPrefix(entry, "PATH=") {
-			if strings.Contains(entry[5:], dir) {
-				return env
+			current := entry[5:]
+			for _, elem := range strings.Split(current, string(os.PathListSeparator)) {
+				if elem == dir {
+					return env
+				}
 			}
-			env[i] = "PATH=" + dir + string(os.PathListSeparator) + entry[5:]
+			env[i] = "PATH=" + dir + string(os.PathListSeparator) + current
 			return env
 		}
 	}
