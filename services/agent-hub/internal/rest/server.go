@@ -40,6 +40,7 @@ func New(h *hub.Hub, cfg *config.Config) *Server {
 	apiMux.HandleFunc("GET /api/v1/agents/{name}/sessions/{id}", handleGetSession(h))
 	apiMux.HandleFunc("GET /api/v1/agents/{name}/sessions/{id}/output", handleGetSessionOutput(h))
 	apiMux.HandleFunc("DELETE /api/v1/agents/{name}/sessions/{id}", handleDestroySession(h))
+	apiMux.HandleFunc("POST /api/v1/agents/{name}/sessions/{id}/input", handleSendInput(h))
 
 	var apiHandler http.Handler = apiMux
 	if cfg.Auth.Mode == "token" {

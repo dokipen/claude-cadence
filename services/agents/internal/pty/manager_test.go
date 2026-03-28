@@ -211,3 +211,31 @@ func TestDefaultBufferSize_FitsWithFramePrefix(t *testing.T) {
 			frameSize, maxMessageSize, maxMessageSize-framePrefixLen)
 	}
 }
+
+func TestPTYManager_WriteInput_Success(t *testing.T) {
+	m := NewPTYManager(PTYConfig{})
+
+	err := m.Create("writeinput-success", t.TempDir(), []string{"cat"}, nil, 80, 24)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	t.Cleanup(func() { m.Destroy("writeinput-success") })
+
+	if err := m.WriteInput("writeinput-success", []byte("hello\n")); err != nil {
+		t.Fatalf("WriteInput failed: %v", err)
+	}
+
+	pollBuffer(t, m, "writeinput-success", "hello")
+}
+
+func TestPTYManager_WriteInput_NotFound(t *testing.T) {
+	m := NewPTYManager(PTYConfig{})
+
+	err := m.WriteInput("nonexistent-session", []byte("hello\n"))
+	if err == nil {
+		t.Fatal("expected error for nonexistent session, got nil")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected error containing \"not found\", got: %v", err)
+	}
+}

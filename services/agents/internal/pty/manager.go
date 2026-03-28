@@ -168,6 +168,18 @@ func (m *PTYManager) Get(id string) (*session, error) {
 	return sess, nil
 }
 
+// WriteInput writes data to the PTY master for the given session.
+func (m *PTYManager) WriteInput(id string, data []byte) error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	sess, ok := m.sessions[id]
+	if !ok {
+		return fmt.Errorf("pty: session %q not found", id)
+	}
+	_, err := sess.master.Write(data)
+	return err
+}
+
 // PID returns the PID of the child process for the given session.
 func (m *PTYManager) PID(id string) (int, error) {
 	sess, err := m.Get(id)

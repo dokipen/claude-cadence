@@ -381,3 +381,134 @@ func TestHandleGetSessionOutput_OfflineAgentReturns502(t *testing.T) {
 		t.Errorf("expected 502 for offline agent, got %d", rw.Code)
 	}
 }
+
+func TestHandleSendInput_Success(t *testing.T) {
+	h := startTestHubWithAgent(t, "test-agent")
+
+	handler := handleSendInput(h)
+
+	req := httptest.NewRequest("POST", "/api/v1/agents/test-agent/sessions/sess-1/input", strings.NewReader(`{"text":"y\n"}`))
+	req.SetPathValue("name", "test-agent")
+	req.SetPathValue("id", "sess-1")
+	rw := httptest.NewRecorder()
+
+	handler.ServeHTTP(rw, req)
+
+	resp := rw.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+	}
+}
+
+func TestHandleSendInput_OfflineAgentReturns502(t *testing.T) {
+	h := hub.New(30*time.Second, 5*time.Second, 0, 5*time.Minute, 0)
+	h.Start()
+	t.Cleanup(h.Stop)
+
+	agentToken := "test-agent-token"
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ws/agent", handleAgentWebSocket(h, agentToken))
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws/agent"
+	conn, _, err := websocket.Dial(context.Background(), wsURL, &websocket.DialOptions{
+		HTTPHeader: http.Header{"Authorization": {"Bearer " + agentToken}},
+	})
+	if err != nil {
+		t.Fatalf("dial agent ws: %v", err)
+	}
+
+	regReq, _ := hub.NewRequest("reg-1", "register", &hub.RegisterParams{
+		Name:     "offline-send-agent",
+		Profiles: map[string]hub.ProfileInfo{"default": {Description: "test"}},
+	})
+	data, _ := json.Marshal(regReq)
+	conn.Write(context.Background(), websocket.MessageText, data)
+	conn.Read(context.Background()) // ack
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if a, ok := h.Get("offline-send-agent"); ok && a.Status() == hub.StatusOnline {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	conn.Close(websocket.StatusNormalClosure, "going offline")
+
+	deadline = time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if a, ok := h.Get("offline-send-agent"); ok && a.Status() != hub.StatusOnline {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	handler := handleSendInput(h)
+	req := httptest.NewRequest("POST", "/api/v1/agents/offline-send-agent/sessions/sess-1/input", strings.NewReader(`{"text":"y\n"}`))
+	req.SetPathValue("name", "offline-send-agent")
+	req.SetPathValue("id", "sess-1")
+	rw := httptest.NewRecorder()
+
+	handler.ServeHTTP(rw, req)
+
+	if rw.Code != http.StatusBadGateway {
+		t.Errorf("expected 502 for offline agent, got %d", rw.Code)
+	}
+}
+
+func TestHandleSendInput_BodyTooLargeReturns413(t *testing.T) {
+	h := startTestHubWithAgent(t, "big-body-agent")
+
+	handler := handleSendInput(h)
+
+	oversizedBody := strings.Repeat("x", hub.RPCMaxMessageSize+1)
+	req := httptest.NewRequest("POST", "/api/v1/agents/big-body-agent/sessions/sess-1/input", strings.NewReader(oversizedBody))
+	req.SetPathValue("name", "big-body-agent")
+	req.SetPathValue("id", "sess-1")
+	rw := httptest.NewRecorder()
+
+	handler.ServeHTTP(rw, req)
+
+	if rw.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("expected 413 for oversized body, got %d", rw.Code)
+	}
+}
+
+func TestHandleSendInput_InvalidJSONReturns400(t *testing.T) {
+	h := startTestHubWithAgent(t, "json-agent")
+
+	handler := handleSendInput(h)
+
+	req := httptest.NewRequest("POST", "/api/v1/agents/json-agent/sessions/sess-1/input", strings.NewReader(`{"invalid`))
+	req.SetPathValue("name", "json-agent")
+	req.SetPathValue("id", "sess-1")
+	rw := httptest.NewRecorder()
+
+	handler.ServeHTTP(rw, req)
+
+	if rw.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid JSON, got %d", rw.Code)
+	}
+}
+
+func TestHandleSendInput_UnknownAgentReturns404(t *testing.T) {
+	h := startTestHubWithAgent(t, "known-agent")
+
+	handler := handleSendInput(h)
+
+	req := httptest.NewRequest("POST", "/api/v1/agents/unknown-agent/sessions/sess-1/input", strings.NewReader(`{"text":"y\n"}`))
+	req.SetPathValue("name", "unknown-agent")
+	req.SetPathValue("id", "sess-1")
+	rw := httptest.NewRecorder()
+
+	handler.ServeHTTP(rw, req)
+
+	if rw.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for unknown agent, got %d", rw.Code)
+	}
+}
