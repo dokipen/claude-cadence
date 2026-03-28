@@ -156,4 +156,30 @@ describe("AgentManager", () => {
     );
     expect(capturedRepoUrl).toBeUndefined();
   });
+
+  it("clicking an open session button minimizes it and removes the open CSS class", async () => {
+    const agentName = "test-agent";
+    const sessionId = "sess-1";
+    const sessions = [makeSession(sessionId, agentName)];
+
+    const { getAllByTestId } = render(
+      <MemoryRouter><AgentManager sessions={sessions} selectedProject={null} /></MemoryRouter>,
+    );
+
+    const sessionButtons = getAllByTestId("sidebar-session");
+    expect(sessionButtons).toHaveLength(1);
+    const sessionBtn = sessionButtons[0];
+
+    // First click: open the session — button should gain the open class
+    await act(async () => {
+      fireEvent.click(sessionBtn);
+    });
+    expect(sessionBtn.className).toContain("open");
+
+    // Second click: session is already open, so it should be minimized
+    await act(async () => {
+      fireEvent.click(sessionBtn);
+    });
+    expect(sessionBtn.className).not.toContain("open");
+  });
 });

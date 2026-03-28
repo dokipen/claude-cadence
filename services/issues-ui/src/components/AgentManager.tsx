@@ -94,8 +94,12 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
       return;
     }
 
-    // If already open, do nothing (already visible)
-    if (openWindows.some((w) => w.key === key)) return;
+    // If already open, minimize it (toggle off)
+    if (openWindows.some((w) => w.key === key)) {
+      setMinimizedKeys((prev) => new Set(prev).add(key));
+      setOpenWindows((prev) => prev.filter((w) => w.key !== key));
+      return;
+    }
 
     // Open new window
     setOpenWindows((prev) => [
@@ -159,6 +163,7 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
           agents={agents}
           sessions={filteredSessions}
           openKeys={openKeys}
+          minimizedKeys={minimizedKeys}
           onSessionClick={handleSessionClick}
           isCollapsed={isCollapsed}
           onToggle={toggleSidebar}
