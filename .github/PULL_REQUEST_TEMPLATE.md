@@ -9,9 +9,11 @@
 ## Attack Surface / Invariants
 
 <!-- Required if this PR touches state machines, session lifecycle, reconnection logic,
-     or stability fixes. Skip (delete this section) for unrelated changes.
+     stability fixes, auth/authz logic, or new external inputs (API params, user data).
+     If not applicable, replace this section with: N/A — <brief reason>
 
      If applicable, answer:
      1. What invariants does this change protect or rely on?
      2. What breaks if those invariants are violated?
+     3. Are there new trust boundaries or external inputs introduced?
 -->
