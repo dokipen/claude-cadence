@@ -33,15 +33,19 @@ vi.mock("../styles/animated-icon.module.css", () => ({ default: {} }));
 vi.mock("./ConfirmDialog", () => ({
   ConfirmDialog: ({
     open,
+    title,
+    confirmLabel,
     onConfirm,
     onCancel,
   }: {
     open: boolean;
+    title?: string;
+    confirmLabel?: string;
     onConfirm?: () => void;
     onCancel?: () => void;
   }) =>
     open ? (
-      <div data-testid="confirm-dialog">
+      <div data-testid="confirm-dialog" data-title={title} data-confirm-label={confirmLabel}>
         <button data-testid="confirm-dialog-confirm" onClick={onConfirm}>
           Confirm
         </button>
@@ -608,9 +612,22 @@ describe('TicketCard visual distinction: kill session vs close ticket', () => {
 
     const killButton = getByTestId('session-kill-button');
     // The kill button should use a stop icon (■), not the × close icon
-    expect(killButton.textContent).not.toBe('×');
-    expect(killButton.textContent).not.toBe('×');
+    expect(killButton.textContent).toContain('■');
     expect(killButton.textContent).not.toContain('×');
+  });
+
+  it('kill session confirm dialog has distinct title and label from close ticket dialog', () => {
+    const ticket = makeTicket({ state: 'REFINED', number: 5 });
+    const sessions = [
+      makeSession('lead-5', 'running', { agentName: 'agent1', sessionId: 'sess-abc' }),
+    ];
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
+
+    // Open kill session dialog
+    fireEvent.click(getByTestId('session-kill-button'));
+    const killDialog = getByTestId('confirm-dialog');
+    expect(killDialog.dataset.title).toBe('Stop session?');
+    expect(killDialog.dataset.confirmLabel).toBe('Stop session');
   });
 
   it('session-kill-button and card-close-button have different CSS class names', () => {

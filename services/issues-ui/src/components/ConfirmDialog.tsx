@@ -29,7 +29,8 @@ export function ConfirmDialog({
     if (open && !el.open) {
       el.showModal();
       if (anchorRect) {
-        requestAnimationFrame(() => {
+        // Double-rAF ensures a layout pass has occurred so offsetWidth/offsetHeight are valid
+        requestAnimationFrame(() => requestAnimationFrame(() => {
           el.style.position = 'fixed';
           el.style.margin = '0';
           const gap = 8;
@@ -47,14 +48,14 @@ export function ConfirmDialog({
           if (top < gap) top = gap;
           el.style.top = `${top}px`;
           el.style.left = `${left}px`;
-        });
+        }));
       }
     } else if (!open && el.open) {
+      el.close();
       el.style.position = '';
       el.style.margin = '';
       el.style.top = '';
       el.style.left = '';
-      el.close();
     }
 
     return () => {

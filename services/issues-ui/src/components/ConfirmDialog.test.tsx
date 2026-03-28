@@ -141,7 +141,7 @@ describe("ConfirmDialog", () => {
     );
   });
 
-  it('positions the dialog with fixed style when anchorRect is provided', async () => {
+  it('positions the dialog near the anchor element when anchorRect is provided', () => {
     const mockAnchorRect = {
       bottom: 100,
       top: 80,
@@ -154,7 +154,7 @@ describe("ConfirmDialog", () => {
       toJSON: () => ({}),
     } as DOMRect;
 
-    // Flush requestAnimationFrame callbacks synchronously
+    // Double-rAF: flush both frames synchronously so positioning code runs
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
       cb(0);
       return 0;
@@ -172,8 +172,12 @@ describe("ConfirmDialog", () => {
     );
 
     const dialog = screen.getByTestId('confirm-dialog');
-    // The dialog should be positioned with fixed layout when anchorRect is provided
+    // Dialog positioned with fixed layout anchored near the triggering element
     expect(dialog.style.position).toBe('fixed');
+    // top is set to anchorRect.bottom + 8px gap = 108px
+    expect(dialog.style.top).toBe('108px');
+    // left is set from anchorRect.left = 50px (no overflow clamping with default 1024px viewport)
+    expect(dialog.style.left).toBe('50px');
   });
 
 });
