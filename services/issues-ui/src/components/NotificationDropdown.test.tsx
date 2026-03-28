@@ -200,9 +200,9 @@ describe("NotificationDropdown — dropdown items", () => {
     );
     fireEvent.click(getByTestId("notification-trigger"));
 
-    const item = getByTestId("notification-item") as HTMLAnchorElement;
+    const link = getByTestId("notification-item-link") as HTMLAnchorElement;
     const expectedHref = `/agents?session=${encodeURIComponent(agentName)}:${encodeURIComponent(sessionId)}`;
-    expect(item.getAttribute("href")).toBe(expectedHref);
+    expect(link.getAttribute("href")).toBe(expectedHref);
   });
 
   it("encodes special characters in agentName and sessionId", () => {
@@ -214,13 +214,13 @@ describe("NotificationDropdown — dropdown items", () => {
     );
     fireEvent.click(getByTestId("notification-trigger"));
 
-    const item = getByTestId("notification-item") as HTMLAnchorElement;
-    expect(item.getAttribute("href")).toBe(
+    const link = getByTestId("notification-item-link") as HTMLAnchorElement;
+    expect(link.getAttribute("href")).toBe(
       `/agents?session=${encodeURIComponent(agentName)}:${encodeURIComponent(sessionId)}`,
     );
   });
 
-  it("clicking a dropdown item closes the dropdown", () => {
+  it("clicking the item link closes the dropdown", () => {
     const sessions = [makeAgentSession("lead", { id: "s1" })];
     const { getByTestId, queryByTestId } = render(
       <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
@@ -228,7 +228,7 @@ describe("NotificationDropdown — dropdown items", () => {
     fireEvent.click(getByTestId("notification-trigger"));
     expect(getByTestId("notification-dropdown")).toBeTruthy();
 
-    fireEvent.click(getByTestId("notification-item"));
+    fireEvent.click(getByTestId("notification-item-link"));
     expect(queryByTestId("notification-dropdown")).toBeNull();
   });
 
@@ -446,8 +446,8 @@ describe("NotificationDropdown — text input prompt", () => {
   });
 });
 
-describe("NotificationDropdown — stopPropagation on controls", () => {
-  it("clicking Yes does not propagate to the Link (dropdown stays open while sending)", async () => {
+describe("NotificationDropdown — controls do not navigate", () => {
+  it("clicking Yes keeps the dropdown open (controls are siblings of the link, not children)", async () => {
     const sessions = [
       makeAgentSession("lead", {
         id: "sess-stop",
@@ -460,12 +460,10 @@ describe("NotificationDropdown — stopPropagation on controls", () => {
     );
     fireEvent.click(getByTestId("notification-trigger"));
 
-    // The btn-yes is inside a div with onClick stopPropagation, which prevents
-    // the Link's onClick (onClose) from firing. Dropdown should remain open.
+    // Controls are siblings of <Link>, not nested inside it.
+    // Clicking a control button does not trigger the link's onClick (onClose).
     fireEvent.click(getByTestId("btn-yes"));
 
-    // The outer div around yesno controls calls e.stopPropagation(), so the
-    // Link's onClick (which closes the dropdown) should NOT be invoked.
     expect(queryByTestId("notification-dropdown")).toBeTruthy();
   });
 });

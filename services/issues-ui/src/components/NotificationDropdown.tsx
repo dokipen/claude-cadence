@@ -58,8 +58,7 @@ function NotificationItem({ ws, projectId, projectName, onClose }: NotificationI
   const promptContext = ws.session.promptContext ?? "";
   const promptType = ws.session.promptType ?? "";
 
-  async function handleSend(text: string, e: React.MouseEvent | React.KeyboardEvent) {
-    e.stopPropagation();
+  async function handleSend(text: string) {
     setError(null);
     try {
       await sendSessionInput(ws.agentName, ws.session.id, text);
@@ -79,15 +78,18 @@ function NotificationItem({ ws, projectId, projectName, onClose }: NotificationI
     return key.repeat(cappedAbs) + "\r";
   }
 
+  // Link covers only the header row — controls are siblings, not children of <a>,
+  // avoiding invalid nested interactive content that causes browsers to fire navigation
+  // even when stopPropagation is called on button clicks.
   return (
-    <Link
-      to={linkTo}
-      className={layoutStyles.notificationItem}
-      onClick={onClose}
-      data-testid="notification-item"
-    >
-      <div className={layoutStyles.notificationItemBody}>
-        <div>
+    <div className={layoutStyles.notificationItem} data-testid="notification-item">
+      <Link
+        to={linkTo}
+        className={layoutStyles.notificationItemLink}
+        onClick={onClose}
+        data-testid="notification-item-link"
+      >
+        <div className={layoutStyles.notificationItemTitleRow}>
           {projectName && (
             <span className={layoutStyles.notificationProjectBadge}>
               {projectName}
@@ -97,7 +99,7 @@ function NotificationItem({ ws, projectId, projectName, onClose }: NotificationI
             {ticket ? `#${ticket.number} ${ticket.title}` : stripProjectPrefix(ws.session.name)}
           </span>
         </div>
-        <div>
+        <div className={layoutStyles.notificationItemMetaRow}>
           <span className={layoutStyles.notificationSessionName}>
             {stripProjectPrefix(ws.session.name)}
           </span>
@@ -110,95 +112,82 @@ function NotificationItem({ ws, projectId, projectName, onClose }: NotificationI
             </span>
           )}
         </div>
-        {promptContext && (
-          <pre className={layoutStyles.notificationPromptText}>
-            {promptContext}
-          </pre>
-        )}
-        {promptType === "yesno" && (
-          <div
-            className={layoutStyles.notificationControlsRow}
-            onClick={(e) => e.stopPropagation()}
+      </Link>
+      {promptContext && (
+        <pre className={layoutStyles.notificationPromptText}>
+          {promptContext}
+        </pre>
+      )}
+      {promptType === "yesno" && (
+        <div className={layoutStyles.notificationControlsRow}>
+          <button
+            className={`${layoutStyles.notificationControlBtn} ${layoutStyles.notificationControlBtnPrimary}`}
+            disabled={sent}
+            onClick={() => void handleSend("y\n")}
+            data-testid="btn-yes"
           >
+            {sent ? "Sent" : "Yes"}
+          </button>
+          <button
+            className={layoutStyles.notificationControlBtn}
+            disabled={sent}
+            onClick={() => void handleSend("n\n")}
+            data-testid="btn-no"
+          >
+            {sent ? "Sent" : "No"}
+          </button>
+        </div>
+      )}
+      {promptType === "select" && (
+        <div className={layoutStyles.notificationControlsRow}>
+          {parseSelectPrompt(promptContext).options.map((option, idx) => (
             <button
-              className={`${layoutStyles.notificationControlBtn} ${layoutStyles.notificationControlBtnPrimary}`}
-              disabled={sent}
-              onClick={(e) => handleSend("y\n", e)}
-              data-testid="btn-yes"
-            >
-              {sent ? "Sent" : "Yes"}
-            </button>
-            <button
+              key={idx}
               className={layoutStyles.notificationControlBtn}
               disabled={sent}
-              onClick={(e) => handleSend("n\n", e)}
-              data-testid="btn-no"
+              onClick={() => void handleSend(buildSelectInput(idx))}
+              data-testid={`btn-option-${idx}`}
             >
-              {sent ? "Sent" : "No"}
+              {sent ? "Sent" : option}
             </button>
-          </div>
-        )}
-        {promptType === "select" && (
-          <div
-            className={layoutStyles.notificationControlsRow}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {parseSelectPrompt(promptContext).options.map((option, idx) => (
-              <button
-                key={idx}
-                className={layoutStyles.notificationControlBtn}
-                disabled={sent}
-                onClick={(e) => handleSend(buildSelectInput(idx), e)}
-                data-testid={`btn-option-${idx}`}
-              >
-                {sent ? "Sent" : option}
-              </button>
-            ))}
-          </div>
-        )}
-        {(promptType === "text" || promptType === "shell" || promptType === "") && (
-          <div
-            className={layoutStyles.notificationInputRow}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <input
-              className={layoutStyles.notificationTextInput}
-              type="text"
-              value={textInput}
-              disabled={sent}
-              onChange={(e) => { setTextInput(e.target.value); setError(null); }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  void handleSend(textInput + "\n", e);
-                  setTextInput("");
-                }
-              }}
-              data-testid="text-input"
-            />
-            <button
-              className={layoutStyles.notificationControlBtn}
-              disabled={sent}
-              onClick={(e) => {
-                void handleSend(textInput + "\n", e);
+          ))}
+        </div>
+      )}
+      {(promptType === "text" || promptType === "shell" || promptType === "") && (
+        <div className={layoutStyles.notificationInputRow}>
+          <input
+            className={layoutStyles.notificationTextInput}
+            type="text"
+            value={textInput}
+            disabled={sent}
+            onChange={(e) => { setTextInput(e.target.value); setError(null); }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                void handleSend(textInput + "\n");
                 setTextInput("");
-              }}
-              data-testid="btn-send"
-            >
-              {sent ? "Sent" : "Send"}
-            </button>
-          </div>
-        )}
-        {error && (
-          <div
-            className={layoutStyles.notificationError}
-            onClick={(e) => e.stopPropagation()}
-            data-testid="send-error"
+              }
+            }}
+            data-testid="text-input"
+          />
+          <button
+            className={layoutStyles.notificationControlBtn}
+            disabled={sent}
+            onClick={() => {
+              void handleSend(textInput + "\n");
+              setTextInput("");
+            }}
+            data-testid="btn-send"
           >
-            {error}
-          </div>
-        )}
-      </div>
-    </Link>
+            {sent ? "Sent" : "Send"}
+          </button>
+        </div>
+      )}
+      {error && (
+        <div className={layoutStyles.notificationError} data-testid="send-error">
+          {error}
+        </div>
+      )}
+    </div>
   );
 }
 
