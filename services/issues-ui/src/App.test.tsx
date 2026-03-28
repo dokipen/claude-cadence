@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { STORAGE_KEY, PROJECT_ID_RE } from "./App";
+import { makeSessionStorageMock } from './test-utils/sessionStorageMock';
 const PROJECTS = [
   { id: "proj-a", name: "Project A" },
   { id: "proj-b", name: "Project B" },
@@ -13,16 +14,6 @@ function resolveTargetProject(projects: typeof PROJECTS): string {
   return savedId && projects.some((p) => p.id === savedId)
     ? savedId
     : projects[0].id;
-}
-
-function makeSessionStorageMock() {
-  const store: Record<string, string> = {};
-  return {
-    getItem: (key: string) => store[key] ?? null,
-    setItem: (key: string, value: string) => { store[key] = value; },
-    removeItem: (key: string) => { delete store[key]; },
-    clear: () => { Object.keys(store).forEach((k) => delete store[k]); },
-  };
 }
 
 let mockStorage: ReturnType<typeof makeSessionStorageMock>;
