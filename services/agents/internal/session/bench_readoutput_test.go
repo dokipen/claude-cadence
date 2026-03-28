@@ -46,16 +46,17 @@ func BenchmarkReadOutput_Current(b *testing.B) {
 }
 
 // BenchmarkReadOutput_Optimized benchmarks the new approach:
-// split into lines and slice the tail first, then ANSI-strip only the small
-// joined string (~4 KB instead of ~1 MB).
+// ANSI-strip the full buffer, split on LF, slice the tail, then
+// normalize CRs only on the small joined tail (~4 KB instead of ~1 MB),
+// eliminating two full-buffer ReplaceAll calls.
 func BenchmarkReadOutput_Optimized(b *testing.B) {
 	raw := buildFakeOutput()
 	const tailLines = 50
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		normalized := bytes.ReplaceAll(raw, []byte("\r\n"), []byte("\n"))
-		all := strings.Split(string(normalized), "\n")
+		clean := ansiEscapeRe.ReplaceAllString(string(raw), "")
+		all := strings.Split(clean, "\n")
 		for len(all) > 0 && all[len(all)-1] == "" {
 			all = all[:len(all)-1]
 		}
@@ -63,6 +64,8 @@ func BenchmarkReadOutput_Optimized(b *testing.B) {
 			all = all[len(all)-tailLines:]
 		}
 		tail := strings.Join(all, "\n")
-		_ = ansiEscapeRe.ReplaceAllString(tail, "")
+		tail = strings.ReplaceAll(tail, "\r\n", "\n")
+		tail = strings.ReplaceAll(tail, "\r", "\n")
+		_ = strings.Split(tail, "\n")
 	}
 }
