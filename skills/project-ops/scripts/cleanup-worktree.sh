@@ -17,8 +17,16 @@ if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
 fi
 
 BRANCH_NAME="$1"
-# Resolve repo root from anywhere (main repo or linked worktree)
-REPO_ROOT="$(dirname "$(git rev-parse --git-common-dir)")"
+
+# Reject branch names with path traversal sequences
+case "$BRANCH_NAME" in
+  *..* | /*) echo "Error: invalid branch name: $BRANCH_NAME" >&2; exit 1 ;;
+esac
+
+# Resolve repo root from anywhere (main repo or linked worktree).
+# cd/../pwd expands the path to absolute even when --git-common-dir returns a relative ".git".
+_COMMON_DIR="$(git rev-parse --git-common-dir)"
+REPO_ROOT="$(cd "${_COMMON_DIR}/.." && pwd)"
 WORKTREE_DIR="${REPO_ROOT}/.worktrees/${BRANCH_NAME}"
 
 echo "Cleaning up worktree: ${BRANCH_NAME}"

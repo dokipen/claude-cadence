@@ -470,7 +470,10 @@ docker compose -p <PROJECT_NAME> down
 3. Sync blocked labels using the `update-blocked-labels.sh` script in this command's `scripts/` directory
 4. Return to default branch and pull latest (skip if `WORKTREE_PREEXISTING` — the worktree is not ours to clean up):
    ```bash
-   cd "$(dirname "$(git rev-parse --git-common-dir)")" && git checkout main && git pull
+   _COMMON_DIR="$(git rev-parse --git-common-dir)"
+   cd "${_COMMON_DIR}/.."
+   DEFAULT_BRANCH="$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')"
+   git checkout "${DEFAULT_BRANCH:-main}" && git pull
    ```
 5. Clean up worktree using the `project-ops` skill's `cleanup-worktree.sh` script (skip if `WORKTREE_PREEXISTING`):
    ```bash
