@@ -446,6 +446,7 @@ describe("handleResumeSession", () => {
 
   it("calls createSession with agentProfile, a resume-prefixed name, and /resume <sessionId> when agentProfile is set", () => {
     mockCreateSession.mockResolvedValue({});
+    mockHubFetch.mockResolvedValue({});
 
     const sessionWithProfile = create(SessionSchema, {
       id: "sess-abc",
@@ -485,6 +486,7 @@ describe("handleResumeSession", () => {
   it("produces distinct session names on successive invocations", () => {
     vi.spyOn(Date, "now").mockReturnValueOnce(1000).mockReturnValueOnce(2000);
     mockCreateSession.mockResolvedValue({});
+    mockHubFetch.mockResolvedValue({});
 
     const sessionWithProfile = create(SessionSchema, {
       id: "sess-abc",
@@ -689,6 +691,7 @@ describe("handleResumeSession validation guard", () => {
 
   it("calls createSession normally when both session.id and agentProfile are valid (regression)", () => {
     mockCreateSession.mockResolvedValue({});
+    mockHubFetch.mockResolvedValue({});
 
     const validSession = create(SessionSchema, {
       id: "cmnae8t2h0027qv01erwytyz0",
@@ -721,4 +724,54 @@ describe("handleResumeSession validation guard", () => {
     );
     expect(console.warn).not.toHaveBeenCalled();
   });
+
+  it("fires DELETE for the old session after creating the new one on resume", () => {
+    mockCreateSession.mockResolvedValue({
+      id: "sess-new",
+      name: "resume-sess-abc-1234",
+      state: "running",
+      agentProfile: "default",
+    });
+    mockHubFetch.mockResolvedValue({});
+
+    const sessionWithProfile = create(SessionSchema, {
+      id: "sess-abc",
+      name: "myproject-lead-42",
+      state: "stopped",
+      agentProfile: "default",
+      createdAt: "2026-01-01T00:00:00Z",
+      agentPid: 1234,
+      baseRef: "main",
+      waitingForInput: false,
+    });
+
+    render(
+      <TerminalWindow
+        session={sessionWithProfile}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    expect(capturedTerminalProps.onResumeSession).toBeDefined();
+
+    // Invoke the resume callback (fire-and-forget internally)
+    capturedTerminalProps.onResumeSession!();
+
+    // createSession must be called first
+    expect(mockCreateSession).toHaveBeenCalledWith(
+      "agent-1",
+      "default",
+      expect.stringMatching(/^resume-/),
+      ["/resume sess-abc"],
+    );
+
+    // hubFetch DELETE for the old session must have been fired
+    expect(mockHubFetch).toHaveBeenCalledWith(
+      "/agents/agent-1/sessions/sess-abc?force=true",
+      { method: "DELETE" },
+    );
+  });
+
 });
