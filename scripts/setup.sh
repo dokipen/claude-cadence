@@ -120,9 +120,7 @@ start_stack() {
         -p "$project_name" \
         up --build -d
 
-    local host_ip
-    host_ip="$(ipconfig getifaddr en0 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")"
-    local url="http://${host_ip}:${port}/"
+    local url="http://localhost:${port}/"
 
     printf '\n'
     info "Stack is up: ${url}"
@@ -151,6 +149,10 @@ main() {
             --port)
                 [ "$#" -ge 2 ] || error "--port requires an argument"
                 port="$2"
+                case "$port" in
+                    ''|*[!0-9]*) error "--port must be a number (e.g. 8080)" ;;
+                esac
+                [ "$port" -ge 1024 ] && [ "$port" -le 65535 ] || error "--port must be between 1024 and 65535"
                 shift 2
                 ;;
             -h|--help)
