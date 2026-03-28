@@ -101,4 +101,10 @@ describe("Comment Management", () => {
     expect(result.stdout).toContain("First comment");
     expect(result.stdout).not.toContain("Updated comment");
   });
+
+  it("should produce clean stderr (no spinner text) when --json is used with comment add", async () => {
+    const result = await suite.cli("comment", "add", ticketId, "--body", "json-test comment", "--json");
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
 });

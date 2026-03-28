@@ -160,4 +160,10 @@ describe("Label Management", () => {
     const output = result.stdout + result.stderr;
     expect(output).toContain("Label deleted");
   });
+
+  it("should produce clean stderr (no spinner text) when --json is used with label list", async () => {
+    const result = await suite.cli("label", "list", "--json");
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
 });

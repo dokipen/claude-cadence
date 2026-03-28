@@ -50,7 +50,7 @@ export function registerBlockCommand(program: Command): void {
     .option("--project <project>", "Project name or ID (required when using ticket numbers)")
     .option("--json", "Output raw JSON")
     .action(async (opts: { blocker: string; blocked: string; project?: string; json?: boolean }) => {
-      const spinner = ora("Adding block relation...").start();
+      const spinner = ora({ text: "Adding block relation...", isSilent: !!opts.json }).start();
       try {
         const [blockerId, blockedId] = await Promise.all([
           resolveTicketId(opts.blocker, opts.project),
@@ -97,7 +97,7 @@ export function registerBlockCommand(program: Command): void {
     .option("--project <project>", "Project name or ID (required when using ticket numbers)")
     .option("--json", "Output raw JSON")
     .action(async (opts: { blocker: string; blocked: string; project?: string; json?: boolean }) => {
-      const spinner = ora("Removing block relation...").start();
+      const spinner = ora({ text: "Removing block relation...", isSilent: !!opts.json }).start();
       try {
         const [blockerId, blockedId] = await Promise.all([
           resolveTicketId(opts.blocker, opts.project),

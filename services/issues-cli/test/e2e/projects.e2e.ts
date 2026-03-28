@@ -175,4 +175,10 @@ describe("Project Management", () => {
     const output = result.stdout + result.stderr;
     expect(output).toContain("Project not found");
   });
+
+  it("should produce clean stderr (no spinner text) when --json is used with project list", async () => {
+    const result = await suite.cli("project", "list", "--json");
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
 });

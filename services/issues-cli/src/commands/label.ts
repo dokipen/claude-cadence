@@ -81,7 +81,7 @@ export function registerLabelCommand(program: Command): void {
     .option("--json", "Output raw JSON")
     .option("--project <id>", "Project name or ID (ignored — labels are global)")
     .action(async (opts: { name: string; color: string; json?: boolean; project?: string }) => {
-      const spinner = ora("Creating label...").start();
+      const spinner = ora({ text: "Creating label...", isSilent: !!opts.json }).start();
       try {
         const client = getClient();
         const data = await client.request<{
@@ -112,7 +112,7 @@ export function registerLabelCommand(program: Command): void {
     .option("--json", "Output raw JSON")
     .option("--project <id>", "Project name or ID (ignored — labels are global)")
     .action(async (opts: { json?: boolean; project?: string }) => {
-      const spinner = ora("Fetching labels...").start();
+      const spinner = ora({ text: "Fetching labels...", isSilent: !!opts.json }).start();
       try {
         const client = getClient();
         const data = await client.request<{
@@ -151,7 +151,7 @@ export function registerLabelCommand(program: Command): void {
     .requiredOption("--label <name-or-id>", "Label name or ID")
     .option("--json", "Output raw JSON")
     .action(async (ticketId: string, opts: { label: string; project?: string; json?: boolean }) => {
-      const spinner = ora("Adding label...").start();
+      const spinner = ora({ text: "Adding label...", isSilent: !!opts.json }).start();
       try {
         const [resolvedId, labelId] = await Promise.all([
           resolveTicketId(ticketId, opts.project),
@@ -188,7 +188,7 @@ export function registerLabelCommand(program: Command): void {
     .requiredOption("--label <name-or-id>", "Label name or ID")
     .option("--json", "Output raw JSON")
     .action(async (ticketId: string, opts: { label: string; project?: string; json?: boolean }) => {
-      const spinner = ora("Removing label...").start();
+      const spinner = ora({ text: "Removing label...", isSilent: !!opts.json }).start();
       try {
         const [resolvedId, labelId] = await Promise.all([
           resolveTicketId(ticketId, opts.project),
@@ -224,7 +224,7 @@ export function registerLabelCommand(program: Command): void {
     .option("--json", "Output raw JSON")
     .option("--project <id>", "Project name or ID (ignored — labels are global)")
     .action(async (nameOrId: string, opts: { json?: boolean; project?: string }) => {
-      const spinner = ora("Deleting label...").start();
+      const spinner = ora({ text: "Deleting label...", isSilent: !!opts.json }).start();
       try {
         const labelId = await resolveLabelId(nameOrId);
         const client = getClient();

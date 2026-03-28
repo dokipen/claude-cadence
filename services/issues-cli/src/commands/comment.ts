@@ -59,7 +59,7 @@ export function registerCommentCommand(program: Command): void {
     .requiredOption("--body <body>", "Comment body")
     .option("--json", "Output raw JSON")
     .action(async (ticketId: string, opts: { body: string; project?: string; json?: boolean }) => {
-      const spinner = ora("Adding comment...").start();
+      const spinner = ora({ text: "Adding comment...", isSilent: !!opts.json }).start();
       try {
         const resolvedId = await resolveTicketId(ticketId, opts.project);
         const client = getClient();
@@ -97,7 +97,7 @@ export function registerCommentCommand(program: Command): void {
     .requiredOption("--body <body>", "Updated comment body")
     .option("--json", "Output raw JSON")
     .action(async (id: string, opts: { body: string; json?: boolean }) => {
-      const spinner = ora("Updating comment...").start();
+      const spinner = ora({ text: "Updating comment...", isSilent: !!opts.json }).start();
       try {
         const client = getClient();
         const data = await client.request<{
@@ -134,7 +134,7 @@ export function registerCommentCommand(program: Command): void {
     .description("Delete a comment")
     .option("--json", "Output raw JSON")
     .action(async (id: string, opts: { json?: boolean }) => {
-      const spinner = ora("Deleting comment...").start();
+      const spinner = ora({ text: "Deleting comment...", isSilent: !!opts.json }).start();
       try {
         const client = getClient();
         const data = await client.request<{

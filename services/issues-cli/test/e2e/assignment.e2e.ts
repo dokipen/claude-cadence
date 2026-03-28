@@ -65,4 +65,10 @@ describe("Assignment Management", () => {
     expect(output).toContain("Ticket assigned");
     expect(assignResult.stdout).toContain("@testuser");
   });
+
+  it("should produce clean stderr (no spinner text) when --json is used with assign", async () => {
+    const result = await suite.cli("assign", ticketId, "--user", userId, "--json");
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
 });
