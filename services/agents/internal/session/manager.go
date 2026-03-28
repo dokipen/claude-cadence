@@ -274,8 +274,11 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 
 	// Build PTY command: wrap the shell command string via bash -c so that
 	// the rendered cmdStr (which may include shell operators) is interpreted
-	// correctly.
-	command := []string{"bash", "-c", cmdStr}
+	// correctly. Prepend `trap '' HUP` so the child process and any exec'd
+	// descendants ignore SIGHUP — this lets sessions survive agentd restarts
+	// (closing the PTY master sends SIGHUP to the foreground process group;
+	// SIG_IGN is inherited across exec so grandchildren are also protected).
+	command := []string{"bash", "-c", "trap '' HUP; " + cmdStr}
 
 	slog.Debug("launching session command", "session", sessionID, "name", req.SessionName, "command", cmdStr, "cwd", workdir)
 
