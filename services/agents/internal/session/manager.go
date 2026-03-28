@@ -22,15 +22,6 @@ import (
 var (
 	envKeyRe      = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 	sessionNameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._~-]*$`)
-	// ansiEscapeRe matches ANSI/VT escape sequences and non-printable control
-	// characters so they can be stripped from PTY output.
-	ansiEscapeRe = regexp.MustCompile(
-		`\x1b\[[0-9;?]*[A-Za-z]` + // CSI sequences (ESC [ ... final)
-			`|\x1b[()][0-9A-Za-z]` + // 3-char charset designators (ESC ( B, ESC ) 0, …)
-			`|\x1b[][PX^_][^\x1b\x9c\n]*[\x1b\x9c]?` + // OSC/DCS/APC/SOS/PM (ESC ] ... BEL/ST)
-			`|\x1b[^\x1b]` + // other two-byte ESC sequences
-			`|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]`, // control chars except \t \n \r
-	)
 )
 
 // Manager orchestrates session lifecycle using Store and pty.PTYManager.
@@ -405,82 +396,6 @@ func (m *Manager) SetWorktreePath(id, path string) error {
 		return &Error{Code: ErrNotFound, Message: fmt.Sprintf("session %q not found", id)}
 	}
 	return nil
-}
-
-// ReadOutput returns the last n lines of PTY output for the session, with ANSI
-// escape sequences stripped. Returns an error if the session is not found or
-// has no PTY buffer.
-func (m *Manager) ReadOutput(sessionID string, lines int) (string, error) {
-	if m.pty == nil {
-		return "", &Error{Code: ErrNotFound, Message: fmt.Sprintf("session %q output not found: no PTY manager", sessionID)}
-	}
-	raw, err := m.pty.ReadBuffer(sessionID)
-	if err != nil {
-		return "", &Error{Code: ErrNotFound, Message: fmt.Sprintf("session %q output not found: %v", sessionID, err)}
-	}
-
-	// Strip ANSI escape sequences first, before any line processing, so that
-	// escape sequences spanning \r or \n boundaries don't break line splitting.
-	cleaned := ansiEscapeRe.ReplaceAllString(string(raw), "")
-
-	// Split on LF only; CRLF lines will have a trailing \r in each element.
-	// Trim trailing empty segments (artifact of the buffer's final newline)
-	// so the line count is accurate before slicing.
-	all := strings.Split(cleaned, "\n")
-	for len(all) > 0 && all[len(all)-1] == "" {
-		all = all[:len(all)-1]
-	}
-
-	// Slice to the tail before CR processing so subsequent work operates on
-	// ~N*lineWidth bytes instead of the full snapshot.
-	if len(all) > lines {
-		all = all[len(all)-lines:]
-	}
-
-	// Apply CR-fold per segment: split each \n-delimited segment on \r and
-	// keep the last non-empty part. This correctly handles both:
-	//   - CRLF lines (trailing \r because \r\n was split at the \n delimiter)
-	//   - multi-character progress-bar overwrites like "frame1\rframe2\rfinal"
-	// Single-rune spinner chars (✻ ✶ ·) are caught by the filter below.
-	for i, seg := range all {
-		parts := strings.Split(seg, "\r")
-		final := ""
-		for j := len(parts) - 1; j >= 0; j-- {
-			if parts[j] != "" {
-				final = parts[j]
-				break
-			}
-		}
-		all[i] = final
-	}
-
-	// Drop empty and spinner-only lines. filtered aliases all's backing
-	// array — write index is always ≤ read index, so this is safe in-place.
-	filtered := all[:0]
-	for _, line := range all {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-		// Drop spinner-only lines (single non-alphanumeric rune like ✻ ✶ · etc).
-		r := []rune(trimmed)
-		if len(r) == 1 && !isAlphanumeric(r[0]) {
-			continue
-		}
-		filtered = append(filtered, line)
-	}
-
-	// Re-apply the lines limit as a safety clamp (CR-fold can expose more
-	// content-bearing lines than the initial LF-segment count).
-	if len(filtered) > lines {
-		filtered = filtered[len(filtered)-lines:]
-	}
-
-	return strings.Join(filtered, "\n"), nil
-}
-
-func isAlphanumeric(r rune) bool {
-	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
 }
 
 func (m *Manager) reconcile(sess *Session) {

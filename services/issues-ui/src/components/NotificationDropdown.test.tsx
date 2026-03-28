@@ -22,7 +22,6 @@ vi.mock("../api/agentHubClient", () => ({
   sendSessionInput: vi.fn().mockResolvedValue(undefined),
   fetchAgents: vi.fn(),
   fetchAllSessions: vi.fn(),
-  fetchSessionOutput: vi.fn(),
   createSession: vi.fn(),
   HubError: class HubError extends Error {
     constructor(public status: number, message: string) {
