@@ -3,6 +3,7 @@ import { AgentLauncher } from "./AgentLauncher";
 import { Terminal } from "./Terminal";
 import { hubFetch } from "../api/agentHubClient";
 import { useAgents } from "../hooks/useAgents";
+import { useSessionsContext } from "../hooks/SessionsContext";
 import { getLaunchConfig } from "./launchConfig";
 import type { Session, TicketState } from "../types";
 import styles from "../styles/agents.module.css";
@@ -26,6 +27,7 @@ export function AgentTab({ ticketNumber, ticketTitle, ticketState, repoUrl }: Ag
   const [discovering, setDiscovering] = useState(true);
   const [destroying, setDestroying] = useState(false);
   const { agents, loading: agentsLoading } = useAgents();
+  const { optimisticSetDestroying } = useSessionsContext();
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const launchConfig = getLaunchConfig(ticketState);
@@ -110,6 +112,7 @@ export function AgentTab({ ticketNumber, ticketTitle, ticketState, repoUrl }: Ag
 
   const handleDestroy = useCallback(async () => {
     if (!active) return;
+    optimisticSetDestroying(active.session.id);
     setDestroying(true);
     try {
       await hubFetch(
@@ -123,7 +126,7 @@ export function AgentTab({ ticketNumber, ticketTitle, ticketState, repoUrl }: Ag
     } finally {
       setDestroying(false);
     }
-  }, [active]);
+  }, [active, optimisticSetDestroying]);
 
   if (discovering) {
     return (

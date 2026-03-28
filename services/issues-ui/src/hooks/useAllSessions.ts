@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { fetchAllSessions } from "../api/agentHubClient";
 import { usePageVisibility } from "./usePageVisibility";
 import type { Session } from "../types";
@@ -15,6 +15,7 @@ interface UseAllSessionsResult {
   waitingSessions: AgentSession[];
   loading: boolean;
   error: string | null;
+  optimisticSetDestroying: (sessionId: string) => void;
 }
 
 export function useAllSessions(): UseAllSessionsResult {
@@ -82,5 +83,15 @@ export function useAllSessions(): UseAllSessionsResult {
     [sessions],
   );
 
-  return { sessions, waitingSessions, loading, error };
+  const optimisticSetDestroying = useCallback((sessionId: string) => {
+    setSessions(prev =>
+      prev.map(s =>
+        s.session.id === sessionId
+          ? { ...s, session: { ...s.session, state: "destroying" as const } }
+          : s
+      )
+    );
+  }, []);
+
+  return { sessions, waitingSessions, loading, error, optimisticSetDestroying };
 }

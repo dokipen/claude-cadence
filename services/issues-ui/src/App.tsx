@@ -11,6 +11,7 @@ import { ProjectSelector } from "./components/ProjectSelector";
 import { useProjects } from "./hooks/useProjects";
 import type { TicketFilters } from "./hooks/useTickets";
 import { useAllSessions } from "./hooks/useAllSessions";
+import { SessionsContext } from "./hooks/SessionsContext";
 import type { ActiveSessionInfo, SessionState } from "./types";
 import { NotificationDropdown } from "./components/NotificationDropdown";
 import { UpdateBanner } from "./components/UpdateBanner";
@@ -93,7 +94,7 @@ function ProjectRedirect() {
 function AppShell() {
   const { user, logout } = useAuth();
   const { projects } = useProjects();
-  const { sessions, waitingSessions } = useAllSessions();
+  const { sessions, waitingSessions, optimisticSetDestroying } = useAllSessions();
   const { updateAvailable } = useVersionPolling();
   const [dismissed, setDismissed] = useState(false);
   const location = useLocation();
@@ -134,6 +135,7 @@ function AppShell() {
   }, [projects, navigate, isOnBoard]);
 
   return (
+    <SessionsContext.Provider value={{ optimisticSetDestroying }}>
     <div className={layoutStyles.shell}>
       <header className={layoutStyles.header}>
         <div className={layoutStyles.headerLeft}>
@@ -183,6 +185,7 @@ function AppShell() {
         </Routes>
       </main>
     </div>
+    </SessionsContext.Provider>
   );
 }
 
