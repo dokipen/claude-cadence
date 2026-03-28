@@ -1,3 +1,5 @@
+import type { Agent as AgentBase } from "./gen/hub/v1/hub_pb";
+
 export interface User {
   id: string;
   login: string;
@@ -64,7 +66,6 @@ export interface Project {
 }
 
 // Agent Hub types — generated from services/agent-hub/proto/hub/v1/hub.proto
-import type { Agent as AgentBase } from "./gen/hub/v1/hub_pb";
 export type { AgentProfile, Session, CreateSessionRequest } from "./gen/hub/v1/hub_pb";
 export type AgentStatus = "online" | "offline";
 // Narrow the proto-generated status field from `string` to the known union type.
