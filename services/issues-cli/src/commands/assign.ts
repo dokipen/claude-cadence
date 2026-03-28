@@ -47,7 +47,7 @@ export function registerAssignCommand(program: Command): void {
     .requiredOption("--user <id>", "User ID")
     .option("--json", "Output raw JSON")
     .action(async (ticketId: string, opts: { user: string; project?: string; json?: boolean }) => {
-      const spinner = ora("Assigning ticket...").start();
+      const spinner = ora({ text: "Assigning ticket...", isSilent: !!opts.json }).start();
       try {
         const resolvedId = await resolveTicketId(ticketId, opts.project);
         const client = getClient();
@@ -86,7 +86,7 @@ export function registerAssignCommand(program: Command): void {
     .option("--project <id>", "Project ID (required when using ticket number)")
     .option("--json", "Output raw JSON")
     .action(async (ticketId: string, opts: { project?: string; json?: boolean }) => {
-      const spinner = ora("Unassigning ticket...").start();
+      const spinner = ora({ text: "Unassigning ticket...", isSilent: !!opts.json }).start();
       try {
         const resolvedId = await resolveTicketId(ticketId, opts.project);
         const client = getClient();

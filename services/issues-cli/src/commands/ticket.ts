@@ -460,7 +460,7 @@ export function registerTicketCommand(program: Command): void {
     .option("--priority <priority>", "Priority (HIGHEST, HIGH, MEDIUM, LOW, LOWEST)")
     .option("--json", "Output raw JSON")
     .action(async (opts: CreateOptions) => {
-      const spinner = ora("Creating ticket...").start();
+      const spinner = ora({ text: "Creating ticket...", isSilent: !!opts.json }).start();
       try {
         const client = getClient();
         const projectId = await resolveProjectId(opts.project);
@@ -518,7 +518,7 @@ export function registerTicketCommand(program: Command): void {
 
   // --- view (+ hidden aliases: get, show) ---
   const viewAction = async (id: string, opts: { project?: string; json?: boolean }) => {
-      const spinner = ora("Fetching ticket...").start();
+      const spinner = ora({ text: "Fetching ticket...", isSilent: !!opts.json }).start();
       try {
         const client = getClient();
         // Intentionally NOT using resolveTicketId here: view fetches the full
@@ -685,7 +685,7 @@ export function registerTicketCommand(program: Command): void {
         process.exitCode = 1;
         return;
       }
-      const spinner = ora("Fetching tickets...").start();
+      const spinner = ora({ text: "Fetching tickets...", isSilent: !!opts.json }).start();
       try {
         // Resolve project: explicit name/ID takes precedence, otherwise infer from git origin
         let projectId: string | undefined;
@@ -829,7 +829,7 @@ export function registerTicketCommand(program: Command): void {
         process.exit(1);
       }
 
-      const spinner = ora("Updating ticket...").start();
+      const spinner = ora({ text: "Updating ticket...", isSilent: !!opts.json }).start();
       try {
         const resolvedId = await resolveTicketId(id, opts.project);
         const client = getClient();
@@ -876,7 +876,7 @@ export function registerTicketCommand(program: Command): void {
     .requiredOption("--to <state>", "Target state (BACKLOG, REFINED, IN_PROGRESS, CLOSED)")
     .option("--json", "Output raw JSON")
     .action(async (id: string, opts: TransitionOptions) => {
-      const spinner = ora("Transitioning ticket...").start();
+      const spinner = ora({ text: "Transitioning ticket...", isSilent: !!opts.json }).start();
       try {
         const resolvedId = await resolveTicketId(id, opts.project);
         const client = getClient();
