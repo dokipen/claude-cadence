@@ -401,9 +401,7 @@ Run **both** applicable sub-sections below. A PR that touches both agent-service
    ```bash
    bash "$WORKTREE_DIR/commands/lead/scripts/start-qa-env.sh" "$WORKTREE_DIR"
    ```
-   The script handles `.env.dev` setup, port discovery, and compose stack startup. It prints the QA URL (`http://HOST_IP:PORT/`) and opens it in the browser.
-
-   > If the script exits after copying `.env.dev.example`, secrets need to be filled in first — inform the user and wait before re-running.
+   The script handles `.env.dev` setup, port discovery, and compose stack startup. It prints the QA URL (`http://HOST_IP:PORT/`) and opens it in the browser. If `.env.dev` is missing, the script copies `.env.dev.example` and continues automatically — no manual secret editing needed for UI-only QA.
 
    **What requires a rebuild vs. what picks up automatically:**
    - Changes to `services/issues-ui/` (frontend) are reflected immediately via Vite HMR — no rebuild needed.
