@@ -725,7 +725,7 @@ describe("handleResumeSession validation guard", () => {
     expect(console.warn).not.toHaveBeenCalled();
   });
 
-  it("fires DELETE for the old session after creating the new one on resume", () => {
+  it("fires DELETE for the old session after creating the new one on resume", async () => {
     mockCreateSession.mockResolvedValue({
       id: "sess-new",
       name: "resume-sess-abc-1234",
@@ -756,10 +756,11 @@ describe("handleResumeSession validation guard", () => {
 
     expect(capturedTerminalProps.onResumeSession).toBeDefined();
 
-    // Invoke the resume callback (fire-and-forget internally)
+    // Invoke the resume callback; the fixed implementation awaits createSession
+    // then fire-and-forgets the DELETE, so we must flush promises.
     capturedTerminalProps.onResumeSession!();
 
-    // createSession must be called first
+    // createSession must be called first (synchronous dispatch)
     expect(mockCreateSession).toHaveBeenCalledWith(
       "agent-1",
       "default",
@@ -767,11 +768,123 @@ describe("handleResumeSession validation guard", () => {
       ["/resume sess-abc"],
     );
 
-    // hubFetch DELETE for the old session must have been fired
-    expect(mockHubFetch).toHaveBeenCalledWith(
-      "/agents/agent-1/sessions/sess-abc?force=true",
-      { method: "DELETE" },
+    // hubFetch DELETE is fired after createSession resolves; wait for it
+    await waitFor(() =>
+      expect(mockHubFetch).toHaveBeenCalledWith(
+        "/agents/agent-1/sessions/sess-abc?force=true",
+        { method: "DELETE" },
+      ),
     );
   });
 
+});
+
+// ---------------------------------------------------------------------------
+// resume session — new behaviour tests (Fix #423)
+// ---------------------------------------------------------------------------
+describe("resume session", () => {
+  beforeEach(() => {
+    mockHubFetch.mockReset();
+    mockCreateSession.mockReset();
+    capturedTerminalProps.onResumeSession = undefined;
+  });
+
+  afterEach(() => {
+    cleanup();
+    capturedTerminalProps.onResumeSession = undefined;
+  });
+
+  const stoppedSession = create(SessionSchema, {
+    id: "sess-stopped-fix",
+    name: "myproject-lead-42",
+    state: "stopped",
+    agentProfile: "default",
+    createdAt: "2026-01-01T00:00:00Z",
+    agentPid: 1234,
+    baseRef: "main",
+    waitingForInput: false,
+  });
+
+  it("calls onTerminated after successful resume", async () => {
+    const onTerminated = vi.fn();
+    mockCreateSession.mockResolvedValueOnce({
+      id: "sess-new-fix",
+      name: "myproject-lead-42",
+      state: "running",
+      agentProfile: "default",
+    });
+    mockHubFetch.mockResolvedValue({});
+
+    render(
+      <TerminalWindow
+        session={stoppedSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={onTerminated}
+      />,
+    );
+
+    expect(capturedTerminalProps.onResumeSession).toBeDefined();
+    capturedTerminalProps.onResumeSession!();
+
+    await waitFor(() => expect(onTerminated).toHaveBeenCalled());
+  });
+
+  it("does not call onTerminated when createSession fails", async () => {
+    const onTerminated = vi.fn();
+    mockCreateSession.mockRejectedValueOnce(new Error("create failed"));
+    mockHubFetch.mockResolvedValue({});
+
+    render(
+      <TerminalWindow
+        session={stoppedSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={onTerminated}
+      />,
+    );
+
+    expect(capturedTerminalProps.onResumeSession).toBeDefined();
+
+    // Suppress expected console.error from the catch handler
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    capturedTerminalProps.onResumeSession!();
+
+    // Give microtasks a chance to settle
+    await waitFor(() => expect(mockCreateSession).toHaveBeenCalled());
+
+    // onTerminated must NOT have been called
+    expect(onTerminated).not.toHaveBeenCalled();
+
+    errSpy.mockRestore();
+  });
+
+  it("fires DELETE after successful resume", async () => {
+    const onTerminated = vi.fn();
+    mockCreateSession.mockResolvedValueOnce({
+      id: "sess-new-fix2",
+      name: "myproject-lead-42",
+      state: "running",
+      agentProfile: "default",
+    });
+    mockHubFetch.mockResolvedValue({});
+
+    render(
+      <TerminalWindow
+        session={stoppedSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={onTerminated}
+      />,
+    );
+
+    capturedTerminalProps.onResumeSession!();
+
+    await waitFor(() =>
+      expect(mockHubFetch).toHaveBeenCalledWith(
+        "/agents/agent-1/sessions/sess-stopped-fix?force=true",
+        { method: "DELETE" },
+      ),
+    );
+  });
 });

@@ -51,7 +51,7 @@ export function TerminalWindow({
   const ticketNumber = ticketMatch ? Number(ticketMatch[1]) : undefined;
   const { ticket } = useTicketByNumber(projectId, ticketNumber);
 
-  const resumeCallback = useCallback(() => {
+  const resumeCallback = useCallback(async () => {
     if (!validateSessionId(session.id) || !validateAgentProfile(session.agentProfile)) {
       // Silently refuse: malformed server data is unexpected; no user-facing error
       // since the resume button is only rendered when agentProfile is non-empty and
@@ -60,7 +60,14 @@ export function TerminalWindow({
       return;
     }
     const newSessionName = `resume-${session.id.slice(0, 8)}-${Date.now()}`;
-    createSession(agentName, session.agentProfile, newSessionName, [`/resume ${session.id}`]).catch(console.error);
+    const newSession = await createSession(agentName, session.agentProfile, newSessionName, [`/resume ${session.id}`]).catch((err: unknown) => {
+      console.error(err);
+      return undefined;
+    });
+    if (!newSession) {
+      // Creation failed — leave the user on the current window so they can retry.
+      return;
+    }
     // Fire-and-forget: destroy the current session after kicking off the resume.
     // Ignore 404 (already gone) and other errors — the new session is the priority.
     hubFetch(
@@ -71,7 +78,9 @@ export function TerminalWindow({
         console.error("[TerminalWindow] Failed to delete session on resume:", err);
       }
     });
-  }, [agentName, session.id, session.agentProfile]);
+    // Close the dead terminal window; the new session will appear via the global sessions list.
+    onTerminated();
+  }, [agentName, session.id, session.agentProfile, onTerminated]);
   const handleResumeSession = session.agentProfile ? resumeCallback : undefined;
 
   const { optimisticSetDestroying, optimisticResetState } = useSessionsContext();
