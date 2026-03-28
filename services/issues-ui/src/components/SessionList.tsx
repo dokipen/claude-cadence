@@ -19,6 +19,12 @@ function sessionKey(s: AgentSession): string {
 // Set to true to show session state and source for debugging
 const DEBUG_SESSION_STATE = false;
 
+function stripProjectPrefix(name: string): string {
+  const slashIndex = name.indexOf("/");
+  if (slashIndex === -1 || slashIndex === name.length - 1) return name;
+  return name.slice(slashIndex + 1);
+}
+
 export function SessionList({ agents, sessions, openKeys, minimizedKeys, onSessionClick, isCollapsed, onToggle }: SessionListProps) {
   // Group sessions by agent
   const sessionsByAgent = new Map<string, AgentSession[]>();
@@ -78,7 +84,7 @@ export function SessionList({ agents, sessions, openKeys, minimizedKeys, onSessi
                         {as.session.waitingForInput ? "◉" : isMinimized ? "▼" : isCreating ? "◌" : isRunning || isDestroying ? "●" : "○"}
                       </span>
                       <span className={styles.sessionName}>
-                        {as.session.name}
+                        {stripProjectPrefix(as.session.name)}
                         {DEBUG_SESSION_STATE && ` [${as.session.state}][${as.stateSource ?? "?"}]`}
                       </span>
                     </button>

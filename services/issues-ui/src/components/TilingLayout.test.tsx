@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
 import { create } from "@bufbuild/protobuf";
 import { SessionSchema } from "../gen/hub/v1/hub_pb";
+import { makeSessionStorageMock } from '../test-utils/makeSessionStorageMock';
 
 // Mock TerminalWindow to avoid xterm and other heavy deps.
 // Renders a div with data-testid="terminal-window-{key}" and a button that
@@ -306,18 +307,6 @@ describe("TilingLayout — master-stack structure", () => {
   });
 });
 
-function makeSessionStorageMock() {
-  const store: Record<string, string> = {};
-  return {
-    getItem: vi.fn((key: string) => store[key] ?? null),
-    setItem: vi.fn((key: string, value: string) => { store[key] = value; }),
-    removeItem: vi.fn((key: string) => { delete store[key]; }),
-    clear: vi.fn(() => { Object.keys(store).forEach((k) => delete store[k]); }),
-    length: 0,
-    key: vi.fn(() => null),
-  };
-}
-
 describe("TilingLayout — sessionStorage persistence", () => {
   let mockSessionStorage: ReturnType<typeof makeSessionStorageMock>;
 
@@ -367,5 +356,78 @@ describe("TilingLayout — sessionStorage persistence", () => {
 
     expect(firstFlexChild.style.flex).toBe(`${storedRatio} 1 0%`);
     expect(lastFlexChild.style.flex).toBe(`${1 - storedRatio} 1 0%`);
+  });
+
+  it("prunes stale ratio entries when a window is removed", () => {
+    // Seed ratios for a 4-window layout: root, root.1, and root.1.1 are all valid paths.
+    // After reducing to 2 windows only "root" remains valid; root.1 and root.1.1 become stale.
+    mockSessionStorage.setItem(
+      "cadence_window_ratios",
+      JSON.stringify([["root", 0.6], ["root.1", 0.5], ["root.1.1", 0.4]]),
+    );
+
+    const { rerender } = render(
+      <TilingLayout
+        windows={makeWindows(["a", "b", "c", "d"])}
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    act(() => {
+      rerender(
+        <TilingLayout
+          windows={makeWindows(["a", "b"])}
+          onMinimize={vi.fn()}
+          onTerminated={vi.fn()}
+        />,
+      );
+    });
+
+    const ratioCalls = mockSessionStorage.setItem.mock.calls.filter(
+      ([key]) => key === "cadence_window_ratios",
+    );
+    const lastCall = ratioCalls.at(-1);
+    expect(lastCall).toBeDefined();
+    const entries: [string, number][] = JSON.parse(lastCall![1]);
+
+    const keys = entries.map(([k]) => k);
+    expect(keys).not.toContain("root.1");
+    expect(keys).not.toContain("root.1.1");
+    expect(keys).toContain("root");
+  });
+
+  it("writes back pruned ratios to sessionStorage after window removal", () => {
+    mockSessionStorage.setItem(
+      "cadence_window_ratios",
+      JSON.stringify([["root", 0.6], ["root.1", 0.4]]),
+    );
+
+    const { rerender } = render(
+      <TilingLayout
+        windows={makeWindows(["a", "b", "c"])}
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    act(() => {
+      rerender(
+        <TilingLayout
+          windows={makeWindows(["a", "b"])}
+          onMinimize={vi.fn()}
+          onTerminated={vi.fn()}
+        />,
+      );
+    });
+
+    const ratioCalls = mockSessionStorage.setItem.mock.calls.filter(
+      ([key]) => key === "cadence_window_ratios",
+    );
+    const lastCall = ratioCalls.at(-1);
+    expect(lastCall).toBeDefined();
+    const entries: [string, number][] = JSON.parse(lastCall![1]);
+
+    expect(entries).toEqual([["root", 0.6]]);
   });
 });

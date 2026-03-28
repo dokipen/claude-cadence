@@ -106,69 +106,69 @@ export function TicketCard({
               </span>
             )}
           </div>
-          <div className={styles.cardFooter}>
-            {ticket.assignee && (
-              <span className={styles.assignee} data-testid="assignee">
-                {ticket.assignee.avatarUrl?.startsWith("https://") ? (
-                  <img
-                    src={ticket.assignee.avatarUrl}
-                    alt={ticket.assignee.login}
-                    className={styles.avatar}
-                  />
+        </Link>
+        <div className={styles.cardFooter}>
+          {ticket.assignee && (
+            <span className={styles.assignee} data-testid="assignee">
+              {ticket.assignee.avatarUrl?.startsWith("https://") ? (
+                <img
+                  src={ticket.assignee.avatarUrl}
+                  alt={ticket.assignee.login}
+                  className={styles.avatar}
+                />
+              ) : (
+                <span className={styles.avatarFallback}>
+                  {ticket.assignee.login[0].toUpperCase()}
+                </span>
+              )}
+              <span className={styles.assigneeLogin}>{ticket.assignee.login}</span>
+            </span>
+          )}
+          <div className={styles.cardActionsOverlay}>
+            {canClose && (
+              <button
+                type="button"
+                className={styles.cardCloseButton}
+                onClick={handleCloseClick}
+                aria-label="Close ticket"
+                data-testid="card-close-button"
+              >
+                &times;
+              </button>
+            )}
+            {activeSession ? (
+              <button
+                type="button"
+                className={styles.activeSessionLogo}
+                data-testid="active-session-logo"
+                aria-label="Session in progress"
+                onClick={handleActiveSessionClick}
+                style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+              >
+                {activeSession.sessionId && activeSession.agentName ? (
+                  <SessionOutputTooltip session={activeSession}>
+                    <AnimatedCadenceIcon />
+                  </SessionOutputTooltip>
                 ) : (
-                  <span className={styles.avatarFallback}>
-                    {ticket.assignee.login[0].toUpperCase()}
-                  </span>
+                  <AnimatedCadenceIcon />
                 )}
-                <span className={styles.assigneeLogin}>{ticket.assignee.login}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                className={agentStyles.cardLaunchButton}
+                onClick={handleLaunchClick}
+                data-testid="card-launch-button"
+              >
+                {launchButtonLabel}
+              </button>
+            )}
+            {ticket.storyPoints != null && (
+              <span className={styles.storyPoints} data-testid="story-points">
+                {ticket.storyPoints}
               </span>
             )}
           </div>
-        </Link>
-        <div className={styles.cardActionsOverlay}>
-          {canClose && (
-            <button
-              type="button"
-              className={styles.cardCloseButton}
-              onClick={handleCloseClick}
-              aria-label="Close ticket"
-              data-testid="card-close-button"
-            >
-              &times;
-            </button>
-          )}
-          {activeSession ? (
-            <button
-              type="button"
-              className={styles.activeSessionLogo}
-              data-testid="active-session-logo"
-              aria-label="Session in progress"
-              onClick={handleActiveSessionClick}
-              style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
-            >
-              {activeSession.sessionId && activeSession.agentName ? (
-                <SessionOutputTooltip session={activeSession}>
-                  <AnimatedCadenceIcon />
-                </SessionOutputTooltip>
-              ) : (
-                <AnimatedCadenceIcon />
-              )}
-            </button>
-          ) : (
-            <button
-              type="button"
-              className={agentStyles.cardLaunchButton}
-              onClick={handleLaunchClick}
-              data-testid="card-launch-button"
-            >
-              {launchButtonLabel}
-            </button>
-          )}
-          {ticket.storyPoints != null && (
-            <span className={styles.storyPoints} data-testid="story-points">
-              {ticket.storyPoints}
-            </span>
-          )}
         </div>
         {transitionError && (
           <div className={styles.cardError} data-testid="card-close-error">

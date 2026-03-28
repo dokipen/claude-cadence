@@ -24,9 +24,9 @@ If no `Ticket Provider` section exists, or if it specifies `provider: github`, u
 ### Detection Logic
 
 ```bash
-# Extract provider from CLAUDE.md (defaults to "github")
-PROVIDER=$(grep -A3 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'provider:' | tail -1 | awk '{print $2}' || echo "github")
-PROJECT=$(grep -A4 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'project_id:' | tail -1 | awk '{print $2}')
+PROVIDER_CONFIG=$(bash skills/ticket-provider/scripts/detect-provider.sh)
+PROVIDER=$(echo "$PROVIDER_CONFIG" | jq -r '.provider')
+PROJECT=$(echo "$PROVIDER_CONFIG" | jq -r '.project')
 ```
 
 ## Provider Dispatch

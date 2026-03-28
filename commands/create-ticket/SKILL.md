@@ -27,8 +27,9 @@ Do not plan, scaffold, implement, or suggest next steps. The purpose of this com
 Detect the configured ticket provider before any operation. Refer to the `ticket-provider` skill for full details and command reference.
 
 ```bash
-PROVIDER=$(grep -A3 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'provider:' | tail -1 | awk '{print $2}' || echo "github")
-PROJECT=$(grep -A4 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'project_id:' | tail -1 | awk '{print $2}')
+PROVIDER_CONFIG=$(bash skills/ticket-provider/scripts/detect-provider.sh)
+PROVIDER=$(echo "$PROVIDER_CONFIG" | jq -r '.provider')
+PROJECT=$(echo "$PROVIDER_CONFIG" | jq -r '.project')
 ```
 
 ## Workflow

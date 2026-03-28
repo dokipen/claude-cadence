@@ -23,8 +23,9 @@ You are now acting as the technical lead, coordinating specialist agents on this
 Detect the provider from the project's `CLAUDE.md` before performing any ticket operations. Refer to the `ticket-provider` skill for full detection logic and command reference.
 
 ```bash
-PROVIDER=$(grep -A3 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'provider:' | tail -1 | awk '{print $2}' || echo "github")
-PROJECT=$(grep -A4 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'project_id:' | tail -1 | awk '{print $2}')
+PROVIDER_CONFIG=$(bash skills/ticket-provider/scripts/detect-provider.sh)
+PROVIDER=$(echo "$PROVIDER_CONFIG" | jq -r '.provider')
+PROJECT=$(echo "$PROVIDER_CONFIG" | jq -r '.project')
 ```
 
 If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, use `issues` CLI commands. **PR operations always use `gh` CLI regardless of provider.**
@@ -217,11 +218,11 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 1. Detect worktree status and current branch (already obtained above in step 0 — reuse the `detect-worktree.sh` output):
    - JSON fields: `{"in_worktree": true|false, "branch": "<name>", "detached_head": true|false}`
 2. **If already in a worktree** (`in_worktree` is `true`):
-   - If on a feature branch (not default): use the current directory and branch as-is. Set `WORKTREE_PREEXISTING=true`.
-   - If on the default branch: use `/new-work` to create a branch in-place (the script auto-detects worktrees). Set `WORKTREE_PREEXISTING=true`.
+   - If on a feature branch (not default): use the current directory and branch as-is. Set `WORKTREE_DIR="$PWD"`, `BRANCH="<current-branch>"`, and `WORKTREE_PREEXISTING=true`.
+   - If on the default branch: use `/new-work` to create a branch in-place (the script auto-detects worktrees). Set `WORKTREE_DIR="$PWD"`, `BRANCH="<new-branch>"`, and `WORKTREE_PREEXISTING=true`.
 3. **If NOT in a worktree**:
-   - If on default branch: use `/new-work` to create a worktree.
-   - If on a feature branch: use the current directory and branch as-is.
+   - If on default branch: use `/new-work` to create a worktree. After the worktree is created, set `WORKTREE_DIR="$(git rev-parse --show-toplevel)/.worktrees/${BRANCH}"` and `cd` into it.
+   - If on a feature branch: use the current directory and branch as-is. Set `WORKTREE_DIR="$PWD"` and `BRANCH="<current-branch>"`.
 4. Post setup to issue:
 
    **GitHub (default):**
@@ -467,23 +468,32 @@ docker compose -p <PROJECT_NAME> down
    - **GitHub (default):** `gh issue edit [NUMBER] --remove-label "in-progress"` (the PR's `Fixes #N` auto-closes it)
    - **Issues API:** `issues ticket transition TICKET_ID --to CLOSED --json`
 3. Sync blocked labels using the `update-blocked-labels.sh` script in this command's `scripts/` directory
-4. Return to default branch and pull latest (skip if `WORKTREE_PREEXISTING` — the worktree is not ours to clean up)
-5. Clean up worktree using the `project-ops` skill's `cleanup-worktree.sh` script (skip if `WORKTREE_PREEXISTING`)
+4. Return to default branch and pull latest (skip if `WORKTREE_PREEXISTING` — the worktree is not ours to clean up):
+   ```bash
+   _COMMON_DIR="$(git rev-parse --git-common-dir)"
+   cd "${_COMMON_DIR}/.."
+   DEFAULT_BRANCH="$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')"
+   git checkout "${DEFAULT_BRANCH:-main}" && git pull
+   ```
+5. Clean up worktree using the `project-ops` skill's `cleanup-worktree.sh` script (skip if `WORKTREE_PREEXISTING`):
+   ```bash
+   bash skills/project-ops/scripts/cleanup-worktree.sh "$BRANCH"
+   ```
 6. **Post completion to issue**:
 
    **GitHub (default):**
    ```bash
-   gh issue comment [N] --body "Issue completed. Merged via PR #[PR-NUMBER]."
+   gh issue comment [N] --body "Completed #[NUMBER]: [TITLE]. Merged via PR #[PR-NUMBER]."
    ```
 
    **Issues API:**
    ```bash
    issues comment add TICKET_ID --body "$(cat <<'EOF'
-Issue completed. Merged via PR #[PR-NUMBER].
+Completed #[NUMBER]: [TITLE]. Merged via PR #[PR-NUMBER].
 EOF
 )" --json
    ```
-7. Report completion
+7. Report completion to the user, including the ticket number, title, and PR link (e.g., "Completed #42: Add user authentication. Merged via PR #[PR-NUMBER].")
 
 > **Note:** If this phase is skipped (e.g., conversation ends early), cleanup happens automatically the next time `/new-work` creates a worktree — the `cleanup-merged-worktrees.sh` pre-flight detects merged PRs and cleans up their worktrees, branches, and labels.
 
@@ -605,10 +615,7 @@ gh issue edit [CHILD-NUMBER-2] --add-label "milestone:[N]-[slug]"
 ```bash
 # Create label if it doesn't already exist
 MILESTONE_LABEL_NAME="milestone:[N]-[slug]"
-EXISTING_ID=$(issues label list --json | jq -r --arg name "$MILESTONE_LABEL_NAME" '.[] | select(.name == $name) | .id')
-if [ -z "$EXISTING_ID" ]; then
-  issues label create --name "$MILESTONE_LABEL_NAME" --color "#8B5CF6" --json
-fi
+bash commands/lead/scripts/ensure-milestone-label.sh "$MILESTONE_LABEL_NAME"
 
 # Apply to plan ticket
 issues label add [PLAN-TICKET-ID] --label "$MILESTONE_LABEL_NAME" --json
@@ -647,7 +654,7 @@ After all sub-tickets are created and the plan doc is committed:
 **GitHub (default):**
 ```bash
 gh issue comment [NUMBER] --body "$(cat <<'EOF'
-## Planning complete
+## Planning complete: [TITLE]
 
 Plan document: `docs/plans/<slug>.md`
 
@@ -664,7 +671,7 @@ gh issue close [NUMBER]
 **Issues API:**
 ```bash
 issues comment add TICKET_ID --body "$(cat <<'EOF'
-## Planning complete
+## Planning complete: [TITLE]
 
 Plan document: `docs/plans/<slug>.md`
 
@@ -682,7 +689,7 @@ issues ticket transition TICKET_ID --to CLOSED --json
 
 1. Return to default branch and pull latest (skip if `WORKTREE_PREEXISTING`)
 2. Clean up worktree using the `project-ops` skill's `cleanup-worktree.sh` script (skip if `WORKTREE_PREEXISTING`)
-3. Report completion with a summary of the plan doc path and all created tickets
+3. Report completion to the user, including the ticket number, title, and plan doc path
 
 ---
 
@@ -740,7 +747,7 @@ Once all steps are confirmed complete:
    **GitHub (default):**
    ```bash
    gh issue comment [NUMBER] --body "$(cat <<'EOF'
-## Walkthrough complete
+## Walkthrough complete: [TITLE]
 
 All manual steps confirmed complete by the human operator.
 EOF
@@ -750,7 +757,7 @@ EOF
    **Issues API:**
    ```bash
    issues comment add TICKET_ID --body "$(cat <<'EOF'
-## Walkthrough complete
+## Walkthrough complete: [TITLE]
 
 All manual steps confirmed complete by the human operator.
 EOF
@@ -761,7 +768,7 @@ EOF
    - **GitHub (default):** `gh issue close [NUMBER]`
    - **Issues API:** `issues ticket transition TICKET_ID --to CLOSED --json`
 
-3. Report completion to the user.
+3. Report completion to the user, including the ticket number and title (e.g., "Completed #42: Add user authentication.").
 
 ### Human Activity Phase 4: Cleanup
 
