@@ -9,6 +9,7 @@ type ConnectionState = "connecting" | "connected" | "reconnecting" | "disconnect
 interface TerminalProps {
   agentName: string;
   sessionId: string;
+  onResumeSession?: () => void;
 }
 
 // ttyd protocol message types (single-byte prefix on binary messages).
@@ -27,7 +28,7 @@ function buildWsUrl(agentName: string, sessionId: string): string {
   return `${proto}//${window.location.host}/ws/terminal/${encodeURIComponent(agentName)}/${encodeURIComponent(sessionId)}`;
 }
 
-export function Terminal({ agentName, sessionId }: TerminalProps) {
+export function Terminal({ agentName, sessionId, onResumeSession }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -343,6 +344,11 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
           <button className={styles.reconnectButton} onClick={manualConnect}>
             Reconnect
           </button>
+          {onResumeSession && (
+            <button className={styles.reconnectButton} data-testid="terminal-resume-session" onClick={onResumeSession}>
+              Resume Session
+            </button>
+          )}
         </div>
       )}
       {connState === "error" && (
@@ -351,6 +357,11 @@ export function Terminal({ agentName, sessionId }: TerminalProps) {
           <button className={styles.reconnectButton} onClick={manualConnect}>
             Retry
           </button>
+          {onResumeSession && (
+            <button className={styles.reconnectButton} data-testid="terminal-resume-session" onClick={onResumeSession}>
+              Resume Session
+            </button>
+          )}
         </div>
       )}
     </div>
