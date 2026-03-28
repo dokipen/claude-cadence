@@ -9,6 +9,7 @@ interface ImportMeta {
 }
 
 declare const __BUILD_SHA__: string;
+declare const __VERSION_POLL_INTERVAL_MS__: number;
 
 declare module "*.module.css" {
   const classes: { readonly [key: string]: string };

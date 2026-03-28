@@ -14,6 +14,9 @@ export default defineConfig({
   plugins: [react()],
   define: {
     __BUILD_SHA__: JSON.stringify(process.env.BUILD_SHA ?? 'dev'),
+    __VERSION_POLL_INTERVAL_MS__: JSON.stringify(
+      parseInt(process.env.VITE_VERSION_POLL_INTERVAL_MS ?? '300000', 10)
+    ),
   },
   test: {
     exclude: ["e2e/**", "node_modules/**"],
