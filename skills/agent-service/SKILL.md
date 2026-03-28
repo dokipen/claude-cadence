@@ -4,6 +4,10 @@ description: Understanding agentd's hub-based architecture for managing AI agent
 user-invokable: false
 ---
 
+## Filesystem Scope
+
+> **IMPORTANT:** Only access files within the project repository (the directory containing `CLAUDE.md`). This applies to all tools — `Read`, `Glob`, `Grep`, and `Bash` alike. Never run Bash commands (e.g., `find`, `cat`, `ls`) targeting paths outside the repository, and never use absolute paths to home directories or system paths. Do not use `$HOME`, `~`, or any environment variable that may expand to a path outside the project repository (e.g., `$XDG_CONFIG_HOME`, `$TMPDIR`, `$XDG_DATA_HOME`, `$XDG_RUNTIME_DIR`, `$XDG_CACHE_HOME`), do not use path traversal (e.g., `../`) to navigate above the repo root, and do not run `readlink` or `realpath` on paths that would resolve outside the project directory. Use relative paths and `Glob`/`Grep` within the project directory.
+
 ## Overview
 
 `agentd` is a service that manages AI agent sessions. It no longer exposes a direct gRPC port. Instead, session management is dispatched through the agent-hub WebSocket reverse connection — agentd connects outbound to the hub and receives JSON-RPC commands over that persistent connection.

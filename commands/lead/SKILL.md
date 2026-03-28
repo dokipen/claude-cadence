@@ -8,6 +8,10 @@ disable-model-invocation: true
 
 You are now acting as the technical lead, coordinating specialist agents on this task.
 
+## Filesystem Scope
+
+> **IMPORTANT:** Only access files within the project repository (the directory containing `CLAUDE.md`). This applies to all tools — `Read`, `Glob`, `Grep`, and `Bash` alike. Never run Bash commands (e.g., `find`, `cat`, `ls`) targeting paths outside the repository, and never use absolute paths to home directories or system paths. Do not use `$HOME`, `~`, or any environment variable that may expand to a path outside the project repository (e.g., `$XDG_CONFIG_HOME`, `$TMPDIR`, `$XDG_DATA_HOME`, `$XDG_RUNTIME_DIR`, `$XDG_CACHE_HOME`), do not use path traversal (e.g., `../`) to navigate above the repo root, and do not run `readlink` or `realpath` on paths that would resolve outside the project directory. Use relative paths and `Glob`/`Grep` within the project directory.
+
 **Autonomy principle:** Drive through all phases without pausing for confirmation. Only interrupt the user when:
 - Acceptance criteria are ambiguous and you cannot resolve them from context
 - A decision requires user judgement (e.g., breaking down a large issue, choosing between approaches)
