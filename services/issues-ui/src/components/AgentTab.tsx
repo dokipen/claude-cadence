@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { AgentLauncher } from "./AgentLauncher";
 import { Terminal } from "./Terminal";
-import { hubFetch } from "../api/agentHubClient";
+import { hubFetch, createSession, HubError } from "../api/agentHubClient";
 import { validateSessionId, validateAgentProfile } from "../utils/validateSession";
 import { useAgents } from "../hooks/useAgents";
 import { useSessionsContext } from "../hooks/SessionsContext";
@@ -28,6 +28,7 @@ export function AgentTab({ ticketNumber, ticketTitle, ticketState, repoUrl }: Ag
   const [active, setActive] = useState<ActiveSession | null>(null);
   const [discovering, setDiscovering] = useState(true);
   const [destroying, setDestroying] = useState(false);
+  const [resuming, setResuming] = useState(false);
   const { agents, loading: agentsLoading } = useAgents();
   const { optimisticSetDestroying, optimisticAddSession } = useSessionsContext();
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -51,7 +52,12 @@ export function AgentTab({ ticketNumber, ticketTitle, ticketState, repoUrl }: Ag
             `/agents/${encodeURIComponent(agent.name)}/sessions`,
           );
           const match = (data.sessions ?? []).find(
-            (s) => s.name === sessionName && (s.state === "running" || s.state === "creating"),
+            (s) =>
+              s.name === sessionName &&
+              (s.state === "running" ||
+                s.state === "creating" ||
+                s.state === "stopped" ||
+                s.state === "error"),
           );
           if (match && !cancelled) {
             setActive({ session: match, agentName: agent.name });
@@ -135,6 +141,41 @@ export function AgentTab({ ticketNumber, ticketTitle, ticketState, repoUrl }: Ag
     }
   }, [active, optimisticSetDestroying]);
 
+  const handleResumeSession = useCallback(async () => {
+    if (!active || resuming) return;
+    if (!validateSessionId(active.session.id) || !validateAgentProfile(active.session.agentProfile)) {
+      console.warn("[AgentTab] Refusing to resume session: invalid id or agentProfile");
+      return;
+    }
+    setResuming(true);
+    try {
+      const newSessionName = `resume-${active.session.id.slice(0, 8)}-${Date.now()}`;
+      const newSession = await createSession(
+        active.agentName,
+        active.session.agentProfile,
+        newSessionName,
+        [`/resume ${active.session.id}`],
+      ).catch(console.error);
+      // Fire-and-forget: destroy the current session. Ignore 404 (already gone).
+      hubFetch(
+        `/agents/${encodeURIComponent(active.agentName)}/sessions/${encodeURIComponent(active.session.id)}?force=true`,
+        { method: "DELETE" },
+      ).catch((err: unknown) => {
+        if (!(err instanceof HubError && err.status === 404)) {
+          console.error("[AgentTab] Failed to delete session on resume:", err);
+        }
+      });
+      if (newSession) {
+        optimisticAddSession(newSession, active.agentName);
+        setActive({ session: newSession, agentName: active.agentName });
+      } else {
+        setActive(null);
+      }
+    } finally {
+      setResuming(false);
+    }
+  }, [active, resuming, optimisticAddSession]);
+
   if (discovering) {
     return (
       <div className={styles.agentTabContent} data-testid="agent-tab-content">
@@ -198,7 +239,11 @@ export function AgentTab({ ticketNumber, ticketTitle, ticketState, repoUrl }: Ag
           {destroying ? "Destroying…" : "Destroy Session"}
         </button>
       </div>
-      <Terminal agentName={active.agentName} sessionId={active.session.id} />
+      <Terminal
+        agentName={active.agentName}
+        sessionId={active.session.id}
+        onResumeSession={active.session.agentProfile ? handleResumeSession : undefined}
+      />
     </div>
   );
 }

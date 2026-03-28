@@ -61,6 +61,16 @@ export function TerminalWindow({
     }
     const newSessionName = `resume-${session.id.slice(0, 8)}-${Date.now()}`;
     createSession(agentName, session.agentProfile, newSessionName, [`/resume ${session.id}`]).catch(console.error);
+    // Fire-and-forget: destroy the current session after kicking off the resume.
+    // Ignore 404 (already gone) and other errors — the new session is the priority.
+    hubFetch(
+      `/agents/${encodeURIComponent(agentName)}/sessions/${encodeURIComponent(session.id)}?force=true`,
+      { method: "DELETE" },
+    ).catch((err: unknown) => {
+      if (!(err instanceof HubError && err.status === 404)) {
+        console.error("[TerminalWindow] Failed to delete session on resume:", err);
+      }
+    });
   }, [agentName, session.id, session.agentProfile]);
   const handleResumeSession = session.agentProfile ? resumeCallback : undefined;
 
