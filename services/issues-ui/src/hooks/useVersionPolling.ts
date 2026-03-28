@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePageVisibility } from './usePageVisibility';
 
+function getBuildSha(): string {
+  return typeof __BUILD_SHA__ !== 'undefined' ? __BUILD_SHA__ : 'dev';
+}
+
 export function useVersionPolling(intervalMs = 300_000): { updateAvailable: boolean } {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const isHidden = usePageVisibility();
@@ -14,7 +18,7 @@ export function useVersionPolling(intervalMs = 300_000): { updateAvailable: bool
         const res = await fetch('/version.json');
         if (!res.ok) return;
         const data = await res.json() as { sha?: string };
-        if (data.sha && data.sha !== __BUILD_SHA__) {
+        if (data.sha && data.sha !== getBuildSha()) {
           setUpdateAvailable(true);
         }
       } catch {

@@ -3,7 +3,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useVersionPolling } from './useVersionPolling';
 
-vi.mock('./usePageVisibility', () => ({ usePageVisibility: () => false }));
+const mockUsePageVisibility = vi.fn(() => false);
+vi.mock('./usePageVisibility', () => ({ usePageVisibility: () => mockUsePageVisibility() }));
 
 const INTERVAL = 1000;
 
@@ -22,6 +23,8 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  mockUsePageVisibility.mockReturnValue(false);
 });
 
 describe('useVersionPolling', () => {
@@ -106,5 +109,64 @@ describe('useVersionPolling', () => {
     });
 
     expect(result.current.updateAvailable).toBe(false);
+  });
+
+  it('pauses polling when tab is hidden and resumes when visible', async () => {
+    const fetchMock = vi.fn(() => makeFetchResponse('test-sha'));
+    vi.stubGlobal('fetch', fetchMock);
+    const { rerender } = renderHook(() => useVersionPolling(INTERVAL));
+
+    // Advance — should poll while visible
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(INTERVAL);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Tab goes hidden
+    mockUsePageVisibility.mockReturnValue(true);
+    await act(async () => { rerender(); });
+
+    const callsBeforeHidden = fetchMock.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(INTERVAL * 3);
+    });
+    expect(fetchMock.mock.calls.length).toBe(callsBeforeHidden);
+
+    // Tab becomes visible again
+    mockUsePageVisibility.mockReturnValue(false);
+    await act(async () => { rerender(); });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(INTERVAL);
+    });
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBeforeHidden);
+  });
+
+  it('keeps updateAvailable false when sha field is missing or null', async () => {
+    vi.stubGlobal('fetch', vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      } as Response)
+    ));
+    const { result } = renderHook(() => useVersionPolling(INTERVAL));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(INTERVAL);
+    });
+
+    expect(result.current.updateAvailable).toBe(false);
+  });
+
+  it('fetches from /version.json', async () => {
+    const fetchMock = vi.fn(() => makeFetchResponse('test-sha'));
+    vi.stubGlobal('fetch', fetchMock);
+    renderHook(() => useVersionPolling(INTERVAL));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(INTERVAL);
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/version.json');
   });
 });

@@ -14,6 +14,7 @@ describe("UpdateBanner", () => {
 
   afterEach(() => {
     cleanup();
+    vi.unstubAllGlobals();
   });
 
   it("renders the banner with expected text", () => {
