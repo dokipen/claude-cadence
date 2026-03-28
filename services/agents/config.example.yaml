@@ -32,3 +32,26 @@ profiles:
     command: "claude --model opus --permission-mode accept{{if .PluginDir}} --plugin-dir {{.PluginDir}}{{end}} --cwd {{.WorktreePath}} {{.ExtraArgs}}"
     plugin_dir: "/opt/cadence/plugin"
     description: "Claude Opus agent"
+
+# Optional: bubblewrap sandbox wrapper for Linux bare-metal deployments.
+# Restricts agent filesystem access to the worktree and explicitly listed paths.
+# Requires: apt install bubblewrap (Debian/Ubuntu) or pacman -S bubblewrap (Arch).
+# Remove this wrapper when running inside Docker — the container provides equivalent isolation.
+# See docs/security/filesystem-sandboxing.md for full rationale and options.
+#
+#  sandboxed-example:
+#    repo: "https://github.com/org/project.git"
+#    command: >
+#      bwrap
+#        --bind {{.WorktreePath}} {{.WorktreePath}}
+#        --ro-bind /usr /usr
+#        --ro-bind /etc /etc
+#        --ro-bind /home/agentd/.claude /home/agentd/.claude
+#        --proc /proc
+#        --dev /dev
+#        --tmpfs /tmp
+#        --die-with-parent
+#        -- claude --dangerously-skip-permissions
+#          --model claude-sonnet-4-6
+#          --add-dir {{.WorktreePath}}
+#    description: "Claude agent with bubblewrap filesystem sandbox (Linux bare-metal)"
