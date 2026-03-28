@@ -209,11 +209,12 @@ Deletes a label entirely. If the label is attached to any tickets, it is automat
 
 ## Comments
 
-### Shell Safety: Always Use Heredocs for Body Content
+### Shell Safety: Heredocs for Body Content, Variables for Titles
 
-**IMPORTANT:** Always use `<<'EOF'` single-quoted heredocs for `--body`, `--description`, and `--acceptance-criteria` arguments. Inline double-quoted strings interpret backticks as shell command substitution, silently corrupting content that contains inline code spans or shell-like text.
+**IMPORTANT:** Backticks inside double-quoted strings are evaluated as shell command substitution. Two argument types need special handling:
 
-Use this pattern for all body content:
+**Body content** (`--body`, `--description`, `--acceptance-criteria`): always use `<<'EOF'` single-quoted heredocs. Single-quoted `<<'EOF'` prevents all variable expansion and command substitution inside the heredoc.
+
 ```bash
 issues comment add TICKET_ID --body "$(cat <<'EOF'
 Comment text with `backticks` safe here.
@@ -221,7 +222,17 @@ EOF
 )" --json
 ```
 
-Single-quoted `<<'EOF'` prevents all variable expansion and command substitution inside the heredoc.
+**Titles** (`--title`): cannot use heredocs inline. If the title contains backticks, assign to a variable first:
+
+```bash
+TICKET_TITLE=$(cat <<'EOF'
+Fix `createSession` return type
+EOF
+)
+issues ticket create --title "$TICKET_TITLE" ...
+```
+
+When possible, write titles without backticks (e.g., "Fix createSession return type") — titles are plain text labels and backtick formatting rarely adds value there.
 
 ### Add a comment
 
