@@ -96,6 +96,12 @@ describe("Terminal", () => {
       unobserve = vi.fn();
       disconnect = vi.fn();
     });
+    // Default: dark mode — matches the previous hardcoded dark theme behavior
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query === "(prefers-color-scheme: dark)",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
     vi.useFakeTimers();
   });
 
@@ -501,6 +507,11 @@ describe("clipboard copy trimming", () => {
       disconnect = vi.fn();
     });
     vi.stubGlobal("navigator", { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query === "(prefers-color-scheme: dark)",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
     vi.useFakeTimers();
   });
 
@@ -638,6 +649,11 @@ describe("Resume Session button", () => {
       unobserve = vi.fn();
       disconnect = vi.fn();
     });
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query === "(prefers-color-scheme: dark)",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
     vi.useFakeTimers();
   });
 
@@ -739,5 +755,106 @@ describe("Resume Session button", () => {
     // After open→close the component is in "reconnecting" (auto-reconnect timer pending)
     expect(screen.getByTestId("terminal-reconnecting")).toBeDefined();
     expect(screen.queryByTestId("terminal-resume-session")).toBeNull();
+  });
+});
+
+describe("terminal color scheme", () => {
+  beforeEach(() => {
+    MockWebSocket.instances = [];
+    xtermInstances.length = 0;
+    fitAddonInstances.length = 0;
+    vi.stubGlobal("WebSocket", MockWebSocket);
+    vi.stubGlobal("ResizeObserver", class {
+      observe = vi.fn();
+      unobserve = vi.fn();
+      disconnect = vi.fn();
+    });
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    cleanup();
+  });
+
+  it("constructs terminal with dark theme when OS is in dark mode", () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query === "(prefers-color-scheme: dark)",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+
+    render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+
+    const theme = (xtermInstances[0].options as { theme?: { background?: string; foreground?: string } }).theme;
+    expect(theme?.background).toBe("#0d1117");
+    expect(theme?.foreground).toBe("#e6edf3");
+  });
+
+  it("constructs terminal with light theme when OS is in light mode", () => {
+    vi.stubGlobal("matchMedia", (_query: string) => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+
+    render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+
+    const theme = (xtermInstances[0].options as { theme?: { background?: string; foreground?: string } }).theme;
+    expect(theme?.background).toBe("#FAFBFC");
+    expect(theme?.foreground).toBe("#1E2A3A");
+  });
+
+  it("updates terminal theme without reconnecting when color scheme changes to light", () => {
+    let changeHandler: ((e: Partial<MediaQueryListEvent>) => void) | null = null;
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query === "(prefers-color-scheme: dark)",
+      addEventListener: vi.fn((_event: string, handler: (e: Partial<MediaQueryListEvent>) => void) => {
+        changeHandler = handler;
+      }),
+      removeEventListener: vi.fn(),
+    }));
+
+    render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+
+    const initialWsCount = MockWebSocket.instances.length;
+
+    // Simulate OS switching to light mode
+    act(() => {
+      changeHandler?.({ matches: false, type: "change" });
+    });
+
+    // No new WebSocket created — no terminal reconnect triggered
+    expect(MockWebSocket.instances).toHaveLength(initialWsCount);
+
+    // Theme updated on the existing xterm instance
+    const theme = (xtermInstances[0].options as { theme?: { background?: string } }).theme;
+    expect(theme?.background).toBe("#FAFBFC");
+  });
+
+  it("updates terminal theme without reconnecting when color scheme changes to dark", () => {
+    let changeHandler: ((e: Partial<MediaQueryListEvent>) => void) | null = null;
+    vi.stubGlobal("matchMedia", (_query: string) => ({
+      matches: false, // start in light mode
+      addEventListener: vi.fn((_event: string, handler: (e: Partial<MediaQueryListEvent>) => void) => {
+        changeHandler = handler;
+      }),
+      removeEventListener: vi.fn(),
+    }));
+
+    render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+
+    const initialWsCount = MockWebSocket.instances.length;
+
+    // Simulate OS switching to dark mode
+    act(() => {
+      changeHandler?.({ matches: true, type: "change" });
+    });
+
+    expect(MockWebSocket.instances).toHaveLength(initialWsCount);
+
+    const theme = (xtermInstances[0].options as { theme?: { background?: string } }).theme;
+    expect(theme?.background).toBe("#0d1117");
   });
 });
