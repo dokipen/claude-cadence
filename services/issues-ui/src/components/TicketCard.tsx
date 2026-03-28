@@ -11,13 +11,14 @@ import type { ActiveSessionInfo } from "../types";
 import styles from "../styles/card.module.css";
 import agentStyles from "../styles/agents.module.css";
 import { AnimatedCadenceIcon } from "./AnimatedCadenceIcon";
+import { SessionOutputTooltip } from "./SessionOutputTooltip";
 
-export function hasActiveSession(sessions: ActiveSessionInfo[], ticketNumber: number, projectId?: string): boolean {
+export function hasActiveSession(sessions: ActiveSessionInfo[], ticketNumber: number, projectId?: string): ActiveSessionInfo | null {
   const prefix = projectId ? `${projectId}-` : "";
   const prefixes = [`${prefix}lead-${ticketNumber}`, `${prefix}refine-${ticketNumber}`, `${prefix}discuss-${ticketNumber}`];
-  return sessions.some(
+  return sessions.find(
     (s) => prefixes.includes(s.name) && (s.state === "running" || s.state === "creating" || s.state === "destroying")
-  );
+  ) ?? null;
 }
 
 export function TicketCard({
@@ -145,7 +146,13 @@ export function TicketCard({
               onClick={handleActiveSessionClick}
               style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
             >
-              <AnimatedCadenceIcon />
+              {activeSession.sessionId && activeSession.agentName ? (
+                <SessionOutputTooltip session={activeSession}>
+                  <AnimatedCadenceIcon />
+                </SessionOutputTooltip>
+              ) : (
+                <AnimatedCadenceIcon />
+              )}
             </button>
           ) : (
             <button

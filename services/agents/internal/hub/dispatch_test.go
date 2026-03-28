@@ -2,9 +2,12 @@ package hub
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
+	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
 )
 
@@ -236,6 +239,79 @@ func TestDispatcher_GetTerminalEndpoint_URNFormNormalized(t *testing.T) {
 	want := "ws://192.168.1.10/ws/terminal/" + canonicalID
 	if out.URL != want {
 		t.Errorf("URL = %q, want %q", out.URL, want)
+	}
+}
+
+func TestDispatcher_GetSessionOutput_UnknownSession(t *testing.T) {
+	d := newTestDispatcher()
+
+	_, rpcErr := d.GetSessionOutput(json.RawMessage(`{"session_id":"no-such-session"}`))
+	if rpcErr == nil {
+		t.Fatal("expected rpcError for unknown session")
+	}
+	if rpcErr.Code != rpcErrNotFound {
+		t.Errorf("expected code %d (not found), got %d", rpcErrNotFound, rpcErr.Code)
+	}
+}
+
+func TestDispatcher_GetSessionOutput_ANSIStrippingAndLastNLines(t *testing.T) {
+	// Create a real PTY session that writes a known multi-line string with ANSI
+	// escape sequences so we can verify stripping and last-N-lines truncation.
+	ptyMgr := pty.NewPTYManager(pty.PTYConfig{})
+	sessID := "output-test-session"
+
+	// Print 5 numbered lines with ANSI color codes interspersed.
+	script := `printf '\033[32mline1\033[0m\nline2\nline3\nline4\nline5\n'; sleep 30`
+	err := ptyMgr.Create(sessID, t.TempDir(), []string{"sh", "-c", script}, nil, 80, 24)
+	if err != nil {
+		t.Fatalf("PTY Create failed: %v", err)
+	}
+	t.Cleanup(func() { ptyMgr.Destroy(sessID) })
+
+	// Poll until at least "line5" appears in the raw buffer.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		buf, readErr := ptyMgr.ReadBuffer(sessID)
+		if readErr != nil {
+			t.Fatalf("ReadBuffer failed: %v", readErr)
+		}
+		if strings.Contains(string(buf), "line5") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for output in buffer; got: %q", string(buf))
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	store := session.NewStore()
+	mgr := session.NewManager(store, ptyMgr, nil, nil, map[string]config.Profile{}, 0)
+	d := NewDispatcher(mgr, "", "ws", "")
+
+	// Request only the last 3 lines.
+	result, rpcErr := d.GetSessionOutput(json.RawMessage(`{"session_id":"output-test-session","lines":3}`))
+	if rpcErr != nil {
+		t.Fatalf("unexpected rpcError: code=%d msg=%s", rpcErr.Code, rpcErr.Message)
+	}
+
+	var out sessionOutputResult
+	if err := json.Unmarshal(result, &out); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+
+	// ANSI escape sequences must be stripped.
+	if strings.Contains(out.Output, "\x1b") {
+		t.Errorf("output still contains ANSI escape sequences: %q", out.Output)
+	}
+
+	// Output must contain "line5" (one of the last 3 lines).
+	if !strings.Contains(out.Output, "line5") {
+		t.Errorf("expected 'line5' in output, got: %q", out.Output)
+	}
+
+	// Output must NOT contain "line1" or "line2" (outside the last 3).
+	if strings.Contains(out.Output, "line1") || strings.Contains(out.Output, "line2") {
+		t.Errorf("output should only contain last 3 lines, got: %q", out.Output)
 	}
 }
 

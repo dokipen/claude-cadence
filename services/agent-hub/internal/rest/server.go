@@ -38,6 +38,7 @@ func New(h *hub.Hub, cfg *config.Config) *Server {
 	apiMux.HandleFunc("POST /api/v1/agents/{name}/sessions", handleCreateSession(h))
 	apiMux.HandleFunc("GET /api/v1/agents/{name}/sessions", handleListSessions(h))
 	apiMux.HandleFunc("GET /api/v1/agents/{name}/sessions/{id}", handleGetSession(h))
+	apiMux.HandleFunc("GET /api/v1/agents/{name}/sessions/{id}/output", handleGetSessionOutput(h))
 	apiMux.HandleFunc("DELETE /api/v1/agents/{name}/sessions/{id}", handleDestroySession(h))
 
 	var apiHandler http.Handler = apiMux

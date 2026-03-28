@@ -194,6 +194,15 @@ type getTerminalEndpointParams struct {
 	SessionID string `json:"session_id"`
 }
 
+type getSessionOutputParams struct {
+	SessionID string `json:"session_id"`
+	Lines     int    `json:"lines,omitempty"`
+}
+
+type sessionOutputResult struct {
+	Output string `json:"output"`
+}
+
 type terminalEndpointResult struct {
 	URL   string `json:"url,omitempty"`
 	Relay bool   `json:"relay,omitempty"`
@@ -285,6 +294,22 @@ func mapSessionError(err error) *rpcError {
 	default:
 		return &rpcError{Code: rpcErrInternal, Message: sessErr.Message}
 	}
+}
+
+// GetSessionOutput handles the getSessionOutput JSON-RPC method.
+func (d *Dispatcher) GetSessionOutput(params json.RawMessage) (json.RawMessage, *rpcError) {
+	var p getSessionOutputParams
+	if err := json.Unmarshal(params, &p); err != nil {
+		return nil, &rpcError{Code: rpcErrInvalidArgument, Message: "invalid params: " + err.Error()}
+	}
+	if p.Lines <= 0 {
+		p.Lines = 50
+	}
+	output, err := d.manager.ReadOutput(p.SessionID, p.Lines)
+	if err != nil {
+		return nil, mapSessionError(err)
+	}
+	return marshalResult(sessionOutputResult{Output: output})
 }
 
 // GetDiagnostics handles the getDiagnostics JSON-RPC method.

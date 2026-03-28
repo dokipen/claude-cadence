@@ -117,6 +117,18 @@ export async function fetchAllSessions(): Promise<AgentSessions[]> {
   return hubFetch("/sessions", undefined, validateAllSessionsResponse);
 }
 
+export async function fetchSessionOutput(
+  agentName: string,
+  sessionId: string,
+): Promise<string> {
+  const resp = await fetch(`/api/v1/agents/${encodeURIComponent(agentName)}/sessions/${encodeURIComponent(sessionId)}/output`);
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch session output: ${resp.status}`);
+  }
+  const data = await resp.json();
+  return data.output as string;
+}
+
 export async function createSession(
   agentName: string,
   profile: string,

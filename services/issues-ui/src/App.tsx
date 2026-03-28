@@ -123,7 +123,12 @@ function AppShell() {
   const repoUrl = selectedProject?.repository;
 
   const isOnBoard = !!boardMatch;
-  const activeSessions = sessions?.map((s): ActiveSessionInfo => ({ name: s.session.name, state: s.session.state as SessionState }));
+  const activeSessions = sessions?.map((s): ActiveSessionInfo => ({
+    name: s.session.name,
+    state: s.session.state as SessionState,
+    sessionId: s.session.id,
+    agentName: s.agentName,
+  }));
   const handleProjectChange = useCallback((id: string) => {
     if (!projects.some((p) => p.id === id)) return;
     setGlobalProjectId(id);
