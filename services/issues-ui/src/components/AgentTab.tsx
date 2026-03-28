@@ -7,6 +7,7 @@ import { useSessionsContext } from "../hooks/SessionsContext";
 import { getLaunchConfig } from "./launchConfig";
 import type { Session, TicketState } from "../types";
 import styles from "../styles/agents.module.css";
+import { stripProjectPrefix } from "../utils/sessionName";
 
 interface AgentTabProps {
   ticketNumber: number;
@@ -181,7 +182,7 @@ export function AgentTab({ ticketNumber, ticketTitle, ticketState, repoUrl }: Ag
     <div className={styles.agentTabTerminal} data-testid="agent-tab-content">
       <div className={styles.terminalHeader} data-testid="terminal-header">
         <span className={styles.terminalSessionName}>
-          {active.session.name} on {active.agentName}
+          {stripProjectPrefix(active.session.name)} on {active.agentName}
         </span>
         <button
           className={styles.destroyButton}

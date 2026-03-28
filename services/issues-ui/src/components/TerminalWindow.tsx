@@ -6,6 +6,7 @@ import { useSessionsContext } from "../hooks/SessionsContext";
 import type { Session } from "../types";
 import styles from "../styles/agents.module.css";
 import { validateSessionId, validateAgentProfile } from "../utils/validateSession";
+import { stripProjectPrefix } from "../utils/sessionName";
 
 interface TerminalWindowProps {
   session: Session;
@@ -88,7 +89,7 @@ export function TerminalWindow({
     }
   };
 
-  const title = session.name;
+  const title = stripProjectPrefix(session.name);
 
   return (
     <div
@@ -112,7 +113,7 @@ export function TerminalWindow({
         onKeyDown={onHeaderKeyDown}
       >
         <span className={styles.tileTitle}>
-          {session.name}
+          {title}
           <span className={styles.tileAgent}> on {agentName}</span>
           {ticket ? (
             <a

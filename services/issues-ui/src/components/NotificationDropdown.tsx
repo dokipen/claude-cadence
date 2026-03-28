@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Link } from "react-router";
 import type { AgentSession } from "../hooks/useAllSessions";
 import layoutStyles from "../styles/layout.module.css";
+import { stripProjectPrefix } from "../utils/sessionName";
 
 interface NotificationDropdownProps {
   waitingSessions: AgentSession[];
@@ -63,7 +64,7 @@ export function NotificationDropdown({ waitingSessions }: NotificationDropdownPr
                 data-testid="notification-item"
               >
                 <span className={layoutStyles.notificationSessionName}>
-                  {ws.session.name}
+                  {stripProjectPrefix(ws.session.name)}
                 </span>
                 <span className={layoutStyles.notificationAgent}>
                   {ws.agentName}
