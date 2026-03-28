@@ -358,6 +358,75 @@ describe("TilingLayout — sessionStorage persistence", () => {
     expect(lastFlexChild.style.flex).toBe(`${1 - storedRatio} 1 0%`);
   });
 
+  it("clamps below-range rehydrated ratio to MIN_RATIO", () => {
+    mockSessionStorage.setItem(
+      "cadence_window_ratios",
+      JSON.stringify([["root", -0.5]]),
+    );
+
+    render(
+      <TilingLayout
+        windows={makeWindows(["a", "b"])}
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    const splits = screen.getAllByTestId("tile-split");
+    const rootSplit = splits[0];
+    const firstFlexChild = rootSplit.firstElementChild as HTMLElement;
+    const lastFlexChild = rootSplit.lastElementChild as HTMLElement;
+
+    expect(firstFlexChild.style.flex).toBe("0.15 1 0%");
+    expect(lastFlexChild.style.flex).toBe("0.85 1 0%");
+  });
+
+  it("clamps above-range rehydrated ratio to MAX_RATIO", () => {
+    mockSessionStorage.setItem(
+      "cadence_window_ratios",
+      JSON.stringify([["root", 1.5]]),
+    );
+
+    render(
+      <TilingLayout
+        windows={makeWindows(["a", "b"])}
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    const splits = screen.getAllByTestId("tile-split");
+    const rootSplit = splits[0];
+    const firstFlexChild = rootSplit.firstElementChild as HTMLElement;
+    const lastFlexChild = rootSplit.lastElementChild as HTMLElement;
+
+    expect(firstFlexChild.style.flex).toBe("0.85 1 0%");
+    expect(lastFlexChild.style.flex).toBe(`${1 - 0.85} 1 0%`);
+  });
+
+  it("falls back to MIN_RATIO for NaN rehydrated values", () => {
+    mockSessionStorage.setItem(
+      "cadence_window_ratios",
+      JSON.stringify([["root", null]]),
+    );
+
+    render(
+      <TilingLayout
+        windows={makeWindows(["a", "b"])}
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    const splits = screen.getAllByTestId("tile-split");
+    const rootSplit = splits[0];
+    const firstFlexChild = rootSplit.firstElementChild as HTMLElement;
+    const lastFlexChild = rootSplit.lastElementChild as HTMLElement;
+
+    expect(firstFlexChild.style.flex).toBe("0.15 1 0%");
+    expect(lastFlexChild.style.flex).toBe(`${1 - 0.15} 1 0%`);
+  });
+
   it("prunes stale ratio entries when a window is removed", () => {
     // Seed ratios for a 4-window layout: root, root.1, and root.1.1 are all valid paths.
     // After reducing to 2 windows only "root" remains valid; root.1 and root.1.1 become stale.
