@@ -5,7 +5,9 @@ set -euo pipefail
 # Stops and removes the agent service, binary, and optionally data.
 
 LABEL="com.cadence.agentd"
+CLEANUP_LABEL="com.cadence.agentd-cleanup"
 BINARY_NAME="agentd"
+CLEANUP_BINARY_NAME="agentd-cleanup"
 INSTALL_DIR="/usr/local/bin"
 
 # --- Helpers ---
@@ -42,6 +44,14 @@ remove_launchd() {
     else
         info "No launchd service found."
     fi
+
+    local cleanup_plist="$HOME/Library/LaunchAgents/$CLEANUP_LABEL.plist"
+    if [[ -f "$cleanup_plist" ]]; then
+        info "Removing launchd cleanup timer..."
+        launchctl bootout "gui/$(id -u)/$CLEANUP_LABEL" 2>/dev/null || true
+        rm -f "$cleanup_plist"
+        info "launchd cleanup timer removed."
+    fi
 }
 
 remove_systemd() {
@@ -57,6 +67,17 @@ remove_systemd() {
     else
         info "No systemd service found."
     fi
+
+    local cleanup_service="/etc/systemd/system/agentd-cleanup.service"
+    local cleanup_timer="/etc/systemd/system/agentd-cleanup.timer"
+    if [[ -f "$cleanup_timer" ]] || [[ -f "$cleanup_service" ]]; then
+        info "Removing systemd cleanup timer..."
+        sudo systemctl stop agentd-cleanup.timer 2>/dev/null || true
+        sudo systemctl disable agentd-cleanup.timer 2>/dev/null || true
+        sudo rm -f "$cleanup_service" "$cleanup_timer"
+        sudo systemctl daemon-reload
+        info "systemd cleanup timer removed."
+    fi
 }
 
 # --- Binary removal ---
@@ -69,6 +90,13 @@ remove_binary() {
         info "Binary removed."
     else
         info "No binary found at $binary."
+    fi
+
+    local cleanup_binary="$INSTALL_DIR/$CLEANUP_BINARY_NAME"
+    if [[ -f "$cleanup_binary" ]]; then
+        info "Removing cleanup script $cleanup_binary..."
+        sudo rm -f "$cleanup_binary"
+        info "Cleanup script removed."
     fi
 }
 
