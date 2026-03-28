@@ -183,6 +183,7 @@ const LIST_TICKETS = gql`
           updatedAt
         }
       }
+      totalCount
       pageInfo {
         hasNextPage
         endCursor
@@ -336,13 +337,14 @@ export async function ticketList(params: TicketListParams): Promise<CallToolResu
     const data = await client.request<{
       tickets: {
         edges: Array<{ node: unknown }>;
+        totalCount: number;
         pageInfo: { hasNextPage: boolean; endCursor: string | null };
       };
     }>(LIST_TICKETS, variables);
 
     const result = {
       tickets: data.tickets.edges.map((e) => e.node),
-      totalCount: data.tickets.edges.length,
+      totalCount: data.tickets.totalCount,
       hasNextPage: data.tickets.pageInfo.hasNextPage,
     };
     return ok(result);

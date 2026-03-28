@@ -7,7 +7,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { gql } from "graphql-request";
 import { getClient } from "./client.js";
-import { getAuthToken, getDefaultProjectId, getDefaultProjectName } from "./config.js";
+import { getAuthToken, getDefaultProjectId, getDefaultProjectName, setResolvedProjectId } from "./config.js";
 import {
   ticketCreate,
   ticketGet,
@@ -58,11 +58,12 @@ if (projectName && !projectId) {
   process.stderr.write(`Resolving project name "${projectName}" to ID...\n`);
   try {
     const resolvedId = await resolveProjectName(projectName);
-    process.env.ISSUES_PROJECT_ID = resolvedId;
+    setResolvedProjectId(resolvedId);
     process.stderr.write(`Resolved project "${projectName}" => ${resolvedId}\n`);
   } catch (error) {
     process.stderr.write(
-      `Warning: Could not resolve project name "${projectName}": ${error instanceof Error ? error.message : String(error)}\n`
+      `Warning: Could not resolve project name "${projectName}": ${error instanceof Error ? error.message : String(error)}\n` +
+      `Warning: Project-scoped tools will fail until ISSUES_PROJECT_ID or a resolvable ISSUES_PROJECT_NAME is set.\n`
     );
   }
 }
@@ -103,16 +104,34 @@ const TOOLS = [
   },
   {
     name: "ticket_get",
-    description: "Get a ticket by CUID or by ticket number (requires projectId when using number)",
+    description:
+      "Get a ticket by CUID (`id`) or by project-scoped number (`number` + `projectId`). " +
+      "Exactly one of `id` or `number` must be provided.",
     inputSchema: {
       type: "object",
-      properties: {
-        id: { type: "string", description: "Ticket CUID" },
-        number: { type: "number", description: "Ticket number (integer)" },
-        projectId: {
-          type: "string",
-          description: "Project ID (required when using number; falls back to ISSUES_PROJECT_ID)",
+      oneOf: [
+        {
+          required: ["id"],
+          properties: {
+            id: { type: "string", description: "Ticket CUID" },
+            projectId: { type: "string", description: "Ignored when id is used" },
+          },
         },
+        {
+          required: ["number", "projectId"],
+          properties: {
+            number: { type: "number", description: "Ticket number (integer)" },
+            projectId: {
+              type: "string",
+              description: "Project ID (required with number; falls back to ISSUES_PROJECT_ID)",
+            },
+          },
+        },
+      ],
+      properties: {
+        id: { type: "string" },
+        number: { type: "number" },
+        projectId: { type: "string" },
       },
     },
   },
@@ -246,7 +265,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   const params = (args ?? {}) as Record<string, unknown>;
 
-  process.stderr.write(`Tool call: ${name}\n`);
+  if (process.env.DEBUG) {
+    process.stderr.write(`Tool call: ${name}\n`);
+  }
 
   switch (name) {
     case "ticket_create":
