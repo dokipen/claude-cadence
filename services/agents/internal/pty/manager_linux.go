@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"regexp"
+	"runtime"
 	"strconv"
 	"syscall"
 	"unsafe"
@@ -20,7 +21,9 @@ var validSlavePath = regexp.MustCompile(`^/dev/pts/[0-9]+$`)
 func masterSlavePath(master *os.File) string {
 	var n uint32
 	// TIOCGPTN is the Linux ioctl to get the PTY number from the master fd.
-	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, master.Fd(), syscall.TIOCGPTN, uintptr(unsafe.Pointer(&n))); errno != 0 { //nolint:gosec // Expected unsafe pointer for Syscall call.
+	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, master.Fd(), syscall.TIOCGPTN, uintptr(unsafe.Pointer(&n))) //nolint:gosec // Expected unsafe pointer for Syscall call.
+	runtime.KeepAlive(master)                                                                                      // prevent GC from finalizing master (closing fd) before Syscall completes
+	if errno != 0 {
 		slog.Warn("pty: failed to get slave path via TIOCGPTN", "error", errno)
 		return ""
 	}
