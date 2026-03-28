@@ -645,6 +645,13 @@
   animation: sessionDestroying 1.5s ease-in-out infinite;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .sidebarSessionDestroying {
+    animation: none;
+    opacity: 0.5;
+  }
+}
+
 /* Spinner for terminal connecting overlay */
 @keyframes spin {
   to {

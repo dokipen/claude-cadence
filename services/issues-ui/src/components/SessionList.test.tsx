@@ -165,39 +165,25 @@ describe("SessionList", () => {
     expect(btn.textContent).not.toContain("○");
   });
 
-  it("destroying session gets destroying class and not stopped class", () => {
-    // CSS modules are mocked to return {}, so class names are empty strings.
-    // We verify the className string on the button element directly by inspecting
-    // what styles keys would be applied via the component logic.
-    // Since the mock returns {} for all keys, we instead verify the icon logic
-    // (already tested above) and that waitingForInput=false + destroying state
-    // does not apply sidebarSessionStopped (empty string from mock).
-    // To properly test class application, we re-mock with named values.
-    vi.doMock("../styles/agents.module.css", () => ({
-      default: {
-        sidebarSession: "sidebarSession",
-        sidebarSessionOpen: "sidebarSessionOpen",
-        sidebarSessionStopped: "sidebarSessionStopped",
-        sidebarSessionDestroying: "sidebarSessionDestroying",
-        sidebarSessionWaiting: "sidebarSessionWaiting",
-        sessionDot: "sessionDot",
-        sessionName: "sessionName",
-        sidebarWrapper: "sidebarWrapper",
-        sessionSidebar: "sessionSidebar",
-        sidebarContent: "sidebarContent",
-        sidebarTitle: "sidebarTitle",
-        sidebarAgent: "sidebarAgent",
-        sidebarAgentHeader: "sidebarAgentHeader",
-        statusDotOnline: "statusDotOnline",
-        statusDotOffline: "statusDotOffline",
-        sidebarAgentName: "sidebarAgentName",
-        sidebarNoSessions: "sidebarNoSessions",
-        sidebarToggle: "sidebarToggle",
-      },
-    }));
+  it("waitingForInput=true takes precedence over state=destroying: shows ◉ not ●", () => {
+    const agents = [makeAgent("my-agent")];
+    const session = makeSession("s1", "my-agent");
+    session.session.state = "destroying";
+    session.session.waitingForInput = true;
+    const { getByTestId } = render(
+      <SessionList
+        {...defaultProps}
+        agents={agents}
+        sessions={[session]}
+        isCollapsed={false}
+      />,
+    );
+    const btn = getByTestId("sidebar-session");
+    expect(btn.textContent).toContain("◉");
+    expect(btn.textContent).not.toContain("●");
+  });
 
-    // Re-import after mock (vitest module isolation means we use the pre-mocked version in this suite;
-    // test the logic via class string inspection on the already-rendered component)
+  it("stopped session shows ○ icon while destroying session shows ●", () => {
     const agents = [makeAgent("my-agent")];
     const destroyingSession = makeSession("s2", "my-agent");
     destroyingSession.session.state = "destroying";
@@ -215,15 +201,11 @@ describe("SessionList", () => {
     );
 
     const btns = getAllByTestId("sidebar-session");
-    // With the top-level mock returning {}, class names are undefined/empty —
-    // verify by title attribute which encodes the state
     const destroyingBtn = btns.find((b) => b.getAttribute("title")?.includes("destroying"));
     const stoppedBtn = btns.find((b) => b.getAttribute("title")?.includes("stopped"));
 
     expect(destroyingBtn).toBeTruthy();
     expect(stoppedBtn).toBeTruthy();
-
-    // destroying shows ●, stopped shows ○
     expect(destroyingBtn?.textContent).toContain("●");
     expect(stoppedBtn?.textContent).toContain("○");
   });
