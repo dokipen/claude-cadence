@@ -410,19 +410,31 @@ func (m *Manager) ReadOutput(sessionID string, lines int) (string, error) {
 	// escape sequences spanning \r or \n boundaries don't break line splitting.
 	cleaned := ansiEscapeRe.ReplaceAllString(string(raw), "")
 
-	// Normalize CRLF to LF.
-	cleaned = strings.ReplaceAll(cleaned, "\r\n", "\n")
-
-	// Apply carriage-return folding: bare \r (without \n) means "overwrite from
-	// start of line", as terminals do for spinners/progress bars. Treat each
-	// bare \r as a line break so that only the final overwrite survives after
-	// we drop empty/spinner lines below.
-	cleaned = strings.ReplaceAll(cleaned, "\r", "\n")
-
-	// Split into lines, drop empty and spinner-only lines.
+	// Split on LF only; CRLF lines will have a trailing \r in each element.
+	// Trim trailing empty segments (artifact of the buffer's final newline)
+	// so the line count is accurate before slicing.
 	all := strings.Split(cleaned, "\n")
-	filtered := all[:0]
-	for _, line := range all {
+	for len(all) > 0 && all[len(all)-1] == "" {
+		all = all[:len(all)-1]
+	}
+
+	// Slice to the tail before joining and normalizing so that the
+	// subsequent ReplaceAll calls operate on ~N*lineWidth bytes instead of
+	// the full ~1 MB snapshot, eliminating the two large intermediate
+	// allocations from the previous implementation.
+	if len(all) > lines {
+		all = all[len(all)-lines:]
+	}
+
+	// Normalize CRs on the small tail string only, then re-split.
+	tail := strings.Join(all, "\n")
+	tail = strings.ReplaceAll(tail, "\r\n", "\n")
+	tail = strings.ReplaceAll(tail, "\r", "\n")
+	sublines := strings.Split(tail, "\n")
+
+	// Drop empty and spinner-only lines.
+	filtered := sublines[:0]
+	for _, line := range sublines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
 			continue
@@ -433,10 +445,6 @@ func (m *Manager) ReadOutput(sessionID string, lines int) (string, error) {
 			continue
 		}
 		filtered = append(filtered, line)
-	}
-
-	if len(filtered) > lines {
-		filtered = filtered[len(filtered)-lines:]
 	}
 
 	return strings.Join(filtered, "\n"), nil
