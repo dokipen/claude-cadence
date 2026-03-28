@@ -235,13 +235,17 @@ describe("fetchAgents", () => {
   });
 
   it("succeeds when agent.status has an unrecognized value (proto3 string field)", async () => {
-    // proto3 string fields accept any string value — no enum validation
+    // proto3 string fields accept any string value — no enum validation.
+    // Agent.status is narrowed to AgentStatus at the type level, but the cast in
+    // parseAgent() is intentional: unknown values pass through at runtime so callers
+    // can handle forward-compat cases without crashing.
     mockFetch({
       json: () => Promise.resolve({ agents: [{ ...validAgentJson, status: "unknown" }] }),
     });
     const result = await fetchAgents();
     expect(result.agents).toHaveLength(1);
-    expect(result.agents[0].status).toBe("unknown");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((result.agents[0] as any).status).toBe("unknown");
   });
 
   it("throws HubError (502) when agent.profiles field has an unexpected type", async () => {

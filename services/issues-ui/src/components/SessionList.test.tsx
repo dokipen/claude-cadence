@@ -4,7 +4,7 @@ import { render, fireEvent, cleanup } from "@testing-library/react";
 import { create } from "@bufbuild/protobuf";
 import { AgentSchema, SessionSchema } from "../gen/hub/v1/hub_pb";
 import { SessionList } from "./SessionList";
-import type { Agent } from "../types";
+import type { Agent, AgentStatus } from "../types";
 import type { AgentSession } from "../hooks/useAllSessions";
 
 // Mock CSS modules
@@ -14,13 +14,13 @@ afterEach(() => {
   cleanup();
 });
 
-const makeAgent = (name: string, status: "online" | "offline" = "online"): Agent =>
+const makeAgent = (name: string, status: AgentStatus = "online"): Agent =>
   create(AgentSchema, {
     name,
     profiles: {},
     status,
     lastSeen: "2024-01-01T00:00:00Z",
-  });
+  }) as unknown as Agent;
 
 const makeSession = (id: string, agentName: string): AgentSession => ({
   agentName,

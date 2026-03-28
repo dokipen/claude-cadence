@@ -57,7 +57,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function parseAgent(data: unknown, index: number): Agent {
   try {
     // ignoreUnknownFields: server may add new fields before proto is updated
-    return fromJson(AgentSchema, data as JsonValue, { ignoreUnknownFields: true });
+    // Cast to Agent: fromJson returns the generated type (status: string); our
+    // exported Agent narrows status to AgentStatus. The cast is intentional —
+    // proto3 strings can carry unexpected values at runtime, but we enforce the
+    // union at the type level for all downstream consumers.
+    return fromJson(AgentSchema, data as JsonValue, { ignoreUnknownFields: true }) as unknown as Agent;
   } catch (e) {
     throw new HubError(502, `Invalid agent at index ${index}: ${e instanceof Error ? e.message : String(e)}`);
   }
