@@ -286,6 +286,7 @@ describe("AgentTab", () => {
         "[AgentTab] Refusing to delete session: invalid id or agentName",
       );
       expect(mockHubFetch).not.toHaveBeenCalled();
+      expect(mockOptimisticSetDestroying).not.toHaveBeenCalled();
 
       warnSpy.mockRestore();
     });
