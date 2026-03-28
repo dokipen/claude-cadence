@@ -79,7 +79,7 @@ Bump the `version` field in `.claude-plugin/plugin.json` only when preparing a r
 - **GitHub access**: Always use `gh` CLI, never WebFetch for GitHub URLs
 - **Shell syntax**: Always use `$()` for command substitution, never backticks — enforced by shellcheck (SC2006)
 - **Milestones**: Group related tickets with `milestone:[N]-[slug]` labels (e.g., `milestone:392-agentd-session-fixes`). `N` is the anchor ticket number; `slug` is a short lowercase-hyphenated descriptor. For plan-generated ticket trees, `/lead` applies these automatically in Phase 3a. For ad-hoc fix clusters (multiple tickets addressing the same underlying problem), create and apply the label manually as soon as the relationship is recognized — don't wait until after the sprint.
-- **No PR without a ticket**: Every PR must link to an issue via `Closes #N` or `Ref #N` in the PR body. Lightweight issues are acceptable — a one-liner with a brief description or repro steps is enough. This ensures traceability and enables mid-sprint communication.
+- **No PR without a ticket**: Every PR must link to an issue in the PR body. Use a closing keyword (`Closes #N`, `Fixes #N`, or `Resolves #N`) when the PR fully resolves the issue; use `Ref #N` for partial work or non-closing references. Lightweight issues are acceptable — a one-liner with a brief description or repro steps is enough. This ensures traceability and enables mid-sprint communication.
 
 ## Workflow Rules
 
