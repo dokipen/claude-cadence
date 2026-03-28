@@ -194,6 +194,7 @@
 .sessionKillButton {
   composes: closeButtonBase;
   font-size: 0.8rem;
+  padding: 0.1rem 0.3rem;
 }
 
 .sessionKillButton:hover:not(:disabled) {
