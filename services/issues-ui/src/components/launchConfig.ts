@@ -12,26 +12,26 @@ export function getLaunchConfig(state: TicketState): LaunchConfig {
       return {
         buttonLabel: "Refine",
         command: (n) => `/refine ${n}`,
-        sessionName: (n, projectId) => `${projectId}-refine-${n}`,
+        sessionName: (n, projectId) => `${projectId ? projectId + "-" : ""}refine-${n}`,
       };
     case "REFINED":
       return {
         buttonLabel: "Lead",
         command: (n) => `/lead ${n}`,
-        sessionName: (n, projectId) => `${projectId}-lead-${n}`,
+        sessionName: (n, projectId) => `${projectId ? projectId + "-" : ""}lead-${n}`,
       };
     case "IN_PROGRESS":
       return {
         buttonLabel: "Lead",
         command: (n) => `/lead ${n}`,
-        sessionName: (n, projectId) => `${projectId}-lead-${n}`,
+        sessionName: (n, projectId) => `${projectId ? projectId + "-" : ""}lead-${n}`,
       };
     case "CLOSED":
       return {
         buttonLabel: "Discuss",
         // Note: ticket titles are user-controlled; see docs/discuss-action-security.md
         command: (n, title) => `Let's discuss ticket #${n} — ${title}`,
-        sessionName: (n, projectId) => `${projectId}-discuss-${n}`,
+        sessionName: (n, projectId) => `${projectId ? projectId + "-" : ""}discuss-${n}`,
       };
     default: {
       const _: never = state;

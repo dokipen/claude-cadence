@@ -161,6 +161,16 @@ describe("hasActiveSession", () => {
   it("returns true for matching name with state 'destroying'", () => {
     expect(hasActiveSession([makeSession("lead-5", "destroying")], 5)).toBe(true);
   });
+
+  it("matches prefixed session names when projectId is provided", () => {
+    expect(hasActiveSession([makeSession("myproject-lead-5", "running")], 5, "myproject")).toBe(true);
+    expect(hasActiveSession([makeSession("myproject-refine-5", "running")], 5, "myproject")).toBe(true);
+    expect(hasActiveSession([makeSession("myproject-discuss-5", "running")], 5, "myproject")).toBe(true);
+  });
+
+  it("does not match a session from a different project when projectId is provided", () => {
+    expect(hasActiveSession([makeSession("other-lead-5", "running")], 5, "myproject")).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
