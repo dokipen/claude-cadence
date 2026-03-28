@@ -91,3 +91,15 @@ describe("ProjectSelector handleChange validation", () => {
     expect(onProjectChange).toHaveBeenCalledWith("proj-a");
   });
 });
+
+describe("ProjectSelector autocomplete attributes", () => {
+  it("project-selector select has autocomplete=off", () => {
+    const onProjectChange = vi.fn();
+    const { getByTestId } = render(
+      <ProjectSelector selectedProjectId="proj-a" onProjectChange={onProjectChange} />,
+    );
+
+    const projectSelect = getByTestId("project-selector");
+    expect(projectSelect).toHaveAttribute("autocomplete", "off");
+  });
+});

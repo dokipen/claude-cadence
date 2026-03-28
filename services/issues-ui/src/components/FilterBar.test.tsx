@@ -298,4 +298,22 @@ describe("FilterBar — autocomplete attributes", () => {
     const cqlInput = getByTestId("cql-input");
     expect(cqlInput).toHaveAttribute("autocomplete", "off");
   });
+
+  it("filter-label select has autocomplete=off", () => {
+    const onChange = vi.fn();
+    const { getByTestId } = render(
+      <FilterBar filters={{}} onChange={onChange} />,
+    );
+    const labelSelect = getByTestId("filter-label");
+    expect(labelSelect).toHaveAttribute("autocomplete", "off");
+  });
+
+  it("filter-priority select has autocomplete=off", () => {
+    const onChange = vi.fn();
+    const { getByTestId } = render(
+      <FilterBar filters={{}} onChange={onChange} />,
+    );
+    const prioritySelect = getByTestId("filter-priority");
+    expect(prioritySelect).toHaveAttribute("autocomplete", "off");
+  });
 });
