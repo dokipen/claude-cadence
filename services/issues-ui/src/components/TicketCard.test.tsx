@@ -25,7 +25,7 @@ const { mockHubFetch, mockOptimisticSetDestroying, mockOptimisticResetState, Moc
 });
 
 // Mock CSS modules
-vi.mock("../styles/card.module.css", () => ({ default: {} }));
+vi.mock("../styles/card.module.css", () => ({ default: new Proxy({}, { get: (_t, key) => String(key) }) }));
 vi.mock("../styles/agents.module.css", () => ({ default: {} }));
 vi.mock("../styles/animated-icon.module.css", () => ({ default: {} }));
 
@@ -591,5 +591,39 @@ describe("kill session", () => {
 
     expect(mockOptimisticResetState).toHaveBeenCalledWith("sess-err", "running");
     expect(getByTestId("card-kill-error")).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TicketCard visual distinction — kill session vs close ticket buttons
+// ---------------------------------------------------------------------------
+
+describe('TicketCard visual distinction: kill session vs close ticket', () => {
+  it('session-kill-button does not show the same icon (x) as the close ticket button', () => {
+    const ticket = makeTicket({ state: 'REFINED', number: 5 });
+    const sessions = [
+      makeSession('lead-5', 'running', { agentName: 'agent1', sessionId: 'sess-abc' }),
+    ];
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
+
+    const killButton = getByTestId('session-kill-button');
+    // The kill button should use a stop icon (■), not the × close icon
+    expect(killButton.textContent).not.toBe('×');
+    expect(killButton.textContent).not.toBe('×');
+    expect(killButton.textContent).not.toContain('×');
+  });
+
+  it('session-kill-button and card-close-button have different CSS class names', () => {
+    const ticket = makeTicket({ state: 'REFINED', number: 5 });
+    const sessions = [
+      makeSession('lead-5', 'running', { agentName: 'agent1', sessionId: 'sess-abc' }),
+    ];
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
+
+    const killButton = getByTestId('session-kill-button');
+    const closeButton = getByTestId('card-close-button');
+
+    // Each button must use a distinct CSS class so they can be styled differently
+    expect(killButton.className).not.toBe(closeButton.className);
   });
 });

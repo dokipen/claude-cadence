@@ -140,4 +140,40 @@ describe("ConfirmDialog", () => {
       "Confirm",
     );
   });
+
+  it('positions the dialog with fixed style when anchorRect is provided', async () => {
+    const mockAnchorRect = {
+      bottom: 100,
+      top: 80,
+      left: 50,
+      right: 100,
+      width: 50,
+      height: 20,
+      x: 50,
+      y: 80,
+      toJSON: () => ({}),
+    } as DOMRect;
+
+    // Flush requestAnimationFrame callbacks synchronously
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      cb(0);
+      return 0;
+    });
+
+    render(
+      <ConfirmDialog
+        open={true}
+        title="Kill session?"
+        message="Terminate the agent?"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+        anchorRect={mockAnchorRect}
+      />,
+    );
+
+    const dialog = screen.getByTestId('confirm-dialog');
+    // The dialog should be positioned with fixed layout when anchorRect is provided
+    expect(dialog.style.position).toBe('fixed');
+  });
+
 });
