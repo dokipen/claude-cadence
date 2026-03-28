@@ -435,9 +435,9 @@ func (d *Dispatcher) SendInput(params json.RawMessage) (json.RawMessage, *rpcErr
 
 func mapPTYError(err error) *rpcError {
 	if errors.Is(err, pty.ErrSessionNotFound) {
-		return &rpcError{Code: rpcErrNotFound, Message: err.Error()}
+		return &rpcError{Code: rpcErrNotFound, Message: "pty session not found"}
 	}
-	return &rpcError{Code: rpcErrInternal, Message: err.Error()}
+	return &rpcError{Code: rpcErrInternal, Message: "internal error"}
 }
 
 func marshalResult(v any) (json.RawMessage, *rpcError) {

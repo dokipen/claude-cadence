@@ -349,24 +349,28 @@ func TestDispatcher_SendInput_NilPTYManager(t *testing.T) {
 
 func TestMapPTYError(t *testing.T) {
 	tests := []struct {
-		name     string
-		err      error
-		wantCode int
+		name        string
+		err         error
+		wantCode    int
+		wantMessage string
 	}{
 		{
-			name:     "sentinel wrapped error maps to not found",
-			err:      fmt.Errorf("pty: session %q not found: %w", "abc", pty.ErrSessionNotFound),
-			wantCode: rpcErrNotFound,
+			name:        "sentinel wrapped error maps to not found",
+			err:         fmt.Errorf("pty: session %q not found: %w", "abc", pty.ErrSessionNotFound),
+			wantCode:    rpcErrNotFound,
+			wantMessage: "pty session not found",
 		},
 		{
-			name:     "unwrapped sentinel maps to not found",
-			err:      pty.ErrSessionNotFound,
-			wantCode: rpcErrNotFound,
+			name:        "unwrapped sentinel maps to not found",
+			err:         pty.ErrSessionNotFound,
+			wantCode:    rpcErrNotFound,
+			wantMessage: "pty session not found",
 		},
 		{
-			name:     "unrelated error maps to internal",
-			err:      errors.New("some other error"),
-			wantCode: rpcErrInternal,
+			name:        "unrelated error maps to internal",
+			err:         errors.New("some other error"),
+			wantCode:    rpcErrInternal,
+			wantMessage: "internal error",
 		},
 	}
 	for _, tt := range tests {
@@ -374,6 +378,9 @@ func TestMapPTYError(t *testing.T) {
 			got := mapPTYError(tt.err)
 			if got.Code != tt.wantCode {
 				t.Errorf("mapPTYError(%v).Code = %v, want %v", tt.err, got.Code, tt.wantCode)
+			}
+			if got.Message != tt.wantMessage {
+				t.Errorf("mapPTYError(%v).Message = %q, want %q", tt.err, got.Message, tt.wantMessage)
 			}
 		})
 	}
