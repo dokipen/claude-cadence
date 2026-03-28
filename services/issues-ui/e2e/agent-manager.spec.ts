@@ -276,7 +276,7 @@ test.describe("agent manager page", () => {
     );
   });
 
-  test("clicking already-open session minimizes it", async ({ page }) => {
+  test("clicking an already-open session minimizes it", async ({ page }) => {
     await page.goto("/agents");
     await expect(page.getByTestId("sidebar-session")).toHaveCount(3, { timeout: 15000 });
 
