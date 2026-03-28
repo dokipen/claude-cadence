@@ -128,6 +128,7 @@ setup_directories() {
     prompt AGENTD_ROOT_DIR "Root directory for repos and worktrees" "$DEFAULT_ROOT_DIR"
     prompt AGENTD_CONFIG_DIR "Config directory" "$DEFAULT_CONFIG_DIR"
     prompt AGENTD_LOG_DIR "Log directory" "$DEFAULT_LOG_DIR"
+    validate_yaml_string "$AGENTD_LOG_DIR" "log.path"
 
     info "Creating directories..."
     sudo mkdir -p "$AGENTD_ROOT_DIR/repos" "$AGENTD_ROOT_DIR/worktrees"
