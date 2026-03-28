@@ -259,10 +259,33 @@ describe("AgentTab", () => {
       fireEvent.click(destroyBtn);
 
       expect(warnSpy).toHaveBeenCalledWith(
-        "[AgentTab] Refusing to delete session: invalid id",
+        "[AgentTab] Refusing to delete session: invalid id or agentName",
       );
       expect(mockHubFetch).not.toHaveBeenCalled();
       expect(mockOptimisticSetDestroying).not.toHaveBeenCalled();
+
+      warnSpy.mockRestore();
+    });
+
+    it("skips DELETE and warns when agentName is invalid", async () => {
+      // Use an agent whose name contains spaces — validateAgentProfile rejects it.
+      // AgentTab sets active.agentName from the matched agent.name during discovery.
+      mockAgents.current = [{ name: "bad agent name", status: "online" }];
+      mockHubFetch.mockResolvedValueOnce({
+        sessions: [{ id: "sess-valid-1", name: "lead-42", state: "running" }],
+      });
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      const { findByTestId } = render(<AgentTab {...defaultProps} />);
+      const destroyBtn = await findByTestId("destroy-session");
+
+      mockHubFetch.mockReset();
+      fireEvent.click(destroyBtn);
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        "[AgentTab] Refusing to delete session: invalid id or agentName",
+      );
+      expect(mockHubFetch).not.toHaveBeenCalled();
 
       warnSpy.mockRestore();
     });

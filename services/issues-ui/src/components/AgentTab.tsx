@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { AgentLauncher } from "./AgentLauncher";
 import { Terminal } from "./Terminal";
 import { hubFetch } from "../api/agentHubClient";
-import { validateSessionId } from "../utils/validateSession";
+import { validateSessionId, validateAgentProfile } from "../utils/validateSession";
 import { useAgents } from "../hooks/useAgents";
 import { useSessionsContext } from "../hooks/SessionsContext";
 import { getLaunchConfig } from "./launchConfig";
@@ -115,8 +115,8 @@ export function AgentTab({ ticketNumber, ticketTitle, ticketState, repoUrl }: Ag
 
   const handleDestroy = useCallback(async () => {
     if (!active) return;
-    if (!validateSessionId(active.session.id)) {
-      console.warn("[AgentTab] Refusing to delete session: invalid id");
+    if (!validateSessionId(active.session.id) || !validateAgentProfile(active.agentName)) {
+      console.warn("[AgentTab] Refusing to delete session: invalid id or agentName");
       return;
     }
     optimisticSetDestroying(active.session.id);
