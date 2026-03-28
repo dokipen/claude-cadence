@@ -22,7 +22,12 @@ REPO_ROOT="${1:-$(cd "$(dirname "$0")/../../.." && pwd)}"
 # ---- Port discovery ---------------------------------------------------------
 
 is_port_free() {
-    ! ss -tln 2>/dev/null | grep -q ":${1}[^0-9]"
+    if command -v ss > /dev/null 2>&1; then
+        if ss -tln 2>/dev/null | grep -q ":${1}[^0-9]"; then return 1; fi
+    elif nc -z 127.0.0.1 "$1" 2>/dev/null; then
+        return 1
+    fi
+    return 0
 }
 
 find_free_port() {
@@ -68,7 +73,7 @@ docker compose \
 
 # ---- Surface URL ------------------------------------------------------------
 
-HOST_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
+HOST_IP=$(ipconfig getifaddr en0 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
 QA_URL="http://${HOST_IP}:${QA_PORT}/"
 
 echo ""

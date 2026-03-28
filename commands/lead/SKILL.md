@@ -396,20 +396,19 @@ Run **both** applicable sub-sections below. A PR that touches both agent-service
 
 #### Visual/UI changes
 
-1. **Direct the user to spin up the dev environment** (see `docs/dev-environment.md`):
+1. **Run the QA environment setup script** from the worktree:
    ```bash
-   # If .env.dev doesn't exist yet, copy the example and fill in secrets first
-   cp .env.dev.example .env.dev
-   # Then start the stack
-   docker compose -f docker-compose.dev.yml up --build
+   bash "$WORKTREE_DIR/commands/lead/scripts/start-qa-env.sh" "$WORKTREE_DIR"
    ```
-   Then open **http://localhost** in a browser.
+   The script handles `.env.dev` setup, port discovery, and compose stack startup. It prints the QA URL (`http://HOST_IP:PORT/`) and opens it in the browser.
+
+   > If the script exits after copying `.env.dev.example`, secrets need to be filled in first — inform the user and wait before re-running.
 
    **What requires a rebuild vs. what picks up automatically:**
    - Changes to `services/issues-ui/` (frontend) are reflected immediately via Vite HMR — no rebuild needed.
-   - Changes to `services/issues/` (backend) require a container rebuild:
+   - Changes to `services/issues/` (backend) require a container rebuild. Use the project name printed by the script (e.g. `cadence-qa-5173`):
      ```bash
-     docker compose -f docker-compose.dev.yml up --build issues
+     docker compose -p cadence-qa-<PORT> up --build issues
      ```
 2. Wait for user feedback (user intervention required)
 3. Address issues if reported, return to Phase 5 after fixes
