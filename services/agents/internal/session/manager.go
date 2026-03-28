@@ -406,24 +406,44 @@ func (m *Manager) ReadOutput(sessionID string, lines int) (string, error) {
 		return "", &Error{Code: ErrNotFound, Message: fmt.Sprintf("session %q output not found: %v", sessionID, err)}
 	}
 
-	// Normalize CRLF to LF first so lines don't carry trailing \r artifacts.
-	// This must happen before splitting into lines.
-	normalized := bytes.ReplaceAll(raw, []byte("\r\n"), []byte("\n"))
+	// Strip ANSI escape sequences first, before any line processing, so that
+	// escape sequences spanning \r or \n boundaries don't break line splitting.
+	cleaned := ansiEscapeRe.ReplaceAllString(string(raw), "")
 
-	// Split into lines, drop empty trailing lines, take last n.
-	all := strings.Split(string(normalized), "\n")
-	// Trim trailing empty lines.
-	for len(all) > 0 && all[len(all)-1] == "" {
-		all = all[:len(all)-1]
-	}
-	if len(all) > lines {
-		all = all[len(all)-lines:]
+	// Normalize CRLF to LF.
+	cleaned = strings.ReplaceAll(cleaned, "\r\n", "\n")
+
+	// Apply carriage-return folding: bare \r (without \n) means "overwrite from
+	// start of line", as terminals do for spinners/progress bars. Treat each
+	// bare \r as a line break so that only the final overwrite survives after
+	// we drop empty/spinner lines below.
+	cleaned = strings.ReplaceAll(cleaned, "\r", "\n")
+
+	// Split into lines, drop empty and spinner-only lines.
+	all := strings.Split(cleaned, "\n")
+	filtered := all[:0]
+	for _, line := range all {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		// Drop spinner-only lines (single non-alphanumeric rune like ✻ ✶ · etc).
+		r := []rune(trimmed)
+		if len(r) == 1 && !isAlphanumeric(r[0]) {
+			continue
+		}
+		filtered = append(filtered, line)
 	}
 
-	// Join the tail (small string ~4 KB) then strip ANSI escape sequences and
-	// non-printable control characters. Running the regex on the tail only
-	// reduces regex input from ~1 MB to ~50 lines.
-	return ansiEscapeRe.ReplaceAllString(strings.Join(all, "\n"), ""), nil
+	if len(filtered) > lines {
+		filtered = filtered[len(filtered)-lines:]
+	}
+
+	return strings.Join(filtered, "\n"), nil
+}
+
+func isAlphanumeric(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
 }
 
 func (m *Manager) reconcile(sess *Session) {

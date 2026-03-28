@@ -293,3 +293,52 @@ func TestReadOutput_LinesLimit(t *testing.T) {
 		}
 	})
 }
+
+// TestReadOutput_SpinnerFiltering verifies that bare \r spinner frames and
+// single-character non-alphanumeric lines (like ✻ ✶ · ✢) are filtered out.
+func TestReadOutput_SpinnerFiltering(t *testing.T) {
+	ptyMgr := pty.NewPTYManager(pty.PTYConfig{BufferSize: 65536})
+	sessID := "readoutput-spinner"
+
+	// Simulate spinner output: bare \r overwrites followed by real content.
+	// The spinner chars are UTF-8 multi-byte, separated by \r (no \n).
+	script := `printf '\xe2\x9c\xbb\r\xe2\x9c\xb6\r\xe2\x9c\xb3\r\xc2\xb7\rreal content line\n'; sleep 3600`
+	err := ptyMgr.Create(sessID, t.TempDir(),
+		[]string{"sh", "-c", script},
+		nil, 80, 24)
+	if err != nil {
+		t.Fatalf("PTY Create failed: %v", err)
+	}
+	t.Cleanup(func() { ptyMgr.Destroy(sessID) })
+
+	waitForContent(t, ptyMgr, sessID, "real content line")
+
+	m := newReadOutputTestManager(ptyMgr)
+	out, err := m.ReadOutput(sessID, 50)
+	if err != nil {
+		t.Fatalf("ReadOutput error: %v", err)
+	}
+
+	t.Run("spinner_chars_removed", func(t *testing.T) {
+		for _, spinner := range []string{"✻", "✶", "✳", "·"} {
+			if strings.Contains(out, spinner) {
+				t.Errorf("spinner char %q should be filtered, got: %q", spinner, out)
+			}
+		}
+	})
+
+	t.Run("real_content_preserved", func(t *testing.T) {
+		if !strings.Contains(out, "real content line") {
+			t.Errorf("expected 'real content line' in output, got: %q", out)
+		}
+	})
+
+	t.Run("no_empty_lines", func(t *testing.T) {
+		for _, line := range strings.Split(out, "\n") {
+			if strings.TrimSpace(line) == "" {
+				t.Errorf("empty line found in output: %q", out)
+				break
+			}
+		}
+	})
+}
