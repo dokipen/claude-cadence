@@ -6,6 +6,12 @@
 
 <!-- How was this tested? List commands run, manual steps, or automated tests. -->
 
+## UI Tests (issues-ui changes only)
+
+<!-- Only applies when services/issues-ui/ is touched. -->
+
+- [ ] New/modified components and hooks have co-located interaction-level tests (see `services/issues-ui/CLAUDE.md`)
+
 ## Attack Surface / Invariants
 
 <!-- Required if this PR touches state machines, session lifecycle, reconnection logic,

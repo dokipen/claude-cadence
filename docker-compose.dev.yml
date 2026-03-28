@@ -1,12 +1,14 @@
 # Dev/QA stack for Claude Cadence
 #
 # All services share a private bridge network (cadence-dev). Only the Vite dev
-# server (port 5173) is exposed to the host. Inter-service communication uses
-# Docker DNS names. Vite proxies /graphql → issues and /api/v1, /ws/terminal →
-# agent-hub (with HUB_API_TOKEN injection), so no Caddy reverse proxy is needed.
+# server and Caddy are exposed to the host. Inter-service communication uses
+# Docker DNS names.
 #
-# Full stack (issues + issues-ui + agent-hub + agentd):
+# Full stack (issues + issues-ui + Caddy + agent-hub + agentd):
 #   docker compose -f docker-compose.dev.yml up
+#
+# Override host ports via environment variables:
+#   ISSUES_UI_HOST_PORT=5174 CADDY_PORT=8080 docker compose -f docker-compose.dev.yml up
 #
 # Prerequisites:
 #   cp .env.dev.example .env.dev
@@ -44,7 +46,8 @@ services:
     networks:
       - cadence-dev
     ports:
-      - "5173:5173" # binds 0.0.0.0 intentionally — dev only, allows remote LAN access
+      # Binds 0.0.0.0 by default for remote LAN access. Override with e.g. ISSUES_UI_HOST_PORT=127.0.0.1:5173
+      - "${ISSUES_UI_HOST_PORT:-5173}:5173"
     volumes:
       # Bind-mount source for hot reload; anonymous volume preserves node_modules
       - ./services/issues-ui:/app
@@ -57,10 +60,26 @@ services:
       - VITE_API_HOST=issues
       - VITE_AGENT_HUB_HOST=agent-hub
       - VITE_AUTH_BYPASS=1 # dev only — bypasses login
-      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_USEPOLLING=true # required for HMR across Docker bind mounts
     depends_on:
       issues:
         condition: service_healthy
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    networks:
+      - cadence-dev
+    ports:
+      - "${QA_HOST:-0.0.0.0}:${QA_PORT:-80}:80"
+    volumes:
+      - ./infrastructure/Caddyfile.dev:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    env_file: .env.dev
+    depends_on:
+      - issues
+      - issues-ui
 
   # Agent services — included in the default stack
   #
@@ -122,4 +141,6 @@ networks:
 
 volumes:
   issues-data:
+  caddy-data:
+  caddy-config:
   agentd-data:

@@ -35,6 +35,7 @@ type Manager struct {
 	ptyHasSession func(id string) bool // injectable for tests; defaults to checking pty.PID
 	processAlive  func(pid int) bool
 	killProcess   func(pid int) error // injectable for tests; defaults to sending SIGKILL
+	ptyReconnect  func(id, slavePath string) error // injectable for tests; defaults to m.pty.Reattach
 }
 
 // NewManager creates a new session Manager.
@@ -60,6 +61,15 @@ func NewManager(store *Store, ptyManager *pty.PTYManager, gitClient *git.Client,
 	}
 	m.processAlive = isProcessAlive
 	m.killProcess = killProcessDefault
+	if ptyManager != nil {
+		m.ptyReconnect = func(id, slavePath string) error {
+			return m.pty.Reattach(id, slavePath)
+		}
+	} else {
+		m.ptyReconnect = func(id, slavePath string) error {
+			return fmt.Errorf("pty manager not configured")
+		}
+	}
 	return m
 }
 
@@ -264,8 +274,11 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 
 	// Build PTY command: wrap the shell command string via bash -c so that
 	// the rendered cmdStr (which may include shell operators) is interpreted
-	// correctly.
-	command := []string{"bash", "-c", cmdStr}
+	// correctly. Prepend `trap '' HUP` so the child process and any exec'd
+	// descendants ignore SIGHUP — this lets sessions survive agentd restarts
+	// (closing the PTY master sends SIGHUP to the foreground process group;
+	// SIG_IGN is inherited across exec so grandchildren are also protected).
+	command := []string{"bash", "-c", "trap '' HUP; " + cmdStr}
 
 	slog.Debug("launching session command", "session", sessionID, "name", req.SessionName, "command", cmdStr, "cwd", workdir)
 
@@ -279,6 +292,10 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		m.store.Delete(sessionID)
 		return nil, &Error{Code: ErrInternal, Message: fmt.Sprintf("failed to create PTY session: %v", err)}
 	}
+
+	// Capture the slave PTY path so it can be persisted and used to reconnect
+	// the PTY on daemon restart if the process is still alive.
+	ptySlavePath := m.pty.GetSlavePath(sessionID)
 
 	// Get PID of the child process.
 	// If the command exited immediately (e.g., fast-exit profile), the PTY
@@ -305,6 +322,7 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		s.State = StateRunning
 		s.AgentPID = pid
 		s.WebsocketURL = ""
+		s.PTYSlavePath = ptySlavePath
 	})
 
 	sess, getErr := m.mustGet(sessionID)
@@ -542,9 +560,21 @@ func (m *Manager) RestoreFromPersister(p *Persister) error {
 					sess.StoppedAt = time.Now()
 				}
 				needsPersist = true
+			} else if sess.PTYSlavePath != "" {
+				// Process is alive and we have the slave PTY path — attempt
+				// to reconnect the PTY so the session is fully live again.
+				if err := m.ptyReconnect(sess.ID, sess.PTYSlavePath); err == nil {
+					// PTY reconnected — session is fully live, no fallback guard needed.
+					needsPersist = false
+				} else {
+					// Reconnect failed — fall back to restoredFromDisk guard so
+					// reconcile() does not incorrectly stop the session.
+					slog.Warn("PTY reconnect failed on restore, falling back to restoredFromDisk guard",
+						"id", sess.ID, "slavePath", sess.PTYSlavePath, "error", err)
+					sess.restoredFromDisk = true
+				}
 			} else {
-				// Process is alive; mark this session as restored so reconcile()
-				// does not mistake the missing PTY handle for a dead session.
+				// Legacy session with no saved slave path — use existing fallback.
 				sess.restoredFromDisk = true
 			}
 			slog.Info("restored session", "id", sess.ID, "state", sess.State, "pid", sess.AgentPID)

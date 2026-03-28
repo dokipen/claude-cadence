@@ -85,6 +85,8 @@ Returns either:
 
 agentd connects to agent-hub via a `hub:` block in `~/.config/agentd/config.yaml`:
 
+> **Note:** This path is shown for human reference only. Do not attempt to read, verify, or access `~/.config/agentd/config.yaml` or any other home directory path during agent operation — this triggers macOS permission popups. All agentd configuration is managed by the host operator.
+
 ```yaml
 hub:
   url: "wss://cadence.whatisbackdoor.com/ws/agent"

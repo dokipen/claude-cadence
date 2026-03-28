@@ -33,6 +33,10 @@ type Session struct {
 	BaseRef         string
 	WaitingForInput bool
 	IdleSince       *time.Time
+	// PTYSlavePath is the /dev/pts/N path of the slave side of the PTY,
+	// captured at session creation time and persisted so that on daemon
+	// restart the PTY can be reconnected by re-opening the slave device.
+	PTYSlavePath string
 	// restoredFromDisk marks a session loaded from persistent storage on daemon
 	// startup. Ephemeral: never serialized. Used by reconcile() to avoid
 	// incorrectly stopping a restored Running session whose process is alive

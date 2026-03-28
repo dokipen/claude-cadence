@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"runtime"
@@ -61,6 +62,7 @@ func ParseLogs(ctx context.Context, logPath string, since time.Time) ([]Diagnost
 	if runtime.GOOS == "linux" {
 		return readJournald(ctx, since)
 	}
+	slog.Warn("no log source available for diagnostics: set log.path in config on non-Linux hosts")
 	return nil, nil
 }
 

@@ -10,6 +10,7 @@ DEFAULT_ROOT_DIR="/var/lib/agentd"
 DEFAULT_CONFIG_DIR=""
 DEFAULT_LOG_DIR=""
 INSTALL_DIR="/usr/local/bin"
+DAEMON_PATH=""
 
 # --- Helpers ---
 
@@ -66,6 +67,18 @@ check_prerequisites() {
     info "Prerequisites satisfied."
 }
 
+# --- gh detection ---
+
+detect_gh_dir() {
+    if command -v gh >/dev/null 2>&1; then
+        dirname "$(command -v gh)"
+    else
+        warn "gh CLI not found — launchd PATH will use system defaults only"
+        warn "Install gh (https://cli.github.com) and re-run to enable gh credential helper support"
+        echo ""
+    fi
+}
+
 # --- User management ---
 
 setup_user() {
@@ -115,6 +128,7 @@ setup_directories() {
     prompt AGENTD_ROOT_DIR "Root directory for repos and worktrees" "$DEFAULT_ROOT_DIR"
     prompt AGENTD_CONFIG_DIR "Config directory" "$DEFAULT_CONFIG_DIR"
     prompt AGENTD_LOG_DIR "Log directory" "$DEFAULT_LOG_DIR"
+    validate_yaml_string "$AGENTD_LOG_DIR" "log.path"
 
     info "Creating directories..."
     sudo mkdir -p "$AGENTD_ROOT_DIR/repos" "$AGENTD_ROOT_DIR/worktrees"
@@ -173,6 +187,7 @@ is_lan_url() {
 # --- Config generation ---
 
 generate_config() {
+    local os="$1"
     local config_path="$AGENTD_CONFIG_DIR/config.yaml"
 
     if [[ -f "$config_path" ]]; then
@@ -192,6 +207,15 @@ root_dir: "$AGENTD_ROOT_DIR"
 log:
   level: "info"
   format: "json"
+EOF
+
+    if [[ "$os" == "darwin" ]]; then
+        cat >> "$config_path" <<EOF
+  path: "$AGENTD_LOG_DIR/agentd.log"
+EOF
+    fi
+
+    cat >> "$config_path" <<EOF
 
 # Add agent profiles below:
 profiles: {}
@@ -252,7 +276,7 @@ xml_encode() {
 
 render_template() {
     local template="$1" output="$2" use_xml="${3:-false}"
-    local binary_path config_path user group root_dir log_dir
+    local binary_path config_path user group root_dir log_dir daemon_path
     if [[ "$use_xml" == "true" ]]; then
         binary_path=$(xml_encode "$INSTALL_DIR/$BINARY_NAME")
         config_path=$(xml_encode "$AGENTD_CONFIG_DIR/config.yaml")
@@ -260,6 +284,7 @@ render_template() {
         group=$(xml_encode "$AGENTD_GROUP")
         root_dir=$(xml_encode "$AGENTD_ROOT_DIR")
         log_dir=$(xml_encode "$AGENTD_LOG_DIR")
+        daemon_path=$(xml_encode "$DAEMON_PATH")
     else
         binary_path="$INSTALL_DIR/$BINARY_NAME"
         config_path="$AGENTD_CONFIG_DIR/config.yaml"
@@ -267,6 +292,7 @@ render_template() {
         group="$AGENTD_GROUP"
         root_dir="$AGENTD_ROOT_DIR"
         log_dir="$AGENTD_LOG_DIR"
+        daemon_path="$DAEMON_PATH"
     fi
     sed \
         -e "s|__BINARY_PATH__|$(sed_escape "$binary_path")|g" \
@@ -275,6 +301,7 @@ render_template() {
         -e "s|__GROUP__|$(sed_escape "$group")|g" \
         -e "s|__ROOT_DIR__|$(sed_escape "$root_dir")|g" \
         -e "s|__LOG_DIR__|$(sed_escape "$log_dir")|g" \
+        -e "s|__DAEMON_PATH__|$(sed_escape "$daemon_path")|g" \
         -e "s|__HUB_AGENT_TOKEN__|$(sed_escape "$(xml_encode "${HUB_AGENT_TOKEN:-}")")|g" \
         "$template" > "$output"
 }
@@ -289,6 +316,15 @@ install_launchd() {
 
     if [[ ! -f "$plist_tmpl" ]]; then
         error "launchd template not found: $plist_tmpl"
+    fi
+
+    local gh_dir sys_path
+    gh_dir="$(detect_gh_dir)"
+    sys_path="/usr/bin:/bin:/usr/sbin:/sbin"
+    if [[ -n "$gh_dir" ]]; then
+        DAEMON_PATH="$gh_dir:$sys_path"
+    else
+        DAEMON_PATH="$sys_path"
     fi
 
     info "Installing launchd service..."
@@ -360,7 +396,7 @@ main() {
     setup_directories "$os"
     setup_hub
     install_binary
-    generate_config
+    generate_config "$os"
 
     case "$os" in
         darwin) install_launchd ;;

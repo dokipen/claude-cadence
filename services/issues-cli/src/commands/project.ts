@@ -66,7 +66,7 @@ export function registerProjectCommand(program: Command): void {
     .requiredOption("--repository <repository>", "Repository (e.g. org/repo)")
     .option("--json", "Output raw JSON")
     .action(async (opts: { name: string; repository: string; json?: boolean }) => {
-      const spinner = ora("Creating project...").start();
+      const spinner = ora({ text: "Creating project...", isSilent: !!opts.json }).start();
       try {
         const client = getClient();
         const data = await client.request<{
@@ -97,7 +97,7 @@ export function registerProjectCommand(program: Command): void {
     .description("List all projects")
     .option("--json", "Output raw JSON")
     .action(async (opts: { json?: boolean }) => {
-      const spinner = ora("Fetching projects...").start();
+      const spinner = ora({ text: "Fetching projects...", isSilent: !!opts.json }).start();
       try {
         const client = getClient();
         const data = await client.request<{
@@ -134,7 +134,7 @@ export function registerProjectCommand(program: Command): void {
     .description("View project details (accepts project name or ID)")
     .option("--json", "Output raw JSON")
     .action(async (id: string, opts: { json?: boolean }) => {
-      const spinner = ora("Fetching project...").start();
+      const spinner = ora({ text: "Fetching project...", isSilent: !!opts.json }).start();
       try {
         const resolvedId = await resolveProjectId(id);
         const client = getClient();
@@ -191,7 +191,7 @@ export function registerProjectCommand(program: Command): void {
         process.exit(1);
       }
 
-      const spinner = ora("Updating project...").start();
+      const spinner = ora({ text: "Updating project...", isSilent: !!opts.json }).start();
       try {
         const resolvedId = await resolveProjectId(id);
         const client = getClient();
