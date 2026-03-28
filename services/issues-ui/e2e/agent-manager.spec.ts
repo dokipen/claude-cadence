@@ -276,16 +276,16 @@ test.describe("agent manager page", () => {
     );
   });
 
-  test("clicking already-open session does not duplicate it", async ({ page }) => {
+  test("clicking already-open session minimizes it", async ({ page }) => {
     await page.goto("/agents");
     await expect(page.getByTestId("sidebar-session")).toHaveCount(3, { timeout: 15000 });
 
     await page.getByTestId("sidebar-session").first().click();
     await expect(page.getByTestId("terminal-window")).toHaveCount(1);
 
-    // Click same session again
+    // Click same session again — should minimize (toggle off)
     await page.getByTestId("sidebar-session").first().click();
-    await expect(page.getByTestId("terminal-window")).toHaveCount(1);
+    await expect(page.getByTestId("terminal-window")).toHaveCount(0);
   });
 
   test("stopped sessions appear dimmed in sidebar", async ({ page }) => {
