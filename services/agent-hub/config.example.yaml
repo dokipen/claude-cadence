@@ -12,7 +12,7 @@ hub_auth:
 # Set this to the frontend URL(s) served by your reverse proxy (e.g. Caddy).
 # When empty, connections from any origin are accepted (not recommended for production).
 # allowed_origins:
-#   - "https://cadence.bootsy.internal"
+#   - "https://cadence.whatisbackdoor.com"
 
 heartbeat:
   interval: "30s"

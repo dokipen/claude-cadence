@@ -106,5 +106,5 @@ shellcheck commands/**/*.sh skills/**/*.sh
 
 ## Ticket Provider
 provider: issues-api
-api_url: https://cadence.bootsy.internal
+api_url: https://cadence.whatisbackdoor.com
 project_id: claude-cadence

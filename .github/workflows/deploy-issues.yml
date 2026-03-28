@@ -105,7 +105,7 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Image:** \`issues-service:${IMAGE_TAG}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Commit:** \`${COMMIT_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Service:** https://cadence.bootsy.internal/graphql" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Service:** https://cadence.whatisbackdoor.com/graphql" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Post failure summary
         if: failure()

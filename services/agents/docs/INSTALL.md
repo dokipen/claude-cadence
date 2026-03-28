@@ -278,7 +278,7 @@ Add a `hub:` block to `config.yaml`:
 
 ```yaml
 hub:
-  url: "wss://cadence.bootsy.internal/ws/agent"
+  url: "wss://cadence.whatisbackdoor.com/ws/agent"
   name: "mbp-bob"              # unique identifier for this machine
   token_env_var: "HUB_AGENT_TOKEN"  # read token from environment (recommended)
   reconnect_interval: "5s"    # default: 5s
@@ -293,7 +293,7 @@ The interactive installer prompts for hub configuration:
 ```
 ==> Hub configuration (optional — connects this agent to an agent-hub)
 Connect this agent to an agent-hub? [y/N]: y
-Hub WebSocket URL [wss://cadence.bootsy.internal/ws/agent]:
+Hub WebSocket URL [wss://cadence.whatisbackdoor.com/ws/agent]:
 Agent name (identifier for this machine) [mbp-bob]:
 Hub agent token (input hidden):
 ```
@@ -333,7 +333,7 @@ After the service starts, verify the agent appears in the hub:
 
 ```bash
 curl -s -H "Authorization: Bearer $HUB_API_TOKEN" \
-  https://cadence.bootsy.internal/api/v1/agents | jq '.[].name'
+  https://cadence.whatisbackdoor.com/api/v1/agents | jq '.[].name'
 ```
 
 The agent's name (e.g. `"mbp-bob"`) should appear with `"status": "online"`. It will then be visible and dispatchable from the issues UI.

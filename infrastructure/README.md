@@ -18,12 +18,12 @@ Caddy provides a single entry point for the Claude Cadence backend services with
 `CADENCE_DOMAIN` is required. Start both backend services first, then run Caddy:
 
 ```bash
-CADENCE_DOMAIN=cadence.bootsy.internal caddy run --config infrastructure/Caddyfile
+CADENCE_DOMAIN=cadence.whatisbackdoor.com caddy run --config infrastructure/Caddyfile
 ```
 
 Caddy serves HTTPS on port 443 using its built-in CA and redirects HTTP (port 80) to HTTPS. Services are available at:
 
-- `https://cadence.bootsy.internal/graphql` — Issues GraphQL API
+- `https://cadence.whatisbackdoor.com/graphql` — Issues GraphQL API
 
 **DNS:** Ensure `CADENCE_DOMAIN` resolves to the host running Caddy on your LAN.
 
