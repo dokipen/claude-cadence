@@ -540,6 +540,8 @@ Using the outline from Plan Phase 1, delegate to a `general-purpose` agent to wr
 
 For each phase in the plan document, create an implementation ticket:
 
+**Shell safety:** The `--title` argument is inline — avoid backticks in phase titles. Write titles as plain text without backtick code formatting.
+
 **GitHub (default):**
 ```bash
 gh issue create \

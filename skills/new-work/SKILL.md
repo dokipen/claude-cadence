@@ -23,6 +23,8 @@ If you don't have an issue number yet, create one first:
 gh issue create --title "Description of the work" --label "enhancement" --body "..."
 ```
 
+**Shell safety:** The `--title` argument is inline — avoid backticks in the title. Use the `github-issues` or `issues-api` skill for guidance on safe patterns.
+
 ## What It Does
 
 1. **Runs pre-flight check**: Checks for orphaned worktree directories

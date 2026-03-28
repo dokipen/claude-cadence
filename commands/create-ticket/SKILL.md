@@ -67,7 +67,14 @@ Acceptance criteria:
 
 ### 3. Create the Ticket
 
-**Shell safety:** Body content uses `<<'EOF'` single-quoted heredocs (backtick-safe). The `--title` argument is inline — avoid backticks in titles. If a title must reference code, write it without backtick formatting (e.g., "Fix createSession return type" not "Fix `createSession` return type"). See `skills/issues-api/SKILL.md` for the variable-assignment escape hatch if backticks in a title are unavoidable.
+**Shell safety:** Body content uses `<<'EOF'` single-quoted heredocs (backtick-safe). The `--title` argument is inline — avoid backticks in titles. If a title must reference code, write it without backtick formatting (e.g., "Fix createSession return type" not "Fix `createSession` return type"). If backticks in a title are unavoidable, use a variable assignment:
+```bash
+TICKET_TITLE=$(cat <<'EOF'
+Fix `createSession` return type
+EOF
+)
+```
+Then pass `--title "$TICKET_TITLE"` instead of an inline string.
 
 **GitHub Issues:**
 ```bash
