@@ -33,6 +33,7 @@ type SessionDispatcher interface {
 	GetTerminalEndpoint(params json.RawMessage) (json.RawMessage, *rpcError)
 	GetSessionOutput(params json.RawMessage) (json.RawMessage, *rpcError)
 	GetDiagnostics(ctx context.Context, params json.RawMessage) (json.RawMessage, *rpcError)
+	SendInput(params json.RawMessage) (json.RawMessage, *rpcError)
 }
 
 // Client manages the WebSocket connection from agentd to the hub.
@@ -237,7 +238,7 @@ func (c *Client) readLoop(ctx context.Context, conn *websocket.Conn) error {
 				return err
 			}
 
-		case "createSession", "getSession", "listSessions", "destroySession", "getTerminalEndpoint", "getSessionOutput", "getDiagnostics":
+		case "createSession", "getSession", "listSessions", "destroySession", "getTerminalEndpoint", "getSessionOutput", "getDiagnostics", "sendInput":
 			// Dispatch asynchronously so long-running operations (e.g., git clone)
 			// don't block the read loop from responding to heartbeat pings.
 			go c.dispatchSessionAsync(ctx, conn, req)
@@ -294,6 +295,8 @@ func (c *Client) dispatchSessionAsync(ctx context.Context, conn *websocket.Conn,
 		fn = func(params json.RawMessage) (json.RawMessage, *rpcError) {
 			return c.dispatcher.GetDiagnostics(ctx, params)
 		}
+	case "sendInput":
+		fn = c.dispatcher.SendInput
 	}
 
 	resp := c.dispatchSession(req.ID, req.Params, fn)

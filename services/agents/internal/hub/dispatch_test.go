@@ -19,7 +19,7 @@ func newFakeManager() *session.Manager {
 }
 
 func newTestDispatcher() *Dispatcher {
-	return NewDispatcher(newFakeManager(), "127.0.0.1", "ws", "")
+	return NewDispatcher(newFakeManager(), "127.0.0.1", "ws", "", nil)
 }
 
 func TestDispatcher_CreateSession_InvalidParams(t *testing.T) {
@@ -105,7 +105,7 @@ func TestDispatcher_GetTerminalEndpoint_RelayWhenNoAdvertiseAddress(t *testing.T
 	store := session.NewStore()
 	store.Add(&session.Session{ID: "550e8400-e29b-41d4-a716-446655440001", State: session.StateStopped})
 	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{}, 0)
-	d := NewDispatcher(mgr, "", "ws", "") // empty advertise address → relay path
+	d := NewDispatcher(mgr, "", "ws", "", nil) // empty advertise address → relay path
 
 	result, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"550e8400-e29b-41d4-a716-446655440001"}`))
 	if rpcErr != nil {
@@ -128,7 +128,7 @@ func TestDispatcher_GetTerminalEndpoint_Success(t *testing.T) {
 	store := session.NewStore()
 	store.Add(&session.Session{ID: "550e8400-e29b-41d4-a716-446655440002", State: session.StateStopped})
 	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{}, 0)
-	d := NewDispatcher(mgr, "192.168.1.10", "ws", "")
+	d := NewDispatcher(mgr, "192.168.1.10", "ws", "", nil)
 
 	result, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"550e8400-e29b-41d4-a716-446655440002"}`))
 	if rpcErr != nil {
@@ -152,7 +152,7 @@ func TestDispatcher_GetTerminalEndpoint_WSSScheme(t *testing.T) {
 	store := session.NewStore()
 	store.Add(&session.Session{ID: "550e8400-e29b-41d4-a716-446655440003", State: session.StateStopped})
 	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{}, 0)
-	d := NewDispatcher(mgr, "example.com", "wss", "")
+	d := NewDispatcher(mgr, "example.com", "wss", "", nil)
 
 	result, rpcErr := d.GetTerminalEndpoint(json.RawMessage(`{"session_id":"550e8400-e29b-41d4-a716-446655440003"}`))
 	if rpcErr != nil {
@@ -224,7 +224,7 @@ func TestDispatcher_GetTerminalEndpoint_URNFormNormalized(t *testing.T) {
 	store := session.NewStore()
 	store.Add(&session.Session{ID: canonicalID, State: session.StateStopped})
 	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{}, 0)
-	d := NewDispatcher(mgr, "192.168.1.10", "ws", "")
+	d := NewDispatcher(mgr, "192.168.1.10", "ws", "", nil)
 
 	urnForm := "urn:uuid:" + canonicalID
 	params, _ := json.Marshal(map[string]string{"session_id": urnForm})
@@ -286,7 +286,7 @@ func TestDispatcher_GetSessionOutput_ANSIStrippingAndLastNLines(t *testing.T) {
 
 	store := session.NewStore()
 	mgr := session.NewManager(store, ptyMgr, nil, nil, map[string]config.Profile{}, 0)
-	d := NewDispatcher(mgr, "", "ws", "")
+	d := NewDispatcher(mgr, "", "ws", "", nil)
 
 	// Request only the last 3 lines.
 	result, rpcErr := d.GetSessionOutput(json.RawMessage(`{"session_id":"output-test-session","lines":3}`))
@@ -333,5 +333,75 @@ func TestStateString(t *testing.T) {
 		if got != tt.expected {
 			t.Errorf("stateString(%d): expected %q, got %q", tt.state, tt.expected, got)
 		}
+	}
+}
+
+func TestDispatcher_SendInput_InvalidJSON(t *testing.T) {
+	d := newTestDispatcher()
+
+	_, rpcErr := d.SendInput(json.RawMessage(`{"invalid`))
+	if rpcErr == nil {
+		t.Fatal("expected rpcError for invalid JSON")
+	}
+	if rpcErr.Code != rpcErrInvalidArgument {
+		t.Errorf("expected code %d, got %d", rpcErrInvalidArgument, rpcErr.Code)
+	}
+}
+
+func TestDispatcher_SendInput_SessionNotFound(t *testing.T) {
+	ptyMgr := pty.NewPTYManager(pty.PTYConfig{})
+	mgr := session.NewManager(session.NewStore(), ptyMgr, nil, nil, map[string]config.Profile{}, 0)
+	d := NewDispatcher(mgr, "127.0.0.1", "ws", "", ptyMgr)
+
+	_, rpcErr := d.SendInput(json.RawMessage(`{"session_id":"no-such","text":"y\n"}`))
+	if rpcErr == nil {
+		t.Fatal("expected rpcError for session not found")
+	}
+	if rpcErr.Code != rpcErrNotFound {
+		t.Errorf("expected code %d, got %d", rpcErrNotFound, rpcErr.Code)
+	}
+}
+
+func TestDispatcher_SendInput_Success(t *testing.T) {
+	ptyMgr := pty.NewPTYManager(pty.PTYConfig{})
+	sessID := "send-input-test-session"
+
+	err := ptyMgr.Create(sessID, t.TempDir(), []string{"cat"}, nil, 80, 24)
+	if err != nil {
+		t.Fatalf("PTY Create failed: %v", err)
+	}
+	t.Cleanup(func() { ptyMgr.Destroy(sessID) })
+
+	mgr := session.NewManager(session.NewStore(), ptyMgr, nil, nil, map[string]config.Profile{}, 0)
+	d := NewDispatcher(mgr, "127.0.0.1", "ws", "", ptyMgr)
+
+	params, _ := json.Marshal(map[string]string{"session_id": sessID, "text": "hello\n"})
+	result, rpcErr := d.SendInput(params)
+	if rpcErr != nil {
+		t.Fatalf("unexpected rpcError: code=%d msg=%s", rpcErr.Code, rpcErr.Message)
+	}
+
+	var out map[string]bool
+	if err := json.Unmarshal(result, &out); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	if !out["ok"] {
+		t.Errorf("expected ok:true in result, got: %v", out)
+	}
+
+	// Poll the ring buffer until "hello" is echoed back by cat.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		buf, readErr := ptyMgr.ReadBuffer(sessID)
+		if readErr != nil {
+			t.Fatalf("ReadBuffer failed: %v", readErr)
+		}
+		if strings.Contains(string(buf), "hello") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for echoed output; got: %q", string(buf))
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

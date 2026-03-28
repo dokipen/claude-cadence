@@ -28,6 +28,8 @@ message Session {
   optional string websocket_url = 12;
   bool waiting_for_input = 13;
   optional string idle_since = 14;
+  optional string prompt_context = 15;
+  optional string prompt_type = 16;
 }
 
 // AgentProfile describes a named configuration profile for an agent.

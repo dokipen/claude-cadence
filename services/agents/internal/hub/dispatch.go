@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/dokipen/claude-cadence/services/agents/internal/logparse"
+	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
 )
 
@@ -27,13 +29,15 @@ type Dispatcher struct {
 	advertiseAddress string
 	webSocketScheme  string
 	logPath          string
+	pty              *pty.PTYManager
 }
 
 // NewDispatcher creates a Dispatcher backed by the given session manager.
 // advertiseAddress enables the getTerminalEndpoint RPC method.
 // logPath is the path to agentd's stderr log file; empty means journald on Linux.
-func NewDispatcher(manager *session.Manager, advertiseAddress string, webSocketScheme string, logPath string) *Dispatcher {
-	return &Dispatcher{manager: manager, advertiseAddress: advertiseAddress, webSocketScheme: webSocketScheme, logPath: logPath}
+// ptyMgr is optional; when non-nil it enables the sendInput RPC method.
+func NewDispatcher(manager *session.Manager, advertiseAddress string, webSocketScheme string, logPath string, ptyMgr *pty.PTYManager) *Dispatcher {
+	return &Dispatcher{manager: manager, advertiseAddress: advertiseAddress, webSocketScheme: webSocketScheme, logPath: logPath, pty: ptyMgr}
 }
 
 // CreateSession handles the createSession JSON-RPC method.
@@ -436,6 +440,29 @@ type diagnosticsSummary struct {
 	TotalSessions      int `json:"total_sessions"`
 	RunningCount       int `json:"running_count"`
 	ErrorCount         int `json:"error_count"`
+}
+
+// SendInput handles the sendInput JSON-RPC method.
+// It writes the given text to the PTY master for the specified session.
+func (d *Dispatcher) SendInput(params json.RawMessage) (json.RawMessage, *rpcError) {
+	var p struct {
+		SessionID string `json:"session_id"`
+		Text      string `json:"text"`
+	}
+	if err := json.Unmarshal(params, &p); err != nil {
+		return nil, &rpcError{Code: rpcErrInvalidArgument, Message: err.Error()}
+	}
+	if err := d.pty.WriteInput(p.SessionID, []byte(p.Text)); err != nil {
+		return nil, mapPTYError(err)
+	}
+	return marshalResult(map[string]bool{"ok": true})
+}
+
+func mapPTYError(err error) *rpcError {
+	if strings.Contains(err.Error(), "not found") {
+		return &rpcError{Code: rpcErrNotFound, Message: err.Error()}
+	}
+	return &rpcError{Code: rpcErrInternal, Message: err.Error()}
 }
 
 func marshalResult(v any) (json.RawMessage, *rpcError) {

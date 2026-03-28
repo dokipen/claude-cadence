@@ -372,6 +372,47 @@ func handleGetSessionOutput(h *hub.Hub) http.HandlerFunc {
 	}
 }
 
+// handleSendInput forwards a SendInput request to the target agentd.
+func handleSendInput(h *hub.Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		agent, ok := resolveAgent(h, w, r)
+		if !ok {
+			return
+		}
+
+		sessionID := r.PathValue("id")
+
+		r.Body = http.MaxBytesReader(w, r.Body, hub.RPCMaxMessageSize)
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			var maxBytesErr *http.MaxBytesError
+			if errors.As(err, &maxBytesErr) {
+				writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
+				return
+			}
+			writeJSONError(w, http.StatusBadRequest, "failed to read request body")
+			return
+		}
+
+		var req struct {
+			Text string `json:"text"`
+		}
+		if err := json.Unmarshal(body, &req); err != nil {
+			writeJSONError(w, http.StatusBadRequest, "invalid JSON")
+			return
+		}
+
+		result, err := callAgent(r.Context(), h, agent, "sendInput", map[string]any{"session_id": sessionID, "text": req.Text}, w)
+		if err != nil {
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(result)
+	}
+}
+
 // handleDestroySession forwards a DestroySession request to the target agentd.
 func handleDestroySession(h *hub.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
