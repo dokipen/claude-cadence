@@ -55,8 +55,9 @@ cleanup_repo() {
 
         # Collect all branches currently checked out in any worktree.
         # This protects against removing worktrees in active use by concurrent sessions.
+        # The `|| true` prevents pipefail from aborting when no feature branches are active.
         local active_branches
-        active_branches=$(git worktree list --porcelain 2>/dev/null | grep '^branch ' | sed 's|^branch refs/heads/||')
+        active_branches=$(git worktree list --porcelain 2>/dev/null | grep '^branch ' | sed 's|^branch refs/heads/||' || true)
 
         local cleaned=0
         for dir in "$worktrees_dir"/*/; do
@@ -97,12 +98,18 @@ cleanup_repo() {
             # Delete remote branch (may already be deleted by the PR merge)
             git push origin --delete "$branch_name" 2>/dev/null || true
 
-            # Remove worktree directory
+            # Remove worktree directory.
+            # The branch_name regex above already excludes '/' but we guard again here
+            # for defence-in-depth before the rm -rf fallback.
             if [[ -d "$worktrees_dir/$branch_name" ]]; then
-                git worktree remove "$worktrees_dir/$branch_name" 2>/dev/null \
-                    || git worktree remove --force "$worktrees_dir/$branch_name" 2>/dev/null \
-                    || rm -rf "${worktrees_dir:?}/${branch_name:?}" \
-                    || echo "  Warning: failed to remove worktree directory for '$branch_name'"
+                if [[ "$branch_name" == *"/"* ]]; then
+                    echo "  Warning: skipping '$branch_name' — unexpected '/' in branch name"
+                else
+                    git worktree remove "$worktrees_dir/$branch_name" 2>/dev/null \
+                        || git worktree remove --force "$worktrees_dir/$branch_name" 2>/dev/null \
+                        || rm -rf "${worktrees_dir:?}/${branch_name:?}" \
+                        || echo "  Warning: failed to remove worktree directory for '$branch_name'"
+                fi
             fi
 
             # Delete local branch

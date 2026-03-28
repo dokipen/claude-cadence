@@ -1,12 +1,12 @@
 [Unit]
-Description=Run Cadence Agent Worktree Cleanup daily
+Description=Run Cadence Agent Worktree Cleanup hourly
 Requires=agentd-cleanup.service
 
 [Timer]
-# Run once per day. Persistent=true means a missed run (e.g. system was off)
+# Run once per hour. Persistent=true means a missed run (e.g. system was off)
 # fires immediately on next boot. RandomizedDelaySec avoids thundering herd
-# on multi-host deployments.
-OnCalendar=daily
+# on multi-host deployments. Matches launchd StartInterval=3600.
+OnCalendar=hourly
 Persistent=true
 RandomizedDelaySec=300
 

@@ -266,14 +266,15 @@ install_cleanup_binary() {
     local script_dir
     script_dir="$(cd "$(dirname "$0")" && pwd)"
     local plugin_scripts_dir
-    plugin_scripts_dir="$(cd "$script_dir/../../../../skills/project-ops/scripts" 2>/dev/null && pwd)" || plugin_scripts_dir=""
+    local expected_scripts_dir="$script_dir/../../../../skills/project-ops/scripts"
+    plugin_scripts_dir="$(cd "$expected_scripts_dir" && pwd)" || plugin_scripts_dir=""
     local src_script="${plugin_scripts_dir:+$plugin_scripts_dir/cleanup-worktrees-scheduled.sh}"
 
     if [[ -n "$src_script" && -f "$src_script" ]]; then
         info "Installing cleanup script to $INSTALL_DIR/$CLEANUP_BINARY_NAME..."
         sudo cp "$src_script" "$INSTALL_DIR/$CLEANUP_BINARY_NAME"
     else
-        error "Cleanup script not found at $src_script. Ensure you are running install.sh from the claude-cadence repo."
+        error "Cleanup script not found (looked in: $expected_scripts_dir). Ensure you are running install.sh from the claude-cadence repo."
     fi
 
     sudo chmod 755 "$INSTALL_DIR/$CLEANUP_BINARY_NAME"
