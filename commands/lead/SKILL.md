@@ -58,7 +58,7 @@ If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, 
    ```
    Save the output as `$TICKET_JSON` — it is reused for label detection in step 5.
 
-3. **If no issue exists**: Create one with a descriptive title and initial context:
+3. **If no issue exists**: Create one with a descriptive title and initial context. **Shell safety:** The `--title` argument is inline — avoid backticks in the title.
 
    **GitHub (default):**
    ```bash
