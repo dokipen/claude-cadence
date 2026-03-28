@@ -2,6 +2,7 @@ package session
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1022,5 +1023,216 @@ func TestRestoreFromPersister_Creating_NonZeroPID_KillsProcess(t *testing.T) {
 	// This assertion will FAIL until Bug 3 is fixed.
 	if killedPID != 42 {
 		t.Errorf("killProcess called with PID %d, want 42 (bug: orphaned process not killed during StateCreating restore)", killedPID)
+	}
+}
+
+// TestRestoreFromPersister_Running_AlivePID_PTYReconnected tests that when a
+// running session has an alive PID and a non-empty PTYSlavePath, RestoreFromPersister
+// calls ptyReconnect and, on success, leaves restoredFromDisk as false (PTY is live).
+func TestRestoreFromPersister_Running_AlivePID_PTYReconnected(t *testing.T) {
+	dir := t.TempDir()
+
+	sess := makeSession(StateRunning)
+	sess.AgentPID = 999
+	sess.PTYSlavePath = "/dev/pts/7"
+
+	// Write JSON manually so PTYSlavePath is included even before sessionRecord
+	// gains the field (the fix will add it; until then this raw JSON simulates
+	// what the fixed persister would have written).
+	rawJSON := []byte(`{"id":"` + sess.ID + `","name":"` + sess.Name + `","agent_profile":"default","state":2,"created_at":"` + sess.CreatedAt.Format("2006-01-02T15:04:05.999999999Z07:00") + `","stopped_at":"0001-01-01T00:00:00Z","agent_pid":999,"pty_slave_path":"/dev/pts/7"}`)
+	if err := os.WriteFile(filepath.Join(dir, sess.ID+".json"), rawJSON, 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	p, err := NewPersister(dir)
+	if err != nil {
+		t.Fatalf("NewPersister: %v", err)
+	}
+	defer p.Stop()
+
+	store := NewStore()
+	alivePIDs := map[int]bool{999: true}
+	m := newManagerWithStore(store, map[string]bool{}, alivePIDs)
+
+	var reconnectCalledID string
+	var reconnectCalledPath string
+	m.ptyReconnect = func(id, slavePath string) error {
+		reconnectCalledID = id
+		reconnectCalledPath = slavePath
+		return nil
+	}
+
+	if err := m.RestoreFromPersister(p); err != nil {
+		t.Fatalf("RestoreFromPersister: %v", err)
+	}
+
+	if reconnectCalledID != sess.ID {
+		t.Errorf("ptyReconnect called with id %q, want %q", reconnectCalledID, sess.ID)
+	}
+	if reconnectCalledPath != "/dev/pts/7" {
+		t.Errorf("ptyReconnect called with slavePath %q, want %q", reconnectCalledPath, "/dev/pts/7")
+	}
+
+	got, ok := store.Get(sess.ID)
+	if !ok {
+		t.Fatalf("session not found in store after restore")
+	}
+	if got.State != StateRunning {
+		t.Errorf("State = %v, want StateRunning", got.State)
+	}
+	// PTY reconnect succeeded: restoredFromDisk must be false (PTY handle is live).
+	if got.restoredFromDisk {
+		t.Error("restoredFromDisk = true, want false (ptyReconnect succeeded, PTY is live)")
+	}
+}
+
+// TestRestoreFromPersister_Running_AlivePID_PTYReconnectFails tests that when a
+// running session has an alive PID and PTYSlavePath, but ptyReconnect returns an
+// error (e.g. slave device gone), the session stays Running and restoredFromDisk
+// falls back to true so the existing guard in reconcile() protects the session.
+func TestRestoreFromPersister_Running_AlivePID_PTYReconnectFails(t *testing.T) {
+	dir := t.TempDir()
+
+	sess := makeSession(StateRunning)
+	sess.AgentPID = 999
+	sess.PTYSlavePath = "/dev/pts/7"
+
+	rawJSON := []byte(`{"id":"` + sess.ID + `","name":"` + sess.Name + `","agent_profile":"default","state":2,"created_at":"` + sess.CreatedAt.Format("2006-01-02T15:04:05.999999999Z07:00") + `","stopped_at":"0001-01-01T00:00:00Z","agent_pid":999,"pty_slave_path":"/dev/pts/7"}`)
+	if err := os.WriteFile(filepath.Join(dir, sess.ID+".json"), rawJSON, 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	p, err := NewPersister(dir)
+	if err != nil {
+		t.Fatalf("NewPersister: %v", err)
+	}
+	defer p.Stop()
+
+	store := NewStore()
+	alivePIDs := map[int]bool{999: true}
+	m := newManagerWithStore(store, map[string]bool{}, alivePIDs)
+
+	reconnectAttempted := false
+	m.ptyReconnect = func(id, slavePath string) error {
+		reconnectAttempted = true
+		return fmt.Errorf("slave device gone: %s", slavePath)
+	}
+
+	if err := m.RestoreFromPersister(p); err != nil {
+		t.Fatalf("RestoreFromPersister: %v", err)
+	}
+
+	if !reconnectAttempted {
+		t.Error("ptyReconnect was not called; expected reconnect attempt even if it fails")
+	}
+
+	got, ok := store.Get(sess.ID)
+	if !ok {
+		t.Fatalf("session not found in store after restore")
+	}
+	if got.State != StateRunning {
+		t.Errorf("State = %v, want StateRunning (process alive; failing reconnect must not kill session)", got.State)
+	}
+	// Reconnect failed: fall back to restoredFromDisk guard so reconcile() won't
+	// incorrectly stop the session due to missing PTY handle.
+	if !got.restoredFromDisk {
+		t.Error("restoredFromDisk = false, want true (ptyReconnect failed; guard must be active)")
+	}
+}
+
+// TestRestoreFromPersister_Running_AlivePID_NoSlavePath tests that when a running
+// session has an alive PID but no PTYSlavePath (legacy session with no path saved),
+// ptyReconnect is NOT called and restoredFromDisk is set true preserving existing
+// legacy behavior.
+func TestRestoreFromPersister_Running_AlivePID_NoSlavePath(t *testing.T) {
+	dir := t.TempDir()
+
+	sess := makeSession(StateRunning)
+	sess.AgentPID = 999
+	// PTYSlavePath is intentionally empty (legacy session).
+	writeSessionFile(t, dir, sess)
+
+	p, err := NewPersister(dir)
+	if err != nil {
+		t.Fatalf("NewPersister: %v", err)
+	}
+	defer p.Stop()
+
+	store := NewStore()
+	alivePIDs := map[int]bool{999: true}
+	m := newManagerWithStore(store, map[string]bool{}, alivePIDs)
+
+	reconnectCalled := false
+	m.ptyReconnect = func(id, slavePath string) error {
+		reconnectCalled = true
+		return nil
+	}
+
+	if err := m.RestoreFromPersister(p); err != nil {
+		t.Fatalf("RestoreFromPersister: %v", err)
+	}
+
+	if reconnectCalled {
+		t.Error("ptyReconnect was called but should not be for a session with empty PTYSlavePath")
+	}
+
+	got, ok := store.Get(sess.ID)
+	if !ok {
+		t.Fatalf("session not found in store after restore")
+	}
+	if got.State != StateRunning {
+		t.Errorf("State = %v, want StateRunning", got.State)
+	}
+	// Legacy session: no slave path, fall back to restoredFromDisk guard.
+	if !got.restoredFromDisk {
+		t.Error("restoredFromDisk = false, want true for legacy session with no PTYSlavePath")
+	}
+}
+
+// TestRestoreFromPersister_Running_DeadPID_NoReconnect tests that when a running
+// session has a dead PID, ptyReconnect is NOT called (process is gone, reconnect
+// would be pointless) and the session transitions to StateStopped as before.
+func TestRestoreFromPersister_Running_DeadPID_NoReconnect(t *testing.T) {
+	dir := t.TempDir()
+
+	sess := makeSession(StateRunning)
+	sess.AgentPID = 999
+	sess.PTYSlavePath = "/dev/pts/7"
+
+	rawJSON := []byte(`{"id":"` + sess.ID + `","name":"` + sess.Name + `","agent_profile":"default","state":2,"created_at":"` + sess.CreatedAt.Format("2006-01-02T15:04:05.999999999Z07:00") + `","stopped_at":"0001-01-01T00:00:00Z","agent_pid":999,"pty_slave_path":"/dev/pts/7"}`)
+	if err := os.WriteFile(filepath.Join(dir, sess.ID+".json"), rawJSON, 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	p, err := NewPersister(dir)
+	if err != nil {
+		t.Fatalf("NewPersister: %v", err)
+	}
+	defer p.Stop()
+
+	store := NewStore()
+	alivePIDs := map[int]bool{} // 999 is dead
+	m := newManagerWithStore(store, map[string]bool{}, alivePIDs)
+
+	reconnectCalled := false
+	m.ptyReconnect = func(id, slavePath string) error {
+		reconnectCalled = true
+		return nil
+	}
+
+	if err := m.RestoreFromPersister(p); err != nil {
+		t.Fatalf("RestoreFromPersister: %v", err)
+	}
+
+	if reconnectCalled {
+		t.Error("ptyReconnect was called but must not be when the process is dead")
+	}
+
+	got, ok := store.Get(sess.ID)
+	if !ok {
+		t.Fatalf("session not found in store after restore")
+	}
+	if got.State != StateStopped {
+		t.Errorf("State = %v, want StateStopped (process dead)", got.State)
 	}
 }

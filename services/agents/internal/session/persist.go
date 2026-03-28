@@ -38,6 +38,7 @@ type sessionRecord struct {
 	WorktreePath string       `json:"worktree_path,omitempty"`
 	RepoURL      string       `json:"repo_url,omitempty"`
 	BaseRef      string       `json:"base_ref,omitempty"`
+	PTYSlavePath string       `json:"pty_slave_path,omitempty"`
 }
 
 func sessionToRecord(s Session) sessionRecord {
@@ -54,6 +55,7 @@ func sessionToRecord(s Session) sessionRecord {
 		WorktreePath: s.WorktreePath,
 		RepoURL:      s.RepoURL,
 		BaseRef:      s.BaseRef,
+		PTYSlavePath: s.PTYSlavePath,
 	}
 }
 
@@ -71,6 +73,7 @@ func recordToSession(r sessionRecord) *Session {
 		WorktreePath: r.WorktreePath,
 		RepoURL:      r.RepoURL,
 		BaseRef:      r.BaseRef,
+		PTYSlavePath: r.PTYSlavePath,
 	}
 }
 
