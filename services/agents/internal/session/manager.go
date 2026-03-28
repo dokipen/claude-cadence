@@ -390,7 +390,30 @@ func (m *Manager) Destroy(id string, force bool) error {
 		}
 	}
 
+	if sess.WorktreePath != "" && m.git != nil {
+		if err := m.git.RemoveWorktree(sess.WorktreePath); err != nil {
+			slog.Warn("failed to remove worktree on session destroy", "session", sess.ID, "worktree", sess.WorktreePath, "error", err)
+		}
+	}
+
 	m.store.Delete(id)
+	return nil
+}
+
+// SetWorktreePath sets the WorktreePath field on a session. It is used in
+// tests and by external callers (e.g. the /new-work skill) that need to
+// record a worktree path after the session has been created so that Destroy
+// can clean it up.
+func (m *Manager) SetWorktreePath(id, path string) error {
+	found, err := m.store.Update(id, func(s *Session) {
+		s.WorktreePath = path
+	})
+	if err != nil {
+		return err
+	}
+	if !found {
+		return &Error{Code: ErrNotFound, Message: fmt.Sprintf("session %q not found", id)}
+	}
 	return nil
 }
 
@@ -617,6 +640,11 @@ func (m *Manager) RestoreFromPersister(p *Persister) error {
 			// Daemon died mid-destroy. Clean up the file directly (not via the
 			// queue) since RestoreFromPersister runs before the write loop has
 			// received any ops — no ordering concern exists at this point.
+			if sess.WorktreePath != "" && m.git != nil {
+				if err := m.git.RemoveWorktree(sess.WorktreePath); err != nil {
+					slog.Warn("failed to remove worktree for mid-destroy session on restore", "id", sess.ID, "worktree", sess.WorktreePath, "error", err)
+				}
+			}
 			p.deleteFile(sess.ID)
 			slog.Info("cleaned up mid-destroy session on restore", "id", sess.ID)
 			continue

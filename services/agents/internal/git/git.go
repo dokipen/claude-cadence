@@ -142,6 +142,33 @@ func (c *Client) CloneDir(repoURL string) (string, error) {
 	return filepath.Join(c.rootDir, "repos", owner, repo), nil
 }
 
+// RemoveWorktree removes the git worktree at the given path. The path must be
+// under the client's rootDir. Uses --force to remove even if the worktree has
+// local modifications.
+func (c *Client) RemoveWorktree(worktreePath string) error {
+	if worktreePath == "" {
+		return fmt.Errorf("worktree path is empty")
+	}
+	absPath, err := filepath.Abs(worktreePath)
+	if err != nil {
+		return fmt.Errorf("resolving worktree path: %w", err)
+	}
+	absRootDir, err := filepath.Abs(c.rootDir)
+	if err != nil {
+		return fmt.Errorf("resolving root dir: %w", err)
+	}
+	if !strings.HasPrefix(absPath, absRootDir+string(filepath.Separator)) {
+		return fmt.Errorf("worktree path %q escapes root dir %q", absPath, absRootDir)
+	}
+	// Run from within the worktree so git can locate the main repo via the
+	// .git file that a linked worktree contains.
+	cmd := exec.Command("git", "-C", absPath, "worktree", "remove", "--force", absPath)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git worktree remove: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
 func (c *Client) pullDefaultBranch(cloneDir string, creds *Credentials) error {
 	branch, err := c.DefaultBranch(cloneDir)
 	if err != nil {
