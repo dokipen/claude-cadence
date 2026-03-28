@@ -19,6 +19,9 @@ interface TilingLayoutProps {
   onReorderAll?: (keys: string[]) => void;
 }
 
+const MIN_RATIO = 0.15;
+const MAX_RATIO = 0.85;
+
 // Recursive binary split tree
 interface SplitNode {
   type: "split";
@@ -84,7 +87,7 @@ export function TilingLayout({ windows, onMinimize, onTerminated, onReorder, onR
       const stored = sessionStorage.getItem("cadence_window_ratios");
       if (!stored) return new Map();
       const entries: [string, number][] = JSON.parse(stored);
-      return new Map(entries);
+      return new Map(entries.map(([k, v]) => [k, Math.max(MIN_RATIO, Math.min(MAX_RATIO, v))] as [string, number]));
     } catch {
       return new Map();
     }
@@ -168,7 +171,7 @@ export function TilingLayout({ windows, onMinimize, onTerminated, onReorder, onR
       const { path, direction, startPos, startRatio, containerSize } = draggingRef.current;
       const currentPos = direction === "horizontal" ? ev.clientX : ev.clientY;
       const delta = (currentPos - startPos) / containerSize;
-      const newRatio = Math.max(0.15, Math.min(0.85, startRatio + delta));
+      const newRatio = Math.max(MIN_RATIO, Math.min(MAX_RATIO, startRatio + delta));
       setRatios((prev) => new Map(prev).set(path, newRatio));
     };
 
