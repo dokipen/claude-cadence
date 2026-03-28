@@ -473,17 +473,17 @@ docker compose -p <PROJECT_NAME> down
 
    **GitHub (default):**
    ```bash
-   gh issue comment [N] --body "Issue completed. Merged via PR #[PR-NUMBER]."
+   gh issue comment [N] --body "Completed #[NUMBER]: [TITLE]. Merged via PR #[PR-NUMBER]."
    ```
 
    **Issues API:**
    ```bash
    issues comment add TICKET_ID --body "$(cat <<'EOF'
-Issue completed. Merged via PR #[PR-NUMBER].
+Completed #[NUMBER]: [TITLE]. Merged via PR #[PR-NUMBER].
 EOF
 )" --json
    ```
-7. Report completion
+7. Report completion to the user, including the ticket number, title, and PR link (e.g., "Completed #42: Add user authentication. Merged via PR #[PR-NUMBER].")
 
 > **Note:** If this phase is skipped (e.g., conversation ends early), cleanup happens automatically the next time `/new-work` creates a worktree — the `cleanup-merged-worktrees.sh` pre-flight detects merged PRs and cleans up their worktrees, branches, and labels.
 
@@ -647,7 +647,7 @@ After all sub-tickets are created and the plan doc is committed:
 **GitHub (default):**
 ```bash
 gh issue comment [NUMBER] --body "$(cat <<'EOF'
-## Planning complete
+## Planning complete: [TITLE]
 
 Plan document: `docs/plans/<slug>.md`
 
@@ -664,7 +664,7 @@ gh issue close [NUMBER]
 **Issues API:**
 ```bash
 issues comment add TICKET_ID --body "$(cat <<'EOF'
-## Planning complete
+## Planning complete: [TITLE]
 
 Plan document: `docs/plans/<slug>.md`
 
@@ -682,7 +682,7 @@ issues ticket transition TICKET_ID --to CLOSED --json
 
 1. Return to default branch and pull latest (skip if `WORKTREE_PREEXISTING`)
 2. Clean up worktree using the `project-ops` skill's `cleanup-worktree.sh` script (skip if `WORKTREE_PREEXISTING`)
-3. Report completion with a summary of the plan doc path and all created tickets
+3. Report completion to the user, including the ticket number, title, and plan doc path
 
 ---
 
@@ -740,7 +740,7 @@ Once all steps are confirmed complete:
    **GitHub (default):**
    ```bash
    gh issue comment [NUMBER] --body "$(cat <<'EOF'
-## Walkthrough complete
+## Walkthrough complete: [TITLE]
 
 All manual steps confirmed complete by the human operator.
 EOF
@@ -750,7 +750,7 @@ EOF
    **Issues API:**
    ```bash
    issues comment add TICKET_ID --body "$(cat <<'EOF'
-## Walkthrough complete
+## Walkthrough complete: [TITLE]
 
 All manual steps confirmed complete by the human operator.
 EOF
@@ -761,7 +761,7 @@ EOF
    - **GitHub (default):** `gh issue close [NUMBER]`
    - **Issues API:** `issues ticket transition TICKET_ID --to CLOSED --json`
 
-3. Report completion to the user.
+3. Report completion to the user, including the ticket number and title (e.g., "Completed #42: Add user authentication.").
 
 ### Human Activity Phase 4: Cleanup
 
