@@ -29,7 +29,7 @@ export function LaunchAgentDialog({
 
   const config = getLaunchConfig(ticketState);
   const command = config.command(ticketNumber, ticketTitle);
-  const sessionName = config.sessionName(ticketNumber, projectId ?? "");
+  const sessionName = config.sessionName(ticketNumber, projectId);
   const buttonLabel = config.buttonLabel;
 
   useEffect(() => {

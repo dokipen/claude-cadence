@@ -3,7 +3,7 @@ import type { TicketState } from "../types";
 interface LaunchConfig {
   buttonLabel: string;
   command: (ticketNumber: number, ticketTitle: string) => string;
-  sessionName: (ticketNumber: number, projectId: string) => string;
+  sessionName: (ticketNumber: number, projectId?: string) => string;
 }
 
 export function getLaunchConfig(state: TicketState): LaunchConfig {
