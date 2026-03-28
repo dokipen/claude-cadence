@@ -144,22 +144,31 @@ func (c *Client) CloneDir(repoURL string) (string, error) {
 
 // RemoveWorktree removes the git worktree at the given path. The path must be
 // under the client's rootDir. Uses --force to remove even if the worktree has
-// local modifications.
+// local modifications. Returns nil if the path does not exist (idempotent).
 func (c *Client) RemoveWorktree(worktreePath string) error {
 	if worktreePath == "" {
 		return fmt.Errorf("worktree path is empty")
 	}
-	absPath, err := filepath.Abs(worktreePath)
+
+	// If the worktree no longer exists, nothing to clean up.
+	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
+		return nil
+	}
+
+	// Resolve symlinks before the containment check so that a symlink inside
+	// rootDir cannot point outside it to bypass the guard.
+	absPath, err := filepath.EvalSymlinks(worktreePath)
 	if err != nil {
 		return fmt.Errorf("resolving worktree path: %w", err)
 	}
-	absRootDir, err := filepath.Abs(c.rootDir)
+	absRootDir, err := filepath.EvalSymlinks(c.rootDir)
 	if err != nil {
 		return fmt.Errorf("resolving root dir: %w", err)
 	}
 	if !strings.HasPrefix(absPath, absRootDir+string(filepath.Separator)) {
 		return fmt.Errorf("worktree path %q escapes root dir %q", absPath, absRootDir)
 	}
+
 	// Run from within the worktree so git can locate the main repo via the
 	// .git file that a linked worktree contains.
 	cmd := exec.Command("git", "-C", absPath, "worktree", "remove", "--force", absPath)
