@@ -42,13 +42,23 @@ export function TicketCard({
   const launchButtonLabel = getLaunchConfig(ticket.state).buttonLabel;
   const canClose = ticket.state === "BACKLOG" || ticket.state === "REFINED";
 
+  const activeSession = hasActiveSession(sessions ?? [], ticket.number, projectId);
+
   const handleActiveSessionClick = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      navigate(`/ticket/${ticket.id}?tab=agent`);
+      if (
+        (ticket.state === "BACKLOG" || ticket.state === "CLOSED") &&
+        activeSession?.agentName &&
+        activeSession?.sessionId
+      ) {
+        navigate(`/agents?session=${activeSession.agentName}:${activeSession.sessionId}`);
+      } else {
+        navigate(`/ticket/${ticket.id}?tab=agent`);
+      }
     },
-    [navigate, ticket.id],
+    [navigate, ticket.id, ticket.state, activeSession],
   );
 
   const handleLaunchClick = useCallback(
@@ -84,8 +94,6 @@ export function TicketCard({
   const handleCancelClose = useCallback(() => {
     setConfirmCloseOpen(false);
   }, []);
-
-  const activeSession = hasActiveSession(sessions ?? [], ticket.number, projectId);
 
   if (closed) return null;
 
