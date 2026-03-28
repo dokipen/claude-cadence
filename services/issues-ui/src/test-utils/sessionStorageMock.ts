@@ -7,7 +7,7 @@ export function makeSessionStorageMock() {
     setItem: vi.fn((key: string, value: string) => { store[key] = value; }),
     removeItem: vi.fn((key: string) => { delete store[key]; }),
     clear: vi.fn(() => { Object.keys(store).forEach((k) => delete store[k]); }),
-    length: 0,
+    get length() { return Object.keys(store).length; },
     key: vi.fn(() => null),
   };
 }

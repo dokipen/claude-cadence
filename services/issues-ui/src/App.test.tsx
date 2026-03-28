@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { STORAGE_KEY, PROJECT_ID_RE } from "./App";
 import { makeSessionStorageMock } from './test-utils/sessionStorageMock';
 const PROJECTS = [
@@ -21,6 +21,10 @@ let mockStorage: ReturnType<typeof makeSessionStorageMock>;
 beforeEach(() => {
   mockStorage = makeSessionStorageMock();
   vi.stubGlobal("sessionStorage", mockStorage);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe("ProjectRedirect sessionStorage resolution", () => {
