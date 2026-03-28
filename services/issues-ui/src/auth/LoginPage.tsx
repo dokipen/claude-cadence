@@ -110,6 +110,7 @@ export function LoginPage() {
             required
             disabled={isSubmitting}
             className={styles.input}
+            autoComplete="current-password"
           />
 
           <button

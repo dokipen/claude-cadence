@@ -96,6 +96,7 @@ export function CreateTicketDialog({
             style={{ width: "100%", boxSizing: "border-box", marginTop: "0.5rem" }}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
+            autoComplete="off"
           />
         </div>
         {open && trimmedPrompt !== "" && (

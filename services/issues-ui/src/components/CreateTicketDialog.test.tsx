@@ -148,4 +148,11 @@ describe("CreateTicketDialog", () => {
     const sessionName = launcher.getAttribute("data-session-name") ?? "";
     expect(sessionName).toMatch(/^ticket-/);
   });
+
+  it("ticket-prompt textarea has autocomplete=off", () => {
+    render(<CreateTicketDialog {...defaultProps} open={true} />);
+
+    const textarea = screen.getByTestId("ticket-prompt");
+    expect(textarea).toHaveAttribute("autocomplete", "off");
+  });
 });

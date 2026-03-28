@@ -36,6 +36,7 @@ export function ProjectSelector({
       className={styles.projectSelector}
       value={selectedProjectId ?? ""}
       onChange={handleChange}
+      autoComplete="off"
       data-testid="project-selector"
     >
       {projects.map((project) => (

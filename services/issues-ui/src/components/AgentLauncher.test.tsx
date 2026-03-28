@@ -154,4 +154,23 @@ describe("AgentLauncher profile filtering", () => {
     // returned it; asserting against the actual rendered content confirms it is absent
     expect(profileSingle.textContent).not.toContain("profile-other");
   });
+
+  it("profile-select has autocomplete=off when multiple profiles are available", () => {
+    mockUseAgents.mockReturnValue({ agents: [], loading: false, error: null });
+    mockUseAgentProfiles.mockReturnValue([
+      makeProfileEntry("host-a", "profile-match", "https://github.com/org/repo-a"),
+      makeProfileEntry("host-a", "generic-profile", ""),
+    ]);
+
+    const { getByTestId } = render(
+      <AgentLauncher
+        ticketNumber={1}
+        repoUrl="https://github.com/org/repo-a"
+        onLaunched={vi.fn()}
+      />,
+    );
+
+    const profileSelect = getByTestId("profile-select");
+    expect(profileSelect).toHaveAttribute("autocomplete", "off");
+  });
 });
