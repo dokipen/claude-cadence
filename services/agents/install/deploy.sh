@@ -118,7 +118,7 @@ deploy_remote() {
         {
             ssh "$HOST" "sudo grep -v '^HUB_AGENT_TOKEN=' $remote_env || true"
             printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN"
-        } | ssh "$HOST" "sudo tee $remote_env > /dev/null && sudo chmod 600 $remote_env"
+        } | ssh "$HOST" "sudo tee ${remote_env}.tmp > /dev/null && sudo chmod 600 ${remote_env}.tmp && sudo mv ${remote_env}.tmp $remote_env"
     else
         printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" | ssh "$HOST" "sudo tee $remote_env > /dev/null && sudo chmod 600 $remote_env"
     fi
@@ -205,12 +205,12 @@ deploy_local() {
     # Write env file - preserve existing values, only update HUB_AGENT_TOKEN
     info "Writing env file..."
     if [[ -f "$env_file" ]]; then
+        install -m 600 /dev/null "${env_file}.tmp"
         {
             grep -v '^HUB_AGENT_TOKEN=' "$env_file" || true
             printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN"
-        } > "${env_file}.tmp"
+        } >> "${env_file}.tmp"
         mv "${env_file}.tmp" "$env_file"
-        chmod 600 "$env_file"
     else
         install -m 600 /dev/null "$env_file"
         printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" > "$env_file"
