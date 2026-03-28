@@ -432,7 +432,8 @@ func (m *Manager) ReadOutput(sessionID string, lines int) (string, error) {
 	tail = strings.ReplaceAll(tail, "\r", "\n")
 	sublines := strings.Split(tail, "\n")
 
-	// Drop empty and spinner-only lines.
+	// Drop empty and spinner-only lines. filtered aliases sublines's backing
+	// array — write index is always ≤ read index, so this is safe in-place.
 	filtered := sublines[:0]
 	for _, line := range sublines {
 		trimmed := strings.TrimSpace(line)
@@ -445,6 +446,12 @@ func (m *Manager) ReadOutput(sessionID string, lines int) (string, error) {
 			continue
 		}
 		filtered = append(filtered, line)
+	}
+
+	// Re-apply the lines limit: bare-\r expansion inside the tail window can
+	// produce more sublines than the N LF-segments that were sliced.
+	if len(filtered) > lines {
+		filtered = filtered[len(filtered)-lines:]
 	}
 
 	return strings.Join(filtered, "\n"), nil
