@@ -22,10 +22,12 @@ A Claude Code Channel plugin that bridges Matrix to Cadence, replacing the Issue
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  Element (phone/desktop)                                        │
-│  ├─ #cadence-board    — ticket summaries, board view            │
-│  ├─ #cadence-agents   — agent/session status                    │
-│  ├─ #cadence-alerts   — waiting-for-input push notifications    │
-│  └─ #cadence-ticket-N — per-ticket discussion (on demand)       │
+│  └─ #cadence (root Space)                                       │
+│     └─ #cadence-{project} (per-project Space)                   │
+│        ├─ #cadence-{project}-board    — ticket board             │
+│        ├─ #cadence-{project}-agents   — agent/session status     │
+│        ├─ #cadence-{project}-alerts   — waiting-for-input alerts │
+│        └─ #cadence-{project}-ticket-N — per-ticket discussion    │
 └──────────────────────────────┬──────────────────────────────────┘
                                │ Matrix CS API (sync + send)
                                ▼
@@ -117,26 +119,36 @@ Key behaviors:
 
 ### 3.3 Room Manager (`src/matrix/rooms.ts`)
 
-Creates and discovers the Matrix Space and child rooms on startup.
+Creates and discovers the two-level Space hierarchy: a root Space for Cadence, and per-project Spaces containing the functional rooms.
 
 ```typescript
 interface RoomLayout {
-  spaceAlias: string;        // #cadence:matrix.whatisbackdoor.com
-  boardRoomAlias: string;    // #cadence-board:matrix.whatisbackdoor.com
-  agentsRoomAlias: string;   // #cadence-agents:matrix.whatisbackdoor.com
-  alertsRoomAlias: string;   // #cadence-alerts:matrix.whatisbackdoor.com
+  rootSpaceAlias: string;    // #cadence:matrix.whatisbackdoor.com
+  // Per-project rooms are scoped: #cadence-{project}-{room}
+}
+
+interface ProjectRooms {
+  projectName: string;       // e.g., "claude-cadence"
+  spaceRoomId: string;       // per-project Space room ID
+  boardRoomId: string;       // #cadence-{project}-board
+  agentsRoomId: string;      // #cadence-{project}-agents
+  alertsRoomId: string;      // #cadence-{project}-alerts
 }
 ```
 
 Startup sequence:
-1. Resolve Space alias → room ID (or create Space if missing)
-2. For each core room: resolve alias → room ID (or create + add as Space child)
+1. Resolve root Space alias → room ID (or create if missing)
+2. For the default project (from `CADENCE_PROJECT` env):
+   a. Resolve project Space alias → room ID (or create + add as child of root Space)
+   b. For each core room: resolve alias → room ID (or create + add as child of project Space)
 3. Invite `authorizedUser` to all rooms if not already joined
 4. Store room ID map for use by tools and monitor
 
+Additional project Spaces are created on demand when the user interacts with a different project.
+
 Room creation uses:
 ```typescript
-// Space creation
+// Root Space creation
 POST /_matrix/client/v3/createRoom
 {
   name: "Cadence",
@@ -146,17 +158,31 @@ POST /_matrix/client/v3/createRoom
   room_alias_name: "cadence"
 }
 
-// Child room
+// Per-project Space (child of root)
+POST /_matrix/client/v3/createRoom
+{
+  name: "claude-cadence",
+  topic: "Project: claude-cadence",
+  creation_content: { type: "m.space" },
+  initial_state: [
+    { type: "m.room.join_rules", content: { join_rule: "invite" } },
+    { type: "m.space.parent", state_key: "<root_space_id>", content: { via: ["matrix.whatisbackdoor.com"] } }
+  ],
+  room_alias_name: "cadence-claude-cadence"
+}
+// Then add m.space.child state event to the root Space
+
+// Functional room (child of project Space)
 POST /_matrix/client/v3/createRoom
 {
   name: "Board",
   topic: "Ticket board — say 'board' for summary",
   initial_state: [
-    { type: "m.space.parent", state_key: "<space_room_id>", content: { via: ["matrix.whatisbackdoor.com"] } }
+    { type: "m.space.parent", state_key: "<project_space_id>", content: { via: ["matrix.whatisbackdoor.com"] } }
   ],
-  room_alias_name: "cadence-board"
+  room_alias_name: "cadence-claude-cadence-board"
 }
-// Then add m.space.child state event to the Space
+// Then add m.space.child state event to the project Space
 ```
 
 ### 3.4 Channel Notifications (`src/channel/notifications.ts`)

@@ -50,14 +50,20 @@ skills/matrix-bridge/
 
 ## Matrix Room Structure
 
-**Space:** `#cadence:matrix.whatisbackdoor.com`
+**Root Space:** `#cadence:matrix.whatisbackdoor.com` — top-level container
+
+**Per-project Space:** `#cadence-{project}:matrix.whatisbackdoor.com` — e.g., `#cadence-claude-cadence`
+
+Each project Space contains:
 
 | Room | Purpose | Maps to UI feature |
 |------|---------|-------------------|
-| `#cadence-board` | Ticket summaries, state changes, board view | KanbanBoard |
-| `#cadence-agents` | Agent/session status, launch, destroy | AgentManager |
-| `#cadence-alerts` | Waiting-for-input notifications | NotificationDropdown |
-| `#cadence-ticket-{N}` | Per-ticket discussion (created on demand) | TicketDetail |
+| `#cadence-{project}-board` | Ticket summaries, state changes, board view | KanbanBoard |
+| `#cadence-{project}-agents` | Agent/session status, launch, destroy | AgentManager |
+| `#cadence-{project}-alerts` | Waiting-for-input notifications | NotificationDropdown |
+| `#cadence-{project}-ticket-{N}` | Per-ticket discussion (created on demand) | TicketDetail |
+
+Project Spaces are created on demand when the user first interacts with a project. The root Space groups all project Spaces for sidebar organization in Element.
 
 ## Feature Mapping
 
