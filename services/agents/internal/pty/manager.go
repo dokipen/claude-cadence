@@ -40,16 +40,26 @@ type PTYConfig struct {
 
 // session holds per-session PTY state.
 type session struct {
-	id        string
-	cmd       *exec.Cmd
-	master    *os.File    // PTY master
-	rb        *RingBuffer
-	writers   []io.Writer // active WS writers (stub for future broadcast)
-	done      chan struct{} // closed when PTY read goroutine exits AND cmd.Wait() has returned
-	waitOnce  sync.Once   // ensures cmd.Wait() is called exactly once
-	waitErr   error       // result of cmd.Wait(), set by waitOnce
-	mu        sync.Mutex
-	slavePath string      // /dev/pts/N path of the slave side of the PTY
+	id         string
+	cmd        *exec.Cmd
+	master     *os.File    // PTY master
+	rb         *RingBuffer
+	writers    []io.Writer  // active WS writers (stub for future broadcast)
+	done       chan struct{} // closed when PTY read goroutine exits AND cmd.Wait() has returned
+	waitOnce   sync.Once   // ensures cmd.Wait() is called exactly once
+	waitErr    error       // result of cmd.Wait(), set by waitOnce
+	closeOnce  sync.Once   // ensures master.Close() is called exactly once (idempotent across Destroy and Reattach goroutine)
+	mu         sync.Mutex
+	slavePath  string      // /dev/pts/N path of the slave side of the PTY
+}
+
+// closeMaster closes the PTY master fd idempotently. The second and subsequent
+// calls are no-ops. Both Destroy() and the Reattach read goroutine call this,
+// so sync.Once makes the ownership explicit: whichever path runs first performs
+// the close; the other is a guaranteed no-op rather than a silently-discarded
+// ErrClosed return.
+func (s *session) closeMaster() {
+	s.closeOnce.Do(func() { _ = s.master.Close() })
 }
 
 // PTYManager manages PTY sessions.
@@ -191,7 +201,7 @@ func (m *PTYManager) Destroy(id string) error {
 	if sess.cmd != nil && sess.cmd.Process != nil {
 		_ = sess.cmd.Process.Kill()
 	}
-	_ = sess.master.Close()
+	sess.closeMaster()
 	<-sess.done // wait for read goroutine to exit (it calls cmd.Wait via waitOnce)
 	if sess.cmd != nil {
 		sess.waitOnce.Do(func() { sess.waitErr = sess.cmd.Wait() }) // no-op if goroutine already reaped
@@ -274,7 +284,7 @@ func (p *PTYManager) Reattach(id, slavePath string) error {
 	// Read goroutine: fan PTY output to ring buffer and active writers.
 	go func() {
 		defer close(sess.done)
-		defer sess.master.Close()
+		defer sess.closeMaster()
 		buf := make([]byte, 4096)
 		for {
 			n, readErr := master.Read(buf)
