@@ -107,28 +107,29 @@ deploy_remote() {
     # Copy binary
     info "Copying binary to $HOST:$remote_binary..."
     scp "$binary" "$HOST:/tmp/agentd"
-    ssh "$HOST" "sudo mv /tmp/agentd $remote_binary && sudo chmod 755 $remote_binary"
+    ssh "$HOST" "sudo mv /tmp/agentd \"$remote_binary\" && sudo chmod 755 \"$remote_binary\""
 
     # Ensure config dir
-    ssh "$HOST" "sudo mkdir -p $remote_config_dir"
+    ssh "$HOST" "sudo mkdir -p \"$remote_config_dir\""
 
     # Write env file - preserve existing values, only update HUB_AGENT_TOKEN
     info "Writing env file..."
-    if ssh "$HOST" "sudo test -f $remote_env"; then
+    if ssh "$HOST" "sudo test -f \"$remote_env\""; then
         {
-            ssh "$HOST" "sudo grep -v '^HUB_AGENT_TOKEN=' $remote_env || true"
+            ssh "$HOST" "sudo grep -v '^HUB_AGENT_TOKEN=' \"$remote_env\" || true"
             printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN"
-        } | ssh "$HOST" "sudo tee ${remote_env}.tmp > /dev/null && sudo chmod 600 ${remote_env}.tmp && sudo mv ${remote_env}.tmp $remote_env"
+        } | ssh "$HOST" "sudo tee \"${remote_env}.tmp\" > /dev/null && sudo chmod 600 \"${remote_env}.tmp\" && sudo mv \"${remote_env}.tmp\" \"$remote_env\""
     else
-        printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" | ssh "$HOST" "sudo tee $remote_env > /dev/null && sudo chmod 600 $remote_env"
+        printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" | ssh "$HOST" "sudo tee \"$remote_env\" > /dev/null && sudo chmod 600 \"$remote_env\""
     fi
 
     # Add hub section to config if missing
-    if ssh "$HOST" "grep -q '^hub:' $remote_config 2>/dev/null"; then
+    if ssh "$HOST" "grep -q '^hub:' \"$remote_config\" 2>/dev/null"; then
         info "Hub config already present in $HOST:$remote_config"
     else
         info "Adding hub section to $HOST:$remote_config..."
-        ssh "$HOST" "sudo tee -a $remote_config > /dev/null" <<EOF
+        # shellcheck disable=SC2087  # EOF unquoted intentionally: $HUB_URL and $NAME expand on client side
+        ssh "$HOST" "sudo tee -a \"$remote_config\" > /dev/null" <<EOF
 
 hub:
   url: "$HUB_URL"
