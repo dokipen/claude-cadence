@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
 import { create } from "@bufbuild/protobuf";
 import { SessionSchema } from "../gen/hub/v1/hub_pb";
+import { makeSessionStorageMock } from '../test-utils/makeSessionStorageMock';
 
 // Mock TerminalWindow to avoid xterm and other heavy deps.
 // Renders a div with data-testid="terminal-window-{key}" and a button that
@@ -305,18 +306,6 @@ describe("TilingLayout — master-stack structure", () => {
     expect(lastFlexChild.style.flex).toBe("0.5 1 0%");
   });
 });
-
-function makeSessionStorageMock() {
-  const store: Record<string, string> = {};
-  return {
-    getItem: vi.fn((key: string) => store[key] ?? null),
-    setItem: vi.fn((key: string, value: string) => { store[key] = value; }),
-    removeItem: vi.fn((key: string) => { delete store[key]; }),
-    clear: vi.fn(() => { Object.keys(store).forEach((k) => delete store[k]); }),
-    length: 0,
-    key: vi.fn(() => null),
-  };
-}
 
 describe("TilingLayout — sessionStorage persistence", () => {
   let mockSessionStorage: ReturnType<typeof makeSessionStorageMock>;
