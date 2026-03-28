@@ -14,7 +14,7 @@ set -euo pipefail
 # Detect ticket provider from the project's CLAUDE.md
 PROVIDER=$(bash skills/ticket-provider/scripts/detect-provider.sh | jq -r '.provider')
 
-if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
   echo "Usage: ./scripts/update-blocked-labels.sh"
   echo ""
   echo "Syncs 'blocked' labels for all open issues based on their"
