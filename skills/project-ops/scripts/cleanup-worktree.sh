@@ -17,7 +17,9 @@ if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
 fi
 
 BRANCH_NAME="$1"
-WORKTREE_DIR=".worktrees/${BRANCH_NAME}"
+# Resolve repo root from anywhere (main repo or linked worktree)
+REPO_ROOT="$(dirname "$(git rev-parse --git-common-dir)")"
+WORKTREE_DIR="${REPO_ROOT}/.worktrees/${BRANCH_NAME}"
 
 echo "Cleaning up worktree: ${BRANCH_NAME}"
 echo "=================================="
