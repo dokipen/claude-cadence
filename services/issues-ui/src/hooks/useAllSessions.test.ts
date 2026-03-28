@@ -28,14 +28,14 @@ const POLL_INTERVAL_MS = 10_000;
 // Thin wrapper so we can swap out renderHook in one place if needed.
 const renderHookTracked = renderHook;
 
-function makeSession(overrides: Partial<Session> = {}): Session {
+function makeSession(overrides: Partial<{ id: string; name: string; state: string; agentProfile: string; waitingForInput: boolean }> = {}): Session {
   return create(SessionSchema, {
-    id: "session-1",
-    agentName: "agent-1",
-    name: "test-session",
-    state: "running",
-    waitingForInput: false,
-    ...overrides,
+    id: overrides.id ?? "session-1",
+    agentProfile: overrides.agentProfile ?? "default",
+    name: overrides.name ?? "test-session",
+    state: overrides.state ?? "running",
+    waitingForInput: overrides.waitingForInput ?? false,
+    createdAt: "2024-01-01T00:00:00Z",
   }) as unknown as Session;
 }
 
