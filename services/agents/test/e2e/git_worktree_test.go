@@ -291,3 +291,61 @@ func run(t *testing.T, name string, args ...string) {
 		t.Fatalf("%s %v: %v: %s", name, args, err, string(output))
 	}
 }
+
+func TestWorktreeCleanup_DestroyRemovesWorktree(t *testing.T) {
+	env := setupGitTestEnv(t)
+	name := uniqueSessionName(t)
+
+	sess, err := env.mgr.Create(session.CreateRequest{
+		AgentProfile: "git-sleeper",
+		SessionName:  name,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	t.Cleanup(func() {
+		env.mgr.Destroy(sess.ID, true) //nolint:errcheck
+	})
+
+	// Find the clone directory that was created during session setup.
+	reposDir := filepath.Join(env.rootDir, "repos")
+	var cloneDir string
+	ownerEntries, err := os.ReadDir(reposDir)
+	if err != nil {
+		t.Fatalf("reading repos dir: %v", err)
+	}
+	for _, ownerEntry := range ownerEntries {
+		ownerPath := filepath.Join(reposDir, ownerEntry.Name())
+		repoEntries, _ := os.ReadDir(ownerPath)
+		for _, repoEntry := range repoEntries {
+			cloneDir = filepath.Join(ownerPath, repoEntry.Name())
+		}
+	}
+	if cloneDir == "" {
+		t.Fatal("could not find clone directory")
+	}
+
+	// Create a real git worktree under env.rootDir so RemoveWorktree accepts it.
+	worktreePath := filepath.Join(env.rootDir, "worktrees", "test-cleanup-branch")
+	run(t, "git", "-C", cloneDir, "worktree", "add", worktreePath, "-b", "test-cleanup-branch")
+
+	// Verify the worktree directory exists before destroying the session.
+	if _, err := os.Stat(worktreePath); err != nil {
+		t.Fatalf("expected worktree directory to exist before destroy: %v", err)
+	}
+
+	// Inject the worktree path onto the session via the exported SetWorktreePath API.
+	if err := env.mgr.SetWorktreePath(sess.ID, worktreePath); err != nil {
+		t.Fatalf("SetWorktreePath: %v", err)
+	}
+
+	// Destroy the session; this should also remove the worktree.
+	if err := env.mgr.Destroy(sess.ID, true); err != nil {
+		t.Fatalf("Destroy: %v", err)
+	}
+
+	// The worktree directory must no longer exist.
+	if _, err := os.Stat(worktreePath); !os.IsNotExist(err) {
+		t.Errorf("expected worktree %q to be removed after Destroy, got: %v", worktreePath, err)
+	}
+}

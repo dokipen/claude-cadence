@@ -179,3 +179,72 @@ func TestEnsureOnPath_SkipsExistingDir(t *testing.T) {
 	}
 	t.Errorf("PATH not found in result: %v", result)
 }
+
+func TestRemoveWorktree_EmptyPath(t *testing.T) {
+	c := newTestClient(t)
+	if err := c.RemoveWorktree(""); err == nil {
+		t.Error("expected error for empty path")
+	}
+}
+
+func TestRemoveWorktree_NonExistentPath(t *testing.T) {
+	c := newTestClient(t)
+	// Should return nil (idempotent) when the path does not exist.
+	if err := c.RemoveWorktree("/nonexistent/path/that/does/not/exist"); err != nil {
+		t.Errorf("expected nil for non-existent path, got: %v", err)
+	}
+}
+
+func TestRemoveWorktree_PathEscapesRootDir(t *testing.T) {
+	c := newTestClient(t)
+	// Create a real directory outside the client's rootDir to pass the os.Stat check.
+	outside := t.TempDir()
+	if err := c.RemoveWorktree(outside); err == nil {
+		t.Error("expected error for path escaping rootDir")
+	}
+}
+
+func TestRemoveWorktree_RemovesLinkedWorktree(t *testing.T) {
+	tmpDir := t.TempDir()
+	c := NewClient(tmpDir)
+
+	// Create a bare repo to clone from.
+	bareRepo := tmpDir + "/remote.git"
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command(args[0], args[1:]...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %v: %s", args, err, out)
+		}
+	}
+	run("git", "init", "--bare", bareRepo)
+	// Clone so we have a working repo with at least one commit.
+	work := tmpDir + "/work"
+	run("git", "clone", bareRepo, work)
+	run("git", "-C", work, "config", "user.email", "test@test.com")
+	run("git", "-C", work, "config", "user.name", "Test")
+	run("git", "-C", work, "commit", "--allow-empty", "-m", "init")
+	run("git", "-C", work, "push", "origin", "HEAD:main")
+
+	// Clone via the git client (creates repos/<owner>/<repo>).
+	cloneDir, err := c.EnsureClone(bareRepo, nil)
+	if err != nil {
+		t.Fatalf("EnsureClone: %v", err)
+	}
+
+	// Create a linked worktree inside rootDir.
+	worktreePath := tmpDir + "/wt/feature"
+	run("git", "-C", cloneDir, "worktree", "add", "-b", "feature", worktreePath)
+
+	if _, err := os.Stat(worktreePath); err != nil {
+		t.Fatalf("worktree should exist before RemoveWorktree: %v", err)
+	}
+
+	if err := c.RemoveWorktree(worktreePath); err != nil {
+		t.Fatalf("RemoveWorktree: %v", err)
+	}
+
+	if _, err := os.Stat(worktreePath); !os.IsNotExist(err) {
+		t.Errorf("expected worktree to be removed, got: %v", err)
+	}
+}
