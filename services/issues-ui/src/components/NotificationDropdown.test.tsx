@@ -331,6 +331,33 @@ describe("NotificationDropdown — yesno prompt", () => {
   });
 });
 
+describe("NotificationDropdown — parseSelectPrompt no ❯ marker", () => {
+  it("defaults currentIndex to 0 when no ❯ marker is present", async () => {
+    const agentName = "lead";
+    const sessionId = "sess-select-nomarker";
+    // Context has no ❯ — currentIndex should default to 0
+    const contextNoMarker = "? Pick one\n  Option A\n  Option B\n  Option C";
+    const sessions = [
+      makeAgentSession(agentName, {
+        id: sessionId,
+        promptType: "select",
+        promptContext: contextNoMarker,
+      }),
+    ];
+    const { getByTestId } = render(
+      <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
+    );
+    fireEvent.click(getByTestId("notification-trigger"));
+
+    // Click Option B (index 1) — currentIndex defaults to 0, delta = 1, one down arrow
+    fireEvent.click(getByTestId("btn-option-1"));
+
+    await vi.waitFor(() => {
+      expect(sendSessionInput).toHaveBeenCalledWith(agentName, sessionId, "\x1b[B\r");
+    });
+  });
+});
+
 describe("NotificationDropdown — select prompt", () => {
   const selectContext = "? Pick one\n  Option A\n❯ Option B\n  Option C";
 
@@ -478,6 +505,54 @@ describe("NotificationDropdown — ticket title", () => {
     fireEvent.click(getByTestId("notification-trigger"));
 
     expect(getByTestId("notification-item").textContent).toContain("general-work");
+  });
+});
+
+describe("NotificationDropdown — error state on sendSessionInput rejection", () => {
+  it("shows error message when sendSessionInput rejects", async () => {
+    vi.mocked(sendSessionInput).mockRejectedValue(new Error("network error"));
+
+    const sessions = [
+      makeAgentSession("lead", {
+        id: "sess-err",
+        promptType: "yesno",
+        promptContext: "Continue? (y/N)",
+      }),
+    ];
+    const { getByTestId } = render(
+      <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
+    );
+    fireEvent.click(getByTestId("notification-trigger"));
+    fireEvent.click(getByTestId("btn-yes"));
+
+    await vi.waitFor(() => {
+      expect(getByTestId("send-error").textContent).toBe("network error");
+    });
+  });
+
+  it("clears error when user types in the text input", async () => {
+    vi.mocked(sendSessionInput).mockRejectedValueOnce(new Error("network error"));
+
+    const sessions = [
+      makeAgentSession("lead", {
+        id: "sess-err-clear",
+        promptType: "text",
+      }),
+    ];
+    const { getByTestId, queryByTestId } = render(
+      <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
+    );
+    fireEvent.click(getByTestId("notification-trigger"));
+
+    // Trigger the error
+    fireEvent.click(getByTestId("btn-send"));
+    await vi.waitFor(() => {
+      expect(getByTestId("send-error")).toBeTruthy();
+    });
+
+    // Typing clears the error
+    fireEvent.change(getByTestId("text-input"), { target: { value: "x" } });
+    expect(queryByTestId("send-error")).toBeNull();
   });
 });
 

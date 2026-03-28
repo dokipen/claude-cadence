@@ -33,8 +33,9 @@ function parseSelectPrompt(context: string): { question: string; options: string
   const optionLines = lines.slice(questionIdx + 1);
   const options = optionLines.map((l) => l.replace(/^[\s❯]+/, "").trim()).filter(Boolean);
   const currentIndex = optionLines.findIndex((l) => l.includes("❯"));
+  const safeCurrentIndex = currentIndex === -1 ? 0 : currentIndex;
   const question = questionIdx >= 0 ? lines[questionIdx].replace(/^\?+\s*/, "") : "";
-  return { question, options, currentIndex: Math.max(0, currentIndex) };
+  return { question, options, currentIndex: safeCurrentIndex };
 }
 
 interface NotificationItemProps {
@@ -47,6 +48,7 @@ interface NotificationItemProps {
 function NotificationItem({ ws, projectId, projectName, onClose }: NotificationItemProps) {
   const [sent, setSent] = useState(false);
   const [textInput, setTextInput] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const ticketNumber = parseTicketNumber(ws.session.name);
   const { ticket } = useTicketByNumber(projectId, ticketNumber ?? undefined);
@@ -58,17 +60,23 @@ function NotificationItem({ ws, projectId, projectName, onClose }: NotificationI
 
   async function handleSend(text: string, e: React.MouseEvent | React.KeyboardEvent) {
     e.stopPropagation();
-    await sendSessionInput(ws.agentName, ws.session.id, text);
-    setSent(true);
-    setTimeout(() => setSent(false), 1000);
+    setError(null);
+    try {
+      await sendSessionInput(ws.agentName, ws.session.id, text);
+      setSent(true);
+      setTimeout(() => setSent(false), 1000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send");
+    }
   }
 
   function buildSelectInput(targetIndex: number): string {
-    const { currentIndex } = parseSelectPrompt(promptContext);
-    const delta = targetIndex - currentIndex;
+    const { currentIndex: safeCurrentIndex, options } = parseSelectPrompt(promptContext);
+    const delta = targetIndex - safeCurrentIndex;
     if (delta === 0) return "\r";
     const key = delta > 0 ? "\x1b[B" : "\x1b[A";
-    return key.repeat(Math.abs(delta)) + "\r";
+    const cappedAbs = Math.min(Math.abs(delta), options.length - 1);
+    return key.repeat(cappedAbs) + "\r";
   }
 
   return (
@@ -148,7 +156,7 @@ function NotificationItem({ ws, projectId, projectName, onClose }: NotificationI
             ))}
           </div>
         )}
-        {promptType !== "yesno" && promptType !== "select" && (
+        {(promptType === "text" || promptType === "shell" || promptType === "") && (
           <div
             className={layoutStyles.notificationInputRow}
             onClick={(e) => e.stopPropagation()}
@@ -158,7 +166,7 @@ function NotificationItem({ ws, projectId, projectName, onClose }: NotificationI
               type="text"
               value={textInput}
               disabled={sent}
-              onChange={(e) => setTextInput(e.target.value)}
+              onChange={(e) => { setTextInput(e.target.value); setError(null); }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   void handleSend(textInput + "\n", e);
@@ -178,6 +186,15 @@ function NotificationItem({ ws, projectId, projectName, onClose }: NotificationI
             >
               {sent ? "Sent" : "Send"}
             </button>
+          </div>
+        )}
+        {error && (
+          <div
+            className={layoutStyles.notificationError}
+            onClick={(e) => e.stopPropagation()}
+            data-testid="send-error"
+          >
+            {error}
           </div>
         )}
       </div>
