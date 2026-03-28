@@ -370,14 +370,16 @@ describe("TilingLayout — sessionStorage persistence", () => {
   });
 
   it("prunes stale ratio entries when a window is removed", () => {
+    // Seed ratios for a 4-window layout: root, root.1, and root.1.1 are all valid paths.
+    // After reducing to 2 windows only "root" remains valid; root.1 and root.1.1 become stale.
     mockSessionStorage.setItem(
       "cadence_window_ratios",
-      JSON.stringify([["root", 0.6], ["root.1", 0.4]]),
+      JSON.stringify([["root", 0.6], ["root.1", 0.5], ["root.1.1", 0.4]]),
     );
 
     const { rerender } = render(
       <TilingLayout
-        windows={makeWindows(["a", "b", "c"])}
+        windows={makeWindows(["a", "b", "c", "d"])}
         onMinimize={vi.fn()}
         onTerminated={vi.fn()}
       />,
@@ -397,10 +399,12 @@ describe("TilingLayout — sessionStorage persistence", () => {
       ([key]) => key === "cadence_window_ratios",
     );
     const lastCall = ratioCalls.at(-1);
+    expect(lastCall).toBeDefined();
     const entries: [string, number][] = JSON.parse(lastCall![1]);
 
     const keys = entries.map(([k]) => k);
     expect(keys).not.toContain("root.1");
+    expect(keys).not.toContain("root.1.1");
     expect(keys).toContain("root");
   });
 
@@ -432,6 +436,7 @@ describe("TilingLayout — sessionStorage persistence", () => {
       ([key]) => key === "cadence_window_ratios",
     );
     const lastCall = ratioCalls.at(-1);
+    expect(lastCall).toBeDefined();
     const entries: [string, number][] = JSON.parse(lastCall![1]);
 
     expect(entries).toEqual([["root", 0.6]]);
