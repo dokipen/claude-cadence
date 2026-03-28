@@ -71,7 +71,7 @@ func connectAgent(t *testing.T, url, name string) {
 // startTestHubWithHeartbeat creates a Hub and HTTP server with custom heartbeat settings.
 func startTestHubWithHeartbeat(t *testing.T, interval, timeout time.Duration) (*Hub, string) {
 	t.Helper()
-	h := New(interval, timeout, 5*time.Minute, 0)
+	h := New(interval, timeout, 15*time.Second, 5*time.Minute, 0)
 	h.Start()
 	t.Cleanup(h.Stop)
 
@@ -164,6 +164,54 @@ func waitForAgent(t *testing.T, h *Hub, name string) *ConnectedAgent {
 	return nil
 }
 
+// startTestHubWithKeepalive creates a Hub and HTTP server with custom heartbeat and keepalive settings.
+func startTestHubWithKeepalive(t *testing.T, interval, timeout, keepalive time.Duration) (*Hub, string) {
+	t.Helper()
+	h := New(interval, timeout, keepalive, 5*time.Minute, 0)
+	h.Start()
+	t.Cleanup(h.Stop)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+			InsecureSkipVerify: true,
+		})
+		if err != nil {
+			t.Errorf("accept ws: %v", err)
+			return
+		}
+
+		_, data, err := conn.Read(r.Context())
+		if err != nil {
+			return
+		}
+		var req Request
+		json.Unmarshal(data, &req)
+
+		var params RegisterParams
+		json.Unmarshal(req.Params, &params)
+
+		agent, regErr := h.Register(params.Name, conn, &params)
+
+		var resp *Response
+		if regErr != nil {
+			resp = NewErrorResponse(req.ID, RPCErrFailedPrecondition, "registration rejected")
+		} else {
+			resp, _ = NewResponse(req.ID, &RegisterResult{Accepted: true})
+		}
+		respData, _ := json.Marshal(resp)
+		conn.Write(r.Context(), websocket.MessageText, respData)
+
+		if regErr != nil {
+			conn.Close(websocket.StatusPolicyViolation, "registration rejected")
+			return
+		}
+		h.HandleAgentConnection(r.Context(), agent)
+	}))
+	t.Cleanup(srv.Close)
+
+	return h, srv.URL
+}
+
 func TestHeartbeatTimeout(t *testing.T) {
 	h, url := startTestHubWithHeartbeat(t, 50*time.Millisecond, 50*time.Millisecond)
 
@@ -185,6 +233,48 @@ func TestHeartbeatTimeout(t *testing.T) {
 
 	if agent.Status() != StatusOffline {
 		t.Errorf("expected agent to be marked offline after heartbeat timeout, got %s", agent.Status())
+	}
+}
+
+// TestWSKeepaliveLoop_Disabled verifies that a zero keepalive interval does not
+// panic and that the agent stays online (the loop is a no-op).
+func TestWSKeepaliveLoop_Disabled(t *testing.T) {
+	h, url := startTestHubWithKeepalive(t, 30*time.Second, 5*time.Second, 0)
+
+	connectAgent(t, url, "test-agent")
+	agent := waitForAgent(t, h, "test-agent")
+
+	if agent.Status() != StatusOnline {
+		t.Fatalf("expected agent to start online, got %s", agent.Status())
+	}
+
+	// Give it a moment to ensure no panic from a zero-interval ticker.
+	time.Sleep(50 * time.Millisecond)
+
+	if agent.Status() != StatusOnline {
+		t.Errorf("expected agent to remain online, got %s", agent.Status())
+	}
+}
+
+// TestWSKeepaliveLoop_KeepsAgentOnline verifies that protocol-level keepalive pings
+// are sent and the agent remains online when responding normally.
+func TestWSKeepaliveLoop_KeepsAgentOnline(t *testing.T) {
+	// Use a very short keepalive interval to trigger multiple pings in the test window.
+	h, url := startTestHubWithKeepalive(t, 30*time.Second, 5*time.Second, 20*time.Millisecond)
+
+	connectAgent(t, url, "test-agent")
+	agent := waitForAgent(t, h, "test-agent")
+
+	if agent.Status() != StatusOnline {
+		t.Fatalf("expected agent to start online, got %s", agent.Status())
+	}
+
+	// Wait long enough for several keepalive pings to have fired.
+	time.Sleep(100 * time.Millisecond)
+
+	// Agent should still be online — keepalive pings must not cause spurious offline marking.
+	if agent.Status() != StatusOnline {
+		t.Errorf("expected agent to remain online after keepalive pings, got %s", agent.Status())
 	}
 }
 
@@ -223,7 +313,7 @@ func TestHub_Call_Success(t *testing.T) {
 }
 
 func TestHub_Call_AgentOffline(t *testing.T) {
-	h := New(30*time.Second, 5*time.Second, 5*time.Minute, 0)
+	h := New(30*time.Second, 5*time.Second, 15*time.Second, 5*time.Minute, 0)
 	h.Start()
 	defer h.Stop()
 
@@ -364,7 +454,7 @@ func TestRegister(t *testing.T) {
 // nil conns are removed before Stop so that Stop does not panic.
 func newTestHubNoReaper(t *testing.T) *Hub {
 	t.Helper()
-	h := New(30*time.Second, 5*time.Second, 5*time.Minute, 0)
+	h := New(30*time.Second, 5*time.Second, 15*time.Second, 5*time.Minute, 0)
 	h.Start()
 	t.Cleanup(func() {
 		// Remove nil-conn agents to prevent panic in Stop.
@@ -516,7 +606,7 @@ func TestRegister_ProfileRepoEmpty(t *testing.T) {
 
 func TestReaper(t *testing.T) {
 	ttl := 50 * time.Millisecond
-	h := New(30*time.Second, 5*time.Second, ttl, 0)
+	h := New(30*time.Second, 5*time.Second, 15*time.Second, ttl, 0)
 	h.Start()
 	t.Cleanup(func() {
 		h.mu.Lock()

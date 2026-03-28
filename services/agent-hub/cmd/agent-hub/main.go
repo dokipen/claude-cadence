@@ -60,7 +60,7 @@ func main() {
 	}
 
 	// Create hub.
-	h := hub.New(cfg.Heartbeat.Interval, cfg.Heartbeat.Timeout, cfg.AgentTTL, cfg.Terminal.MaxSessions)
+	h := hub.New(cfg.Heartbeat.Interval, cfg.Heartbeat.Timeout, cfg.Heartbeat.KeepaliveInterval, cfg.AgentTTL, cfg.Terminal.MaxSessions)
 	h.Start()
 
 	// Create and start REST server.

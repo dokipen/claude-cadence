@@ -20,7 +20,7 @@ import (
 // getTerminalEndpoint with address/port pointing at the mock ttyd server.
 func startTestHub(t *testing.T, mockTtydAddr string) (*hub.Hub, string) {
 	t.Helper()
-	h := hub.New(30*time.Second, 5*time.Second, 5*time.Minute, 0)
+	h := hub.New(30*time.Second, 5*time.Second, 15*time.Second, 5*time.Minute, 0)
 	h.Start()
 	t.Cleanup(h.Stop)
 
@@ -83,7 +83,7 @@ func waitForAgent(t *testing.T, h *hub.Hub, name string) {
 }
 
 func TestHandleTerminalProxy_AgentNotFound(t *testing.T) {
-	h := hub.New(30*time.Second, 5*time.Second, 5*time.Minute, 0)
+	h := hub.New(30*time.Second, 5*time.Second, 15*time.Second, 5*time.Minute, 0)
 	h.Start()
 	defer h.Stop()
 
@@ -105,7 +105,7 @@ func TestHandleTerminalProxy_AgentNotFound(t *testing.T) {
 }
 
 func TestHandleTerminalProxy_AgentOffline(t *testing.T) {
-	h := hub.New(30*time.Second, 5*time.Second, 5*time.Minute, 0)
+	h := hub.New(30*time.Second, 5*time.Second, 15*time.Second, 5*time.Minute, 0)
 	h.Start()
 	defer h.Stop()
 
@@ -419,7 +419,7 @@ func TestHandleTerminalProxy_SurvivesReadTimeout(t *testing.T) {
 }
 
 func TestHandleTerminalProxy_OriginRejected(t *testing.T) {
-	h := hub.New(30*time.Second, 5*time.Second, 5*time.Minute, 0)
+	h := hub.New(30*time.Second, 5*time.Second, 15*time.Second, 5*time.Minute, 0)
 	h.Start()
 	defer h.Stop()
 
@@ -1086,7 +1086,7 @@ func TestHandleTerminalProxy_SessionLimit(t *testing.T) {
 	mockHost := strings.SplitN(mockAddr, ":", 2)[0]
 
 	// Build a hub with the session limit.
-	h := hub.New(30*time.Second, 5*time.Second, 5*time.Minute, maxSessions)
+	h := hub.New(30*time.Second, 5*time.Second, 15*time.Second, 5*time.Minute, maxSessions)
 	h.Start()
 	t.Cleanup(h.Stop)
 
@@ -1309,7 +1309,7 @@ func TestHandleTerminalProxy_RelaySessionLimit(t *testing.T) {
 	const maxSessions = 2
 
 	// Build a hub with the session limit.
-	h := hub.New(30*time.Second, 5*time.Second, 5*time.Minute, maxSessions)
+	h := hub.New(30*time.Second, 5*time.Second, 15*time.Second, 5*time.Minute, maxSessions)
 	h.Start()
 	t.Cleanup(h.Stop)
 
