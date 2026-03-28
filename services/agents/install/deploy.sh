@@ -107,10 +107,10 @@ deploy_remote() {
     # Copy binary
     info "Copying binary to $HOST:$remote_binary..."
     scp "$binary" "$HOST:/tmp/agentd"
-    ssh "$HOST" "sudo mv /tmp/agentd $remote_binary && sudo chmod 755 $remote_binary"
+    ssh "$HOST" "sudo mv /tmp/agentd \"$remote_binary\" && sudo chmod 755 \"$remote_binary\""
 
     # Ensure config dir
-    ssh "$HOST" "sudo mkdir -p $remote_config_dir"
+    ssh "$HOST" "sudo mkdir -p \"$remote_config_dir\""
 
     # Write env file - preserve existing values, only update HUB_AGENT_TOKEN
     info "Writing env file..."
@@ -128,6 +128,7 @@ deploy_remote() {
         info "Hub config already present in $HOST:$remote_config"
     else
         info "Adding hub section to $HOST:$remote_config..."
+        # shellcheck disable=SC2087  # EOF unquoted intentionally: $HUB_URL and $NAME expand on client side
         ssh "$HOST" "sudo tee -a \"$remote_config\" > /dev/null" <<EOF
 
 hub:
@@ -143,7 +144,7 @@ EOF
         info "EnvironmentFile already present in systemd unit."
     else
         info "Adding EnvironmentFile to agentd systemd unit..."
-        ssh "$HOST" "sudo sed -i '/^\[Service\]/a EnvironmentFile=\"$remote_env\"' /etc/systemd/system/agentd.service"
+        ssh "$HOST" "sudo sed -i '/^\[Service\]/a EnvironmentFile=$remote_env' /etc/systemd/system/agentd.service"
     fi
 
     # Restart
