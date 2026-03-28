@@ -23,8 +23,32 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
       )
     : sessions;
   const { agents, loading: agentsLoading } = useAgents(selectedProject?.repository);
-  const [openWindows, setOpenWindows] = useState<TiledWindow[]>([]);
-  const [minimizedKeys, setMinimizedKeys] = useState<Set<string>>(new Set());
+  const [openWindows, setOpenWindows] = useState<TiledWindow[]>(() => {
+    try {
+      const stored = sessionStorage.getItem("cadence_open_windows");
+      if (!stored) return [];
+      const storedKeys: string[] = JSON.parse(stored);
+      const sessionMap = new Map(sessions.map((s) => [sessionKey(s), s]));
+      return storedKeys.flatMap((key) => {
+        const s = sessionMap.get(key);
+        if (!s) return [];
+        return [{ key, session: s.session, agentName: s.agentName, projectId: selectedProject?.id }];
+      });
+    } catch {
+      return [];
+    }
+  });
+  const [minimizedKeys, setMinimizedKeys] = useState<Set<string>>(() => {
+    try {
+      const stored = sessionStorage.getItem("cadence_minimized_windows");
+      if (!stored) return new Set();
+      const storedKeys: string[] = JSON.parse(stored);
+      const liveKeys = new Set(sessions.map((s) => sessionKey(s)));
+      return new Set(storedKeys.filter((k) => liveKeys.has(k)));
+    } catch {
+      return new Set();
+    }
+  });
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem("cadence_sidebar_collapsed") === "true";
@@ -32,6 +56,22 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
       return false;
     }
   });
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("cadence_open_windows", JSON.stringify(openWindows.map((w) => w.key)));
+    } catch {
+      // ignore storage errors
+    }
+  }, [openWindows]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("cadence_minimized_windows", JSON.stringify([...minimizedKeys]));
+    } catch {
+      // ignore storage errors
+    }
+  }, [minimizedKeys]);
 
   const toggleSidebar = useCallback(() => {
     setIsCollapsed((prev) => {
