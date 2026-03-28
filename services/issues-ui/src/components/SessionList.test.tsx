@@ -211,6 +211,37 @@ describe("SessionList", () => {
     expect(stoppedBtn?.textContent).toContain("○");
   });
 
+  it("strips project prefix from session name display", () => {
+    const agents = [makeAgent("my-agent")];
+    const session = makeSession("s1", "my-agent");
+    session.session.name = "myproject/lead-42";
+    const { getByText, queryByText } = render(
+      <SessionList
+        {...defaultProps}
+        agents={agents}
+        sessions={[session]}
+        isCollapsed={false}
+      />,
+    );
+    expect(getByText("lead-42")).toBeTruthy();
+    expect(queryByText("myproject/lead-42")).toBeNull();
+  });
+
+  it("displays session name as-is when there is no project prefix", () => {
+    const agents = [makeAgent("my-agent")];
+    const session = makeSession("s1", "my-agent");
+    session.session.name = "lead-42";
+    const { getByText } = render(
+      <SessionList
+        {...defaultProps}
+        agents={agents}
+        sessions={[session]}
+        isCollapsed={false}
+      />,
+    );
+    expect(getByText("lead-42")).toBeTruthy();
+  });
+
   it("inert is removed from content after collapse then expand (bug repro: transitionend never fires in jsdom)", () => {
     const onSessionClick = vi.fn();
     const agents = [makeAgent("my-agent")];
