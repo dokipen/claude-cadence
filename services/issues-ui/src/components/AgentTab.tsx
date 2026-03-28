@@ -161,6 +161,8 @@ export function AgentTab({ ticketNumber, ticketTitle, ticketState, repoUrl }: Ag
           console.error("[AgentTab] Failed to delete session on resume:", err);
         }
       }
+      // sessionName is derived from launchConfig.sessionName(ticketNumber) — a TypeScript number
+      // interpolated into a static template — and is validated by the backend on creation.
       const newSession = await createSession(
         active.agentName,
         active.session.agentProfile,
@@ -171,6 +173,7 @@ export function AgentTab({ ticketNumber, ticketTitle, ticketState, repoUrl }: Ag
         optimisticAddSession(newSession, active.agentName);
         setActive({ session: newSession, agentName: active.agentName });
       } else {
+        // CREATE failed (likely name conflict if DELETE didn't complete) — show launcher so user can retry.
         setActive(null);
       }
     } finally {

@@ -59,6 +59,8 @@ export function TerminalWindow({
       console.warn("[TerminalWindow] Refusing to resume session: invalid id or agentProfile");
       return;
     }
+    // TerminalWindow discovers sessions via the global useAllSessions hook (not by name),
+    // so a unique resume name is safe here — the new session will appear automatically.
     const newSessionName = `resume-${session.id.slice(0, 8)}-${Date.now()}`;
     const newSession = await createSession(agentName, session.agentProfile, newSessionName, [`/resume ${session.id}`]).catch((err: unknown) => {
       console.error(err);

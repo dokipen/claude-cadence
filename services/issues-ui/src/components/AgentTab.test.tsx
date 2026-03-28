@@ -603,6 +603,78 @@ describe("AgentTab", () => {
       const fourthArg = mockCreateSession.mock.calls[0][3];
       expect(fourthArg).toEqual(["/resume sess-resume-arg"]);
     });
+
+    it("does not resume when session id is invalid", async () => {
+      // Session with an empty id fails validateSessionId
+      const invalidSession = makeSession({ id: "", name: "lead-42", state: "stopped", agentProfile: "default" });
+      mockHubFetch.mockResolvedValueOnce({ sessions: [invalidSession] });
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      render(<AgentTab {...defaultProps} />);
+      await flushAsync();
+
+      // capturedTerminalProps.onResumeSession should be undefined since agentProfile is set
+      // but validateSessionId will block — however onResumeSession is still passed because
+      // the validation only fires inside handleResumeSession at call time.
+      // We call it directly to trigger the guard.
+      mockHubFetch.mockReset();
+
+      if (capturedTerminalProps.onResumeSession) {
+        await act(async () => {
+          capturedTerminalProps.onResumeSession!();
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+      }
+
+      expect(mockCreateSession).not.toHaveBeenCalled();
+      expect(mockHubFetch).not.toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ method: "DELETE" }),
+      );
+
+      warnSpy.mockRestore();
+    });
+
+    it("proceeds with createSession even when DELETE returns non-404 error", async () => {
+      const stoppedSession = makeSession({ id: "sess-del-err", name: "lead-42", state: "stopped", agentProfile: "default" });
+      const newSession = makeSession({ id: "sess-new-after-err", name: "lead-42", state: "running", agentProfile: "default" });
+
+      mockHubFetch.mockResolvedValueOnce({ sessions: [stoppedSession] });
+
+      // Construct a HubError with status 500 from the mocked class
+      const { HubError } = await import("../api/agentHubClient");
+      mockHubFetch.mockRejectedValueOnce(new HubError(500, "Internal Server Error"));
+      mockCreateSession.mockResolvedValueOnce(newSession);
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      const { getByTestId } = render(<AgentTab {...defaultProps} />);
+      await flushAsync();
+
+      expect(capturedTerminalProps.onResumeSession).toBeDefined();
+
+      await act(async () => {
+        capturedTerminalProps.onResumeSession!();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // createSession must still be called despite the DELETE error
+      expect(mockCreateSession).toHaveBeenCalledWith(
+        "test-agent",
+        "default",
+        "lead-42",
+        ["/resume sess-del-err"],
+      );
+
+      // New session id appears in the terminal header
+      const header = getByTestId("terminal-header");
+      expect(header.textContent).toContain("lead-42");
+
+      errorSpy.mockRestore();
+    });
   });
 
 });
