@@ -266,6 +266,20 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		envSlice = append(envSlice, fmt.Sprintf("%s=%s", k, v))
 	}
 
+	// Default TERM to xterm-256color if not set — agentd runs as a systemd
+	// service with no TERM in its environment, and terminal programs like vim
+	// require a valid TERM to function.
+	hasTERM := false
+	for _, e := range envSlice {
+		if strings.HasPrefix(e, "TERM=") {
+			hasTERM = true
+			break
+		}
+	}
+	if !hasTERM {
+		envSlice = append(envSlice, "TERM=xterm-256color")
+	}
+
 	// Build PTY command: wrap the shell command string via bash -c so that
 	// the rendered cmdStr (which may include shell operators) is interpreted
 	// correctly. Prepend `trap '' HUP` so the child process and any exec'd
