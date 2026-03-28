@@ -357,4 +357,77 @@ describe("TilingLayout — sessionStorage persistence", () => {
     expect(firstFlexChild.style.flex).toBe(`${storedRatio} 1 0%`);
     expect(lastFlexChild.style.flex).toBe(`${1 - storedRatio} 1 0%`);
   });
+
+  it("prunes stale ratio entries when a window is removed", () => {
+    // Seed ratios for a 4-window layout: root, root.1, and root.1.1 are all valid paths.
+    // After reducing to 2 windows only "root" remains valid; root.1 and root.1.1 become stale.
+    mockSessionStorage.setItem(
+      "cadence_window_ratios",
+      JSON.stringify([["root", 0.6], ["root.1", 0.5], ["root.1.1", 0.4]]),
+    );
+
+    const { rerender } = render(
+      <TilingLayout
+        windows={makeWindows(["a", "b", "c", "d"])}
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    act(() => {
+      rerender(
+        <TilingLayout
+          windows={makeWindows(["a", "b"])}
+          onMinimize={vi.fn()}
+          onTerminated={vi.fn()}
+        />,
+      );
+    });
+
+    const ratioCalls = mockSessionStorage.setItem.mock.calls.filter(
+      ([key]) => key === "cadence_window_ratios",
+    );
+    const lastCall = ratioCalls.at(-1);
+    expect(lastCall).toBeDefined();
+    const entries: [string, number][] = JSON.parse(lastCall![1]);
+
+    const keys = entries.map(([k]) => k);
+    expect(keys).not.toContain("root.1");
+    expect(keys).not.toContain("root.1.1");
+    expect(keys).toContain("root");
+  });
+
+  it("writes back pruned ratios to sessionStorage after window removal", () => {
+    mockSessionStorage.setItem(
+      "cadence_window_ratios",
+      JSON.stringify([["root", 0.6], ["root.1", 0.4]]),
+    );
+
+    const { rerender } = render(
+      <TilingLayout
+        windows={makeWindows(["a", "b", "c"])}
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    act(() => {
+      rerender(
+        <TilingLayout
+          windows={makeWindows(["a", "b"])}
+          onMinimize={vi.fn()}
+          onTerminated={vi.fn()}
+        />,
+      );
+    });
+
+    const ratioCalls = mockSessionStorage.setItem.mock.calls.filter(
+      ([key]) => key === "cadence_window_ratios",
+    );
+    const lastCall = ratioCalls.at(-1);
+    expect(lastCall).toBeDefined();
+    const entries: [string, number][] = JSON.parse(lastCall![1]);
+
+    expect(entries).toEqual([["root", 0.6]]);
+  });
 });
