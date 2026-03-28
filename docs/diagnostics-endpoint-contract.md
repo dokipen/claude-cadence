@@ -16,7 +16,7 @@ The endpoint is intended for use on a trusted LAN. It is not designed for public
 
 **Authentication:** `Authorization: Bearer <HUB_API_TOKEN>`
 
-The token is the same shared secret used by all other hub REST endpoints.
+The token is the same shared secret used by all other hub REST endpoints. Invalid or missing tokens return `HTTP 401 Unauthorized`.
 
 ### Query Parameters
 
@@ -138,7 +138,7 @@ All four `sessions.*` arrays (`running`, `stopped`, `error`, `creating`) contain
 | `base_ref` | string | omitempty | Branch or ref name |
 | `error_message` | string | omitempty | Populated when `state` is `"error"` |
 | `agent_pid` | int | omitempty | OS process ID; `0` means absent |
-| `websocket_url` | string | omitempty | WebSocket URL for terminal connection |
+| `websocket_url` | string | omitempty | WebSocket URL for terminal connection. A valid bearer token grants full terminal access to any session at this URL — treat it as a sensitive credential. |
 | `idle_since` | string or null | pointer | RFC3339 timestamp, or `null` when the session is not idle |
 | `prompt_context` | string | omitempty | Short context string for the pending prompt |
 | `prompt_type` | string | omitempty | Type of pending prompt |
@@ -180,7 +180,7 @@ DiagnosticEvents share a common struct shape regardless of origin:
 | `agent_offline` | Agent connection dropped unexpectedly |
 | `agent_conn_closed` | Agent WebSocket connection was closed |
 
-Hub-side events use: `ts` (always), `type` (always), `agent` (omitempty), `error` (omitempty).
+Hub-side events use only `ts`, `type`, `agent` (omitempty), and `error` (omitempty). The session-related fields (`session_id`, `session_name`, `pid`, `exit_error`, `exit_code`, `age`) are **not present** on hub-side events.
 
 ---
 
@@ -200,7 +200,8 @@ The endpoint is pull-only. There is no push, streaming, or subscription mechanis
 
 | Layer | Duration | Behavior |
 |---|---|---|
-| Per-agent log-parse sub-context (agentd) | 30s | Aborts log parsing; returns empty events for that agent |
+| Per-agent log-parse sub-context (agentd) | 30s | Aborts log parsing; returns empty `events` for that agent |
+| Hub log-parse sub-context (hub) | 5s | Aborts hub log parsing; returns empty `hub_events` |
 | Per-agent RPC timeout (hub) | 60s | Agent call fails silently; `diagnostics` is `null` for that agent |
 | Overall fan-out deadline (hub) | 90s | Returns `504 Gateway Timeout` |
 | HTTP server WriteTimeout | Cleared per-request | The hub removes the 35s server-level write deadline for this handler |
