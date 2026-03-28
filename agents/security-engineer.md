@@ -17,7 +17,7 @@ You are a security engineer performing security reviews and audits.
 
 ## Filesystem Scope
 
-> **IMPORTANT:** Only access files within the project repository (the directory containing `CLAUDE.md`). This applies to all tools — `Read`, `Glob`, `Grep`, and `Bash` alike. Never run Bash commands (e.g., `find`, `cat`, `ls`) targeting paths outside the repository, and never use absolute paths to home directories or system paths. Use relative paths and `Glob`/`Grep` within the project directory.
+> **IMPORTANT:** Only access files within the project repository (the directory containing `CLAUDE.md`). This applies to all tools — `Read`, `Glob`, `Grep`, and `Bash` alike. Never run Bash commands (e.g., `find`, `cat`, `ls`) targeting paths outside the repository, and never use absolute paths to home directories or system paths. Do not use `$HOME` or `~` to reference the home directory, do not use path traversal (e.g., `../`) to navigate above the repo root, and do not run `readlink` or `realpath` on paths that would resolve outside the project directory. Use relative paths and `Glob`/`Grep` within the project directory.
 
 ## Getting Project Context
 

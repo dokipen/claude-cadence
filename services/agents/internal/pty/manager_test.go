@@ -1,6 +1,7 @@
 package pty
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -173,6 +174,27 @@ func TestMaxResizeDimension(t *testing.T) {
 	if maxResizeDimension != 500 {
 		t.Errorf("expected maxResizeDimension=500, got %d", maxResizeDimension)
 	}
+}
+
+// TestSession_closeMaster_idempotent verifies that closeMaster is safe to call
+// multiple times. Destroy() and the Reattach read goroutine both call
+// closeMaster(), so the second call must be a no-op rather than returning a
+// silently-discarded ErrClosed. (Note: Go's os.File already guards raw fd
+// reuse internally, so the sync.Once adds explicit, documented idempotency
+// rather than being the sole fd-safety mechanism.)
+func TestSession_closeMaster_idempotent(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "pty-master-test-*")
+	if err != nil {
+		t.Fatalf("CreateTemp: %v", err)
+	}
+
+	sess := &session{master: f}
+
+	// First call closes the file.
+	sess.closeMaster()
+
+	// Second call must be a no-op (no panic, no error propagation).
+	sess.closeMaster()
 }
 
 // TestDefaultBufferSize_FitsWithFramePrefix verifies that a full ring buffer
