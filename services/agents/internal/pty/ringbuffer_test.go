@@ -106,3 +106,17 @@ func TestRingBuffer_LargerThanCapacity(t *testing.T) {
 		t.Errorf("expected last 3 bytes %q, got %q", "def", snap)
 	}
 }
+
+func BenchmarkRingBuffer_Snapshot_1MB(b *testing.B) {
+	rb := NewRingBuffer(defaultBufferSize)
+	// Fill the buffer completely by writing 2 MB (ensures wrap-around).
+	chunk := bytes.Repeat([]byte("x"), 4096)
+	for rb.size < len(rb.buf) {
+		rb.Write(chunk)
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = rb.Snapshot()
+	}
+}
