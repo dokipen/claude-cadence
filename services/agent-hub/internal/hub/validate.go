@@ -74,6 +74,18 @@ func isValidHostname(s string) bool {
 	return true
 }
 
+// ValidateProfileType checks that typ is one of the accepted profile type
+// values: "", "shell", or "agent". An empty string is accepted (type not
+// specified). Any other value is rejected.
+func ValidateProfileType(typ string) error {
+	switch typ {
+	case "", "shell", "agent":
+		return nil
+	default:
+		return fmt.Errorf("profile type %q is invalid: must be \"\", \"shell\", or \"agent\"", typ)
+	}
+}
+
 // ValidateProfileRepo checks that repo is either empty or a valid http/https
 // URL. Empty strings are accepted (repo not specified). Plain strings, bare
 // hostnames, and non-http schemes are rejected.
