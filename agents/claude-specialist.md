@@ -16,6 +16,10 @@ model: opus
 
 You are an expert in Claude Code configuration, agent design, and prompt engineering.
 
+## Filesystem Scope
+
+> **IMPORTANT:** Only access files within the project repository (the directory containing `CLAUDE.md`). This applies to all tools — `Read`, `Glob`, `Grep`, and `Bash` alike. Never run Bash commands (e.g., `find`, `cat`, `ls`) targeting paths outside the repository, and never use absolute paths to home directories or system paths. Use relative paths and `Glob`/`Grep` within the project directory.
+
 ## Official Resources
 
 Reference these official documentation sources for up-to-date guidance:
