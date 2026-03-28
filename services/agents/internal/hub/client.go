@@ -237,7 +237,7 @@ func (c *Client) readLoop(ctx context.Context, conn *websocket.Conn) error {
 				return err
 			}
 
-		case "createSession", "getSession", "listSessions", "destroySession", "getTerminalEndpoint", "getSessionOutput", "getDiagnostics", "sendInput":
+		case "createSession", "getSession", "listSessions", "destroySession", "getTerminalEndpoint", "getDiagnostics", "sendInput":
 			// Dispatch asynchronously so long-running operations (e.g., git clone)
 			// don't block the read loop from responding to heartbeat pings.
 			go c.dispatchSessionAsync(ctx, conn, req)

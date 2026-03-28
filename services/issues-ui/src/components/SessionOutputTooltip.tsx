@@ -86,6 +86,8 @@ export function SessionOutputTooltip({ session, children }: SessionOutputTooltip
     };
 
     return () => {
+      // Null handlers before close so stale callbacks don't fire if the socket
+      // is still in CONNECTING state when the tooltip hides.
       ws.onopen = null;
       ws.onmessage = null;
       ws.onclose = null;
