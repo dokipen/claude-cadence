@@ -2,7 +2,7 @@
 #
 # Usage:
 #   LAN (internal TLS via Caddy's built-in CA):
-#     CADENCE_DOMAIN=cadence.bootsy.internal caddy run --config infrastructure/Caddyfile
+#     CADENCE_DOMAIN=cadence.whatisbackdoor.com caddy run --config infrastructure/Caddyfile
 #
 # Environment variables:
 #   CADENCE_DOMAIN  — Hostname to serve on (required).
