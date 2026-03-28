@@ -45,7 +45,7 @@ export function TerminalWindow({
   isMaximized,
   onMaximize,
 }: TerminalWindowProps) {
-  const ticketMatch = session.name.match(/^lead-(\d+)$/);
+  const ticketMatch = session.name.match(/(?:^|-)lead-(\d+)$/);
   const ticketNumber = ticketMatch ? Number(ticketMatch[1]) : undefined;
   const { ticket } = useTicketByNumber(projectId, ticketNumber);
 

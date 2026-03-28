@@ -7,24 +7,26 @@ interface CreateTicketDialogProps {
   open: boolean;
   onClose: () => void;
   repoUrl?: string;
+  projectId?: string;
 }
 
 export function CreateTicketDialog({
   open,
   onClose,
   repoUrl,
+  projectId,
 }: CreateTicketDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [prompt, setPrompt] = useState("");
   // Generated once per open — stable for the lifetime of a single dialog session.
-  const sessionNameRef = useRef("ticket-" + Date.now());
+  const sessionNameRef = useRef(`${projectId ? projectId + "-" : ""}ticket-` + Date.now());
 
   useEffect(() => {
     const el = dialogRef.current;
     if (!el) return;
 
     if (open && !el.open) {
-      sessionNameRef.current = "ticket-" + Date.now();
+      sessionNameRef.current = `${projectId ? projectId + "-" : ""}ticket-` + Date.now();
       el.showModal();
     } else if (!open && el.open) {
       setPrompt("");

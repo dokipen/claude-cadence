@@ -7,19 +7,21 @@ interface RefineAllDialogProps {
   repoUrl: string | undefined;
   open: boolean;
   onClose: () => void;
+  projectId?: string;
 }
 
 export function RefineAllDialog({
   repoUrl,
   open,
   onClose,
+  projectId,
 }: RefineAllDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   const command = "/refine";
   // Generated once on mount; refreshed in the useEffect on each open so rapid
   // re-opens also get a fresh name.
-  const sessionNameRef = useRef("refine-all-" + Date.now());
+  const sessionNameRef = useRef(`${projectId ? projectId + "-" : ""}refine-all-` + Date.now());
   const buttonLabel = "Refine All";
 
   useEffect(() => {
@@ -27,7 +29,7 @@ export function RefineAllDialog({
     if (!el) return;
 
     if (open && !el.open) {
-      sessionNameRef.current = "refine-all-" + Date.now();
+      sessionNameRef.current = `${projectId ? projectId + "-" : ""}refine-all-` + Date.now();
       el.showModal();
     } else if (!open && el.open) {
       el.close();

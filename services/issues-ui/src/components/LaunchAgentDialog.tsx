@@ -12,6 +12,7 @@ interface LaunchAgentDialogProps {
   ticketState: TicketState;
   ticketTitle: string;
   anchorRect?: DOMRect;
+  projectId?: string;
 }
 
 export function LaunchAgentDialog({
@@ -22,12 +23,13 @@ export function LaunchAgentDialog({
   ticketState,
   ticketTitle,
   anchorRect,
+  projectId,
 }: LaunchAgentDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   const config = getLaunchConfig(ticketState);
   const command = config.command(ticketNumber, ticketTitle);
-  const sessionName = config.sessionName(ticketNumber);
+  const sessionName = config.sessionName(ticketNumber, projectId);
   const buttonLabel = config.buttonLabel;
 
   useEffect(() => {
