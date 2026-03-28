@@ -249,6 +249,9 @@ describe("SessionOutputTooltip", () => {
     const renderedLines = content.split("\n");
     expect(renderedLines.length).toBe(4);
     expect(renderedLines[renderedLines.length - 1]).toBe("line10");
-    expect(content).not.toContain("line1\n");
+    // Verify early lines are excluded (line1–line6 should not appear)
+    for (const excluded of ["line1", "line2", "line3", "line4", "line5", "line6"]) {
+      expect(renderedLines).not.toContain(excluded);
+    }
   });
 });
