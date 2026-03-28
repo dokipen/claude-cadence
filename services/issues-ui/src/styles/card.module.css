@@ -135,13 +135,6 @@
   color: var(--text-secondary);
 }
 
-.cardActions {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin-left: auto;
-}
-
 .cardActionsOverlay {
   display: flex;
   align-items: center;

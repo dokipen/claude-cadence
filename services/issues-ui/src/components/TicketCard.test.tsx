@@ -296,6 +296,19 @@ describe("TicketCard close button", () => {
 });
 
 // ---------------------------------------------------------------------------
+// TicketCard footer — no-assignee layout
+// ---------------------------------------------------------------------------
+
+describe("TicketCard footer without assignee", () => {
+  it("shows launch button when ticket has no assignee", () => {
+    const ticket = makeTicket({ assignee: undefined });
+    const { getByTestId, queryByTestId } = render(<TicketCard ticket={ticket} sessions={[]} />);
+    expect(queryByTestId("assignee")).toBeNull();
+    expect(getByTestId("card-launch-button")).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // TicketCard blocked badge — rendering
 // ---------------------------------------------------------------------------
 
