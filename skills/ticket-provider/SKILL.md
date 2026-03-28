@@ -96,3 +96,7 @@ The two providers use different terminology in some areas:
 - When using `issues-api`, the API URL from `CLAUDE.md` must be reachable
 - When using `issues-api`, `project_id` is required for `ticket list`, `ticket create`, and `ticket view` (when using ticket numbers). Other commands take a CUID ticket ID and don't need `--project`.
 - The `issues` CLI must be installed and authenticated (`gh auth token | issues auth login --pat -`)
+- **QA/local override** (`issues-api` only): Set `ISSUES_API_URL` to target a local or QA instance without modifying `CLAUDE.md`. This takes precedence over the `api_url` in `CLAUDE.md`. Has no effect when provider is `github`.
+  ```bash
+  ISSUES_API_URL=http://192.168.1.100:5173/graphql /lead 123
+  ```
