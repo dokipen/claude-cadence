@@ -20,7 +20,7 @@ const makeAgent = (name: string, status: "online" | "offline" = "online"): Agent
     profiles: {},
     status,
     lastSeen: "2024-01-01T00:00:00Z",
-  });
+  }) as unknown as Agent;
 
 const makeSession = (id: string, agentName: string): AgentSession => ({
   agentName,

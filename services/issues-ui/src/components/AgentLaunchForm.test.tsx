@@ -3,7 +3,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, act, cleanup } from "@testing-library/react";
 import { create } from "@bufbuild/protobuf";
 import { AgentSchema, AgentProfileSchema } from "../gen/hub/v1/hub_pb";
-import type { Agent } from "../types";
+import type { Agent, AgentStatus } from "../types";
 
 vi.mock("../api/agentHubClient", () => ({
   createSession: vi.fn(),
@@ -26,7 +26,7 @@ import { AgentLaunchForm } from "./AgentLaunchForm";
 
 const makeAgent = (
   name: string,
-  status: string,
+  status: AgentStatus,
   profiles: Record<string, string>,
 ): Agent =>
   create(AgentSchema, {
@@ -39,7 +39,7 @@ const makeAgent = (
         create(AgentProfileSchema, { repo }),
       ]),
     ),
-  });
+  }) as unknown as Agent;
 
 afterEach(() => cleanup());
 

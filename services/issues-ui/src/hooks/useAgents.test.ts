@@ -4,7 +4,7 @@ import { renderHook } from "@testing-library/react";
 import { create } from "@bufbuild/protobuf";
 import { AgentSchema, AgentProfileSchema } from "../gen/hub/v1/hub_pb";
 import { normalizeRepo, useAgentProfiles } from "./useAgents";
-import type { Agent } from "../types";
+import type { Agent, AgentStatus } from "../types";
 
 describe("normalizeRepo", () => {
   it("strips https://github.com/ prefix", () => {
@@ -68,7 +68,7 @@ describe("normalizeRepo - nullish inputs from recovered sessions", () => {
 
 const makeAgent = (
   name: string,
-  status: string,
+  status: AgentStatus,
   profiles: Record<string, string>,
 ): Agent =>
   create(AgentSchema, {
@@ -81,7 +81,7 @@ const makeAgent = (
         create(AgentProfileSchema, { repo }),
       ]),
     ),
-  });
+  }) as unknown as Agent;
 
 describe("useAgentProfiles", () => {
   it("returns empty array when repoUrl is undefined", () => {
