@@ -114,21 +114,21 @@ deploy_remote() {
 
     # Write env file - preserve existing values, only update HUB_AGENT_TOKEN
     info "Writing env file..."
-    if ssh "$HOST" "sudo test -f $remote_env"; then
+    if ssh "$HOST" "sudo test -f \"$remote_env\""; then
         {
-            ssh "$HOST" "sudo grep -v '^HUB_AGENT_TOKEN=' $remote_env || true"
+            ssh "$HOST" "sudo grep -v '^HUB_AGENT_TOKEN=' \"$remote_env\" || true"
             printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN"
-        } | ssh "$HOST" "sudo tee ${remote_env}.tmp > /dev/null && sudo chmod 600 ${remote_env}.tmp && sudo mv ${remote_env}.tmp $remote_env"
+        } | ssh "$HOST" "sudo tee \"${remote_env}.tmp\" > /dev/null && sudo chmod 600 \"${remote_env}.tmp\" && sudo mv \"${remote_env}.tmp\" \"$remote_env\""
     else
-        printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" | ssh "$HOST" "sudo tee $remote_env > /dev/null && sudo chmod 600 $remote_env"
+        printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" | ssh "$HOST" "sudo tee \"$remote_env\" > /dev/null && sudo chmod 600 \"$remote_env\""
     fi
 
     # Add hub section to config if missing
-    if ssh "$HOST" "grep -q '^hub:' $remote_config 2>/dev/null"; then
+    if ssh "$HOST" "grep -q '^hub:' \"$remote_config\" 2>/dev/null"; then
         info "Hub config already present in $HOST:$remote_config"
     else
         info "Adding hub section to $HOST:$remote_config..."
-        ssh "$HOST" "sudo tee -a $remote_config > /dev/null" <<EOF
+        ssh "$HOST" "sudo tee -a \"$remote_config\" > /dev/null" <<EOF
 
 hub:
   url: "$HUB_URL"
@@ -143,7 +143,7 @@ EOF
         info "EnvironmentFile already present in systemd unit."
     else
         info "Adding EnvironmentFile to agentd systemd unit..."
-        ssh "$HOST" "sudo sed -i '/^\[Service\]/a EnvironmentFile=$remote_env' /etc/systemd/system/agentd.service"
+        ssh "$HOST" "sudo sed -i '/^\[Service\]/a EnvironmentFile=\"$remote_env\"' /etc/systemd/system/agentd.service"
     fi
 
     # Restart
