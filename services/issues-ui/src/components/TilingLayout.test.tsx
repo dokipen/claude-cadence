@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
 import { create } from "@bufbuild/protobuf";
 import { SessionSchema } from "../gen/hub/v1/hub_pb";
@@ -303,5 +303,69 @@ describe("TilingLayout — master-stack structure", () => {
     // ratio = 1/2 = 0.5
     expect(firstFlexChild.style.flex).toBe("0.5 1 0%");
     expect(lastFlexChild.style.flex).toBe("0.5 1 0%");
+  });
+});
+
+function makeSessionStorageMock() {
+  const store: Record<string, string> = {};
+  return {
+    getItem: vi.fn((key: string) => store[key] ?? null),
+    setItem: vi.fn((key: string, value: string) => { store[key] = value; }),
+    removeItem: vi.fn((key: string) => { delete store[key]; }),
+    clear: vi.fn(() => { Object.keys(store).forEach((k) => delete store[k]); }),
+    length: 0,
+    key: vi.fn(() => null),
+  };
+}
+
+describe("TilingLayout — sessionStorage persistence", () => {
+  let mockSessionStorage: ReturnType<typeof makeSessionStorageMock>;
+
+  beforeEach(() => {
+    mockSessionStorage = makeSessionStorageMock();
+    vi.stubGlobal("sessionStorage", mockSessionStorage);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    cleanup();
+  });
+
+  it("writes ratios to sessionStorage on initial render", () => {
+    render(
+      <TilingLayout
+        windows={makeWindows(["a", "b"])}
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    const setItemCalls = mockSessionStorage.setItem.mock.calls;
+    const ratioCalls = setItemCalls.filter(([key]) => key === "cadence_window_ratios");
+    expect(ratioCalls.length).toBeGreaterThan(0);
+  });
+
+  it("rehydrates ratios from sessionStorage on mount and applies them to the split", () => {
+    const storedRatio = 0.7;
+    mockSessionStorage.setItem(
+      "cadence_window_ratios",
+      JSON.stringify([["root", storedRatio]]),
+    );
+
+    render(
+      <TilingLayout
+        windows={makeWindows(["a", "b"])}
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    const splits = screen.getAllByTestId("tile-split");
+    const rootSplit = splits[0];
+    const firstFlexChild = rootSplit.firstElementChild as HTMLElement;
+    const lastFlexChild = rootSplit.lastElementChild as HTMLElement;
+
+    expect(firstFlexChild.style.flex).toBe(`${storedRatio} 1 0%`);
+    expect(lastFlexChild.style.flex).toBe(`${1 - storedRatio} 1 0%`);
   });
 });

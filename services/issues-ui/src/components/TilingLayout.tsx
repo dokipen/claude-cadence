@@ -79,7 +79,16 @@ function getNodeRatio(root: LayoutNode | null, path: string): number {
 export function TilingLayout({ windows, onMinimize, onTerminated, onReorder, onReorderAll }: TilingLayoutProps) {
   // All hooks first
   const [maximizedKey, setMaximizedKey] = useState<string | null>(null);
-  const [ratios, setRatios] = useState<Map<string, number>>(new Map());
+  const [ratios, setRatios] = useState<Map<string, number>>(() => {
+    try {
+      const stored = sessionStorage.getItem("cadence_window_ratios");
+      if (!stored) return new Map();
+      const entries: [string, number][] = JSON.parse(stored);
+      return new Map(entries);
+    } catch {
+      return new Map();
+    }
+  });
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const draggingRef = useRef<{ path: string; direction: "horizontal" | "vertical"; startPos: number; startRatio: number; containerSize: number } | null>(null);
   const dragKeyRef = useRef<string | null>(null);
@@ -134,6 +143,14 @@ export function TilingLayout({ windows, onMinimize, onTerminated, onReorder, onR
       return pruned.size === prev.size ? prev : pruned;
     });
   }, [keysJson]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("cadence_window_ratios", JSON.stringify([...ratios]));
+    } catch {
+      // ignore storage errors
+    }
+  }, [ratios]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent, path: string, direction: "horizontal" | "vertical") => {
     e.preventDefault();

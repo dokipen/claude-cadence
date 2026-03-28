@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, fireEvent, act, cleanup } from "@testing-library/react";
 import { create } from "@bufbuild/protobuf";
 import { SessionSchema } from "../gen/hub/v1/hub_pb";
@@ -182,6 +182,144 @@ describe("AgentManager", () => {
       fireEvent.click(sessionBtn);
     });
     expect(sessionBtn.className).not.toContain("open");
+    expect(sessionBtn.className).toContain("sidebarSessionMinimized");
+  });
+});
+
+function makeSessionStorageMock() {
+  const store: Record<string, string> = {};
+  return {
+    getItem: vi.fn((key: string) => store[key] ?? null),
+    setItem: vi.fn((key: string, value: string) => { store[key] = value; }),
+    removeItem: vi.fn((key: string) => { delete store[key]; }),
+    clear: vi.fn(() => { Object.keys(store).forEach((k) => delete store[k]); }),
+    length: 0,
+    key: vi.fn(() => null),
+  };
+}
+
+describe("sessionStorage persistence", () => {
+  let mockSessionStorage: ReturnType<typeof makeSessionStorageMock>;
+
+  beforeEach(() => {
+    mockSessionStorage = makeSessionStorageMock();
+    vi.stubGlobal("sessionStorage", mockSessionStorage);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    cleanup();
+  });
+
+  it("writes open windows to sessionStorage when a window is opened", async () => {
+    const agentName = "test-agent";
+    const sessionId = "sess-persist-1";
+    const sessions = [makeSession(sessionId, agentName)];
+    const expectedKey = `${agentName}:${sessionId}`;
+
+    const { getAllByTestId } = render(
+      <MemoryRouter><AgentManager sessions={sessions} selectedProject={null} /></MemoryRouter>,
+    );
+
+    const sessionBtn = getAllByTestId("sidebar-session")[0];
+    await act(async () => {
+      fireEvent.click(sessionBtn);
+    });
+
+    const setItemCalls = mockSessionStorage.setItem.mock.calls;
+    const openWindowsCalls = setItemCalls.filter(([key]) => key === "cadence_open_windows");
+    expect(openWindowsCalls.length).toBeGreaterThan(0);
+    const lastCall = openWindowsCalls[openWindowsCalls.length - 1];
+    const stored: string[] = JSON.parse(lastCall[1]);
+    expect(stored).toContain(expectedKey);
+  });
+
+  it("writes minimized windows to sessionStorage when a window is minimized", async () => {
+    const agentName = "test-agent";
+    const sessionId = "sess-persist-2";
+    const sessions = [makeSession(sessionId, agentName)];
+    const expectedKey = `${agentName}:${sessionId}`;
+
+    const { getAllByTestId } = render(
+      <MemoryRouter><AgentManager sessions={sessions} selectedProject={null} /></MemoryRouter>,
+    );
+
+    const sessionBtn = getAllByTestId("sidebar-session")[0];
+
+    // Open it
+    await act(async () => {
+      fireEvent.click(sessionBtn);
+    });
+
+    // Minimize it by clicking again
+    await act(async () => {
+      fireEvent.click(sessionBtn);
+    });
+
+    const setItemCalls = mockSessionStorage.setItem.mock.calls;
+    const minimizedCalls = setItemCalls.filter(([key]) => key === "cadence_minimized_windows");
+    expect(minimizedCalls.length).toBeGreaterThan(0);
+    const lastCall = minimizedCalls[minimizedCalls.length - 1];
+    const stored: string[] = JSON.parse(lastCall[1]);
+    expect(stored).toContain(expectedKey);
+  });
+
+  it("rehydrates open windows from sessionStorage on mount", async () => {
+    const agentName = "test-agent";
+    const sessionId = "sess-rehydrate-1";
+    const sessions = [makeSession(sessionId, agentName)];
+    const key = `${agentName}:${sessionId}`;
+
+    // Pre-populate sessionStorage
+    mockSessionStorage.setItem("cadence_open_windows", JSON.stringify([key]));
+
+    const { getByTestId } = render(
+      <MemoryRouter><AgentManager sessions={sessions} selectedProject={null} /></MemoryRouter>,
+    );
+
+    // TilingLayout should be rendered (not the empty state), meaning window is open
+    expect(getByTestId("tiling-layout")).toBeDefined();
+  });
+
+  it("drops stale keys from sessionStorage on mount when session no longer exists", async () => {
+    const agentName = "test-agent";
+    const staleKey = `${agentName}:stale-session-id`;
+
+    // Pre-populate with a key that matches no provided session
+    mockSessionStorage.setItem("cadence_open_windows", JSON.stringify([staleKey]));
+
+    // Render with no matching sessions — stale key should be dropped.
+    // Wrap in act to ensure all effects (including the persistence useEffect) flush.
+    await act(async () => {
+      render(
+        <MemoryRouter><AgentManager sessions={[]} selectedProject={null} /></MemoryRouter>,
+      );
+    });
+
+    // The effect should have written an empty array back to sessionStorage
+    const setItemCalls = mockSessionStorage.setItem.mock.calls;
+    const openWindowsCalls = setItemCalls.filter(([key]) => key === "cadence_open_windows");
+    expect(openWindowsCalls.length).toBeGreaterThan(0);
+    const lastCall = openWindowsCalls[openWindowsCalls.length - 1];
+    const stored: string[] = JSON.parse(lastCall[1]);
+    expect(stored).toHaveLength(0);
+  });
+
+  it("rehydrates minimized windows from sessionStorage on mount", async () => {
+    const agentName = "test-agent";
+    const sessionId = "sess-rehydrate-min-1";
+    const sessions = [makeSession(sessionId, agentName)];
+    const key = `${agentName}:${sessionId}`;
+
+    // Pre-populate minimized windows
+    mockSessionStorage.setItem("cadence_minimized_windows", JSON.stringify([key]));
+
+    const { getAllByTestId } = render(
+      <MemoryRouter><AgentManager sessions={sessions} selectedProject={null} /></MemoryRouter>,
+    );
+
+    // The session button should have the minimized CSS class
+    const sessionBtn = getAllByTestId("sidebar-session")[0];
     expect(sessionBtn.className).toContain("sidebarSessionMinimized");
   });
 });
