@@ -58,16 +58,17 @@ export function SessionList({ agents, sessions, openKeys, onSessionClick, isColl
                   const key = sessionKey(as);
                   const isOpen = openKeys.has(key);
                   const isRunning = as.session.state === "running";
+                  const isDestroying = as.session.state === "destroying";
                   return (
                     <button
                       key={as.session.id}
-                      className={`${styles.sidebarSession} ${isOpen ? styles.sidebarSessionOpen : ""} ${!isRunning ? styles.sidebarSessionStopped : ""} ${as.session.waitingForInput ? styles.sidebarSessionWaiting : ""}`}
+                      className={`${styles.sidebarSession} ${isOpen ? styles.sidebarSessionOpen : ""} ${!isRunning && !isDestroying ? styles.sidebarSessionStopped : ""} ${isDestroying && !as.session.waitingForInput ? styles.sidebarSessionDestroying : ""} ${as.session.waitingForInput ? styles.sidebarSessionWaiting : ""}`}
                       onClick={() => onSessionClick(as)}
                       data-testid="sidebar-session"
                       title={`${as.session.name} (${as.session.state})`}
                     >
                       <span className={styles.sessionDot}>
-                        {as.session.waitingForInput ? "◉" : isRunning ? "●" : "○"}
+                        {as.session.waitingForInput ? "◉" : isRunning || isDestroying ? "●" : "○"}
                       </span>
                       <span className={styles.sessionName}>{as.session.name}</span>
                     </button>

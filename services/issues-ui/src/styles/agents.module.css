@@ -635,6 +635,16 @@
   color: var(--amber);
 }
 
+@keyframes sessionDestroying {
+  0%, 100% { opacity: 0.65; }
+  50% { opacity: 0.25; }
+}
+
+.sidebarSessionDestroying {
+  color: var(--amber);
+  animation: sessionDestroying 1.5s ease-in-out infinite;
+}
+
 /* Spinner for terminal connecting overlay */
 @keyframes spin {
   to {
