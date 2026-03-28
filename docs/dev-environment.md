@@ -2,6 +2,15 @@
 
 A single-command local stack for manual PR QA.
 
+## Quick Setup (Recommended)
+
+```bash
+bash scripts/setup.sh
+```
+
+Starts all services on port 8080 and opens the UI in your browser.
+For advanced configuration (TLS, low ports, production), see the manual steps below.
+
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) with the Compose plugin (`docker compose`)
