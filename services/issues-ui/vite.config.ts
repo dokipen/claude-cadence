@@ -20,6 +20,7 @@ export default defineConfig({
     setupFiles: ['./src/test-setup.ts'],
   },
   server: {
+    allowedHosts: 'all',
     proxy: {
       "/graphql": `http://${apiHost}:${apiPort}`,
       "/api/v1": {
