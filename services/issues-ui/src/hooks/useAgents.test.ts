@@ -161,3 +161,60 @@ describe("useAgentProfiles", () => {
     expect(result.current[0].profileName).toBe("default");
   });
 });
+
+const makeAgentWithProfileTypes = (
+  name: string,
+  status: AgentStatus,
+  profiles: Record<string, { repo: string; type?: string }>,
+): Agent =>
+  create(AgentSchema, {
+    name,
+    status,
+    lastSeen: "2024-01-01T00:00:00Z",
+    profiles: Object.fromEntries(
+      Object.entries(profiles).map(([profileName, { repo, type }]) => [
+        profileName,
+        create(AgentProfileSchema, { repo, type: type ?? "" }),
+      ]),
+    ),
+  }) as unknown as Agent;
+
+describe("useAgentProfiles - type filtering", () => {
+  it("excludes shell-type profiles from results", () => {
+    const agents = [
+      makeAgentWithProfileTypes("agent1", "online", {
+        "shell-profile": { repo: "https://github.com/owner/repo", type: "shell" },
+      }),
+    ];
+    const { result } = renderHook(() =>
+      useAgentProfiles("https://github.com/owner/repo", agents),
+    );
+    expect(result.current).toHaveLength(0);
+  });
+
+  it("includes agent-type profiles in results", () => {
+    const agents = [
+      makeAgentWithProfileTypes("agent1", "online", {
+        "agent-profile": { repo: "https://github.com/owner/repo", type: "agent" },
+      }),
+    ];
+    const { result } = renderHook(() =>
+      useAgentProfiles("https://github.com/owner/repo", agents),
+    );
+    expect(result.current).toHaveLength(1);
+    expect(result.current[0].profileName).toBe("agent-profile");
+  });
+
+  it("includes profiles with empty type (legacy default) in results", () => {
+    const agents = [
+      makeAgentWithProfileTypes("agent1", "online", {
+        "legacy-profile": { repo: "https://github.com/owner/repo", type: "" },
+      }),
+    ];
+    const { result } = renderHook(() =>
+      useAgentProfiles("https://github.com/owner/repo", agents),
+    );
+    expect(result.current).toHaveLength(1);
+    expect(result.current[0].profileName).toBe("legacy-profile");
+  });
+});

@@ -436,3 +436,117 @@ func TestPTYConfig_Validate_ZeroMaxSessions(t *testing.T) {
 		t.Errorf("expected no error for MaxSessions=0 (unlimited), got: %v", err)
 	}
 }
+
+// --- Profile.Type tests ---
+
+func writeConfigFile(t *testing.T, content string) string {
+	t.Helper()
+	f, err := os.CreateTemp("", "agentd-config-*.yaml")
+	if err != nil {
+		t.Fatalf("creating temp config file: %v", err)
+	}
+	if _, err := f.WriteString(content); err != nil {
+		t.Fatalf("writing temp config file: %v", err)
+	}
+	f.Close()
+	t.Cleanup(func() { os.Remove(f.Name()) })
+	return f.Name()
+}
+
+func TestProfileType_DefaultsToAgent(t *testing.T) {
+	yaml := `
+profiles:
+  myprofile:
+    command: echo test
+auth:
+  mode: none
+cleanup:
+  stale_session_ttl: 1h
+  session_reap_interval: 30s
+pty:
+  websocket_scheme: ws
+`
+	path := writeConfigFile(t, yaml)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if got := cfg.Profiles["myprofile"].Type; got != "agent" {
+		t.Errorf("expected default Type %q, got %q", "agent", got)
+	}
+}
+
+func TestProfileType_ShellIsValid(t *testing.T) {
+	yaml := `
+profiles:
+  shellprofile:
+    command: echo test
+    type: shell
+auth:
+  mode: none
+cleanup:
+  stale_session_ttl: 1h
+  session_reap_interval: 30s
+pty:
+  websocket_scheme: ws
+`
+	path := writeConfigFile(t, yaml)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if got := cfg.Profiles["shellprofile"].Type; got != "shell" {
+		t.Errorf("expected Type %q, got %q", "shell", got)
+	}
+}
+
+func TestProfileType_AgentIsExplicit(t *testing.T) {
+	yaml := `
+profiles:
+  agentprofile:
+    command: echo test
+    type: agent
+auth:
+  mode: none
+cleanup:
+  stale_session_ttl: 1h
+  session_reap_interval: 30s
+pty:
+  websocket_scheme: ws
+`
+	path := writeConfigFile(t, yaml)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if got := cfg.Profiles["agentprofile"].Type; got != "agent" {
+		t.Errorf("expected Type %q, got %q", "agent", got)
+	}
+}
+
+func TestProfileType_InvalidTypeRejected(t *testing.T) {
+	yaml := `
+profiles:
+  badprofile:
+    command: echo test
+    type: invalid
+auth:
+  mode: none
+cleanup:
+  stale_session_ttl: 1h
+  session_reap_interval: 30s
+pty:
+  websocket_scheme: ws
+`
+	path := writeConfigFile(t, yaml)
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for invalid profile type")
+	}
+	if !strings.Contains(err.Error(), "badprofile") {
+		t.Errorf("expected error to mention profile name %q, got %q", "badprofile", err.Error())
+	}
+	if !strings.Contains(err.Error(), "invalid") {
+		t.Errorf("expected error to mention invalid value, got %q", err.Error())
+	}
+}

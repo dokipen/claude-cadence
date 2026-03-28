@@ -35,6 +35,8 @@ message AgentProfile {
   string description = 1;
   // repo is empty string when not specified.
   string repo = 2;
+  // type is "shell" or "agent". Empty string means "agent" (legacy default).
+  string type = 3;
 }
 
 // Agent represents an available agent with its profiles and status.

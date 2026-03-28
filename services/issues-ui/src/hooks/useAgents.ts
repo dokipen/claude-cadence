@@ -113,6 +113,7 @@ export function useAgentProfiles(
     for (const agent of agents) {
       if (agent.status !== "online") continue;
       for (const [profileName, profile] of Object.entries(agent.profiles)) {
+        if (profile.type === "shell") continue;
         if (!profile.repo || normalizeRepo(profile.repo) === normalizedUrl) {
           entries.push({ agent: agent.name, profileName, profile });
         }

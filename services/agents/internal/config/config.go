@@ -145,6 +145,7 @@ type Profile struct {
 	Description string `yaml:"description"`
 	VaultSecret string `yaml:"vault_secret"` // Vault path for credentials (e.g. "secret/data/agentd/github/repo")
 	PluginDir   string `yaml:"plugin_dir"`   // Claude Code plugin directory (available as {{.PluginDir}} in command template)
+	Type        string `yaml:"type"`         // "agent" or "shell"; defaults to "agent"
 }
 
 // Load reads and validates a YAML config file.
@@ -199,6 +200,12 @@ func applyDefaults(cfg *Config) {
 	if cfg.PTY.WebSocketScheme == "" {
 		cfg.PTY.WebSocketScheme = "ws"
 	}
+	for name, p := range cfg.Profiles {
+		if p.Type == "" {
+			p.Type = "agent"
+			cfg.Profiles[name] = p
+		}
+	}
 }
 
 func parseDurations(cfg *Config) error {
@@ -248,6 +255,9 @@ func validate(cfg *Config) error {
 	for name, p := range cfg.Profiles {
 		if p.Command == "" {
 			return fmt.Errorf("profile %q: command is required", name)
+		}
+		if p.Type != "" && p.Type != "agent" && p.Type != "shell" {
+			return fmt.Errorf("profile %q: type must be \"shell\" or \"agent\", got %q", name, p.Type)
 		}
 	}
 
