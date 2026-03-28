@@ -6,7 +6,7 @@ import {
   type CallToolResult,
 } from "@modelcontextprotocol/sdk/types.js";
 import { gql } from "graphql-request";
-import { getClient } from "./client.js";
+import { bootstrapAuth, getClient } from "./client.js";
 import { getAuthToken, getDefaultProjectId, getDefaultProjectName, setResolvedProjectId } from "./config.js";
 import {
   ticketCreate,
@@ -42,12 +42,14 @@ async function resolveProjectName(name: string): Promise<string> {
 
 // --- Startup validation ---
 
-const token = getAuthToken();
-if (!token) {
-  process.stderr.write(
-    "Error: ISSUES_AUTH_TOKEN environment variable is required\n"
-  );
-  process.exit(1);
+if (!getAuthToken()) {
+  process.stderr.write("ISSUES_AUTH_TOKEN not set, attempting auto-authentication via gh auth token...\n");
+  const ok = await bootstrapAuth();
+  if (!ok) {
+    process.stderr.write("Error: Authentication failed. Set ISSUES_AUTH_TOKEN or ensure `gh auth token` returns a valid token.\n");
+    process.exit(1);
+  }
+  process.stderr.write("Auto-authentication successful.\n");
 }
 
 // Resolve ISSUES_PROJECT_NAME to ID at startup if ID is not already set
