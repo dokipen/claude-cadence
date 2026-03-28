@@ -5,6 +5,7 @@ import { useAgents, normalizeRepo } from "../hooks/useAgents";
 import { SessionList, sessionKey } from "./SessionList";
 import { TilingLayout } from "./TilingLayout";
 import { AgentLaunchForm } from "./AgentLaunchForm";
+import { useSessionsContext } from "../hooks/SessionsContext";
 import type { TiledWindow } from "./TilingLayout";
 import type { AgentSession } from "../hooks/useAllSessions";
 import type { Session } from "../types";
@@ -142,9 +143,11 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
     });
   }, []);
 
-  const handleLaunched = useCallback((_session: Session, _agentName: string) => {
-    // The useAllSessions polling will pick up the new session automatically.
-  }, []);
+  const { optimisticAddSession } = useSessionsContext();
+
+  const handleLaunched = useCallback((session: Session, agentName: string) => {
+    optimisticAddSession(session, agentName);
+  }, [optimisticAddSession]);
 
   const loading = agentsLoading;
 

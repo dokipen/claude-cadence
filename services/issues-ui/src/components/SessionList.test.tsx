@@ -148,6 +148,68 @@ describe("SessionList", () => {
     expect(getByText("session-s1")).toBeTruthy();
   });
 
+  it("destroying session shows ● icon (not ○)", () => {
+    const agents = [makeAgent("my-agent")];
+    const session = makeSession("s1", "my-agent");
+    session.session.state = "destroying";
+    const { getByTestId } = render(
+      <SessionList
+        {...defaultProps}
+        agents={agents}
+        sessions={[session]}
+        isCollapsed={false}
+      />,
+    );
+    const btn = getByTestId("sidebar-session");
+    expect(btn.textContent).toContain("●");
+    expect(btn.textContent).not.toContain("○");
+  });
+
+  it("waitingForInput=true takes precedence over state=destroying: shows ◉ not ●", () => {
+    const agents = [makeAgent("my-agent")];
+    const session = makeSession("s1", "my-agent");
+    session.session.state = "destroying";
+    session.session.waitingForInput = true;
+    const { getByTestId } = render(
+      <SessionList
+        {...defaultProps}
+        agents={agents}
+        sessions={[session]}
+        isCollapsed={false}
+      />,
+    );
+    const btn = getByTestId("sidebar-session");
+    expect(btn.textContent).toContain("◉");
+    expect(btn.textContent).not.toContain("●");
+  });
+
+  it("stopped session shows ○ icon while destroying session shows ●", () => {
+    const agents = [makeAgent("my-agent")];
+    const destroyingSession = makeSession("s2", "my-agent");
+    destroyingSession.session.state = "destroying";
+
+    const stoppedSession = makeSession("s3", "my-agent");
+    stoppedSession.session.state = "stopped";
+
+    const { getAllByTestId } = render(
+      <SessionList
+        {...defaultProps}
+        agents={agents}
+        sessions={[destroyingSession, stoppedSession]}
+        isCollapsed={false}
+      />,
+    );
+
+    const btns = getAllByTestId("sidebar-session");
+    const destroyingBtn = btns.find((b) => b.getAttribute("title")?.includes("destroying"));
+    const stoppedBtn = btns.find((b) => b.getAttribute("title")?.includes("stopped"));
+
+    expect(destroyingBtn).toBeTruthy();
+    expect(stoppedBtn).toBeTruthy();
+    expect(destroyingBtn?.textContent).toContain("●");
+    expect(stoppedBtn?.textContent).toContain("○");
+  });
+
   it("inert is removed from content after collapse then expand (bug repro: transitionend never fires in jsdom)", () => {
     const onSessionClick = vi.fn();
     const agents = [makeAgent("my-agent")];

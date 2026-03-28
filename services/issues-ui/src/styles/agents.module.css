@@ -635,6 +635,40 @@
   color: var(--amber);
 }
 
+@keyframes sessionDestroying {
+  0%, 100% { opacity: 0.65; }
+  50% { opacity: 0.25; }
+}
+
+.sidebarSessionDestroying {
+  color: var(--amber);
+  animation: sessionDestroying 1.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebarSessionDestroying {
+    animation: none;
+    opacity: 0.5;
+  }
+}
+
+@keyframes sessionCreating {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.sidebarSessionCreating {
+  color: var(--primary-light);
+  animation: sessionCreating 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebarSessionCreating {
+    animation: none;
+    opacity: 0.8;
+  }
+}
+
 /* Spinner for terminal connecting overlay */
 @keyframes spin {
   to {
