@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { createSession } from "../api/agentHubClient";
+import { normalizeRepo } from "../hooks/useAgents";
 import type { Agent, Session } from "../types";
 import styles from "../styles/agents.module.css";
 
@@ -23,8 +24,13 @@ export function AgentLaunchForm({ agents, onLaunched, repoUrl }: AgentLaunchForm
 
   const onlineAgents = agents.filter((a) => a.status === "online");
 
-  const profileOptions = selectedHost
-    ? Object.keys(onlineAgents.find((a) => a.name === selectedHost)?.profiles ?? {})
+  const selectedAgent = selectedHost ? onlineAgents.find((a) => a.name === selectedHost) : undefined;
+  const profileOptions = selectedAgent
+    ? Object.entries(selectedAgent.profiles)
+        .filter(([, profile]) =>
+          !repoUrl || !profile.repo || normalizeRepo(profile.repo) === normalizeRepo(repoUrl)
+        )
+        .map(([name]) => name)
     : [];
 
   const handleHostChange = useCallback(

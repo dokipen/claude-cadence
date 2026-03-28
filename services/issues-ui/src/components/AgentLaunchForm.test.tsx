@@ -175,3 +175,128 @@ describe("AgentLaunchForm", () => {
     expect(options).not.toContain("offline-profile");
   });
 });
+
+describe("AgentLaunchForm profile filtering by repoUrl", () => {
+  it("excludes a non-matching repo-scoped profile when repoUrl is provided", async () => {
+    // host-a has one generic profile and one profile scoped to a different repo.
+    // When repoUrl is org/repo-a, the non-matching repo-scoped profile must NOT appear.
+    const agents = [
+      makeAgent("host-a", "online", {
+        "generic-profile": "",
+        "other-repo-profile": "https://github.com/org/repo-b",
+      }),
+    ];
+
+    const { getByTestId } = render(
+      <AgentLaunchForm
+        agents={agents}
+        onLaunched={vi.fn()}
+        repoUrl="https://github.com/org/repo-a"
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.change(getByTestId("host-select"), {
+        target: { value: "host-a" },
+      });
+    });
+
+    const profileSelect = getByTestId("profile-select");
+    const options = Array.from(profileSelect.querySelectorAll("option")).map(
+      (o) => o.value,
+    );
+    expect(options).toContain("generic-profile");
+    expect(options).not.toContain("other-repo-profile");
+  });
+
+  it("includes a generic (empty-repo) profile when repoUrl is provided", async () => {
+    const agents = [
+      makeAgent("host-a", "online", {
+        "generic-profile": "",
+      }),
+    ];
+
+    const { getByTestId } = render(
+      <AgentLaunchForm
+        agents={agents}
+        onLaunched={vi.fn()}
+        repoUrl="https://github.com/org/repo-a"
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.change(getByTestId("host-select"), {
+        target: { value: "host-a" },
+      });
+    });
+
+    const profileSelect = getByTestId("profile-select");
+    const options = Array.from(profileSelect.querySelectorAll("option")).map(
+      (o) => o.value,
+    );
+    expect(options).toContain("generic-profile");
+  });
+
+  it("includes a matching repo-scoped profile when repoUrl is provided", async () => {
+    const agents = [
+      makeAgent("host-a", "online", {
+        "matching-profile": "https://github.com/org/repo-a",
+        "unrelated-profile": "https://github.com/org/repo-z",
+      }),
+    ];
+
+    const { getByTestId } = render(
+      <AgentLaunchForm
+        agents={agents}
+        onLaunched={vi.fn()}
+        repoUrl="https://github.com/org/repo-a"
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.change(getByTestId("host-select"), {
+        target: { value: "host-a" },
+      });
+    });
+
+    const profileSelect = getByTestId("profile-select");
+    const options = Array.from(profileSelect.querySelectorAll("option")).map(
+      (o) => o.value,
+    );
+    expect(options).toContain("matching-profile");
+    expect(options).not.toContain("unrelated-profile");
+  });
+
+  it("shows only generic profiles when agent has a mix and repoUrl does not match any repo-scoped profile", async () => {
+    // host-a has two repo-scoped profiles (neither matches) and one generic profile.
+    const agents = [
+      makeAgent("host-a", "online", {
+        "generic-profile": "",
+        "repo-b-profile": "https://github.com/org/repo-b",
+        "repo-c-profile": "https://github.com/org/repo-c",
+      }),
+    ];
+
+    const { getByTestId } = render(
+      <AgentLaunchForm
+        agents={agents}
+        onLaunched={vi.fn()}
+        repoUrl="https://github.com/org/repo-a"
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.change(getByTestId("host-select"), {
+        target: { value: "host-a" },
+      });
+    });
+
+    const profileSelect = getByTestId("profile-select");
+    const options = Array.from(profileSelect.querySelectorAll("option")).map(
+      (o) => o.value,
+    );
+    expect(options).toContain("generic-profile");
+    expect(options).not.toContain("repo-b-profile");
+    expect(options).not.toContain("repo-c-profile");
+  });
+});
