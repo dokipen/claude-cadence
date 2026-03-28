@@ -48,6 +48,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  defaultProps.onClose.mockReset();
 });
 
 // ---------------------------------------------------------------------------

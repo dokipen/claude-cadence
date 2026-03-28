@@ -17,7 +17,8 @@ export function RefineAllDialog({
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   const command = "/refine";
-  const sessionNameRef = useRef("refine-all-" + Date.now());
+  // Initialized empty — always overwritten in the useEffect open branch before first read.
+  const sessionNameRef = useRef("");
   const buttonLabel = "Refine All";
 
   useEffect(() => {
