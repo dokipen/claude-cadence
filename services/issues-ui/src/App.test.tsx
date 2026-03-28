@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { STORAGE_KEY, PROJECT_ID_RE } from "./App";
+import { render, cleanup } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
+import { STORAGE_KEY, PROJECT_ID_RE, AppShell } from "./App";
 import { makeSessionStorageMock } from './test-utils/makeSessionStorageMock';
 
 // Mocks for AppShell component tests
@@ -99,57 +101,56 @@ describe("ProjectRedirect format validation", () => {
 });
 
 describe("AppShell URL param validation", () => {
-  let render: typeof import("@testing-library/react").render;
-  let cleanup: typeof import("@testing-library/react").cleanup;
-  let MemoryRouter: typeof import("react-router").MemoryRouter;
-  let AppShell: typeof import("./App").AppShell;
-  let React: typeof import("react");
-
-  beforeEach(async () => {
-    ({ render, cleanup } = await import("@testing-library/react"));
-    ({ MemoryRouter } = await import("react-router"));
-    ({ AppShell } = await import("./App"));
-    React = await import("react");
-  });
-
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
   });
 
-  it("renders error state when projectId in URL contains spaces", async () => {
+  it("renders error state when projectId in URL contains spaces", () => {
     const { getByTestId, queryByTestId } = render(
-      React.createElement(MemoryRouter, { initialEntries: ["/projects/bad id/"] },
-        React.createElement(AppShell)
-      )
+      <MemoryRouter initialEntries={["/projects/bad id/"]}>
+        <AppShell />
+      </MemoryRouter>
     );
     expect(getByTestId("invalid-project-id-error")).toBeTruthy();
     expect(queryByTestId("kanban-board")).toBeNull();
   });
 
-  it("renders error state when projectId in URL contains slashes", async () => {
+  it("renders error state when projectId in URL contains unicode characters", () => {
+    // PROJECT_ID_RE uses \w without the u flag, so unicode letters are rejected
     const { getByTestId } = render(
-      React.createElement(MemoryRouter, { initialEntries: ["/projects/a%2Fb/"] },
-        React.createElement(AppShell)
-      )
+      <MemoryRouter initialEntries={["/projects/caf\u00E9/"]}>
+        <AppShell />
+      </MemoryRouter>
     );
     expect(getByTestId("invalid-project-id-error")).toBeTruthy();
   });
 
-  it("does not write invalid projectId to sessionStorage", async () => {
+  it("renders error state when projectId in URL contains a percent-encoded slash", () => {
+    // React Router decodes %2F to "/" in the matched segment value, producing "a/b"
+    // which contains a slash and fails PROJECT_ID_RE
+    const { getByTestId } = render(
+      <MemoryRouter initialEntries={["/projects/a%2Fb/"]}>
+        <AppShell />
+      </MemoryRouter>
+    );
+    expect(getByTestId("invalid-project-id-error")).toBeTruthy();
+  });
+
+  it("does not write invalid projectId to sessionStorage", () => {
     render(
-      React.createElement(MemoryRouter, { initialEntries: ["/projects/bad id/"] },
-        React.createElement(AppShell)
-      )
+      <MemoryRouter initialEntries={["/projects/bad id/"]}>
+        <AppShell />
+      </MemoryRouter>
     );
     expect(mockStorage.setItem).not.toHaveBeenCalledWith(STORAGE_KEY, "bad id");
   });
 
-  it("renders KanbanBoard for a valid projectId", async () => {
+  it("renders KanbanBoard for a valid projectId", () => {
     const { getByTestId, queryByTestId } = render(
-      React.createElement(MemoryRouter, { initialEntries: ["/projects/valid-project/"] },
-        React.createElement(AppShell)
-      )
+      <MemoryRouter initialEntries={["/projects/valid-project/"]}>
+        <AppShell />
+      </MemoryRouter>
     );
     expect(getByTestId("kanban-board")).toBeTruthy();
     expect(queryByTestId("invalid-project-id-error")).toBeNull();
