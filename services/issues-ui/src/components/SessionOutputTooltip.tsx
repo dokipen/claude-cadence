@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import type { ActiveSessionInfo } from "../types";
 import { fetchSessionOutput } from "../api/agentHubClient";
 import styles from "../styles/session-output-tooltip.module.css";
@@ -11,9 +12,19 @@ interface SessionOutputTooltipProps {
 export function SessionOutputTooltip({ session, children }: SessionOutputTooltipProps) {
   const [visible, setVisible] = useState(false);
   const [output, setOutput] = useState<string | null | undefined>(undefined);
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleMouseEnter = useCallback(() => {
+    if (wrapperRef.current) {
+      const rect = wrapperRef.current.getBoundingClientRect();
+      const margin = 8;
+      const tooltipWidth = Math.min(1200, Math.max(900, window.innerWidth - margin * 2));
+      const centered = rect.left + rect.width / 2 - tooltipWidth / 2;
+      const left = Math.max(margin, Math.min(centered, window.innerWidth - tooltipWidth - margin));
+      setCoords({ top: rect.bottom + 4, left });
+    }
     setVisible(true);
   }, []);
 
@@ -54,13 +65,18 @@ export function SessionOutputTooltip({ session, children }: SessionOutputTooltip
 
   return (
     <div
+      ref={wrapperRef}
       className={styles.wrapper}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
       {children}
-      {visible && (
-        <div className={styles.tooltip} data-testid="session-output-tooltip">
+      {visible && createPortal(
+        <div
+          className={styles.tooltip}
+          data-testid="session-output-tooltip"
+          style={{ top: coords.top, left: coords.left }}
+        >
           <pre className={styles.output} data-testid="session-output-content">
             {output === undefined
               ? "Loading..."
@@ -68,7 +84,8 @@ export function SessionOutputTooltip({ session, children }: SessionOutputTooltip
                 ? "Output unavailable"
                 : output}
           </pre>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
