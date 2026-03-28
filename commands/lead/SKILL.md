@@ -210,7 +210,7 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 
    **Stop condition A — Detached HEAD**: If `detached_head` is `true` (branch is empty string): **STOP immediately**. Report the diagnostic output (`git worktree list`, `git status`, `pwd`) to the user. Instruct them to check out a named branch before continuing (e.g., `git checkout <branch-name>`). Do not proceed to any further steps.
 
-   **Existing worktree — auto-resume**: If `in_worktree` is `false` AND `git worktree list` shows a worktree whose branch name contains the issue number: extract its path from the `git worktree list` output, set `WORKTREE_DIR` to that path, set `BRANCH` to that branch name, set `WORKTREE_PREEXISTING=true`, and **skip ahead to step 4** (posting to the issue). Do not run `/new-work`.
+   **Existing worktree — auto-resume**: If `in_worktree` is `false` AND `git worktree list` shows exactly one worktree whose branch name starts with `<N>-` (where N is the issue number): extract its path from the `git worktree list` output, set `WORKTREE_DIR` to that path, set `BRANCH` to that branch name (strip surrounding `[brackets]` from the `git worktree list` output), set `WORKTREE_PREEXISTING=true`, and **skip ahead to step 4** (posting to the issue). Do not run `/new-work`. If more than one worktree matches, **STOP** and report all matching worktree paths to the user for disambiguation.
 
    Only if stop condition A is not triggered and no existing worktree was found, proceed to step 1.
 
