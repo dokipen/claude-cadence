@@ -31,20 +31,7 @@ The primary deployment (Docker) already provides strong isolation via container 
 ```yaml
 profiles:
   your-profile:
-    command: >
-      bwrap
-        --bind {{.WorktreePath}} {{.WorktreePath}}
-        --ro-bind /usr /usr
-        --ro-bind /etc /etc
-        --ro-bind /home/agentd/.claude /home/agentd/.claude
-        --ro-bind /nix /nix
-        --proc /proc
-        --dev /dev
-        --tmpfs /tmp
-        --die-with-parent
-        -- claude --dangerously-skip-permissions
-          --model claude-sonnet-4-6
-          --add-dir {{.WorktreePath}}
+    command: "bwrap --bind {{.WorktreePath}} {{.WorktreePath}} --ro-bind /usr /usr --ro-bind /etc /etc --ro-bind /home/agentd/.claude /home/agentd/.claude --proc /proc --dev /dev --tmpfs /tmp --die-with-parent -- claude --permission-mode accept --model claude-sonnet-4-6 --cwd {{.WorktreePath}} {{.ExtraArgs}}"
 ```
 
 This wrapper:
