@@ -1,6 +1,7 @@
 package pty
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -172,6 +173,37 @@ func TestPTYManager_MaxSessions_SlotFreedAfterDestroy(t *testing.T) {
 func TestMaxResizeDimension(t *testing.T) {
 	if maxResizeDimension != 500 {
 		t.Errorf("expected maxResizeDimension=500, got %d", maxResizeDimension)
+	}
+}
+
+// TestSession_closeMaster_idempotent verifies that closeMaster is safe to call
+// multiple times. Without sync.Once, the second close of a recycled fd would
+// silently close an unrelated file descriptor opened between the two closes —
+// the classic double-close fd-reuse hazard described in issue #408.
+func TestSession_closeMaster_idempotent(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "pty-master-test-*")
+	if err != nil {
+		t.Fatalf("CreateTemp: %v", err)
+	}
+
+	sess := &session{master: f}
+
+	// First close — reclaims the fd number.
+	sess.closeMaster()
+
+	// Open a new file; the OS may reuse the same fd number.
+	f2, err := os.CreateTemp(t.TempDir(), "pty-master-recycled-*")
+	if err != nil {
+		t.Fatalf("CreateTemp: %v", err)
+	}
+	defer f2.Close()
+
+	// Second closeMaster must be a no-op — it must not close f2.
+	sess.closeMaster()
+
+	// Verify f2 is still usable (would fail with EIO/EBADF if fd was closed).
+	if _, err := f2.Write([]byte("ok")); err != nil {
+		t.Fatalf("recycled fd was closed by second closeMaster call: %v", err)
 	}
 }
 
