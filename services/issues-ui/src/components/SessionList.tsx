@@ -21,7 +21,8 @@ const DEBUG_SESSION_STATE = false;
 
 function stripProjectPrefix(name: string): string {
   const slashIndex = name.indexOf("/");
-  return slashIndex !== -1 ? name.slice(slashIndex + 1) : name;
+  if (slashIndex === -1 || slashIndex === name.length - 1) return name;
+  return name.slice(slashIndex + 1);
 }
 
 export function SessionList({ agents, sessions, openKeys, minimizedKeys, onSessionClick, isCollapsed, onToggle }: SessionListProps) {
