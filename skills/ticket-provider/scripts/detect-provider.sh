@@ -23,13 +23,14 @@ set -euo pipefail
 _parsed=""
 if [ -f CLAUDE.md ]; then
   _parsed=$(awk '
-    /^```/                { in_fence = !in_fence; next }
-    in_fence              { next }
-    /^## Ticket Provider/ { in_section=1; next }
-    in_section && /^## /  { in_section=0 }
-    in_section && /^provider:/   { provider=$2 }
-    in_section && /^project_id:/ { project=$2 }
-    in_section && /^api_url:/    { api_url=$2 }
+    { gsub(/\r/, "") }
+    /^```/                              { in_fence = !in_fence; next }
+    in_fence                            { next }
+    /^## Ticket Provider[[:space:]]*$/  { in_section=1; next }
+    in_section && /^## /                { in_section=0 }
+    in_section && /^provider:/          { provider=$2 }
+    in_section && /^project_id:/        { project=$2 }
+    in_section && /^api_url:/           { api_url=$2 }
     END { print provider "\t" project "\t" api_url }
   ' CLAUDE.md)
 fi
