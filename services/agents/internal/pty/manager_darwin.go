@@ -3,19 +3,36 @@
 package pty
 
 import (
+	"bytes"
+	"log/slog"
 	"os"
 	"regexp"
+	"runtime"
+	"syscall"
+	"unsafe"
 )
 
 // validSlavePath matches macOS PTY slave device paths (e.g. /dev/ttys000).
-// masterSlavePath always returns "" on macOS so Reattach will never be
-// called with a non-empty path; this pattern exists to satisfy the build
-// and to validate any future macOS Reattach implementation.
 var validSlavePath = regexp.MustCompile(`^/dev/ttys[0-9]+$`)
 
-// masterSlavePath returns the slave PTY path for the given master file.
-// Slave path recovery via ioctl is not implemented on macOS; returns empty
-// string. PTY reattach after daemon restart is not supported on macOS.
-func masterSlavePath(_ *os.File) string {
+// _TIOCPTYGNAME is the macOS ioctl to retrieve the slave PTY device name
+// from a master fd. Defined in <sys/ttycom.h> as _IOC(IOC_OUT, 't', 83, 128).
+const _TIOCPTYGNAME = 0x40807453
+
+// masterSlavePath returns the /dev/ttysNNN path of the slave side of the PTY
+// for the given master file. Uses TIOCPTYGNAME ioctl. Returns an empty string
+// if the path cannot be determined.
+func masterSlavePath(master *os.File) string {
+	var buf [128]byte
+	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, master.Fd(), _TIOCPTYGNAME, uintptr(unsafe.Pointer(&buf[0]))) //nolint:gosec // Expected unsafe pointer for Syscall call.
+	runtime.KeepAlive(master)                                                                                        // prevent GC from finalizing master (closing fd) before Syscall completes
+	if errno != 0 {
+		slog.Warn("pty: failed to get slave path via TIOCPTYGNAME", "error", errno)
+		return ""
+	}
+	// buf is a NUL-terminated C string; trim at first NUL byte.
+	if i := bytes.IndexByte(buf[:], 0); i >= 0 {
+		return string(buf[:i])
+	}
 	return ""
 }
