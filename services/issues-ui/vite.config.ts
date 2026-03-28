@@ -8,15 +8,17 @@ const agentHubPort = Number(process.env.VITE_AGENT_HUB_PORT ?? "4200");
 if (!Number.isInteger(agentHubPort) || agentHubPort < 1 || agentHubPort > 65535) {
   throw new Error("VITE_AGENT_HUB_PORT must be a valid port number");
 }
+const versionPollIntervalMs = parseInt(process.env.VITE_VERSION_POLL_INTERVAL_MS ?? '300000', 10);
+if (isNaN(versionPollIntervalMs) || versionPollIntervalMs < 5000) {
+  throw new Error("VITE_VERSION_POLL_INTERVAL_MS must be a number >= 5000");
+}
 const agentHubToken = process.env.HUB_API_TOKEN || process.env.AGENT_HUB_TOKEN || "";
 
 export default defineConfig({
   plugins: [react()],
   define: {
     __BUILD_SHA__: JSON.stringify(process.env.BUILD_SHA ?? 'dev'),
-    __VERSION_POLL_INTERVAL_MS__: JSON.stringify(
-      parseInt(process.env.VITE_VERSION_POLL_INTERVAL_MS ?? '300000', 10)
-    ),
+    __VERSION_POLL_INTERVAL_MS__: JSON.stringify(versionPollIntervalMs),
   },
   test: {
     exclude: ["e2e/**", "node_modules/**"],
