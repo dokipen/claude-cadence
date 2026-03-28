@@ -23,8 +23,9 @@ You are now acting as the technical lead, coordinating specialist agents on this
 Detect the provider from the project's `CLAUDE.md` before performing any ticket operations. Refer to the `ticket-provider` skill for full detection logic and command reference.
 
 ```bash
-PROVIDER=$(grep -A3 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'provider:' | tail -1 | awk '{print $2}' || echo "github")
-PROJECT=$(grep -A4 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'project_id:' | tail -1 | awk '{print $2}')
+PROVIDER_CONFIG=$(bash skills/ticket-provider/scripts/detect-provider.sh)
+PROVIDER=$(echo "$PROVIDER_CONFIG" | jq -r '.provider')
+PROJECT=$(echo "$PROVIDER_CONFIG" | jq -r '.project')
 ```
 
 If `PROVIDER` is `github` (or unset), use `gh issue` commands. If `issues-api`, use `issues` CLI commands. **PR operations always use `gh` CLI regardless of provider.**
@@ -605,10 +606,7 @@ gh issue edit [CHILD-NUMBER-2] --add-label "milestone:[N]-[slug]"
 ```bash
 # Create label if it doesn't already exist
 MILESTONE_LABEL_NAME="milestone:[N]-[slug]"
-EXISTING_ID=$(issues label list --json | jq -r --arg name "$MILESTONE_LABEL_NAME" '.[] | select(.name == $name) | .id')
-if [ -z "$EXISTING_ID" ]; then
-  issues label create --name "$MILESTONE_LABEL_NAME" --color "#8B5CF6" --json
-fi
+bash commands/lead/scripts/ensure-milestone-label.sh "$MILESTONE_LABEL_NAME"
 
 # Apply to plan ticket
 issues label add [PLAN-TICKET-ID] --label "$MILESTONE_LABEL_NAME" --json

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Sync blocked labels for all open issues
 #
 # Usage: ./scripts/update-blocked-labels.sh
@@ -9,11 +9,10 @@
 #    relationships via GitHub API, and adds/removes "blocked" labels
 # 3. For issues-api: no-op (blocking is enforced by the state machine)
 
-set -e
+set -euo pipefail
 
 # Detect ticket provider from the project's CLAUDE.md
-PROVIDER=$(grep -A3 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'provider:' | tail -1 | awk '{print $2}')
-PROVIDER=${PROVIDER:-github}
+PROVIDER=$(bash skills/ticket-provider/scripts/detect-provider.sh | jq -r '.provider')
 
 if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
   echo "Usage: ./scripts/update-blocked-labels.sh"
