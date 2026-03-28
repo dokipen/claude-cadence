@@ -479,30 +479,28 @@ func (m *Manager) reconcile(sess *Session) {
 		if sess.restoredFromDisk && sess.AgentPID > 0 && m.processAlive(sess.AgentPID) {
 			return
 		}
-		_ = m.store.Transition(sess.ID, StateStopped, func(s *Session) {
+		if err := m.store.Transition(sess.ID, StateStopped, func(s *Session) {
 			s.StoppedAt = now
-		})
-		sess.State = StateStopped
-		sess.StoppedAt = now
+		}); err == nil {
+			sess.State = StateStopped
+			sess.StoppedAt = now
+		} else {
+			slog.Warn("reconcile: unexpected transition rejection", "id", sess.ID, "error", err)
+		}
 		return
 	}
 
 	if sess.AgentPID > 0 && !m.processAlive(sess.AgentPID) {
-		_ = m.store.Transition(sess.ID, StateStopped, func(s *Session) {
+		if err := m.store.Transition(sess.ID, StateStopped, func(s *Session) {
 			s.StoppedAt = now
-		})
-		sess.State = StateStopped
-		sess.StoppedAt = now
+		}); err == nil {
+			sess.State = StateStopped
+			sess.StoppedAt = now
+		} else {
+			slog.Warn("reconcile: unexpected transition rejection", "id", sess.ID, "error", err)
+		}
 		return
 	}
-}
-
-func (m *Manager) cleanup(sessionID, errMsg string) {
-	_ = m.pty.Destroy(sessionID)
-
-	_ = m.store.Transition(sessionID, StateError, func(s *Session) {
-		s.ErrorMessage = errMsg
-	})
 }
 
 func (m *Manager) mustGet(id string) (*Session, error) {
@@ -684,6 +682,10 @@ func (m *Manager) RestoreFromPersister(p *Persister) error {
 			finalState := sess.State
 			finalStopped := sess.StoppedAt
 			finalErrMsg := sess.ErrorMessage
+			// Use Update (not Transition) here: the session was added via TryAdd
+			// with the already-reconciled state, so from-state == to-state.
+			// This call's sole purpose is to trigger the persister so the
+			// reconciled state is written to disk. TryAdd bypasses the persister.
 			_, _ = m.store.Update(sess.ID, func(s *Session) {
 				s.State = finalState
 				s.StoppedAt = finalStopped

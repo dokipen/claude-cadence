@@ -356,3 +356,49 @@ func TestStore_Transition_AppliesAdditionalFields(t *testing.T) {
 		t.Errorf("ErrorMessage = %q, want %q", got.ErrorMessage, "boom")
 	}
 }
+
+func TestStore_Transition_CallbackCannotOverrideState(t *testing.T) {
+	// A callback that tries to overwrite State must be silently corrected by
+	// the re-assertion in Transition.
+	store := NewStore()
+	store.Add(&Session{ID: "s", State: StateCreating})
+	err := store.Transition("s", StateRunning, func(s *Session) {
+		s.State = StateError // attempt to override — must be ignored
+	})
+	if err != nil {
+		t.Fatalf("Transition() = %v, want nil", err)
+	}
+	got, _ := store.Get("s")
+	if got.State != StateRunning {
+		t.Errorf("state = %s after callback override attempt, want running (re-assertion must win)", got.State)
+	}
+}
+
+func TestStore_Transition_QueuesPersister(t *testing.T) {
+	const id = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+	dir := t.TempDir()
+	p, err := NewPersister(dir)
+	if err != nil {
+		t.Fatalf("NewPersister: %v", err)
+	}
+
+	store := NewStoreWithPersister(p)
+	store.Add(&Session{ID: id, Name: "sess", State: StateCreating})
+	if err := store.Transition(id, StateRunning); err != nil {
+		t.Fatalf("Transition() = %v, want nil", err)
+	}
+
+	p.Stop() // flush pending writes
+
+	// Re-read from disk to verify the persisted state.
+	sessions, err := p.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("LoadAll: got %d sessions, want 1", len(sessions))
+	}
+	if sessions[0].State != StateRunning {
+		t.Errorf("persisted state = %s, want running", sessions[0].State)
+	}
+}

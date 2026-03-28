@@ -254,7 +254,9 @@ func (s *Store) Update(id string, fn func(*Session)) (bool, error) {
 // Returns *Error{Code: ErrNotFound} if no session with that id exists.
 // The optional fn callbacks are called within the store lock to apply
 // additional field mutations alongside the state change (e.g. ErrorMessage,
-// StoppedAt). Returns nil on success.
+// StoppedAt). Callbacks must not modify the State field; Transition
+// re-asserts toState after calling them to enforce this invariant.
+// Returns nil on success.
 func (s *Store) Transition(id string, toState SessionState, fn ...func(*Session)) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -269,6 +271,8 @@ func (s *Store) Transition(id string, toState SessionState, fn ...func(*Session)
 	for _, f := range fn {
 		f(sess)
 	}
+	// Re-assert toState after callbacks to guard against accidental State overwrites.
+	sess.State = toState
 	if s.persister != nil {
 		s.persister.queue(*sess)
 	}
