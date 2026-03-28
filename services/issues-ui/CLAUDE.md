@@ -15,6 +15,8 @@ fireEvent.click(button)
 // assert a dialog appears, or a mock fn was called
 ```
 
+> `@testing-library/user-event` is not currently installed. Use `fireEvent` — it covers click/change interactions adequately. If you need pointer or keyboard event chains, install `user-event` first.
+
 **Hooks** — a `renderHook` test that invokes the hook, wraps state changes in `act()`, and asserts on return values.
 
 **Pure display components** (no behavior, no state, no interactions) are exempt.
@@ -33,3 +35,9 @@ Existing untested features are tracked in ticket #402. New features added since 
 ### Enforcement
 
 The test bar is enforced at PR review time via the PR template checklist. Reviewers must verify that new `services/issues-ui/` features have co-located test files covering at least their primary interactions.
+
+## Verification
+
+```bash
+npm run test
+```
