@@ -123,7 +123,6 @@ export function Terminal({ agentName, sessionId, onResumeSession }: TerminalProp
 
     if (!validateAgentProfile(agentName) || !validateSessionId(sessionId)) {
       console.warn("[Terminal] Refusing to connect: invalid agentName or sessionId");
-      setConnState("error");
       return;
     }
 

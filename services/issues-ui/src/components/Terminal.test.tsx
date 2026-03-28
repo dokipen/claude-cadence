@@ -494,23 +494,23 @@ describe("Terminal", () => {
   });
 
   describe("validation guard", () => {
-    it("refuses to connect and shows error overlay when agentName is invalid", () => {
+    it("refuses to connect and emits console.warn when agentName is invalid", () => {
       const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       render(<Terminal agentName="invalid agent name" sessionId="sess-1" />);
 
       expect(MockWebSocket.instances).toHaveLength(0);
-      expect(screen.getByTestId("terminal-error")).toBeDefined();
+      expect(screen.queryByTestId("terminal-error")).toBeNull();
       expect(warnSpy).toHaveBeenCalledWith("[Terminal] Refusing to connect: invalid agentName or sessionId");
 
       warnSpy.mockRestore();
     });
 
-    it("refuses to connect and shows error overlay when sessionId is invalid", () => {
+    it("refuses to connect and emits console.warn when sessionId is invalid", () => {
       const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       render(<Terminal agentName="agent-1" sessionId="../evil" />);
 
       expect(MockWebSocket.instances).toHaveLength(0);
-      expect(screen.getByTestId("terminal-error")).toBeDefined();
+      expect(screen.queryByTestId("terminal-error")).toBeNull();
       expect(warnSpy).toHaveBeenCalledWith("[Terminal] Refusing to connect: invalid agentName or sessionId");
 
       warnSpy.mockRestore();
