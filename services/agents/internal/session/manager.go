@@ -233,8 +233,9 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	}
 
 	// Build env slice for PTY (format: "KEY=VALUE").
-	// Start from the daemon's own environment so PATH, HOME, TERM, etc. are
+	// Start from the daemon's own environment so PATH, HOME, etc. are
 	// inherited. Vault secrets and request env vars override anything inherited.
+	// TERM is defaulted to xterm-256color below if not already present.
 	envSlice := os.Environ()
 
 	// Vault secrets as env vars.
