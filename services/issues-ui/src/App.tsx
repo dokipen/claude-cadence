@@ -21,8 +21,8 @@ import layoutStyles from "./styles/layout.module.css";
 
 export const STORAGE_KEY = "cadence_project_id";
 
-// Exported for use in tests — \w is ASCII-only (no `u` flag), so unicode characters are rejected
-export const PROJECT_ID_RE = /^[\w-]+$/;
+// Exported for use in tests — mirrors agentd sessionNameRe: first char alphanumeric, rest [a-zA-Z0-9._~-]
+export const PROJECT_ID_RE = /^[a-zA-Z0-9][a-zA-Z0-9._~-]*$/;
 
 const loadingStyle: React.CSSProperties = {
   minHeight: "100vh",

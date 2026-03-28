@@ -44,7 +44,6 @@ vi.mock("./components/TicketDetail", () => ({ TicketDetail: () => null }));
 const PROJECTS = [
   { id: "proj-a", name: "Project A" },
   { id: "proj-b", name: "Project B" },
-  { id: "my_project", name: "My Project" },
 ];
 
 function resolveTargetProject(projects: typeof PROJECTS): string {
@@ -79,9 +78,9 @@ describe("ProjectRedirect sessionStorage resolution", () => {
 });
 
 describe("ProjectRedirect format validation", () => {
-  it("accepts a valid project ID with underscores (verifies \\w includes underscore)", () => {
+  it("rejects a project ID with underscores (underscore rejected by agentd sessionNameRe)", () => {
     sessionStorage.setItem(STORAGE_KEY, "my_project");
-    expect(resolveTargetProject(PROJECTS)).toBe("my_project");
+    expect(resolveTargetProject(PROJECTS)).toBe("proj-a");
   });
 
   it("rejects an ID with path-traversal characters", () => {
@@ -117,7 +116,7 @@ describe("AppShell URL param validation", () => {
   });
 
   it("renders error state when projectId in URL contains unicode characters", () => {
-    // PROJECT_ID_RE uses \w without the u flag, so unicode letters are rejected
+    // PROJECT_ID_RE only allows [a-zA-Z0-9._~-], so unicode letters are rejected
     const { getByTestId } = render(
       <MemoryRouter initialEntries={["/projects/caf\u00E9/"]}>
         <AppShell />
