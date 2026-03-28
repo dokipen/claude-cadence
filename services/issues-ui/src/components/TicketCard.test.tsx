@@ -407,4 +407,12 @@ describe("TicketCard active-session-logo click navigation", () => {
     fireEvent.click(getByTestId("active-session-logo"));
     expect(mockNavigate).toHaveBeenCalledWith("/ticket/ticket-1?tab=agent");
   });
+
+  it("clicking active-session-logo on CLOSED ticket without agentName/sessionId falls back to ticket agent tab", () => {
+    const ticket = makeTicket({ state: "CLOSED", number: 5 });
+    const sessions = [makeSession("discuss-5", "running")];
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
+    fireEvent.click(getByTestId("active-session-logo"));
+    expect(mockNavigate).toHaveBeenCalledWith("/ticket/ticket-1?tab=agent");
+  });
 });

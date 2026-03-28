@@ -12,6 +12,7 @@ import styles from "../styles/card.module.css";
 import agentStyles from "../styles/agents.module.css";
 import { AnimatedCadenceIcon } from "./AnimatedCadenceIcon";
 import { SessionOutputTooltip } from "./SessionOutputTooltip";
+import { validateAgentProfile, validateSessionId } from "../utils/validateSession";
 
 export function hasActiveSession(sessions: ActiveSessionInfo[], ticketNumber: number, projectId?: string): ActiveSessionInfo | null {
   const prefix = projectId ? `${projectId}-` : "";
@@ -51,7 +52,9 @@ export function TicketCard({
       if (
         (ticket.state === "BACKLOG" || ticket.state === "CLOSED") &&
         activeSession?.agentName &&
-        activeSession?.sessionId
+        activeSession?.sessionId &&
+        validateAgentProfile(activeSession.agentName) &&
+        validateSessionId(activeSession.sessionId)
       ) {
         navigate(`/agents?session=${activeSession.agentName}:${activeSession.sessionId}`);
       } else {
