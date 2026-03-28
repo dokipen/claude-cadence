@@ -14,7 +14,7 @@
 
 .launcherMessage {
   font-size: 0.85rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   padding: 0.5rem 0;
 }
 
@@ -41,7 +41,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .profileValue {
@@ -120,7 +120,7 @@
   margin-bottom: -2px;
   font-size: 0.85rem;
   font-weight: 500;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   cursor: pointer;
 }
 
@@ -248,7 +248,7 @@
 
 .agentTabEmptyDesc {
   font-size: 0.85rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   margin: 0 0 1.5rem;
 }
 
@@ -292,7 +292,7 @@
 }
 
 .nameInput::placeholder {
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 /* ── Agent Manager ── */
@@ -361,7 +361,7 @@
   border: none;
   border-right: 1px solid var(--border);
   border-left: none;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: 0.65rem;
   cursor: pointer;
   flex-shrink: 0;
@@ -377,14 +377,14 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   padding: 0 0.75rem 0.5rem;
   margin: 0;
 }
 
 .sidebarEmpty {
   font-size: 0.8rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   padding: 0.5rem 0.75rem;
   margin: 0;
 }
@@ -416,7 +416,7 @@
 }
 
 .statusDotOffline {
-  background: var(--text-muted);
+  background: var(--text-secondary);
 }
 
 .sidebarAgentName {
@@ -427,7 +427,7 @@
 
 .sidebarNoSessions {
   font-size: 0.75rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   padding: 0.15rem 0.75rem 0.15rem 1.75rem;
   margin: 0;
 }
@@ -493,7 +493,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: 0.9rem;
 }
 
@@ -676,7 +676,7 @@
 }
 
 .sidebarSessionMinimized {
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-style: italic;
 }
 
