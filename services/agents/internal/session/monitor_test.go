@@ -362,6 +362,11 @@ func TestStripANSI(t *testing.T) {
 			want:  "green bold",
 		},
 		{
+			name:  "CSI private-mode sequence (hide cursor)",
+			input: "\x1b[?25ltext\x1b[?25h",
+			want:  "text",
+		},
+		{
 			name:  "OSC sequence terminated by BEL",
 			input: "\x1b]0;window title\x07normal",
 			want:  "normal",
@@ -503,6 +508,11 @@ func TestClassifyPromptType(t *testing.T) {
 		{
 			name:    "yesno bracket mixed [Y/n]",
 			context: "Proceed [Y/n]",
+			want:    "yesno",
+		},
+		{
+			name:    "yesno long form (yes/no)",
+			context: "Continue? (yes/no)",
 			want:    "yesno",
 		},
 		{

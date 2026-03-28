@@ -17,8 +17,8 @@ var promptPatterns = regexp.MustCompile(
 )
 
 var (
-	ansiEscape        = regexp.MustCompile(`\x1b(?:\[[0-9;]*[A-Za-z]|[()][0-9A-Za-z]|\][^\x07\x1b]*(?:\x07|\x1b\\))`)
-	yesnoPattern      = regexp.MustCompile(`(?i)[\[(][yn]\/[yn][\])]`)
+	ansiEscape        = regexp.MustCompile(`\x1b(?:\[[0-9;?<>]*[A-Za-z]|[()][0-9A-Za-z]|\][^\x07\x1b]*(?:\x07|\x1b\\))`)
+	yesnoPattern      = regexp.MustCompile(`(?i)(?:[\[(][yn]\/[yn][\])]|\(yes\/no\))`)
 	textPromptPattern = regexp.MustCompile(`[?]\s*$|>\s*$`)
 	shellPattern      = regexp.MustCompile(`[$#]\s*$`)
 )
