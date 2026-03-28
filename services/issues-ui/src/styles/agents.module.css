@@ -571,7 +571,7 @@
 
 .tileAgent {
   font-weight: 400;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .tileTicketLink {
