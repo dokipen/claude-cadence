@@ -13,6 +13,8 @@ import type { TicketFilters } from "./hooks/useTickets";
 import { useAllSessions } from "./hooks/useAllSessions";
 import type { ActiveSessionInfo, SessionState } from "./types";
 import { NotificationDropdown } from "./components/NotificationDropdown";
+import { UpdateBanner } from "./components/UpdateBanner";
+import { useVersionPolling } from "./hooks/useVersionPolling";
 import type { ReactNode } from "react";
 import layoutStyles from "./styles/layout.module.css";
 
@@ -92,6 +94,8 @@ function AppShell() {
   const { user, logout } = useAuth();
   const { projects } = useProjects();
   const { sessions, waitingSessions } = useAllSessions();
+  const { updateAvailable } = useVersionPolling();
+  const [dismissed, setDismissed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const boardMatch = useMatch("/projects/:projectId/*");
@@ -161,6 +165,9 @@ function AppShell() {
           )}
         </div>
       </header>
+      {updateAvailable && !dismissed && (
+        <UpdateBanner onDismiss={() => setDismissed(true)} />
+      )}
       {showFilters && (
         <FilterBar filters={filters} onChange={setFilters} />
       )}

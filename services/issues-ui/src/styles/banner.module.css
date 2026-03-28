@@ -1,0 +1,38 @@
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: var(--amber, #F5A623);
+  color: #000;
+  font-size: 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.message {
+  flex: 1;
+}
+
+.refreshBtn {
+  margin-left: 12px;
+  padding: 4px 12px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.dismissBtn {
+  margin-left: 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  opacity: 0.7;
+}
+
+.dismissBtn:hover {
+  opacity: 1;
+}

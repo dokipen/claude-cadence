@@ -8,6 +8,8 @@ interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
 
+declare const __BUILD_SHA__: string;
+
 declare module "*.module.css" {
   const classes: { readonly [key: string]: string };
   export default classes;
