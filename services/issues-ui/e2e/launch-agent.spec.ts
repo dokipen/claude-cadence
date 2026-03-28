@@ -454,7 +454,7 @@ test.describe("ticket detail terminal", () => {
     await expect(page.getByTestId("terminal-wrapper")).not.toBeVisible();
   });
 
-  test("shows launch control when session is stopped", async ({ page }) => {
+  test("shows terminal when session is stopped", async ({ page }) => {
     await setupSessionMock(page, [{ ...MOCK_SESSION, state: "stopped" }]);
 
     await page.goto("/projects/e2e-test-project");
@@ -465,7 +465,10 @@ test.describe("ticket detail terminal", () => {
 
     await page.getByTestId("tab-agent").click();
     await expect(page.getByTestId("agent-tab-content")).toBeVisible();
-    await expect(page.getByTestId("agent-launcher")).toBeVisible();
+    // Stopped sessions now show the terminal (not the launcher) so users can
+    // review output and resume the session via the Resume button.
+    await expect(page.getByTestId("terminal-wrapper")).toBeVisible();
+    await expect(page.getByTestId("agent-launcher")).not.toBeVisible();
   });
 
   test("terminal header shows session name and agent", async ({ page }) => {

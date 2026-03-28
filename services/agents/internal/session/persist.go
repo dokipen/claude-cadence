@@ -24,7 +24,7 @@ type writeOp struct {
 }
 
 // sessionRecord is the private JSON representation of a Session.
-// Ephemeral fields (WaitingForInput, IdleSince) are intentionally excluded.
+// Ephemeral fields (WaitingForInput, IdleSince, PromptContext, PromptType) are intentionally excluded.
 type sessionRecord struct {
 	ID           string       `json:"id"`
 	Name         string       `json:"name"`

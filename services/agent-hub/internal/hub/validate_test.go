@@ -74,6 +74,36 @@ func TestValidateAdvertiseAddress(t *testing.T) {
 	}
 }
 
+func TestValidateProfileType(t *testing.T) {
+	tests := []struct {
+		name    string
+		typ     string
+		wantErr bool
+	}{
+		// Accepted values.
+		{name: "empty string", typ: "", wantErr: false},
+		{name: "shell", typ: "shell", wantErr: false},
+		{name: "agent", typ: "agent", wantErr: false},
+
+		// Invalid values.
+		{name: "unknown type", typ: "worker", wantErr: true},
+		{name: "mixed case", typ: "Shell", wantErr: true},
+		{name: "arbitrary string", typ: "foo", wantErr: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateProfileType(tc.typ)
+			if tc.wantErr && err == nil {
+				t.Errorf("ValidateProfileType(%q) = nil, want error", tc.typ)
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("ValidateProfileType(%q) = %v, want nil", tc.typ, err)
+			}
+		})
+	}
+}
+
 func TestValidateProfileRepo(t *testing.T) {
 	tests := []struct {
 		name    string

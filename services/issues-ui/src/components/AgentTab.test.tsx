@@ -8,13 +8,16 @@ import type { Session } from "../types";
 // ---------------------------------------------------------------------------
 // Hoisted mutable state shared between mock factories and tests
 // ---------------------------------------------------------------------------
-const { mockHubFetch, mockOptimisticSetDestroying, mockOptimisticAddSession, mockAgents, mockAgentsLoading } = vi.hoisted(() => ({
+const { mockHubFetch, mockCreateSession, mockOptimisticSetDestroying, mockOptimisticAddSession, mockAgents, mockAgentsLoading, capturedTerminalProps } = vi.hoisted(() => ({
   mockHubFetch: vi.fn(),
+  mockCreateSession: vi.fn(),
   mockOptimisticSetDestroying: vi.fn(),
   mockOptimisticAddSession: vi.fn(),
   // Mutable containers so each test can change the value without re-mocking
   mockAgents: { current: [] as { name: string; status: string }[] },
   mockAgentsLoading: { current: false },
+  // Captures props passed to the Terminal stub for inspection
+  capturedTerminalProps: { onResumeSession: undefined as (() => void) | undefined },
 }));
 
 // ---------------------------------------------------------------------------
@@ -27,6 +30,7 @@ vi.mock("../styles/agents.module.css", () => ({ default: {} }));
 // ---------------------------------------------------------------------------
 vi.mock("../api/agentHubClient", () => ({
   hubFetch: mockHubFetch,
+  createSession: mockCreateSession,
   HubError: class HubError extends Error {
     status: number;
     constructor(status: number, message: string) {
@@ -83,10 +87,13 @@ vi.mock("./AgentLauncher", () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Terminal stub
+// Terminal stub — captures props for inspection in resume tests
 // ---------------------------------------------------------------------------
 vi.mock("./Terminal", () => ({
-  Terminal: () => <div data-testid="terminal" />,
+  Terminal: (props: { agentName?: string; sessionId?: string; onResumeSession?: () => void }) => {
+    capturedTerminalProps.onResumeSession = props.onResumeSession;
+    return <div data-testid="terminal" />;
+  },
 }));
 
 // ---------------------------------------------------------------------------
@@ -158,11 +165,13 @@ async function flushAsync() {
 // ---------------------------------------------------------------------------
 beforeEach(() => {
   mockHubFetch.mockReset();
+  mockCreateSession.mockReset();
   mockOptimisticSetDestroying.mockReset();
   mockOptimisticAddSession.mockReset();
   // Default: single online agent, agents have finished loading
   mockAgents.current = [{ name: "test-agent", status: "online" }];
   mockAgentsLoading.current = false;
+  capturedTerminalProps.onResumeSession = undefined;
 });
 
 afterEach(() => {
@@ -432,4 +441,87 @@ describe("AgentTab", () => {
       expect(queryByTestId("terminal")).toBeTruthy();
     });
   });
+
+  describe("stopped/error session discovery", () => {
+    it("surfaces a stopped session as active (shows terminal, not launcher)", async () => {
+      const stoppedSession = makeSession({ id: "sess-stopped", name: "lead-42", state: "stopped" });
+      mockHubFetch.mockResolvedValueOnce({ sessions: [stoppedSession] });
+
+      const { getByTestId, queryByTestId } = render(<AgentTab {...defaultProps} />);
+      await flushAsync();
+
+      expect(getByTestId("terminal")).toBeTruthy();
+      expect(queryByTestId("agent-launcher")).toBeNull();
+    });
+
+    it("surfaces an error session as active (shows terminal, not launcher)", async () => {
+      const errorSession = makeSession({ id: "sess-error", name: "lead-42", state: "error" });
+      mockHubFetch.mockResolvedValueOnce({ sessions: [errorSession] });
+
+      const { getByTestId, queryByTestId } = render(<AgentTab {...defaultProps} />);
+      await flushAsync();
+
+      expect(getByTestId("terminal")).toBeTruthy();
+      expect(queryByTestId("agent-launcher")).toBeNull();
+    });
+  });
+
+  describe("handleResumeSession", () => {
+    it("passes onResumeSession to Terminal when session is stopped and agentProfile is set", async () => {
+      const stoppedSession = makeSession({ id: "sess-stop-1", name: "lead-42", state: "stopped", agentProfile: "default" });
+      mockHubFetch.mockResolvedValueOnce({ sessions: [stoppedSession] });
+
+      render(<AgentTab {...defaultProps} />);
+      await flushAsync();
+
+      expect(capturedTerminalProps.onResumeSession).toBeDefined();
+    });
+
+    it("passes onResumeSession={undefined} to Terminal when agentProfile is empty", async () => {
+      const stoppedSession = makeSession({ id: "sess-stop-2", name: "lead-42", state: "stopped", agentProfile: "" });
+      mockHubFetch.mockResolvedValueOnce({ sessions: [stoppedSession] });
+
+      render(<AgentTab {...defaultProps} />);
+      await flushAsync();
+
+      expect(capturedTerminalProps.onResumeSession).toBeUndefined();
+    });
+
+    it("creates a new session and deletes the old one when resume is triggered", async () => {
+      const stoppedSession = makeSession({ id: "sess-stop-3", name: "lead-42", state: "stopped", agentProfile: "default" });
+      const newSession = makeSession({ id: "sess-new-1", name: "resume-sess-stop-1234", state: "running", agentProfile: "default" });
+
+      // discovery call
+      mockHubFetch.mockResolvedValueOnce({ sessions: [stoppedSession] });
+      mockCreateSession.mockResolvedValueOnce(newSession);
+      // DELETE call for old session
+      mockHubFetch.mockResolvedValueOnce(undefined);
+
+      render(<AgentTab {...defaultProps} />);
+      await flushAsync();
+
+      expect(capturedTerminalProps.onResumeSession).toBeDefined();
+
+      await act(async () => {
+        capturedTerminalProps.onResumeSession!();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // createSession called with correct args including /resume <oldSessionId>
+      expect(mockCreateSession).toHaveBeenCalledWith(
+        "test-agent",
+        "default",
+        expect.stringMatching(/^resume-/),
+        ["/resume sess-stop-3"],
+      );
+
+      // hubFetch DELETE called for the old session
+      expect(mockHubFetch).toHaveBeenCalledWith(
+        expect.stringContaining("sess-stop-3"),
+        expect.objectContaining({ method: "DELETE" }),
+      );
+    });
+  });
+
 });

@@ -1,6 +1,7 @@
 package pty
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -235,7 +236,7 @@ func TestPTYManager_WriteInput_NotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for nonexistent session, got nil")
 	}
-	if !strings.Contains(err.Error(), "not found") {
-		t.Errorf("expected error containing \"not found\", got: %v", err)
+	if !errors.Is(err, ErrSessionNotFound) {
+		t.Errorf("expected ErrSessionNotFound, got: %v", err)
 	}
 }

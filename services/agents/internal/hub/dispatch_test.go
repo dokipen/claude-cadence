@@ -2,6 +2,8 @@ package hub
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -415,5 +417,37 @@ func TestDispatcher_SendInput_NilPTYManager(t *testing.T) {
 	}
 	if rpcErr.Code != rpcErrInternal {
 		t.Errorf("expected code %d (rpcErrInternal), got %d", rpcErrInternal, rpcErr.Code)
+	}
+}
+
+func TestMapPTYError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		wantCode int
+	}{
+		{
+			name:     "sentinel wrapped error maps to not found",
+			err:      fmt.Errorf("pty: session %q not found: %w", "abc", pty.ErrSessionNotFound),
+			wantCode: rpcErrNotFound,
+		},
+		{
+			name:     "unwrapped sentinel maps to not found",
+			err:      pty.ErrSessionNotFound,
+			wantCode: rpcErrNotFound,
+		},
+		{
+			name:     "unrelated error maps to internal",
+			err:      errors.New("some other error"),
+			wantCode: rpcErrInternal,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := mapPTYError(tt.err)
+			if got.Code != tt.wantCode {
+				t.Errorf("mapPTYError(%v).Code = %v, want %v", tt.err, got.Code, tt.wantCode)
+			}
+		})
 	}
 }

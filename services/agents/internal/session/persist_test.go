@@ -92,6 +92,8 @@ func TestPersister_RoundTrip(t *testing.T) {
 		// Ephemeral fields — must NOT appear in JSON.
 		WaitingForInput: true,
 		IdleSince:       &now,
+		PromptContext:   "$ git status\nnothing to commit",
+		PromptType:      "shell",
 	}
 
 	p.queue(*sess)
@@ -151,6 +153,12 @@ func TestPersister_RoundTrip(t *testing.T) {
 	if got.IdleSince != nil {
 		t.Error("IdleSince should not be persisted (expected nil after reload)")
 	}
+	if got.PromptContext != "" {
+		t.Errorf("PromptContext should not be persisted (expected empty after reload, got %q)", got.PromptContext)
+	}
+	if got.PromptType != "" {
+		t.Errorf("PromptType should not be persisted (expected empty after reload, got %q)", got.PromptType)
+	}
 
 	// Verify the raw JSON does not contain the ephemeral field names.
 	path := filepath.Join(dir, sess.ID+".json")
@@ -163,6 +171,12 @@ func TestPersister_RoundTrip(t *testing.T) {
 	}
 	if strings.Contains(string(raw), "idle_since") {
 		t.Error("JSON should not contain 'idle_since'")
+	}
+	if strings.Contains(string(raw), "prompt_context") {
+		t.Error("JSON should not contain 'prompt_context'")
+	}
+	if strings.Contains(string(raw), "prompt_type") {
+		t.Error("JSON should not contain 'prompt_type'")
 	}
 }
 

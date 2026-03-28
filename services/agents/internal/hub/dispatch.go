@@ -3,8 +3,8 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -462,7 +462,7 @@ func (d *Dispatcher) SendInput(params json.RawMessage) (json.RawMessage, *rpcErr
 }
 
 func mapPTYError(err error) *rpcError {
-	if strings.Contains(err.Error(), "not found") {
+	if errors.Is(err, pty.ErrSessionNotFound) {
 		return &rpcError{Code: rpcErrNotFound, Message: err.Error()}
 	}
 	return &rpcError{Code: rpcErrInternal, Message: err.Error()}

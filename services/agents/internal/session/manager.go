@@ -410,27 +410,39 @@ func (m *Manager) ReadOutput(sessionID string, lines int) (string, error) {
 	// escape sequences spanning \r or \n boundaries don't break line splitting.
 	cleaned := ansiEscapeRe.ReplaceAllString(string(raw), "")
 
-	// Normalize CRLF to LF.
-	cleaned = strings.ReplaceAll(cleaned, "\r\n", "\n")
-
-	// Apply carriage-return folding: bare \r (without \n) means "overwrite from
-	// start of line", as terminals do for spinners/progress bars. For each
-	// \n-delimited segment, keep only the content after the last \r — this
-	// discards all intermediate overwrite frames (including multi-character
-	// progress-bar lines like "Building (3/10)\rBuilding (10/10)") while
-	// preserving the final overwritten state.
-	{
-		segments := strings.Split(cleaned, "\n")
-		for i, seg := range segments {
-			if idx := strings.LastIndex(seg, "\r"); idx >= 0 {
-				segments[i] = seg[idx+1:]
-			}
-		}
-		cleaned = strings.Join(segments, "\n")
+	// Split on LF only; CRLF lines will have a trailing \r in each element.
+	// Trim trailing empty segments (artifact of the buffer's final newline)
+	// so the line count is accurate before slicing.
+	all := strings.Split(cleaned, "\n")
+	for len(all) > 0 && all[len(all)-1] == "" {
+		all = all[:len(all)-1]
 	}
 
-	// Split into lines, drop empty and spinner-only lines.
-	all := strings.Split(cleaned, "\n")
+	// Slice to the tail before CR processing so subsequent work operates on
+	// ~N*lineWidth bytes instead of the full snapshot.
+	if len(all) > lines {
+		all = all[len(all)-lines:]
+	}
+
+	// Apply CR-fold per segment: split each \n-delimited segment on \r and
+	// keep the last non-empty part. This correctly handles both:
+	//   - CRLF lines (trailing \r because \r\n was split at the \n delimiter)
+	//   - multi-character progress-bar overwrites like "frame1\rframe2\rfinal"
+	// Single-rune spinner chars (✻ ✶ ·) are caught by the filter below.
+	for i, seg := range all {
+		parts := strings.Split(seg, "\r")
+		final := ""
+		for j := len(parts) - 1; j >= 0; j-- {
+			if parts[j] != "" {
+				final = parts[j]
+				break
+			}
+		}
+		all[i] = final
+	}
+
+	// Drop empty and spinner-only lines. filtered aliases all's backing
+	// array — write index is always ≤ read index, so this is safe in-place.
 	filtered := all[:0]
 	for _, line := range all {
 		trimmed := strings.TrimSpace(line)
@@ -445,6 +457,8 @@ func (m *Manager) ReadOutput(sessionID string, lines int) (string, error) {
 		filtered = append(filtered, line)
 	}
 
+	// Re-apply the lines limit as a safety clamp (CR-fold can expose more
+	// content-bearing lines than the initial LF-segment count).
 	if len(filtered) > lines {
 		filtered = filtered[len(filtered)-lines:]
 	}

@@ -4,6 +4,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import styles from "../styles/agents.module.css";
 import { useDarkMode } from "../hooks/useDarkMode";
+import { validateAgentProfile, validateSessionId } from "../utils/validateSession";
 
 type ConnectionState = "connecting" | "connected" | "reconnecting" | "disconnected" | "error";
 
@@ -119,6 +120,11 @@ export function Terminal({ agentName, sessionId, onResumeSession }: TerminalProp
 
     const container = containerRef.current;
     if (!container) return;
+
+    if (!validateAgentProfile(agentName) || !validateSessionId(sessionId)) {
+      console.warn("[Terminal] Refusing to connect: invalid agentName or sessionId");
+      return;
+    }
 
     // Clean up previous terminal if reconnecting
     if (termRef.current) {
