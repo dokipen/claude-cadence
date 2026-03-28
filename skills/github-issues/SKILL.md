@@ -30,6 +30,24 @@ gh issue view 42 --comments
 gh issue view 42 --json title,body,labels,assignees,state
 ```
 
+## Shell Safety: Heredocs for Body Content, Variables for Titles
+
+**IMPORTANT:** Backticks inside double-quoted strings are evaluated as shell command substitution. Two argument types need special handling:
+
+**Body content** (`--body`): always use `<<'EOF'` single-quoted heredocs. Single-quoted `<<'EOF'` prevents all variable expansion and command substitution inside the heredoc, so backticks in generated content are safe.
+
+**Titles** (`--title`): cannot use heredocs inline. If the title contains backticks, assign to a variable first:
+
+```bash
+ISSUE_TITLE=$(cat <<'EOF'
+Fix `createSession` return type
+EOF
+)
+gh issue create --title "$ISSUE_TITLE" ...
+```
+
+When possible, write titles without backticks (e.g., "Fix createSession return type") — titles are plain text labels and backtick formatting rarely adds value there.
+
 ## Creating Issues
 
 ```bash

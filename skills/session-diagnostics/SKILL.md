@@ -103,10 +103,12 @@ Skip ticket creation if a matching open ticket already exists; comment on it ins
 
 For each actionable pattern without an existing ticket:
 
+**Shell safety:** The `--title` argument is inline — avoid backticks in the title. Write titles as plain text (e.g., "OOM in session restore" not "OOM in `restoreSession`"). The `--description` heredoc below is already backtick-safe via `<<'EOF'`.
+
 ```bash
 issues ticket create \
   --project claude-cadence \
-  --title "<concise description>" \
+  --title "<concise description without backticks>" \
   --description "$(cat <<'EOF'
 ## Problem
 
