@@ -233,8 +233,9 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	}
 
 	// Build env slice for PTY (format: "KEY=VALUE").
-	// Start from the daemon's own environment so PATH, HOME, TERM, etc. are
+	// Start from the daemon's own environment so PATH, HOME, etc. are
 	// inherited. Vault secrets and request env vars override anything inherited.
+	// TERM is defaulted to xterm-256color below if not already present.
 	envSlice := os.Environ()
 
 	// Vault secrets as env vars.
@@ -264,6 +265,20 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 			return retSess, &Error{Code: ErrInvalidArgument, Message: errMsg}
 		}
 		envSlice = append(envSlice, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	// Default TERM to xterm-256color if not set — agentd runs as a systemd
+	// service with no TERM in its environment, and terminal programs like vim
+	// require a valid TERM to function.
+	hasTERM := false
+	for _, e := range envSlice {
+		if strings.HasPrefix(e, "TERM=") {
+			hasTERM = true
+			break
+		}
+	}
+	if !hasTERM {
+		envSlice = append(envSlice, "TERM=xterm-256color")
 	}
 
 	// Build PTY command: wrap the shell command string via bash -c so that
