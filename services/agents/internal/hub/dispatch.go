@@ -452,6 +452,9 @@ func (d *Dispatcher) SendInput(params json.RawMessage) (json.RawMessage, *rpcErr
 	if err := json.Unmarshal(params, &p); err != nil {
 		return nil, &rpcError{Code: rpcErrInvalidArgument, Message: err.Error()}
 	}
+	if d.pty == nil {
+		return nil, &rpcError{Code: rpcErrInternal, Message: "PTY manager not available"}
+	}
 	if err := d.pty.WriteInput(p.SessionID, []byte(p.Text)); err != nil {
 		return nil, mapPTYError(err)
 	}

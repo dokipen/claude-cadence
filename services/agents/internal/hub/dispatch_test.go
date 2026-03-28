@@ -405,3 +405,15 @@ func TestDispatcher_SendInput_Success(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+func TestDispatcher_SendInput_NilPTYManager(t *testing.T) {
+	d := newTestDispatcher() // nil pty
+
+	_, rpcErr := d.SendInput(json.RawMessage(`{"session_id":"any","text":"y\n"}`))
+	if rpcErr == nil {
+		t.Fatal("expected rpcError when PTY manager is nil")
+	}
+	if rpcErr.Code != rpcErrInternal {
+		t.Errorf("expected code %d (rpcErrInternal), got %d", rpcErrInternal, rpcErr.Code)
+	}
+}
