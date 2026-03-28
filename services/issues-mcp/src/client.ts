@@ -1,9 +1,35 @@
 import { GraphQLClient } from "graphql-request";
-import { getApiUrl, getAuthToken } from "./config.js";
+import { gql } from "graphql-request";
+import {
+  getApiUrl,
+  getAuthToken,
+  getRefreshToken,
+  getGhPat,
+  setResolvedAuthToken,
+  setResolvedRefreshToken,
+} from "./config.js";
 
 const MAX_RETRIES = 3;
 const BASE_BACKOFF_MS = 1000;
 const MAX_RETRY_AFTER_MS = 30_000;
+
+const AUTHENTICATE_WITH_PAT = gql`
+  mutation AuthenticateWithGitHubPAT($token: String!) {
+    authenticateWithGitHubPAT(token: $token) {
+      token
+      refreshToken
+    }
+  }
+`;
+
+const REFRESH_TOKEN_MUTATION = gql`
+  mutation RefreshToken($refreshToken: String!) {
+    refreshToken(refreshToken: $refreshToken) {
+      token
+      refreshToken
+    }
+  }
+`;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -15,6 +41,13 @@ function createRawClient(url: string, token?: string): GraphQLClient {
     headers["Authorization"] = `Bearer ${token}`;
   }
   return new GraphQLClient(url, { headers });
+}
+
+export function isAuthError(error: unknown): boolean {
+  const err = error as { response?: { errors?: Array<{ extensions?: { code?: string } }> } };
+  return err?.response?.errors?.some(
+    (e) => e?.extensions?.code === "UNAUTHENTICATED"
+  ) ?? false;
 }
 
 export function is429Error(error: unknown): boolean {
@@ -54,9 +87,73 @@ export function getRetryAfterMs(error: unknown): number | null {
   return null;
 }
 
+async function tryAuth(url: string): Promise<string | null> {
+  // Try refresh token first
+  const refreshToken = getRefreshToken();
+  if (refreshToken) {
+    try {
+      const client = createRawClient(url);
+      const result = await client.request<{ refreshToken: { token: string; refreshToken: string } }>(
+        REFRESH_TOKEN_MUTATION,
+        { refreshToken }
+      );
+      const newToken = result.refreshToken.token;
+      setResolvedAuthToken(newToken);
+      setResolvedRefreshToken(result.refreshToken.refreshToken);
+      return newToken;
+    } catch {
+      // Fall through to gh auth token
+    }
+  }
+
+  // Fall back to gh auth token
+  const ghPat = getGhPat();
+  if (!ghPat) return null;
+
+  try {
+    const unauthClient = createRawClient(url);
+    const result = await unauthClient.request<{ authenticateWithGitHubPAT: { token: string; refreshToken: string } }>(
+      AUTHENTICATE_WITH_PAT,
+      { token: ghPat }
+    );
+    const newToken = result.authenticateWithGitHubPAT.token;
+    setResolvedAuthToken(newToken);
+    setResolvedRefreshToken(result.authenticateWithGitHubPAT.refreshToken);
+    return newToken;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Returns a GraphQL client with 429 retry logic using exponential backoff.
- * No token refresh — MCP servers use long-lived tokens.
+ * Bootstraps authentication at startup if no token is available.
+ * Tries gh auth token -> PAT exchange and stores the resulting tokens.
+ * Returns true on success, false if no PAT is available or auth fails.
+ */
+export async function bootstrapAuth(): Promise<boolean> {
+  if (getAuthToken()) return true;
+
+  const url = getApiUrl();
+  const ghPat = getGhPat();
+  if (!ghPat) return false;
+
+  try {
+    const unauthClient = createRawClient(url);
+    const result = await unauthClient.request<{
+      authenticateWithGitHubPAT: { token: string; refreshToken: string };
+    }>(AUTHENTICATE_WITH_PAT, { token: ghPat });
+    setResolvedAuthToken(result.authenticateWithGitHubPAT.token);
+    setResolvedRefreshToken(result.authenticateWithGitHubPAT.refreshToken);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Returns a GraphQL client with 429 retry logic using exponential backoff
+ * and automatic re-authentication on UNAUTHENTICATED errors via refresh token
+ * or gh auth token exchange.
  */
 export function getClient(): GraphQLClient {
   const url = getApiUrl();
@@ -68,10 +165,11 @@ export function getClient(): GraphQLClient {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (client as any).request = async (documentOrOptions: any, variables?: any, requestHeaders?: any) => {
     let attempt = 0;
+    let currentRequest = originalRequest;
 
     while (true) {
       try {
-        return await originalRequest(documentOrOptions, variables, requestHeaders);
+        return await currentRequest(documentOrOptions, variables, requestHeaders);
       } catch (error: unknown) {
         if (is429Error(error)) {
           if (attempt >= MAX_RETRIES) {
@@ -85,7 +183,19 @@ export function getClient(): GraphQLClient {
           attempt++;
           continue;
         }
-        throw error;
+
+        if (!isAuthError(error)) {
+          throw error;
+        }
+
+        const newToken = await tryAuth(url);
+        if (!newToken) {
+          throw error;
+        }
+
+        // Switch to refreshed-token client and retry (stays in the loop for 429 protection)
+        const retryClient = createRawClient(url, newToken);
+        currentRequest = retryClient.request.bind(retryClient) as typeof currentRequest;
       }
     }
   };

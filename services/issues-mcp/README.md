@@ -29,7 +29,7 @@ All configuration is via environment variables passed through `.mcp.json`.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `ISSUES_AUTH_TOKEN` | yes | — | Bearer token for authenticating with the issues API |
+| `ISSUES_AUTH_TOKEN` | no | — | Bearer token for authenticating with the issues API. If omitted, auto-obtained via `gh auth token` |
 | `ISSUES_API_URL` | no | `http://localhost:4000/graphql` | GraphQL API endpoint |
 | `ISSUES_PROJECT_ID` | no | — | Default project CUID; used when tools are called without an explicit `projectId` |
 | `ISSUES_PROJECT_NAME` | no | — | Default project name; resolved to a CUID at startup (alternative to `ISSUES_PROJECT_ID`) |
@@ -47,7 +47,6 @@ Add the server to your project's `.mcp.json`:
       "command": "node",
       "args": ["/path/to/services/issues-mcp/dist/index.js"],
       "env": {
-        "ISSUES_AUTH_TOKEN": "your-token",
         "ISSUES_API_URL": "https://your-api-url/graphql",
         "ISSUES_PROJECT_NAME": "your-project"
       }
@@ -74,7 +73,9 @@ Replace `/path/to/services/issues-mcp` with the absolute path on your machine.
 
 ## Getting a Token
 
-**Production:** Use `issues-cli` (in `services/issues-cli`) to authenticate:
+If you have `gh` authenticated on your machine, no manual token setup is required. The server bootstraps automatically by running `gh auth token` at startup and caching the result for the session.
+
+**Manual token (optional):** You can still set `ISSUES_AUTH_TOKEN` explicitly in `.mcp.json` to bypass the auto-auth flow. To obtain a token manually, use `issues-cli` (in `services/issues-cli`):
 
 ```bash
 issues auth login --pat <your-personal-access-token>
