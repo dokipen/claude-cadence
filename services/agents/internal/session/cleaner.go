@@ -27,6 +27,17 @@ type Cleaner struct {
 //   - Destroy error sessions older than errorSessionTTL (0 = use stale TTL as fallback)
 //
 // Both checks run on every interval tick.
+//
+// # error_session_ttl cleanup latency baseline
+//
+// The worst-case latency from a session entering StateError to being reaped is:
+//
+//	max_latency ≈ errorSessionTTL + interval
+//
+// where interval is the cleaner tick period. The cleaner does not run continuously;
+// it fires once per interval. A session that just missed a tick must wait for the
+// next one. In the default production configuration (errorSessionTTL=5m, interval=30s)
+// the observed cleanup window is 5m0s–5m30s after the session enters StateError.
 func NewCleaner(manager *Manager, ttl, interval, creatingSessionTTL, errorSessionTTL time.Duration) *Cleaner {
 	return &Cleaner{
 		manager:            manager,
@@ -93,8 +104,7 @@ func (c *Cleaner) cleanup() {
 			age := time.Since(sess.CreatedAt).Round(time.Second)
 			errMsg := fmt.Sprintf("session stuck in creating state for %s; reaped by cleaner", age)
 			slog.Warn("reaping stuck StateCreating session", "id", sess.ID, "name", sess.Name, "age", age)
-			_, _ = c.manager.store.Update(sess.ID, func(s *Session) {
-				s.State = StateError
+			_ = c.manager.store.Transition(sess.ID, StateError, func(s *Session) {
 				s.ErrorMessage = errMsg
 			})
 			continue

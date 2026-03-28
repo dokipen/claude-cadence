@@ -389,3 +389,46 @@ func TestCleaner_ErrorTTLDisabledFallsBackToStaleTTL(t *testing.T) {
 		t.Error("expected StateError session past stale TTL to be destroyed when errorSessionTTL is disabled")
 	}
 }
+
+// TestCleaner_ErrorSessionTTL_LatencyBaseline documents and verifies the
+// cleanup latency contract for error sessions.
+//
+// Worst-case latency from StateError entry to reaping:
+//
+//	max_latency ≈ errorSessionTTL + cleanerInterval
+//
+// This test confirms the boundary conditions that produce that window:
+//   - A session just at errorSessionTTL is reaped on the next cleanup call.
+//   - A session 1ms before errorSessionTTL is NOT reaped (must wait another tick).
+//
+// In production (errorSessionTTL=5m, interval=30s) the cleanup window is 5m–5m30s.
+func TestCleaner_ErrorSessionTTL_LatencyBaseline(t *testing.T) {
+	const errorTTL = 5 * time.Minute
+
+	m := newTestManager(map[string]bool{}, map[int]bool{})
+
+	// Session that has exactly reached errorSessionTTL — must be reaped this tick.
+	atTTL := &Session{
+		ID:        "at-ttl",
+		State:     StateError,
+		CreatedAt: time.Now().Add(-errorTTL),
+	}
+	// Session 1ms short of errorSessionTTL — must survive this tick.
+	beforeTTL := &Session{
+		ID:        "before-ttl",
+		State:     StateError,
+		CreatedAt: time.Now().Add(-errorTTL + time.Millisecond),
+	}
+	m.store.Add(atTTL)
+	m.store.Add(beforeTTL)
+
+	cleaner := NewCleaner(m, time.Hour, time.Minute, 0, errorTTL)
+	cleaner.cleanup()
+
+	if _, ok := m.store.Get("at-ttl"); ok {
+		t.Error("session at errorSessionTTL boundary should be reaped on this tick")
+	}
+	if _, ok := m.store.Get("before-ttl"); !ok {
+		t.Error("session 1ms before errorSessionTTL boundary must survive to the next tick")
+	}
+}

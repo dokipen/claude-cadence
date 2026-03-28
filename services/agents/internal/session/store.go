@@ -17,6 +17,57 @@ const (
 	StateDestroying                         // 5
 )
 
+// String returns the human-readable name of a SessionState.
+// The returned values appear in log output and error messages.
+func (s SessionState) String() string {
+	switch s {
+	case StateCreating:
+		return "creating"
+	case StateRunning:
+		return "running"
+	case StateStopped:
+		return "stopped"
+	case StateError:
+		return "error"
+	case StateDestroying:
+		return "destroying"
+	default:
+		return fmt.Sprintf("unknown(%d)", int(s))
+	}
+}
+
+// validTransitions encodes the allowed state machine edges for a session.
+// It is the authoritative documentation of the session lifecycle and is
+// enforced at runtime by Store.Transition.
+//
+//	Creating  → Running     (PTY launched, process started)
+//	Creating  → Stopped     (process exited immediately after launch)
+//	Creating  → Error       (setup failure: vault, git, env, PTY, or daemon restart)
+//	Creating  → Destroying  (force destroy during create)
+//	Running   → Stopped     (process exited; detected by reconcile or cleaner)
+//	Running   → Destroying  (force destroy of a live session)
+//	Stopped   → Destroying  (normal destroy of a completed session)
+//	Error     → Destroying  (cleaner TTL expiry or explicit destroy call)
+//	Destroying → (terminal) (session is deleted from the store immediately after)
+var validTransitions = map[SessionState]map[SessionState]bool{
+	StateCreating:   {StateRunning: true, StateStopped: true, StateError: true, StateDestroying: true},
+	StateRunning:    {StateStopped: true, StateDestroying: true},
+	StateStopped:    {StateDestroying: true},
+	StateError:      {StateDestroying: true},
+	StateDestroying: {},
+}
+
+// InvalidTransitionError is returned by Transition when the requested
+// state change is not permitted by the session state machine.
+type InvalidTransitionError struct {
+	From SessionState
+	To   SessionState
+}
+
+func (e *InvalidTransitionError) Error() string {
+	return fmt.Sprintf("invalid state transition: %s → %s", e.From, e.To)
+}
+
 // Session represents an agent session in the internal domain.
 type Session struct {
 	ID           string
@@ -194,6 +245,34 @@ func (s *Store) Update(id string, fn func(*Session)) (bool, error) {
 		s.persister.queue(*sess)
 	}
 	return true, nil
+}
+
+// Transition atomically moves session id to toState, enforcing the state
+// machine defined by validTransitions.
+//
+// Returns *InvalidTransitionError if the current state does not permit toState.
+// Returns *Error{Code: ErrNotFound} if no session with that id exists.
+// The optional fn callbacks are called within the store lock to apply
+// additional field mutations alongside the state change (e.g. ErrorMessage,
+// StoppedAt). Returns nil on success.
+func (s *Store) Transition(id string, toState SessionState, fn ...func(*Session)) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sess, ok := s.sessions[id]
+	if !ok {
+		return &Error{Code: ErrNotFound, Message: fmt.Sprintf("session %q not found", id)}
+	}
+	if !validTransitions[sess.State][toState] {
+		return &InvalidTransitionError{From: sess.State, To: toState}
+	}
+	sess.State = toState
+	for _, f := range fn {
+		f(sess)
+	}
+	if s.persister != nil {
+		s.persister.queue(*sess)
+	}
+	return nil
 }
 
 // Delete removes a session from the store.
