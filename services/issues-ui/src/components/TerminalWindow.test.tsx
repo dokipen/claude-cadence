@@ -452,11 +452,46 @@ describe("handleResumeSession", () => {
     expect(mockCreateSession).toHaveBeenCalledWith(
       "agent-1",
       "default",
-      expect.stringContaining("resume-"),
+      expect.stringMatching(/^resume-[\w-]+-\d+$/),
       ["/resume sess-abc"],
     );
   });
 
+
+  it("produces distinct session names on successive invocations", () => {
+    vi.spyOn(Date, "now").mockReturnValueOnce(1000).mockReturnValueOnce(2000);
+    mockCreateSession.mockResolvedValue({});
+
+    const sessionWithProfile = create(SessionSchema, {
+      id: "sess-abc",
+      name: "lead-42",
+      state: "running",
+      agentProfile: "default",
+      createdAt: "2026-01-01T00:00:00Z",
+      agentPid: 1234,
+      baseRef: "main",
+      waitingForInput: false,
+    });
+
+    render(
+      <TerminalWindow
+        session={sessionWithProfile}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    expect(capturedTerminalProps.onResumeSession).toBeDefined();
+
+    capturedTerminalProps.onResumeSession!();
+    capturedTerminalProps.onResumeSession!();
+
+    expect(mockCreateSession).toHaveBeenCalledTimes(2);
+    const firstName = mockCreateSession.mock.calls[0][2] as string;
+    const secondName = mockCreateSession.mock.calls[1][2] as string;
+    expect(firstName).not.toBe(secondName);
+  });
   it("passes onResumeSession={undefined} to Terminal when agentProfile is empty", () => {
     const sessionNoProfile = create(SessionSchema, {
       id: "sess-xyz",
