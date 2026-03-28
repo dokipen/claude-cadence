@@ -288,10 +288,13 @@ describe("sessionStorage persistence", () => {
     // Pre-populate with a key that matches no provided session
     mockSessionStorage.setItem("cadence_open_windows", JSON.stringify([staleKey]));
 
-    // Render with no matching sessions — stale key should be dropped
-    render(
-      <MemoryRouter><AgentManager sessions={[]} selectedProject={null} /></MemoryRouter>,
-    );
+    // Render with no matching sessions — stale key should be dropped.
+    // Wrap in act to ensure all effects (including the persistence useEffect) flush.
+    await act(async () => {
+      render(
+        <MemoryRouter><AgentManager sessions={[]} selectedProject={null} /></MemoryRouter>,
+      );
+    });
 
     // The effect should have written an empty array back to sessionStorage
     const setItemCalls = mockSessionStorage.setItem.mock.calls;

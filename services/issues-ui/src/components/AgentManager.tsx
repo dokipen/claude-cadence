@@ -32,6 +32,8 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
       return storedKeys.flatMap((key) => {
         const s = sessionMap.get(key);
         if (!s) return [];
+        // selectedProject?.id is correct here: AgentManager always remounts on navigation,
+        // so the lazy initializer always runs with the current selectedProject value.
         return [{ key, session: s.session, agentName: s.agentName, projectId: selectedProject?.id }];
       });
     } catch {
