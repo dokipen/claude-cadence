@@ -94,7 +94,7 @@ function ProjectRedirect() {
 function AppShell() {
   const { user, logout } = useAuth();
   const { projects } = useProjects();
-  const { sessions, waitingSessions, optimisticSetDestroying } = useAllSessions();
+  const { sessions, waitingSessions, optimisticSetDestroying, optimisticAddSession } = useAllSessions();
   const { updateAvailable } = useVersionPolling();
   const [dismissed, setDismissed] = useState(false);
   const location = useLocation();
@@ -135,7 +135,7 @@ function AppShell() {
   }, [projects, navigate, isOnBoard]);
 
   return (
-    <SessionsContext.Provider value={{ optimisticSetDestroying }}>
+    <SessionsContext.Provider value={{ optimisticSetDestroying, optimisticAddSession }}>
     <div className={layoutStyles.shell}>
       <header className={layoutStyles.header}>
         <div className={layoutStyles.headerLeft}>

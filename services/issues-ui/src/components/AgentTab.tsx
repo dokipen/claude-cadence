@@ -27,7 +27,7 @@ export function AgentTab({ ticketNumber, ticketTitle, ticketState, repoUrl }: Ag
   const [discovering, setDiscovering] = useState(true);
   const [destroying, setDestroying] = useState(false);
   const { agents, loading: agentsLoading } = useAgents();
-  const { optimisticSetDestroying } = useSessionsContext();
+  const { optimisticSetDestroying, optimisticAddSession } = useSessionsContext();
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const launchConfig = getLaunchConfig(ticketState);
@@ -107,8 +107,9 @@ export function AgentTab({ ticketNumber, ticketTitle, ticketState, repoUrl }: Ag
   }, [activeSessionId, activeSessionState, activeAgentName]);
 
   const handleLaunched = useCallback((session: Session, agentName: string) => {
+    optimisticAddSession(session, agentName);
     setActive({ session, agentName });
-  }, []);
+  }, [optimisticAddSession]);
 
   const handleDestroy = useCallback(async () => {
     if (!active) return;

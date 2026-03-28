@@ -16,6 +16,7 @@ interface UseAllSessionsResult {
   loading: boolean;
   error: string | null;
   optimisticSetDestroying: (sessionId: string) => void;
+  optimisticAddSession: (session: Session, agentName: string) => void;
 }
 
 export function useAllSessions(): UseAllSessionsResult {
@@ -93,5 +94,12 @@ export function useAllSessions(): UseAllSessionsResult {
     );
   }, []);
 
-  return { sessions, waitingSessions, loading, error, optimisticSetDestroying };
+  const optimisticAddSession = useCallback((session: Session, agentName: string) => {
+    setSessions(prev => {
+      if (prev.some(s => s.session.id === session.id)) return prev;
+      return [{ session, agentName }, ...prev];
+    });
+  }, []);
+
+  return { sessions, waitingSessions, loading, error, optimisticSetDestroying, optimisticAddSession };
 }
