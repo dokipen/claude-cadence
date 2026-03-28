@@ -26,7 +26,8 @@ var (
 	// characters so they can be stripped from PTY output.
 	ansiEscapeRe = regexp.MustCompile(
 		`\x1b\[[0-9;?]*[A-Za-z]` + // CSI sequences (ESC [ ... final)
-			`|\x1b[()[0-9A-Za-z]` + // character set designators
+			`|\x1b[()][0-9A-Za-z]` + // 3-char charset designators (ESC ( B, ESC ) 0, …)
+			`|\x1b[][PX^_][^\x1b\x9c]*[\x1b\x9c]?` + // OSC/DCS/APC/SOS/PM (ESC ] ... BEL/ST)
 			`|\x1b[^\x1b]` + // other two-byte ESC sequences
 			`|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]`, // control chars except \t \n \r
 	)
@@ -406,7 +407,9 @@ func (m *Manager) ReadOutput(sessionID string, lines int) (string, error) {
 	}
 
 	// Strip ANSI escape sequences and non-printable control characters.
-	clean := ansiEscapeRe.ReplaceAll(raw, nil)
+	// Normalize CRLF to LF first so lines don't carry trailing \r artifacts.
+	normalized := bytes.ReplaceAll(raw, []byte("\r\n"), []byte("\n"))
+	clean := ansiEscapeRe.ReplaceAll(normalized, nil)
 
 	// Split into lines, drop empty trailing lines, take last n.
 	all := strings.Split(string(clean), "\n")

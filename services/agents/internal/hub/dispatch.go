@@ -305,6 +305,9 @@ func (d *Dispatcher) GetSessionOutput(params json.RawMessage) (json.RawMessage, 
 	if p.Lines <= 0 {
 		p.Lines = 50
 	}
+	if p.Lines > 500 {
+		p.Lines = 500
+	}
 	output, err := d.manager.ReadOutput(p.SessionID, p.Lines)
 	if err != nil {
 		return nil, mapSessionError(err)
