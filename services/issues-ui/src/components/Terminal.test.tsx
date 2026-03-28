@@ -727,4 +727,17 @@ describe("Resume Session button", () => {
     expect(screen.getByTestId("terminal-error")).toBeDefined();
     expect(screen.queryByTestId("terminal-resume-session")).toBeNull();
   });
+
+  // 5. reconnecting state → button NOT present (auto-reconnect pending, not yet disconnected)
+  it("does not show 'Resume Session' button during reconnecting state", () => {
+    const onResumeSession = vi.fn();
+    render(<Terminal agentName="agent-1" sessionId="sess-1" onResumeSession={onResumeSession} />);
+
+    act(() => { MockWebSocket.instances[0].simulateOpen(); });
+    act(() => { MockWebSocket.instances[0].simulateClose(); });
+
+    // After open→close the component is in "reconnecting" (auto-reconnect timer pending)
+    expect(screen.getByTestId("terminal-reconnecting")).toBeDefined();
+    expect(screen.queryByTestId("terminal-resume-session")).toBeNull();
+  });
 });

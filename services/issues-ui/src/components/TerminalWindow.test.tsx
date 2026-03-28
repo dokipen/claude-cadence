@@ -413,11 +413,11 @@ describe("handleResumeSession", () => {
   beforeEach(() => {
     mockHubFetch.mockReset();
     mockCreateSession.mockReset();
-    capturedTerminalProps.onResumeSession = undefined;
   });
 
   afterEach(() => {
     cleanup();
+    capturedTerminalProps.onResumeSession = undefined;
   });
 
   it("calls createSession with agentProfile, a resume-prefixed name, and /resume <sessionId> when agentProfile is set", () => {

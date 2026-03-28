@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { Terminal } from "./Terminal";
 import { hubFetch, HubError, createSession } from "../api/agentHubClient";
 import { useTicketByNumber } from "../hooks/useTicketByNumber";
@@ -47,12 +48,11 @@ export function TerminalWindow({
   const ticketNumber = ticketMatch ? Number(ticketMatch[1]) : undefined;
   const { ticket } = useTicketByNumber(projectId, ticketNumber);
 
-  const handleResumeSession = session.agentProfile
-    ? () => {
-        const newSessionName = `resume-${session.id.slice(0, 8)}`;
-        createSession(agentName, session.agentProfile, newSessionName, [`/resume ${session.id}`]).catch(console.error);
-      }
-    : undefined;
+  const resumeCallback = useCallback(() => {
+    const newSessionName = `resume-${session.id.slice(0, 8)}`;
+    createSession(agentName, session.agentProfile, newSessionName, [`/resume ${session.id}`]).catch(console.error);
+  }, [agentName, session.id, session.agentProfile]);
+  const handleResumeSession = session.agentProfile ? resumeCallback : undefined;
 
   const handleTerminate = async () => {
     try {
