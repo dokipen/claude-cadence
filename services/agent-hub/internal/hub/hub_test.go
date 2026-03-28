@@ -1314,7 +1314,6 @@ func TestRPCTimeout_SuccessResetsCounter(t *testing.T) {
 }
 
 func TestRPCCanceledDoesNotDemoteAgent(t *testing.T) {
-	// Use a long heartbeat interval so heartbeats don't interfere with the test.
 	h, url := startTestHubWithHeartbeat(t, 30*time.Second, 5*time.Second)
 
 	connectPingOnlyAgent(t, url, "rpc-cancel-agent")
@@ -1324,14 +1323,25 @@ func TestRPCCanceledDoesNotDemoteAgent(t *testing.T) {
 		t.Fatalf("expected agent to start online, got %s", agent.Status())
 	}
 
-	// Make 3+ RPC calls and cancel each context immediately (before the deadline).
-	// The agent will not respond to getDiagnostics (ping-only), but we cancel
-	// before it times out — this produces context.Canceled, not DeadlineExceeded.
-	for i := 0; i < 3; i++ {
+	// Make maxConsecutiveRPCFailures+1 RPC calls and cancel each context
+	// mid-flight (after the WebSocket write succeeds but before the agent
+	// responds). This exercises the select { case <-ctx.Done() } branch in
+	// hub.go and the errors.Is(callErr, context.DeadlineExceeded) gate that
+	// deliberately excludes context.Canceled from the failure counter.
+	for i := 0; i < maxConsecutiveRPCFailures+1; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		cancel() // cancel immediately before the call
-		_, err := h.Call(ctx, agent, "getDiagnostics", map[string]string{})
 
+		errCh := make(chan error, 1)
+		go func() {
+			_, err := h.Call(ctx, agent, "getDiagnostics", map[string]string{})
+			errCh <- err
+		}()
+
+		// Give the WebSocket write time to land before cancelling.
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+
+		err := <-errCh
 		if err == nil {
 			t.Fatalf("call %d: expected error, got nil", i+1)
 		}
@@ -1340,12 +1350,14 @@ func TestRPCCanceledDoesNotDemoteAgent(t *testing.T) {
 		}
 	}
 
-	// After 3 context.Canceled errors, the agent must still be online.
+	// After maxConsecutiveRPCFailures+1 context.Canceled errors, the agent
+	// must still be online — Canceled is deliberately excluded from the counter.
 	if agent.Status() != StatusOnline {
-		t.Errorf("expected agent to remain online after 3 context.Canceled RPC errors, got %s", agent.Status())
+		t.Errorf("expected agent to remain online after %d context.Canceled RPC errors, got %s",
+			maxConsecutiveRPCFailures+1, agent.Status())
 	}
 
-	// Verify the counter was never incremented (white-box check).
+	// White-box: confirm the counter was never incremented.
 	if agent.consecutiveRPCFailures != 0 {
 		t.Errorf("expected consecutiveRPCFailures to be 0 after context.Canceled errors, got %d",
 			agent.consecutiveRPCFailures)
