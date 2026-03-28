@@ -95,6 +95,16 @@ export function useAllSessions(): UseAllSessionsResult {
     );
   }, []);
 
+  const optimisticResetState = useCallback((sessionId: string, state: Session["state"]) => {
+    setSessions(prev =>
+      prev.map(s =>
+        s.session.id === sessionId
+          ? { ...s, session: { ...s.session, state }, stateSource: "U" }
+          : s
+      )
+    );
+  }, []);
+
   const optimisticAddSession = useCallback((session: Session, agentName: string) => {
     setSessions(prev => {
       if (prev.some(s => s.session.id === session.id)) return prev;
@@ -102,5 +112,5 @@ export function useAllSessions(): UseAllSessionsResult {
     });
   }, []);
 
-  return { sessions, waitingSessions, loading, error, optimisticSetDestroying, optimisticAddSession };
+  return { sessions, waitingSessions, loading, error, optimisticSetDestroying, optimisticResetState, optimisticAddSession };
 }

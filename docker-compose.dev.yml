@@ -44,7 +44,7 @@ services:
     networks:
       - cadence-dev
     ports:
-      - "5173:5173"
+      - "5173:5173" # binds 0.0.0.0 intentionally — dev only, allows remote LAN access
     volumes:
       # Bind-mount source for hot reload; anonymous volume preserves node_modules
       - ./services/issues-ui:/app

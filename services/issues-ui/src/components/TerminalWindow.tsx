@@ -55,9 +55,10 @@ export function TerminalWindow({
   }, [agentName, session.id, session.agentProfile]);
   const handleResumeSession = session.agentProfile ? resumeCallback : undefined;
 
-  const { optimisticSetDestroying } = useSessionsContext();
+  const { optimisticSetDestroying, optimisticResetState } = useSessionsContext();
 
   const handleTerminate = async () => {
+    const originalState = session.state;
     optimisticSetDestroying(session.id);
     try {
       await hubFetch(
@@ -68,6 +69,9 @@ export function TerminalWindow({
     } catch (err) {
       if (err instanceof HubError && err.status === 404) {
         onTerminated();
+      } else {
+        // Restore original state so the session isn't stuck amber/disabled
+        optimisticResetState(session.id, originalState);
       }
     }
   };
