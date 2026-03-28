@@ -54,8 +54,10 @@ type session struct {
 }
 
 // closeMaster closes the PTY master fd idempotently. The second and subsequent
-// calls are no-ops. This prevents a double-close hazard when both Destroy() and
-// the Reattach read goroutine attempt to close the same fd.
+// calls are no-ops. Both Destroy() and the Reattach read goroutine call this,
+// so sync.Once makes the ownership explicit: whichever path runs first performs
+// the close; the other is a guaranteed no-op rather than a silently-discarded
+// ErrClosed return.
 func (s *session) closeMaster() {
 	s.closeOnce.Do(func() { _ = s.master.Close() })
 }

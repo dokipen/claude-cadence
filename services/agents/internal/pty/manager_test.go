@@ -177,9 +177,11 @@ func TestMaxResizeDimension(t *testing.T) {
 }
 
 // TestSession_closeMaster_idempotent verifies that closeMaster is safe to call
-// multiple times. Without sync.Once, the second close of a recycled fd would
-// silently close an unrelated file descriptor opened between the two closes —
-// the classic double-close fd-reuse hazard described in issue #408.
+// multiple times. Destroy() and the Reattach read goroutine both call
+// closeMaster(), so the second call must be a no-op rather than returning a
+// silently-discarded ErrClosed. (Note: Go's os.File already guards raw fd
+// reuse internally, so the sync.Once adds explicit, documented idempotency
+// rather than being the sole fd-safety mechanism.)
 func TestSession_closeMaster_idempotent(t *testing.T) {
 	f, err := os.CreateTemp(t.TempDir(), "pty-master-test-*")
 	if err != nil {
@@ -188,23 +190,11 @@ func TestSession_closeMaster_idempotent(t *testing.T) {
 
 	sess := &session{master: f}
 
-	// First close — reclaims the fd number.
+	// First call closes the file.
 	sess.closeMaster()
 
-	// Open a new file; the OS may reuse the same fd number.
-	f2, err := os.CreateTemp(t.TempDir(), "pty-master-recycled-*")
-	if err != nil {
-		t.Fatalf("CreateTemp: %v", err)
-	}
-	defer f2.Close()
-
-	// Second closeMaster must be a no-op — it must not close f2.
+	// Second call must be a no-op (no panic, no error propagation).
 	sess.closeMaster()
-
-	// Verify f2 is still usable (would fail with EIO/EBADF if fd was closed).
-	if _, err := f2.Write([]byte("ok")); err != nil {
-		t.Fatalf("recycled fd was closed by second closeMaster call: %v", err)
-	}
 }
 
 // TestDefaultBufferSize_FitsWithFramePrefix verifies that a full ring buffer
