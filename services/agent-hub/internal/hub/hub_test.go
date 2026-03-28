@@ -1145,3 +1145,80 @@ func TestRPCTimeoutDemotesAgent(t *testing.T) {
 		t.Errorf("expected agent to be offline after 3 consecutive RPC timeouts, got %s", agent.Status())
 	}
 }
+
+func TestRPCTimeout_TwoFailuresDoNotDemote(t *testing.T) {
+	// Use a long heartbeat interval so heartbeats don't interfere with the test.
+	h, url := startTestHubWithHeartbeat(t, 30*time.Second, 5*time.Second)
+
+	connectPingOnlyAgent(t, url, "rpc-two-fail-agent")
+	agent := waitForAgent(t, h, "rpc-two-fail-agent")
+
+	if agent.Status() != StatusOnline {
+		t.Fatalf("expected agent to start online, got %s", agent.Status())
+	}
+
+	// Make only 2 RPC calls that time out. The threshold is 3, so the agent
+	// must remain online after 2 consecutive failures (off-by-one guard).
+	for i := 0; i < 2; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		_, err := h.Call(ctx, agent, "getDiagnostics", map[string]string{})
+		cancel()
+
+		if err == nil {
+			t.Fatalf("call %d: expected timeout error, got nil", i+1)
+		}
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("call %d: expected DeadlineExceeded, got: %v", i+1, err)
+		}
+	}
+
+	// After only 2 consecutive timeouts (below the threshold of 3), the agent
+	// must still be online.
+	if agent.Status() != StatusOnline {
+		t.Errorf("expected agent to remain online after 2 consecutive RPC timeouts (threshold is %d), got %s",
+			maxConsecutiveRPCFailures, agent.Status())
+	}
+}
+
+func TestRPCTimeout_SuccessResetsCounter(t *testing.T) {
+	// Test that resetRPCFailures zeroes the counter so that N-1 timeouts + 1
+	// success + N-1 more timeouts never reaches the demotion threshold.
+	// Because ConnectedAgent is in the same package we can call the methods
+	// directly without going through the full WebSocket stack.
+	agent := &ConnectedAgent{
+		Name:    "counter-reset-agent",
+		status:  StatusOnline,
+		pending: make(map[string]chan *Response),
+	}
+
+	// Increment twice — still below threshold (3).
+	c1 := agent.incRPCFailures()
+	c2 := agent.incRPCFailures()
+	if c1 != 1 {
+		t.Errorf("after first incRPCFailures: expected 1, got %d", c1)
+	}
+	if c2 != 2 {
+		t.Errorf("after second incRPCFailures: expected 2, got %d", c2)
+	}
+
+	// Simulate a successful RPC — counter resets to 0.
+	agent.resetRPCFailures()
+	if agent.consecutiveRPCFailures != 0 {
+		t.Errorf("after resetRPCFailures: expected 0, got %d", agent.consecutiveRPCFailures)
+	}
+
+	// Two more increments after the reset must only reach 2, not 4.
+	c3 := agent.incRPCFailures()
+	c4 := agent.incRPCFailures()
+	if c3 != 1 {
+		t.Errorf("after reset + first incRPCFailures: expected 1, got %d", c3)
+	}
+	if c4 != 2 {
+		t.Errorf("after reset + second incRPCFailures: expected 2, got %d", c4)
+	}
+
+	// Agent must still be online — nothing here should have triggered demotion.
+	if agent.Status() != StatusOnline {
+		t.Errorf("agent status should remain online throughout counter test, got %s", agent.Status())
+	}
+}

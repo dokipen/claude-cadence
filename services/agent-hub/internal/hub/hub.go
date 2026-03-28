@@ -279,6 +279,10 @@ func (h *Hub) Call(ctx context.Context, agent *ConnectedAgent, method string, pa
 	err = agent.Conn().Write(writeCtx, websocket.MessageText, data)
 	writeCancel()
 	if err != nil {
+		// Do not increment consecutiveRPCFailures here. A write failure means
+		// the WebSocket connection itself is broken; HandleAgentConnection's read
+		// loop will detect the error, exit, and call markOfflineIfCurrent to
+		// handle offline detection through the normal heartbeat/connection path.
 		return nil, fmt.Errorf("write request: %w", err)
 	}
 

@@ -379,6 +379,13 @@ func handleDestroySession(h *hub.Hub) http.HandlerFunc {
 // events, and returns a merged diagnostic view including offline agents.
 func handleGetDiagnostics(h *hub.Hub, logPath string, overallDeadline time.Duration) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// diagnosticsDeadline (90s) exceeds the HTTP server's WriteTimeout (35s).
+		// Clear the inherited write deadline so the server doesn't close the
+		// connection before the handler can write its response; the handler
+		// enforces its own deadline via diagnosticsDeadline / fanOutCtx.
+		rc := http.NewResponseController(w)
+		_ = rc.SetWriteDeadline(time.Time{}) // clear inherited write deadline; handler enforces its own via diagnosticsDeadline
+
 		sinceMinutes := 10080
 		if s := r.URL.Query().Get("since_minutes"); s != "" {
 			if n, err := strconv.Atoi(s); err == nil && n > 0 {
@@ -433,7 +440,7 @@ func handleGetDiagnostics(h *hub.Hub, logPath string, overallDeadline time.Durat
 			agentName := info.Name
 			eg.Go(func() error {
 				defer func() { <-sem }()
-				callCtx, callCancel := context.WithTimeout(egCtx, diagnosticsTimeout)
+				callCtx, callCancel := context.WithTimeout(r.Context(), diagnosticsTimeout)
 				defer callCancel()
 
 				result, err := h.Call(callCtx, agent, "getDiagnostics", map[string]any{
