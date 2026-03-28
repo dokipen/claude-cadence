@@ -23,7 +23,7 @@ function formatIdleDuration(idleSince: string | undefined): string {
 }
 
 function parseTicketNumber(sessionName: string): number | null {
-  const match = sessionName.match(/^lead-(\d+)/);
+  const match = sessionName.match(/-(\d+)$/);
   return match ? parseInt(match[1], 10) : null;
 }
 

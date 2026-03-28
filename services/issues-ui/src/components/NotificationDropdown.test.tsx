@@ -486,6 +486,27 @@ describe("NotificationDropdown — ticket title", () => {
     expect(getByTestId("notification-item").textContent).toContain("Add sound effects");
   });
 
+  it.each([
+    ["refine", "refine-42"],
+    ["discuss", "discuss-42"],
+    ["tester", "tester-42"],
+    ["security-engineer", "security-engineer-42"],
+  ])("shows ticket title for %s sessions", (agentName, sessionName) => {
+    vi.mocked(useTicketByNumber).mockReturnValue({
+      ticket: { id: "t1", number: 42, title: "Add sound effects" },
+      loading: false,
+      error: null,
+    });
+
+    const sessions = [makeAgentSession(agentName, { id: "s1", name: sessionName })];
+    const { getByTestId } = render(
+      <NotificationDropdown waitingSessions={sessions} projectId="proj-1" projectName={null} />,
+    );
+    fireEvent.click(getByTestId("notification-trigger"));
+
+    expect(getByTestId("notification-item").textContent).toContain("Add sound effects");
+  });
+
   it("shows session name as fallback when no ticket is found", () => {
     vi.mocked(useTicketByNumber).mockReturnValue({
       ticket: null,
