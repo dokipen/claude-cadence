@@ -161,14 +161,9 @@ describe("Label Management", () => {
     expect(output).toContain("Label deleted");
   });
 
-  // --- Bug reproduction: --json flag should not pollute stderr with spinner text ---
-
-  it("should produce no spinner text on stderr when --json is used with label list", async () => {
+  it("should produce clean stderr (no spinner text) when --json is used with label list", async () => {
     const result = await suite.cli("label", "list", "--json");
     expect(result.exitCode).toBe(0);
-    // The spinner starts unconditionally before --json is checked, so spinner text
-    // ("Fetching labels...") leaks onto stderr even when --json is active.
-    // This test reproduces the bug: it fails until the spinner is silenced for --json.
     expect(result.stderr).toBe("");
   });
 });

@@ -325,5 +325,11 @@ describe("Ticket Management", () => {
       const parsed = JSON.parse(result.stdout);
       expect(parsed.title).toBe("Full ticket");
     });
+
+    it("should produce clean stderr (no spinner text) when --json is used with ticket view", async () => {
+      const result = await suite.cli("ticket", "view", fullTicketId, "--json");
+      expect(result.exitCode).toBe(0);
+      expect(result.stderr).toBe("");
+    });
   });
 });

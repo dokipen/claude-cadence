@@ -124,4 +124,10 @@ describe("Blocking", () => {
     expect(output).toContain("Ticket transitioned");
     expect(output).toContain("IN_PROGRESS");
   });
+
+  it("should produce clean stderr (no spinner text) when --json is used with block remove", async () => {
+    const result = await suite.cli("block", "remove", "--blocker", ticketAId, "--blocked", ticketBId, "--json");
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
 });
