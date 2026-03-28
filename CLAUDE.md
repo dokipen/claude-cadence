@@ -78,6 +78,7 @@ Bump the `version` field in `.claude-plugin/plugin.json` only when preparing a r
 - **Communication**: Issue comments pre-PR, PR comments post-PR
 - **GitHub access**: Always use `gh` CLI, never WebFetch for GitHub URLs
 - **Shell syntax**: Always use `$()` for command substitution, never backticks — enforced by shellcheck (SC2006)
+- **Milestones**: Group related fix clusters with `milestone:[N]-[slug]` labels (e.g., `milestone:42-add-sound-effects`). `N` is the anchor ticket number; `slug` is a short lowercase-hyphenated descriptor. Plan workflows apply these automatically in Phase 3a. For ad-hoc fix clusters, create and apply the label manually when the relationship is first recognized — don't wait until after the sprint.
 
 ## Workflow Rules
 
