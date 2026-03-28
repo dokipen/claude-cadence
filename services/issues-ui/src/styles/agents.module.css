@@ -581,6 +581,12 @@
   font-weight: 500;
 }
 
+@media (prefers-color-scheme: dark) {
+  .tileTicketLink {
+    color: var(--primary-light);
+  }
+}
+
 .tileTicketLink:hover {
   text-decoration: underline;
 }
