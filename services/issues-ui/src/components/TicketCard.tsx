@@ -12,8 +12,9 @@ import styles from "../styles/card.module.css";
 import agentStyles from "../styles/agents.module.css";
 import { AnimatedCadenceIcon } from "./AnimatedCadenceIcon";
 
-export function hasActiveSession(sessions: ActiveSessionInfo[], ticketNumber: number): boolean {
-  const prefixes = [`lead-${ticketNumber}`, `refine-${ticketNumber}`, `discuss-${ticketNumber}`];
+export function hasActiveSession(sessions: ActiveSessionInfo[], ticketNumber: number, projectId?: string): boolean {
+  const prefix = projectId ? `${projectId}-` : "";
+  const prefixes = [`${prefix}lead-${ticketNumber}`, `${prefix}refine-${ticketNumber}`, `${prefix}discuss-${ticketNumber}`];
   return sessions.some(
     (s) => prefixes.includes(s.name) && (s.state === "running" || s.state === "creating" || s.state === "destroying")
   );
@@ -23,10 +24,12 @@ export function TicketCard({
   ticket,
   repoUrl,
   sessions,
+  projectId,
 }: {
   ticket: Ticket;
   repoUrl?: string;
   sessions?: ActiveSessionInfo[];
+  projectId?: string;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [anchorRect, setAnchorRect] = useState<DOMRect | undefined>(undefined);
@@ -81,7 +84,7 @@ export function TicketCard({
     setConfirmCloseOpen(false);
   }, []);
 
-  const activeSession = hasActiveSession(sessions ?? [], ticket.number);
+  const activeSession = hasActiveSession(sessions ?? [], ticket.number, projectId);
 
   if (closed) return null;
 
@@ -174,6 +177,7 @@ export function TicketCard({
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         anchorRect={anchorRect}
+        projectId={projectId}
       />
       <ConfirmDialog
         open={confirmCloseOpen}

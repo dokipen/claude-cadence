@@ -47,7 +47,7 @@ import { HubError } from "../api/agentHubClient";
 
 const baseSession = create(SessionSchema, {
   id: "sess-abc",
-  name: "lead-42",
+  name: "myproject-lead-42",
   state: "running",
   agentProfile: "default",
   createdAt: "2026-01-01T00:00:00Z",
@@ -321,7 +321,7 @@ describe("ticket title in header", () => {
 
   const leadSession = create(SessionSchema, {
     id: "sess-lead",
-    name: "lead-42",
+    name: "myproject-lead-42",
     state: "running",
     agentProfile: "default",
     createdAt: "2026-01-01T00:00:00Z",
@@ -425,7 +425,7 @@ describe("handleResumeSession", () => {
 
     const sessionWithProfile = create(SessionSchema, {
       id: "sess-abc",
-      name: "lead-42",
+      name: "myproject-lead-42",
       state: "running",
       agentProfile: "default",
       createdAt: "2026-01-01T00:00:00Z",

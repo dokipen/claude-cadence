@@ -21,9 +21,10 @@ interface KanbanColumnProps {
   error: string | null;
   repoUrl?: string;
   sessions?: ActiveSessionInfo[];
+  projectId?: string;
 }
 
-export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading, error, repoUrl, sessions }: KanbanColumnProps) {
+export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading, error, repoUrl, sessions, projectId }: KanbanColumnProps) {
   const [showRefineAll, setShowRefineAll] = useState(false);
   const [showCreateTicket, setShowCreateTicket] = useState(false);
 
@@ -78,7 +79,7 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
         {!loading &&
           !error &&
           tickets.map((ticket) => (
-            <TicketCard key={ticket.id} ticket={ticket} repoUrl={repoUrl} sessions={sessions} />
+            <TicketCard key={ticket.id} ticket={ticket} repoUrl={repoUrl} sessions={sessions} projectId={projectId} />
           ))}
       </div>
     </div>
@@ -87,6 +88,7 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
         repoUrl={repoUrl}
         open={showRefineAll}
         onClose={() => setShowRefineAll(false)}
+        projectId={projectId}
       />
     )}
     {state === "BACKLOG" && (
@@ -94,6 +96,7 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
         repoUrl={repoUrl}
         open={showCreateTicket}
         onClose={() => setShowCreateTicket(false)}
+        projectId={projectId}
       />
     )}
     </>

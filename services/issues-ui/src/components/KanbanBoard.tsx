@@ -36,6 +36,7 @@ function ColumnFetcher({
       error={error}
       repoUrl={repoUrl}
       sessions={sessions}
+      projectId={projectId}
     />
   );
 }
