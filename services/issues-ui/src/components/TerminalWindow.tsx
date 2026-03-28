@@ -52,10 +52,10 @@ export function TerminalWindow({
 
   const resumeCallback = useCallback(() => {
     if (!validateSessionId(session.id) || !validateAgentProfile(session.agentProfile)) {
-      console.warn(
-        `[TerminalWindow] Refusing to resume session: invalid id or agentProfile`,
-        { id: session.id, agentProfile: session.agentProfile }
-      );
+      // Silently refuse: malformed server data is unexpected; no user-facing error
+      // since the resume button is only rendered when agentProfile is non-empty and
+      // the session record is server-generated.
+      console.warn("[TerminalWindow] Refusing to resume session: invalid id or agentProfile");
       return;
     }
     const newSessionName = `resume-${session.id.slice(0, 8)}-${Date.now()}`;
@@ -66,6 +66,10 @@ export function TerminalWindow({
   const { optimisticSetDestroying, optimisticResetState } = useSessionsContext();
 
   const handleTerminate = async () => {
+    if (!validateSessionId(session.id)) {
+      console.warn("[TerminalWindow] Refusing to terminate session: invalid id");
+      return;
+    }
     const originalState = session.state;
     optimisticSetDestroying(session.id);
     try {
