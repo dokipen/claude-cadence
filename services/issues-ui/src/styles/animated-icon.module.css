@@ -5,16 +5,19 @@
 }
 
 .chevron1 {
+  fill: var(--text);
   animation: chevronPulse 1.6s ease-in-out infinite;
   animation-delay: 0s;
 }
 
 .chevron2 {
+  fill: var(--text);
   animation: chevronPulse 1.6s ease-in-out infinite;
   animation-delay: 0.2s;
 }
 
 .chevron3 {
+  fill: var(--text);
   animation: chevronPulse 1.6s ease-in-out infinite;
   animation-delay: 0.4s;
 }
