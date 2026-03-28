@@ -12,6 +12,7 @@ import styles from "../styles/card.module.css";
 import agentStyles from "../styles/agents.module.css";
 import { AnimatedCadenceIcon } from "./AnimatedCadenceIcon";
 import { SessionOutputTooltip } from "./SessionOutputTooltip";
+import { validateAgentProfile, validateSessionId } from "../utils/validateSession";
 
 export function hasActiveSession(sessions: ActiveSessionInfo[], ticketNumber: number, projectId?: string): ActiveSessionInfo | null {
   const prefix = projectId ? `${projectId}-` : "";
@@ -42,13 +43,25 @@ export function TicketCard({
   const launchButtonLabel = getLaunchConfig(ticket.state).buttonLabel;
   const canClose = ticket.state === "BACKLOG" || ticket.state === "REFINED";
 
+  const activeSession = hasActiveSession(sessions ?? [], ticket.number, projectId);
+
   const handleActiveSessionClick = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      navigate(`/ticket/${ticket.id}?tab=agent`);
+      if (
+        (ticket.state === "BACKLOG" || ticket.state === "CLOSED") &&
+        activeSession?.agentName &&
+        activeSession?.sessionId &&
+        validateAgentProfile(activeSession.agentName) &&
+        validateSessionId(activeSession.sessionId)
+      ) {
+        navigate(`/agents?session=${activeSession.agentName}:${activeSession.sessionId}`);
+      } else {
+        navigate(`/ticket/${ticket.id}?tab=agent`);
+      }
     },
-    [navigate, ticket.id],
+    [navigate, ticket.id, ticket.state, activeSession],
   );
 
   const handleLaunchClick = useCallback(
@@ -84,8 +97,6 @@ export function TicketCard({
   const handleCancelClose = useCallback(() => {
     setConfirmCloseOpen(false);
   }, []);
-
-  const activeSession = hasActiveSession(sessions ?? [], ticket.number, projectId);
 
   if (closed) return null;
 
