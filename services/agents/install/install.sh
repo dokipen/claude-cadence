@@ -186,6 +186,7 @@ is_lan_url() {
 # --- Config generation ---
 
 generate_config() {
+    local os="$1"
     local config_path="$AGENTD_CONFIG_DIR/config.yaml"
 
     if [[ -f "$config_path" ]]; then
@@ -205,6 +206,15 @@ root_dir: "$AGENTD_ROOT_DIR"
 log:
   level: "info"
   format: "json"
+EOF
+
+    if [[ "$os" == "darwin" ]]; then
+        cat >> "$config_path" <<EOF
+  path: "$AGENTD_LOG_DIR/agentd.log"
+EOF
+    fi
+
+    cat >> "$config_path" <<EOF
 
 # Add agent profiles below:
 profiles: {}
@@ -385,7 +395,7 @@ main() {
     setup_directories "$os"
     setup_hub
     install_binary
-    generate_config
+    generate_config "$os"
 
     case "$os" in
         darwin) install_launchd ;;
