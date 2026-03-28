@@ -10,6 +10,7 @@ DEFAULT_ROOT_DIR="/var/lib/agentd"
 DEFAULT_CONFIG_DIR=""
 DEFAULT_LOG_DIR=""
 INSTALL_DIR="/usr/local/bin"
+GH_BIN_DIR=""
 
 # --- Helpers ---
 
@@ -64,6 +65,18 @@ check_prerequisites() {
     command -v vault >/dev/null 2>&1 || warn "vault CLI not found (optional, needed for private repos)"
 
     info "Prerequisites satisfied."
+}
+
+# --- gh detection ---
+
+detect_gh_dir() {
+    if command -v gh >/dev/null 2>&1; then
+        dirname "$(command -v gh)"
+    else
+        warn "gh CLI not found — PATH in launchd plist will use system defaults only"
+        warn "Install gh (https://cli.github.com) and re-run to enable gh credential helper support"
+        echo "/usr/local/bin:/opt/homebrew/bin"
+    fi
 }
 
 # --- User management ---
@@ -252,7 +265,7 @@ xml_encode() {
 
 render_template() {
     local template="$1" output="$2" use_xml="${3:-false}"
-    local binary_path config_path user group root_dir log_dir
+    local binary_path config_path user group root_dir log_dir gh_bin_dir
     if [[ "$use_xml" == "true" ]]; then
         binary_path=$(xml_encode "$INSTALL_DIR/$BINARY_NAME")
         config_path=$(xml_encode "$AGENTD_CONFIG_DIR/config.yaml")
@@ -260,6 +273,7 @@ render_template() {
         group=$(xml_encode "$AGENTD_GROUP")
         root_dir=$(xml_encode "$AGENTD_ROOT_DIR")
         log_dir=$(xml_encode "$AGENTD_LOG_DIR")
+        gh_bin_dir=$(xml_encode "$GH_BIN_DIR")
     else
         binary_path="$INSTALL_DIR/$BINARY_NAME"
         config_path="$AGENTD_CONFIG_DIR/config.yaml"
@@ -267,6 +281,7 @@ render_template() {
         group="$AGENTD_GROUP"
         root_dir="$AGENTD_ROOT_DIR"
         log_dir="$AGENTD_LOG_DIR"
+        gh_bin_dir="$GH_BIN_DIR"
     fi
     sed \
         -e "s|__BINARY_PATH__|$(sed_escape "$binary_path")|g" \
@@ -275,6 +290,7 @@ render_template() {
         -e "s|__GROUP__|$(sed_escape "$group")|g" \
         -e "s|__ROOT_DIR__|$(sed_escape "$root_dir")|g" \
         -e "s|__LOG_DIR__|$(sed_escape "$log_dir")|g" \
+        -e "s|__GH_BIN_DIR__|$(sed_escape "$gh_bin_dir")|g" \
         -e "s|__HUB_AGENT_TOKEN__|$(sed_escape "$(xml_encode "${HUB_AGENT_TOKEN:-}")")|g" \
         "$template" > "$output"
 }
@@ -290,6 +306,8 @@ install_launchd() {
     if [[ ! -f "$plist_tmpl" ]]; then
         error "launchd template not found: $plist_tmpl"
     fi
+
+    GH_BIN_DIR="$(detect_gh_dir)"
 
     info "Installing launchd service..."
     mkdir -p "$HOME/Library/LaunchAgents"

@@ -183,15 +183,35 @@ func (c *Client) pullDefaultBranch(cloneDir string, creds *Credentials) error {
 	return nil
 }
 
+// ensureOnPath returns env with dir prepended to PATH if not already present.
+// It modifies env in place and returns it.
+func ensureOnPath(env []string, dir string) []string {
+	for i, entry := range env {
+		if strings.HasPrefix(entry, "PATH=") {
+			if strings.Contains(entry[5:], dir) {
+				return env
+			}
+			env[i] = "PATH=" + dir + string(os.PathListSeparator) + entry[5:]
+			return env
+		}
+	}
+	return append(env, "PATH="+dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
 // applyCredentials sets environment variables on a git command for authentication.
 // Returns a cleanup function that removes any temporary credential files.
 func (c *Client) applyCredentials(cmd *exec.Cmd, repoURL string, creds *Credentials) func() {
-	noop := func() {}
-	if creds == nil {
-		return noop
+	env := append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+
+	if ghPath, err := exec.LookPath("gh"); err == nil {
+		env = ensureOnPath(env, filepath.Dir(ghPath))
 	}
 
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	cmd.Env = env
+
+	if creds == nil {
+		return func() {}
+	}
 
 	var tempFiles []string
 
