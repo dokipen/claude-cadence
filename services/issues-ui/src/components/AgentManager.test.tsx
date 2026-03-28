@@ -10,6 +10,7 @@ vi.mock("../styles/agents.module.css", () => ({
   default: {
     sidebarSessionOpen: "open",
     sidebarSession: "session",
+    sidebarSessionMinimized: "sidebarSessionMinimized",
   },
 }));
 
@@ -181,5 +182,6 @@ describe("AgentManager", () => {
       fireEvent.click(sessionBtn);
     });
     expect(sessionBtn.className).not.toContain("open");
+    expect(sessionBtn.className).toContain("sidebarSessionMinimized");
   });
 });
