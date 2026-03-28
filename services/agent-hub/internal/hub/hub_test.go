@@ -1312,3 +1312,42 @@ func TestRPCTimeout_SuccessResetsCounter(t *testing.T) {
 		t.Errorf("agent status should remain online throughout counter test, got %s", agent.Status())
 	}
 }
+
+func TestRPCCanceledDoesNotDemoteAgent(t *testing.T) {
+	// Use a long heartbeat interval so heartbeats don't interfere with the test.
+	h, url := startTestHubWithHeartbeat(t, 30*time.Second, 5*time.Second)
+
+	connectPingOnlyAgent(t, url, "rpc-cancel-agent")
+	agent := waitForAgent(t, h, "rpc-cancel-agent")
+
+	if agent.Status() != StatusOnline {
+		t.Fatalf("expected agent to start online, got %s", agent.Status())
+	}
+
+	// Make 3+ RPC calls and cancel each context immediately (before the deadline).
+	// The agent will not respond to getDiagnostics (ping-only), but we cancel
+	// before it times out — this produces context.Canceled, not DeadlineExceeded.
+	for i := 0; i < 3; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		cancel() // cancel immediately before the call
+		_, err := h.Call(ctx, agent, "getDiagnostics", map[string]string{})
+
+		if err == nil {
+			t.Fatalf("call %d: expected error, got nil", i+1)
+		}
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("call %d: expected context.Canceled, got: %v", i+1, err)
+		}
+	}
+
+	// After 3 context.Canceled errors, the agent must still be online.
+	if agent.Status() != StatusOnline {
+		t.Errorf("expected agent to remain online after 3 context.Canceled RPC errors, got %s", agent.Status())
+	}
+
+	// Verify the counter was never incremented (white-box check).
+	if agent.consecutiveRPCFailures != 0 {
+		t.Errorf("expected consecutiveRPCFailures to be 0 after context.Canceled errors, got %d",
+			agent.consecutiveRPCFailures)
+	}
+}
