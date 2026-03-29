@@ -396,6 +396,4 @@ func TestServeTerminal_ConcurrentReconnect_WriterSurvives(t *testing.T) {
 			"A's deferred cleanup likely set sess.writers = nil, wiping B's writer (issue #523)")
 	}
 
-	// Drain B's context cancellation.
-	_ = bytes.Compare(nil, nil) // use bytes import
 }
