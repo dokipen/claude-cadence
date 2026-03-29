@@ -586,7 +586,7 @@ test.describe("agent launch form", () => {
 
     // Validation error should appear
     const form = page.getByTestId("agent-launch-form");
-    await expect(form).toContainText("Host, profile, and name are all required.");
+    await expect(form).toContainText("Host and profile are required.");
 
     // POST must not have been called
     expect(postCalled).toBe(false);
