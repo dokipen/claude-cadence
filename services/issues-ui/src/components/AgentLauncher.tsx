@@ -4,6 +4,8 @@ import { useAgents, useAgentProfiles } from "../hooks/useAgents";
 import type { Session } from "../types";
 import styles from "../styles/agents.module.css";
 
+export const MAX_SESSION_COMMAND_LENGTH = 500;
+
 interface AgentLauncherProps {
   ticketNumber: number;
   repoUrl: string | undefined;
@@ -51,7 +53,9 @@ export const AgentLauncher = forwardRef<AgentLauncherHandle, AgentLauncherProps>
     setError(null);
 
     const cappedCommand =
-      command.length > 500 ? command.slice(0, 500) + "…" : command;
+      command.length > MAX_SESSION_COMMAND_LENGTH
+        ? command.slice(0, MAX_SESSION_COMMAND_LENGTH) + "…"
+        : command;
 
     try {
       const session = await createSession(selected.agent, selected.profileName, sessionName, [cappedCommand]);

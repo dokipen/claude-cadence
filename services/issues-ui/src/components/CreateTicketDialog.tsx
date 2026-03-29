@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback, useState } from "react";
-import { AgentLauncher } from "./AgentLauncher";
+import { AgentLauncher, MAX_SESSION_COMMAND_LENGTH } from "./AgentLauncher";
 import type { AgentLauncherHandle } from "./AgentLauncher";
 import type { Session } from "../types";
 import styles from "../styles/dialog.module.css";
@@ -10,6 +10,10 @@ interface CreateTicketDialogProps {
   repoUrl?: string;
   projectId?: string;
 }
+
+const CREATE_TICKET_COMMAND_PREFIX = "/create-ticket ";
+const CREATE_TICKET_PROMPT_MAX_LENGTH =
+  MAX_SESSION_COMMAND_LENGTH - CREATE_TICKET_COMMAND_PREFIX.length;
 
 export function CreateTicketDialog({
   open,
@@ -113,6 +117,7 @@ export function CreateTicketDialog({
             data-testid="ticket-prompt"
             rows={4}
             className={styles.promptTextarea}
+            maxLength={CREATE_TICKET_PROMPT_MAX_LENGTH}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={handleTextareaKeyDown}
@@ -125,7 +130,7 @@ export function CreateTicketDialog({
             ticketNumber={0}
             repoUrl={repoUrl}
             onLaunched={handleLaunched}
-            command={"/create-ticket " + normalizedPrompt}
+            command={CREATE_TICKET_COMMAND_PREFIX + normalizedPrompt}
             sessionName={sessionNameRef.current}
             buttonLabel="Create Ticket"
           />
