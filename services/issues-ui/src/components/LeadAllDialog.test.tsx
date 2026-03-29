@@ -19,6 +19,7 @@ vi.mock("../api/agentHubClient", () => ({
 
 import { LeadAllDialog } from "./LeadAllDialog";
 import { useAgents, useAgentProfiles } from "../hooks/useAgents";
+import type { AgentProfileEntry } from "../hooks/useAgents";
 import { createSession } from "../api/agentHubClient";
 
 const mockUseAgents = vi.mocked(useAgents);
@@ -42,14 +43,14 @@ const mockProfiles = [
   {
     agent: "agent-1",
     profileName: "default",
-    profile: { name: "default", type: "claude" as const, repo: undefined },
+    profile: { name: "default", type: "claude", repo: undefined },
   },
   {
     agent: "agent-2",
     profileName: "fast",
-    profile: { name: "fast", type: "claude" as const, repo: undefined },
+    profile: { name: "fast", type: "claude", repo: undefined },
   },
-];
+] as unknown as AgentProfileEntry[];
 
 const defaultProps = {
   repoUrl: "https://github.com/org/repo",
