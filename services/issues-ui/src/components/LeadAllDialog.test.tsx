@@ -261,13 +261,13 @@ describe("LeadAllDialog confirm launches sessions", () => {
     expect(mockCreateSession).toHaveBeenCalledWith(
       "agent-1",
       "default",
-      "proj-lead-all-10",
+      "proj-lead-10",
       ["/lead 10"]
     );
     expect(mockCreateSession).toHaveBeenCalledWith(
       "agent-1",
       "default",
-      "proj-lead-all-20",
+      "proj-lead-20",
       ["/lead 20"]
     );
     expect(onClose).toHaveBeenCalled();
@@ -290,7 +290,7 @@ describe("LeadAllDialog confirm launches sessions", () => {
     expect(mockCreateSession).toHaveBeenCalledWith(
       "agent-1",
       "default",
-      "lead-all-5",
+      "lead-5",
       ["/lead 5"]
     );
   });

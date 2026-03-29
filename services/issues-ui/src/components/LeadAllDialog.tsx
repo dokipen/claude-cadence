@@ -89,7 +89,7 @@ export function LeadAllDialog({
       tickets.map((ticket) => {
         const assigned =
           selectedProfiles[Math.floor(Math.random() * selectedProfiles.length)];
-        const sessionName = `${projectId ? projectId + "-" : ""}lead-all-${ticket.number}`;
+        const sessionName = `${projectId ? projectId + "-" : ""}lead-${ticket.number}`;
         return createSession(assigned.agent, assigned.profileName, sessionName, [
           `/lead ${ticket.number}`,
         ]);
