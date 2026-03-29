@@ -266,14 +266,15 @@ describe("SessionOutputTooltip", () => {
       });
 
       const tooltip = getByTestId("session-output-tooltip");
-      // spaceLeft = 1180 - 8 = 1172 > spaceRight = 1200 - 1160 - 8 = 32 → left-anchor
-      // width = min(600, 1172) = 600; left = max(8, 1180 - 600) = 580; top = 100 + 4 = 104
+      // maxWidthLeft = min(600, 1180 - 8) = 600 > maxWidthRight = min(600, 1200 - 1160 - 8) = 32
+      // → left-anchor: left = max(8, 1180 - 600) = 580; top = 100 + 4 = 104
       expect(tooltip.style.top).toBe("104px");
       expect(tooltip.style.left).toBe("580px");
       expect(tooltip.style.width).toBe("600px");
+      expect(tooltip.style.height).toBe("688px"); // 800 - 104 - 8
     });
 
-    it("centers tooltip below icon when there is more space to the right", async () => {
+    it("clamps tooltip to viewport left edge when icon is near the left viewport edge", async () => {
       vi.stubGlobal("innerWidth", 1200);
       vi.stubGlobal("innerHeight", 800);
 
@@ -295,11 +296,12 @@ describe("SessionOutputTooltip", () => {
       });
 
       const tooltip = getByTestId("session-output-tooltip");
-      // spaceRight = 1200 - 20 - 8 = 1172 > spaceLeft = 40 - 8 = 32 → right/center
-      // width = min(600, 1172) = 600; tooltipLeft = 20 + 10 - 300 = -270; left = max(8, -270) = 8
+      // maxWidthRight = min(600, 1200 - 20 - 8) = 600 >= maxWidthLeft = min(600, 40 - 8) = 32
+      // → right/center: width=600; tooltipLeft = 20+10-300 = -270; left = max(8, -270) = 8
       expect(tooltip.style.top).toBe("104px");
       expect(tooltip.style.left).toBe("8px");
       expect(tooltip.style.width).toBe("600px");
+      expect(tooltip.style.height).toBe("688px");
     });
   });
 
