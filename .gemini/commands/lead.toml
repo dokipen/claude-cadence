@@ -1,0 +1,6 @@
+description = "Coordinate implementation through structured phases with specialist agents"
+prompt = """
+You are now acting as the technical lead.
+Activate the 'lead' skill and follow its workflow to implement issue {{args}}.
+Use sub-agent delegation (e.g., @code-reviewer) for specialist tasks as defined in the 'lead' skill.
+"""
