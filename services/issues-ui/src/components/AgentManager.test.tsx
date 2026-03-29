@@ -41,11 +41,13 @@ vi.mock("./AgentLaunchForm", () => ({
   },
 }));
 
-// Capture onMinimize from TilingLayout so the test can invoke it
+// Capture onMinimize and windows from TilingLayout so the tests can inspect them
 let capturedOnMinimize: ((key: string) => void) | undefined;
+let capturedWindows: { key: string }[] = [];
 vi.mock("./TilingLayout", () => ({
-  TilingLayout: ({ onMinimize }: { onMinimize: (key: string) => void }) => {
+  TilingLayout: ({ onMinimize, windows }: { onMinimize: (key: string) => void; windows: { key: string }[] }) => {
     capturedOnMinimize = onMinimize;
+    capturedWindows = windows;
     return <div data-testid="tiling-layout" />;
   },
 }));
@@ -55,6 +57,7 @@ import { AgentManager } from "./AgentManager";
 
 afterEach(() => {
   capturedOnMinimize = undefined;
+  capturedWindows = [];
   capturedRepoUrl = undefined;
   cleanup();
 });
@@ -81,7 +84,7 @@ describe("AgentManager", () => {
     const sessions = [makeSession(sessionId, agentName)];
 
     const { getAllByTestId } = render(
-      <MemoryRouter><AgentManager sessions={sessions} selectedProject={null} /></MemoryRouter>,
+      <MemoryRouter><AgentManager sessions={sessions} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
     );
 
     // Click the session button to open it
@@ -113,7 +116,7 @@ describe("AgentManager", () => {
     const expectedKey = `${agentName}:${sessionId}`;
 
     const { getAllByTestId } = render(
-      <MemoryRouter><AgentManager sessions={sessions} selectedProject={null} /></MemoryRouter>,
+      <MemoryRouter><AgentManager sessions={sessions} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
     );
 
     const sessionButtons = getAllByTestId("sidebar-session");
@@ -143,6 +146,7 @@ describe("AgentManager", () => {
       <MemoryRouter>
         <AgentManager
           sessions={[]}
+          sessionsLoaded={true}
           selectedProject={{ id: "p1", name: "my-project", repository: "https://github.com/owner/repo" }}
         />
       </MemoryRouter>,
@@ -153,7 +157,7 @@ describe("AgentManager", () => {
   it("passes undefined repoUrl to AgentLaunchForm when no project is selected", () => {
     render(
       <MemoryRouter>
-        <AgentManager sessions={[]} selectedProject={null} />
+        <AgentManager sessions={[]} sessionsLoaded={true} selectedProject={null} />
       </MemoryRouter>,
     );
     expect(capturedRepoUrl).toBeUndefined();
@@ -165,7 +169,7 @@ describe("AgentManager", () => {
     const sessions = [makeSession(sessionId, agentName)];
 
     const { getAllByTestId } = render(
-      <MemoryRouter><AgentManager sessions={sessions} selectedProject={null} /></MemoryRouter>,
+      <MemoryRouter><AgentManager sessions={sessions} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
     );
 
     const sessionButtons = getAllByTestId("sidebar-session");
@@ -207,7 +211,7 @@ describe("sessionStorage persistence", () => {
     const expectedKey = `${agentName}:${sessionId}`;
 
     const { getAllByTestId } = render(
-      <MemoryRouter><AgentManager sessions={sessions} selectedProject={null} /></MemoryRouter>,
+      <MemoryRouter><AgentManager sessions={sessions} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
     );
 
     const sessionBtn = getAllByTestId("sidebar-session")[0];
@@ -230,7 +234,7 @@ describe("sessionStorage persistence", () => {
     const expectedKey = `${agentName}:${sessionId}`;
 
     const { getAllByTestId } = render(
-      <MemoryRouter><AgentManager sessions={sessions} selectedProject={null} /></MemoryRouter>,
+      <MemoryRouter><AgentManager sessions={sessions} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
     );
 
     const sessionBtn = getAllByTestId("sidebar-session")[0];
@@ -262,12 +266,46 @@ describe("sessionStorage persistence", () => {
     // Pre-populate sessionStorage
     mockSessionStorage.setItem("cadence_open_windows", JSON.stringify([key]));
 
-    const { getByTestId } = render(
-      <MemoryRouter><AgentManager sessions={sessions} selectedProject={null} /></MemoryRouter>,
-    );
+    // Wrap in act so the deferred restore useEffect flushes before asserting
+    await act(async () => {
+      render(
+        <MemoryRouter><AgentManager sessions={sessions} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
+      );
+    });
 
-    // TilingLayout should be rendered (not the empty state), meaning window is open
-    expect(getByTestId("tiling-layout")).toBeDefined();
+    // The window should have been restored
+    expect(capturedWindows.map((w) => w.key)).toContain(key);
+  });
+
+  it("defers open window rehydration until sessionsLoaded becomes true", async () => {
+    const agentName = "test-agent";
+    const sessionId = "sess-deferred-1";
+    const sessions = [makeSession(sessionId, agentName)];
+    const key = `${agentName}:${sessionId}`;
+
+    mockSessionStorage.setItem("cadence_open_windows", JSON.stringify([key]));
+
+    let rerender!: ReturnType<typeof render>["rerender"];
+
+    // Mount with sessionsLoaded=false (sessions still loading) — windows should NOT be restored yet
+    await act(async () => {
+      ({ rerender } = render(
+        <MemoryRouter><AgentManager sessions={[]} sessionsLoaded={false} selectedProject={null} /></MemoryRouter>,
+      ));
+    });
+
+    // No windows should be open yet
+    expect(capturedWindows).toHaveLength(0);
+
+    // Simulate sessions finishing load: sessionsLoaded becomes true with sessions populated
+    await act(async () => {
+      rerender(
+        <MemoryRouter><AgentManager sessions={sessions} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
+      );
+    });
+
+    // Now the window should be restored
+    expect(capturedWindows.map((w) => w.key)).toContain(key);
   });
 
   it("drops stale keys from sessionStorage on mount when session no longer exists", async () => {
@@ -277,11 +315,11 @@ describe("sessionStorage persistence", () => {
     // Pre-populate with a key that matches no provided session
     mockSessionStorage.setItem("cadence_open_windows", JSON.stringify([staleKey]));
 
-    // Render with no matching sessions — stale key should be dropped.
+    // Render with sessionsLoaded=true and no matching sessions — stale key should be dropped.
     // Wrap in act to ensure all effects (including the persistence useEffect) flush.
     await act(async () => {
       render(
-        <MemoryRouter><AgentManager sessions={[]} selectedProject={null} /></MemoryRouter>,
+        <MemoryRouter><AgentManager sessions={[]} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
       );
     });
 
@@ -303,9 +341,13 @@ describe("sessionStorage persistence", () => {
     // Pre-populate minimized windows
     mockSessionStorage.setItem("cadence_minimized_windows", JSON.stringify([key]));
 
-    const { getAllByTestId } = render(
-      <MemoryRouter><AgentManager sessions={sessions} selectedProject={null} /></MemoryRouter>,
-    );
+    let getAllByTestId!: ReturnType<typeof render>["getAllByTestId"];
+    // Wrap in act so the deferred restore useEffect flushes before asserting
+    await act(async () => {
+      ({ getAllByTestId } = render(
+        <MemoryRouter><AgentManager sessions={sessions} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
+      ));
+    });
 
     // The session button should have the minimized CSS class
     const sessionBtn = getAllByTestId("sidebar-session")[0];

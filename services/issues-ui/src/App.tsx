@@ -94,7 +94,7 @@ function ProjectRedirect() {
 export function AppShell() {
   const { user, logout } = useAuth();
   const { projects } = useProjects();
-  const { sessions, waitingSessions, optimisticSetDestroying, optimisticResetState, optimisticAddSession } = useAllSessions();
+  const { sessions, waitingSessions, loading: sessionsLoading, optimisticSetDestroying, optimisticResetState, optimisticAddSession } = useAllSessions();
   const { updateAvailable } = useVersionPolling();
   const [dismissed, setDismissed] = useState(false);
   const location = useLocation();
@@ -185,7 +185,7 @@ export function AppShell() {
       )}
       <main className={layoutStyles.main}>
         <Routes>
-          <Route path="/agents" element={<AgentManager sessions={sessions} selectedProject={selectedProject} />} />
+          <Route path="/agents" element={<AgentManager sessions={sessions} sessionsLoaded={!sessionsLoading} selectedProject={selectedProject} />} />
           <Route
             path="/projects/:projectId/*"
             element={projectIdInvalid
