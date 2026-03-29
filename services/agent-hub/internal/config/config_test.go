@@ -278,6 +278,8 @@ func TestValidate_LoopbackVariants(t *testing.T) {
 		{"LOCALHOST", true},
 		{"::ffff:127.0.0.1", true},
 		{"::ffff:7f00:1", true},
+		{"0:0:0:0:0:0:0:1", true}, // expanded ::1
+		{"127.0.0.2", true},       // other 127.0.0.0/8 address
 		// non-loopback hosts — auth: none should be rejected
 		{"0.0.0.0", false},
 		{"192.168.1.1", false},
