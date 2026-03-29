@@ -79,9 +79,19 @@ describe("ProjectRedirect sessionStorage resolution", () => {
 });
 
 describe("ProjectRedirect format validation", () => {
-  it("accepts a valid project ID with underscores (verifies \\w includes underscore)", () => {
+  it("accepts a project ID with a non-leading underscore (agentd sessionNameRe allows underscore)", () => {
     sessionStorage.setItem(STORAGE_KEY, "my_project");
     expect(resolveTargetProject(PROJECTS)).toBe("my_project");
+  });
+
+  it("rejects a project ID with a leading underscore", () => {
+    sessionStorage.setItem(STORAGE_KEY, "_myproject");
+    expect(resolveTargetProject(PROJECTS)).toBe("proj-a");
+  });
+
+  it("rejects a project ID with a leading hyphen", () => {
+    sessionStorage.setItem(STORAGE_KEY, "-myproject");
+    expect(resolveTargetProject(PROJECTS)).toBe("proj-a");
   });
 
   it("rejects an ID with path-traversal characters", () => {
@@ -117,7 +127,7 @@ describe("AppShell URL param validation", () => {
   });
 
   it("renders error state when projectId in URL contains unicode characters", () => {
-    // PROJECT_ID_RE uses \w without the u flag, so unicode letters are rejected
+    // PROJECT_ID_RE only allows [a-zA-Z0-9._~-], so unicode letters are rejected
     const { getByTestId } = render(
       <MemoryRouter initialEntries={["/projects/caf\u00E9/"]}>
         <AppShell />
