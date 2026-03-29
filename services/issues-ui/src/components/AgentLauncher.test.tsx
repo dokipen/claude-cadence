@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
+import React from "react";
 import { render, cleanup } from "@testing-library/react";
 import type { AgentProfileEntry } from "../hooks/useAgents";
 
@@ -31,6 +32,8 @@ vi.mock("../hooks/useAgents", () => ({
 
 import { useAgents, useAgentProfiles } from "../hooks/useAgents";
 import { AgentLauncher } from "./AgentLauncher";
+import type { AgentLauncherHandle } from "./AgentLauncher";
+import { createSession } from "../api/agentHubClient";
 
 const mockUseAgents = vi.mocked(useAgents);
 const mockUseAgentProfiles = vi.mocked(useAgentProfiles);
@@ -172,5 +175,40 @@ describe("AgentLauncher profile filtering", () => {
 
     const profileSelect = getByTestId("profile-select");
     expect(profileSelect).toHaveAttribute("autocomplete", "off");
+  });
+});
+
+describe("AgentLauncher handleLaunch concurrency guard", () => {
+  it("rapid double-launch only fires createSession once", async () => {
+    // createSession never resolves — keeps the first launch in-flight when the
+    // second fires, reproducing the race where both reads see launching===false
+    vi.mocked(createSession).mockImplementation(
+      () => new Promise(() => {}),
+    );
+
+    mockUseAgents.mockReturnValue({ agents: [], loading: false, error: null });
+    mockUseAgentProfiles.mockReturnValue([
+      makeProfileEntry("host-a", "profile-match", "https://github.com/org/repo-a"),
+    ]);
+
+    const ref = React.createRef<AgentLauncherHandle>();
+
+    render(
+      <AgentLauncher
+        ref={ref}
+        ticketNumber={1}
+        repoUrl="https://github.com/org/repo-a"
+        onLaunched={vi.fn()}
+      />,
+    );
+
+    // Call launch twice without awaiting — both calls read launching===false
+    // before any re-render occurs, so both proceed to call createSession.
+    ref.current!.launch();
+    ref.current!.launch();
+
+    // Without a concurrency guard, createSession is called twice.
+    // The fix should ensure it is called only once.
+    expect(vi.mocked(createSession)).toHaveBeenCalledTimes(1);
   });
 });
