@@ -38,7 +38,7 @@ export function CreateTicketDialog({
     return () => {
       if (el.open) el.close();
     };
-  }, [open]);
+  }, [open, safeProjectId]);
 
   const handleClose = useCallback(() => {
     dialogRef.current?.close();
@@ -63,11 +63,12 @@ export function CreateTicketDialog({
   );
 
   const trimmedPrompt = prompt.trim();
-  // Normalize whitespace then strip non-printable control characters before
-  // passing to the command to prevent ANSI escape injection via the PTY.
+  // Normalize whitespace first (converts \t, \n, \r to spaces), then strip
+  // remaining C0 controls, DEL, and C1 controls (U+0080-U+009F, which include
+  // the 8-bit CSI introducer) before passing to the PTY command.
   const normalizedPrompt = trimmedPrompt
     .replace(/\s+/g, " ")
-    .replace(/[\x00-\x1f\x7f]/g, "");
+    .replace(/[\x00-\x1f\x7f\u0080-\u009f]/g, "");
 
   return (
     <dialog
