@@ -353,7 +353,10 @@ func (c *Client) RegisterRelaySession(sessionID string, relayCancel context.Canc
 	cleanup := func() {
 		once.Do(func() {
 			c.relayChMu.Lock()
-			delete(c.relayCh, sessionID)
+			// Only delete if the map still points to OUR channel.
+			if c.relayCh[sessionID] == ch {
+				delete(c.relayCh, sessionID)
+			}
 			c.relayChMu.Unlock()
 			// Cancel the relay goroutine's context so it stops attempting
 			// writes on a stale hub connection (e.g., after hub reconnect).

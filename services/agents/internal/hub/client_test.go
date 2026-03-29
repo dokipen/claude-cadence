@@ -115,3 +115,51 @@ func TestRegisterRelaySession_NormalizesUUIDKey(t *testing.T) {
 		t.Fatal("timed out waiting for payload: RegisterRelaySession stored uppercase key but dispatchBinaryFrame looks up lowercase canonical key")
 	}
 }
+
+func TestRegisterRelaySession_StaleCleanupDoesNotClobberLiveRegistration(t *testing.T) {
+	c := &Client{
+		relayCh: make(map[string]chan []byte),
+	}
+
+	const sessionID = "12345678-1234-1234-1234-123456789abc"
+
+	// First registration (stale).
+	_, cleanup1 := c.RegisterRelaySession(sessionID, func() {})
+
+	// Second registration for the same session (live replacement).
+	ch2, cleanup2 := c.RegisterRelaySession(sessionID, func() {})
+
+	// Stale cleanup must not remove the live channel.
+	cleanup1()
+
+	// Send a terminal frame for the session and assert ch2 still receives it.
+	parsed, err := uuid.Parse(sessionID)
+	if err != nil {
+		t.Fatalf("uuid.Parse: %v", err)
+	}
+	want := []byte("live relay payload")
+	frame := encodeTerminalFrame(parsed, want)
+	c.dispatchBinaryFrame(frame)
+
+	select {
+	case got, ok := <-ch2:
+		if !ok {
+			t.Fatal("ch2 closed unexpectedly after stale cleanup")
+		}
+		if string(got) != string(want) {
+			t.Fatalf("ch2 payload mismatch: got %q, want %q", got, want)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("timed out waiting for payload on ch2: stale cleanup may have clobbered the live registration")
+	}
+
+	// cleanup2 must remove the map entry.
+	cleanup2()
+
+	c.relayChMu.Lock()
+	_, exists := c.relayCh[parsed.String()]
+	c.relayChMu.Unlock()
+	if exists {
+		t.Fatal("map entry still present after cleanup2()")
+	}
+}
