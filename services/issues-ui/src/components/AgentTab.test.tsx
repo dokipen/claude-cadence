@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, fireEvent, act, cleanup } from "@testing-library/react";
+import { render, fireEvent, act, cleanup, waitFor } from "@testing-library/react";
 import { create } from "@bufbuild/protobuf";
 import { SessionSchema } from "../gen/hub/v1/hub_pb";
 import type { Session } from "../types";
@@ -487,15 +487,17 @@ describe("AgentTab", () => {
       expect(capturedTerminalProps.onResumeSession).toBeUndefined();
     });
 
-    it("creates a new session and deletes the old one when resume is triggered", async () => {
+    it("creates resumed session with original sessionName", async () => {
+      // The fixed handleResumeSession uses the deterministic sessionName (e.g. lead-42),
+      // not a unique resume-<id>-<timestamp> name.
       const stoppedSession = makeSession({ id: "sess-stop-3", name: "lead-42", state: "stopped", agentProfile: "default" });
-      const newSession = makeSession({ id: "sess-new-1", name: "resume-sess-stop-1234", state: "running", agentProfile: "default" });
+      const newSession = makeSession({ id: "sess-new-1", name: "lead-42", state: "running", agentProfile: "default" });
 
-      // discovery call
+      // discovery call; DELETE call (before createSession); createSession response
       mockHubFetch.mockResolvedValueOnce({ sessions: [stoppedSession] });
-      mockCreateSession.mockResolvedValueOnce(newSession);
-      // DELETE call for old session
+      // DELETE of old session is awaited BEFORE createSession in the fixed implementation
       mockHubFetch.mockResolvedValueOnce(undefined);
+      mockCreateSession.mockResolvedValueOnce(newSession);
 
       render(<AgentTab {...defaultProps} />);
       await flushAsync();
@@ -506,21 +508,172 @@ describe("AgentTab", () => {
         capturedTerminalProps.onResumeSession!();
         await Promise.resolve();
         await Promise.resolve();
+        await Promise.resolve();
       });
 
-      // createSession called with correct args including /resume <oldSessionId>
+      // Third arg must be the deterministic sessionName "lead-42", not a resume-<id>-<ts> name
       expect(mockCreateSession).toHaveBeenCalledWith(
         "test-agent",
         "default",
-        expect.stringMatching(/^resume-/),
+        "lead-42",
         ["/resume sess-stop-3"],
       );
+    });
 
-      // hubFetch DELETE called for the old session
-      expect(mockHubFetch).toHaveBeenCalledWith(
-        expect.stringContaining("sess-stop-3"),
+    it("DELETE is called before createSession on resume", async () => {
+      // The fixed handleResumeSession awaits the DELETE first, then calls createSession.
+      const stoppedSession = makeSession({ id: "sess-stop-ord", name: "lead-42", state: "stopped", agentProfile: "default" });
+      const newSession = makeSession({ id: "sess-new-ord", name: "lead-42", state: "running", agentProfile: "default" });
+
+      mockHubFetch.mockResolvedValueOnce({ sessions: [stoppedSession] });
+
+      const callOrder: string[] = [];
+      mockHubFetch.mockImplementationOnce(() => {
+        callOrder.push("DELETE");
+        return Promise.resolve(undefined);
+      });
+      mockCreateSession.mockImplementationOnce(() => {
+        callOrder.push("createSession");
+        return Promise.resolve(newSession);
+      });
+
+      render(<AgentTab {...defaultProps} />);
+      await flushAsync();
+
+      await act(async () => {
+        capturedTerminalProps.onResumeSession!();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(callOrder).toEqual(["DELETE", "createSession"]);
+    });
+
+    it("updates active state to new session after resume", async () => {
+      const stoppedSession = makeSession({ id: "sess-stop-upd", name: "lead-42", state: "stopped", agentProfile: "default" });
+      const newSession = makeSession({ id: "sess-new-upd", name: "lead-42", state: "running", agentProfile: "default" });
+
+      mockHubFetch.mockResolvedValueOnce({ sessions: [stoppedSession] });
+      mockHubFetch.mockResolvedValueOnce(undefined); // DELETE
+      mockCreateSession.mockResolvedValueOnce(newSession);
+
+      const { getByTestId } = render(<AgentTab {...defaultProps} />);
+      await flushAsync();
+
+      // Terminal is shown for the stopped session
+      expect(getByTestId("terminal")).toBeTruthy();
+
+      await act(async () => {
+        capturedTerminalProps.onResumeSession!();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // Terminal still visible (now for the new running session)
+      await waitFor(() => expect(getByTestId("terminal")).toBeTruthy());
+
+      // optimisticAddSession was called with the new session
+      expect(mockOptimisticAddSession).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "sess-new-upd" }),
+        "test-agent",
+      );
+    });
+
+    it("includes /resume <old-id> in extraArgs passed to createSession", async () => {
+      const stoppedSession = makeSession({ id: "sess-resume-arg", name: "lead-42", state: "stopped", agentProfile: "default" });
+      const newSession = makeSession({ id: "sess-new-arg", name: "lead-42", state: "running", agentProfile: "default" });
+
+      mockHubFetch.mockResolvedValueOnce({ sessions: [stoppedSession] });
+      mockHubFetch.mockResolvedValueOnce(undefined); // DELETE
+      mockCreateSession.mockResolvedValueOnce(newSession);
+
+      render(<AgentTab {...defaultProps} />);
+      await flushAsync();
+
+      await act(async () => {
+        capturedTerminalProps.onResumeSession!();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // Fourth argument to createSession must be the extraArgs array
+      const fourthArg = mockCreateSession.mock.calls[0][3];
+      expect(fourthArg).toEqual(["/resume sess-resume-arg"]);
+    });
+
+    it("does not resume when session id is invalid", async () => {
+      // Session with an empty id fails validateSessionId
+      const invalidSession = makeSession({ id: "", name: "lead-42", state: "stopped", agentProfile: "default" });
+      mockHubFetch.mockResolvedValueOnce({ sessions: [invalidSession] });
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      render(<AgentTab {...defaultProps} />);
+      await flushAsync();
+
+      // capturedTerminalProps.onResumeSession should be undefined since agentProfile is set
+      // but validateSessionId will block — however onResumeSession is still passed because
+      // the validation only fires inside handleResumeSession at call time.
+      // We call it directly to trigger the guard.
+      mockHubFetch.mockReset();
+
+      if (capturedTerminalProps.onResumeSession) {
+        await act(async () => {
+          capturedTerminalProps.onResumeSession!();
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+      }
+
+      expect(mockCreateSession).not.toHaveBeenCalled();
+      expect(mockHubFetch).not.toHaveBeenCalledWith(
+        expect.any(String),
         expect.objectContaining({ method: "DELETE" }),
       );
+
+      warnSpy.mockRestore();
+    });
+
+    it("proceeds with createSession even when DELETE returns non-404 error", async () => {
+      const stoppedSession = makeSession({ id: "sess-del-err", name: "lead-42", state: "stopped", agentProfile: "default" });
+      const newSession = makeSession({ id: "sess-new-after-err", name: "lead-42", state: "running", agentProfile: "default" });
+
+      mockHubFetch.mockResolvedValueOnce({ sessions: [stoppedSession] });
+
+      // Construct a HubError with status 500 from the mocked class
+      const { HubError } = await import("../api/agentHubClient");
+      mockHubFetch.mockRejectedValueOnce(new HubError(500, "Internal Server Error"));
+      mockCreateSession.mockResolvedValueOnce(newSession);
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      const { getByTestId } = render(<AgentTab {...defaultProps} />);
+      await flushAsync();
+
+      expect(capturedTerminalProps.onResumeSession).toBeDefined();
+
+      await act(async () => {
+        capturedTerminalProps.onResumeSession!();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // createSession must still be called despite the DELETE error
+      expect(mockCreateSession).toHaveBeenCalledWith(
+        "test-agent",
+        "default",
+        "lead-42",
+        ["/resume sess-del-err"],
+      );
+
+      // New session id appears in the terminal header
+      const header = getByTestId("terminal-header");
+      expect(header.textContent).toContain("lead-42");
+
+      errorSpy.mockRestore();
     });
   });
 

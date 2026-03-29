@@ -149,32 +149,37 @@ export function AgentTab({ ticketNumber, ticketTitle, ticketState, repoUrl }: Ag
     }
     setResuming(true);
     try {
-      const newSessionName = `resume-${active.session.id.slice(0, 8)}-${Date.now()}`;
-      const newSession = await createSession(
-        active.agentName,
-        active.session.agentProfile,
-        newSessionName,
-        [`/resume ${active.session.id}`],
-      ).catch(console.error);
-      // Fire-and-forget: destroy the current session. Ignore 404 (already gone).
-      hubFetch(
-        `/agents/${encodeURIComponent(active.agentName)}/sessions/${encodeURIComponent(active.session.id)}?force=true`,
-        { method: "DELETE" },
-      ).catch((err: unknown) => {
+      // Delete the old session first (await it), ignoring 404 (already gone).
+      // On non-404 errors, log but still proceed with CREATE.
+      try {
+        await hubFetch(
+          `/agents/${encodeURIComponent(active.agentName)}/sessions/${encodeURIComponent(active.session.id)}?force=true`,
+          { method: "DELETE" },
+        );
+      } catch (err: unknown) {
         if (!(err instanceof HubError && err.status === 404)) {
           console.error("[AgentTab] Failed to delete session on resume:", err);
         }
-      });
+      }
+      // sessionName is derived from launchConfig.sessionName(ticketNumber) — a TypeScript number
+      // interpolated into a static template — and is validated by the backend on creation.
+      const newSession = await createSession(
+        active.agentName,
+        active.session.agentProfile,
+        sessionName,
+        [`/resume ${active.session.id}`],
+      ).catch(console.error);
       if (newSession) {
         optimisticAddSession(newSession, active.agentName);
         setActive({ session: newSession, agentName: active.agentName });
       } else {
+        // CREATE failed (likely name conflict if DELETE didn't complete) — show launcher so user can retry.
         setActive(null);
       }
     } finally {
       setResuming(false);
     }
-  }, [active, resuming, optimisticAddSession]);
+  }, [active, resuming, optimisticAddSession, sessionName]);
 
   if (discovering) {
     return (
