@@ -140,4 +140,44 @@ describe("ConfirmDialog", () => {
       "Confirm",
     );
   });
+
+  it('positions the dialog near the anchor element when anchorRect is provided', () => {
+    const mockAnchorRect = {
+      bottom: 100,
+      top: 80,
+      left: 50,
+      right: 100,
+      width: 50,
+      height: 20,
+      x: 50,
+      y: 80,
+      toJSON: () => ({}),
+    } as DOMRect;
+
+    // Double-rAF: flush both frames synchronously so positioning code runs
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      cb(0);
+      return 0;
+    });
+
+    render(
+      <ConfirmDialog
+        open={true}
+        title="Kill session?"
+        message="Terminate the agent?"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+        anchorRect={mockAnchorRect}
+      />,
+    );
+
+    const dialog = screen.getByTestId('confirm-dialog');
+    // Dialog positioned with fixed layout anchored near the triggering element
+    expect(dialog.style.position).toBe('fixed');
+    // top is set to anchorRect.bottom + 8px gap = 108px
+    expect(dialog.style.top).toBe('108px');
+    // left is set from anchorRect.left = 50px (no overflow clamping with default 1024px viewport)
+    expect(dialog.style.left).toBe('50px');
+  });
+
 });
