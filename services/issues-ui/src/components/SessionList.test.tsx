@@ -10,6 +10,13 @@ import type { AgentSession } from "../hooks/useAllSessions";
 // Mock CSS modules
 vi.mock("../styles/agents.module.css", () => ({ default: {} }));
 
+// Mock SessionOutputTooltip so tests don't need xterm/WebSocket setup
+vi.mock("./SessionOutputTooltip", () => ({
+  SessionOutputTooltip: ({ children, session }: { children: React.ReactNode; session: { sessionId: string } }) => (
+    <div data-testid="session-output-tooltip-wrapper" data-session-id={session.sessionId}>{children}</div>
+  ),
+}));
+
 afterEach(() => {
   cleanup();
 });
@@ -241,6 +248,57 @@ describe("SessionList", () => {
       />,
     );
     expect(getByText("lead-42")).toBeTruthy();
+  });
+
+  it("running session is wrapped with SessionOutputTooltip", () => {
+    const agents = [makeAgent("my-agent")];
+    const session = makeSession("s1", "my-agent");
+    session.session.state = "running";
+    const { getByTestId } = render(
+      <SessionList {...defaultProps} agents={agents} sessions={[session]} isCollapsed={false} />,
+    );
+    expect(getByTestId("session-output-tooltip-wrapper")).toBeTruthy();
+    expect(getByTestId("session-output-tooltip-wrapper").getAttribute("data-session-id")).toBe("s1");
+  });
+
+  it("creating session is wrapped with SessionOutputTooltip", () => {
+    const agents = [makeAgent("my-agent")];
+    const session = makeSession("s1", "my-agent");
+    session.session.state = "creating";
+    const { getByTestId } = render(
+      <SessionList {...defaultProps} agents={agents} sessions={[session]} isCollapsed={false} />,
+    );
+    expect(getByTestId("session-output-tooltip-wrapper")).toBeTruthy();
+  });
+
+  it("destroying session is wrapped with SessionOutputTooltip", () => {
+    const agents = [makeAgent("my-agent")];
+    const session = makeSession("s1", "my-agent");
+    session.session.state = "destroying";
+    const { getByTestId } = render(
+      <SessionList {...defaultProps} agents={agents} sessions={[session]} isCollapsed={false} />,
+    );
+    expect(getByTestId("session-output-tooltip-wrapper")).toBeTruthy();
+  });
+
+  it("stopped session is not wrapped with SessionOutputTooltip", () => {
+    const agents = [makeAgent("my-agent")];
+    const session = makeSession("s1", "my-agent");
+    session.session.state = "stopped";
+    const { queryByTestId } = render(
+      <SessionList {...defaultProps} agents={agents} sessions={[session]} isCollapsed={false} />,
+    );
+    expect(queryByTestId("session-output-tooltip-wrapper")).toBeNull();
+  });
+
+  it("error session is not wrapped with SessionOutputTooltip", () => {
+    const agents = [makeAgent("my-agent")];
+    const session = makeSession("s1", "my-agent");
+    session.session.state = "error";
+    const { queryByTestId } = render(
+      <SessionList {...defaultProps} agents={agents} sessions={[session]} isCollapsed={false} />,
+    );
+    expect(queryByTestId("session-output-tooltip-wrapper")).toBeNull();
   });
 
   it("displays full name when string is exactly 26 chars (no session name after prefix)", () => {
