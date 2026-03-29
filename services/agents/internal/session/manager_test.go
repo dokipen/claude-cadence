@@ -141,6 +141,55 @@ func TestCreate_SessionNameTooLong(t *testing.T) {
 	})
 }
 
+func TestCreate_EnvVarValueTooLong(t *testing.T) {
+	profiles := map[string]config.Profile{
+		"default": {Command: "echo {{.SessionName}}"},
+	}
+
+	// Build boundary-value env var values (all lowercase a).
+	value4096 := strings.Repeat("a", 4096)
+	value4097 := strings.Repeat("a", 4097)
+
+	t.Run("exactly 4096 bytes accepted", func(t *testing.T) {
+		m := newCreateTestManager(profiles)
+		var gotInvalidArg bool
+		func() {
+			defer func() { recover() }() // swallow nil-PTY panic; that means validation passed
+			_, err := m.Create(CreateRequest{
+				AgentProfile: "default",
+				SessionName:  "test-session",
+				Env:          map[string]string{"KEY": value4096},
+			})
+			var sesErr *Error
+			if errors.As(err, &sesErr) && sesErr.Code == ErrInvalidArgument {
+				gotInvalidArg = true
+			}
+		}()
+		if gotInvalidArg {
+			t.Errorf("expected 4096-byte env var value to be accepted, got ErrInvalidArgument")
+		}
+	})
+
+	t.Run("4097 bytes rejected", func(t *testing.T) {
+		m := newCreateTestManager(profiles)
+		_, err := m.Create(CreateRequest{
+			AgentProfile: "default",
+			SessionName:  "test-session",
+			Env:          map[string]string{"KEY": value4097},
+		})
+		if err == nil {
+			t.Fatalf("expected ErrInvalidArgument for 4097-byte env var value, got nil")
+		}
+		var sessionErr *Error
+		if !errors.As(err, &sessionErr) {
+			t.Fatalf("expected *Error, got %T", err)
+		}
+		if sessionErr.Code != ErrInvalidArgument {
+			t.Errorf("expected ErrInvalidArgument, got %v", sessionErr.Code)
+		}
+	})
+}
+
 func TestShellEscapeArg(t *testing.T) {
 	tests := []struct {
 		name string

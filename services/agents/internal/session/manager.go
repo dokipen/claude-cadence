@@ -86,6 +86,7 @@ const (
 	maxExtraArgs      = 64
 	maxExtraArgLen    = 4096
 	maxSessionNameLen = 255
+	maxEnvVarValueLen = 4096
 )
 
 // Create validates inputs, creates PTY session, starts command, returns Session.
@@ -255,6 +256,28 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	for k, v := range req.Env {
 		if !envKeyRe.MatchString(k) {
 			errMsg := fmt.Sprintf("invalid env var key: %q", k)
+			_ = m.store.Transition(sessionID, StateError, func(s *Session) {
+				s.ErrorMessage = errMsg
+			})
+			retSess, getErr := m.mustGet(sessionID)
+			if getErr != nil {
+				return nil, fmt.Errorf("%s; %w", errMsg, getErr)
+			}
+			return retSess, &Error{Code: ErrInvalidArgument, Message: errMsg}
+		}
+		if len(v) > maxEnvVarValueLen {
+			errMsg := fmt.Sprintf("env var value for key %q too long: %d bytes (max %d)", k, len(v), maxEnvVarValueLen)
+			_ = m.store.Transition(sessionID, StateError, func(s *Session) {
+				s.ErrorMessage = errMsg
+			})
+			retSess, getErr := m.mustGet(sessionID)
+			if getErr != nil {
+				return nil, fmt.Errorf("%s; %w", errMsg, getErr)
+			}
+			return retSess, &Error{Code: ErrInvalidArgument, Message: errMsg}
+		}
+		if strings.ContainsRune(v, '\x00') {
+			errMsg := fmt.Sprintf("env var value for key %q contains invalid character", k)
 			_ = m.store.Transition(sessionID, StateError, func(s *Session) {
 				s.ErrorMessage = errMsg
 			})
