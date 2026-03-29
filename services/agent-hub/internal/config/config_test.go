@@ -266,6 +266,53 @@ func TestValidate_AuthModeNoneOnNonLocalhost(t *testing.T) {
 	}
 }
 
+func TestValidate_LoopbackVariants(t *testing.T) {
+	tests := []struct {
+		host       string
+		isLoopback bool
+	}{
+		// loopback hosts — auth: none should be accepted
+		{"127.0.0.1", true},
+		{"localhost", true},
+		{"::1", true},
+		{"LOCALHOST", true},
+		{"::ffff:127.0.0.1", true},
+		{"::ffff:7f00:1", true},
+		// non-loopback hosts — auth: none should be rejected
+		{"0.0.0.0", false},
+		{"192.168.1.1", false},
+		{"10.0.0.1", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.host, func(t *testing.T) {
+			cfg := &Config{
+				Host:    tt.host,
+				Auth:    AuthConfig{Mode: "none"},
+				HubAuth: HubAuthConfig{Token: "hub-secret"},
+				Heartbeat: HeartbeatConfig{
+					Interval: 30 * time.Second,
+					Timeout:  10 * time.Second,
+				},
+				AgentTTL: 5 * time.Minute,
+			}
+			err := validate(cfg)
+			if tt.isLoopback {
+				if err != nil {
+					t.Errorf("expected no auth error for loopback host %q, got: %v", tt.host, err)
+				}
+			} else {
+				if err == nil {
+					t.Fatalf("expected auth error for non-loopback host %q, got nil", tt.host)
+				}
+				if !strings.Contains(err.Error(), "authentication required") {
+					t.Errorf("expected error containing \"authentication required\" for host %q, got %q", tt.host, err.Error())
+				}
+			}
+		})
+	}
+}
+
 func TestValidate_AllowedOriginsUnsetOnNonLocalhost(t *testing.T) {
 	cfg := &Config{
 		Host:    "0.0.0.0",
