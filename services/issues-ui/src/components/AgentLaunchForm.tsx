@@ -47,7 +47,7 @@ export function AgentLaunchForm({ agents, onLaunched, repoUrl }: AgentLaunchForm
       e.preventDefault();
 
       if (!selectedHost || !selectedProfile) {
-        setError("Host, profile, and name are all required.");
+        setError("Host and profile are required.");
         return;
       }
 
