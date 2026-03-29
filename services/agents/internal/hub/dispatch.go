@@ -291,7 +291,8 @@ func mapSessionError(err error) *rpcError {
 	case session.ErrFailedPrecondition:
 		return &rpcError{Code: rpcErrFailedPrecondition, Message: sessErr.Message}
 	default:
-		return &rpcError{Code: rpcErrInternal, Message: sessErr.Message}
+		slog.Error("internal session error", "error", sessErr)
+		return &rpcError{Code: rpcErrInternal, Message: "internal error"}
 	}
 }
 
