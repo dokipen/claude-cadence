@@ -789,3 +789,42 @@ describe("NotificationDropdown — yesno with empty promptContext", () => {
     expect(item.querySelector("pre")).toBeNull();
   });
 });
+
+describe("NotificationDropdown — timer leak on unmount (#496)", () => {
+  it("does not leave a pending setSent timer after the component unmounts", async () => {
+    vi.useFakeTimers();
+
+    try {
+      const sessions = [
+        makeAgentSession("lead", {
+          id: "sess-timer-leak",
+          promptType: "yesno",
+          promptContext: "Continue? (y/N)",
+        }),
+      ];
+      const { getByTestId, unmount } = render(
+        <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
+      );
+      fireEvent.click(getByTestId("notification-trigger"));
+
+      const yesBtn = getByTestId("btn-yes") as HTMLButtonElement;
+      fireEvent.click(yesBtn);
+
+      // Wait for sendSessionInput to resolve so that setSent(true) and the
+      // bare setTimeout(() => setSent(false), 1000) are both scheduled.
+      await vi.waitFor(() => {
+        expect(yesBtn.disabled).toBe(true);
+      });
+
+      // Unmount before the 1-second timer fires.
+      unmount();
+
+      // With the current implementation there is no cleanup, so the timer
+      // is still pending.  After the fix (clearTimeout in a useEffect return),
+      // the timer must have been cancelled and the count must be 0.
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
