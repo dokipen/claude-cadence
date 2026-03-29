@@ -16,11 +16,11 @@ export function getActiveRefineAllSession(sessions: ActiveSessionInfo[], project
   ) ?? null;
 }
 
-export function getActiveLeadAllSession(sessions: ActiveSessionInfo[], projectId?: string): ActiveSessionInfo | null {
+export function hasActiveLeadAllSession(sessions: ActiveSessionInfo[], projectId?: string): boolean {
   const prefix = projectId ? `${projectId}-lead-all-` : "lead-all-";
-  return sessions.find(
+  return sessions.some(
     (s) => s.name.startsWith(prefix) && (s.state === "running" || s.state === "creating" || s.state === "destroying")
-  ) ?? null;
+  );
 }
 
 const STATE_LABELS: Record<TicketState, string> = {
@@ -48,7 +48,6 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
   const [showCreateTicket, setShowCreateTicket] = useState(false);
 
   const activeRefineAllSession = getActiveRefineAllSession(sessions ?? [], projectId);
-  const activeLeadAllSession = getActiveLeadAllSession(sessions ?? [], projectId);
 
   const displayCount = loading
     ? "…"
@@ -100,14 +99,8 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
             aria-label="Lead All"
             title="Lead All"
           >
-            {activeLeadAllSession ? (
-              activeLeadAllSession.sessionId && activeLeadAllSession.agentName ? (
-                <SessionOutputTooltip session={activeLeadAllSession}>
-                  <AnimatedCadenceIcon width={14} height={14} />
-                </SessionOutputTooltip>
-              ) : (
-                <AnimatedCadenceIcon width={14} height={14} />
-              )
+            {hasActiveLeadAllSession(sessions ?? [], projectId) ? (
+              <AnimatedCadenceIcon width={14} height={14} />
             ) : (
               <Sparkles size={14} />
             )}

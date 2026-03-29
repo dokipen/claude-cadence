@@ -42,7 +42,7 @@ vi.mock("./TicketCard", () => ({
   TicketCard: () => <div data-testid="ticket-card" />,
 }));
 
-import { KanbanColumn, getActiveRefineAllSession, getActiveLeadAllSession } from "./KanbanColumn";
+import { KanbanColumn, getActiveRefineAllSession, hasActiveLeadAllSession } from "./KanbanColumn";
 
 // jsdom does not implement showModal/close on HTMLDialogElement.
 beforeEach(() => {
@@ -312,54 +312,54 @@ describe("KanbanColumn Refine All icon button", () => {
 });
 
 // ---------------------------------------------------------------------------
-// getActiveLeadAllSession unit tests
+// hasActiveLeadAllSession unit tests
 // ---------------------------------------------------------------------------
 
-describe("getActiveLeadAllSession", () => {
+describe("hasActiveLeadAllSession", () => {
   it("returns false for empty sessions", () => {
-    expect(getActiveLeadAllSession([], "my-project")).toBeFalsy();
+    expect(hasActiveLeadAllSession([], "my-project")).toBe(false);
   });
 
   it("returns true when a running lead-all session exists with projectId prefix", () => {
     const sessions: ActiveSessionInfo[] = [
       { name: "my-project-lead-all-42", state: "running", sessionId: "s1", agentName: "leader" },
     ];
-    expect(getActiveLeadAllSession(sessions, "my-project")).toBeTruthy();
+    expect(hasActiveLeadAllSession(sessions, "my-project")).toBe(true);
   });
 
   it("returns true for creating state", () => {
     const sessions: ActiveSessionInfo[] = [
       { name: "my-project-lead-all-42", state: "creating", sessionId: "s2", agentName: "leader" },
     ];
-    expect(getActiveLeadAllSession(sessions, "my-project")).toBeTruthy();
+    expect(hasActiveLeadAllSession(sessions, "my-project")).toBe(true);
   });
 
   it("returns true for destroying state", () => {
     const sessions: ActiveSessionInfo[] = [
       { name: "my-project-lead-all-42", state: "destroying", sessionId: "s3", agentName: "leader" },
     ];
-    expect(getActiveLeadAllSession(sessions, "my-project")).toBeTruthy();
+    expect(hasActiveLeadAllSession(sessions, "my-project")).toBe(true);
   });
 
   it("returns false when session state is not active", () => {
     const sessions: ActiveSessionInfo[] = [
       { name: "my-project-lead-all-42", state: "stopped", sessionId: "s4", agentName: "leader" },
     ];
-    expect(getActiveLeadAllSession(sessions, "my-project")).toBeFalsy();
+    expect(hasActiveLeadAllSession(sessions, "my-project")).toBe(false);
   });
 
   it("returns false when session belongs to a different project", () => {
     const sessions: ActiveSessionInfo[] = [
       { name: "other-project-lead-all-42", state: "running", sessionId: "s5", agentName: "leader" },
     ];
-    expect(getActiveLeadAllSession(sessions, "my-project")).toBeFalsy();
+    expect(hasActiveLeadAllSession(sessions, "my-project")).toBe(false);
   });
 
   it("falls back to bare lead-all- prefix when projectId is undefined", () => {
     const sessions: ActiveSessionInfo[] = [
       { name: "lead-all-42", state: "running", sessionId: "s6", agentName: "leader" },
     ];
-    expect(getActiveLeadAllSession(sessions, undefined)).toBeTruthy();
+    expect(hasActiveLeadAllSession(sessions, undefined)).toBe(true);
   });
 });
 
