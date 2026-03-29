@@ -347,12 +347,32 @@ func TestValidate_AllowedOriginsSetOnNonLocalhost(t *testing.T) {
 			Timeout:  10 * time.Second,
 		},
 		AgentTTL: 5 * time.Minute,
-	}
-	if err := validate(cfg); err != nil {
+		}
+		if err := validate(cfg); err != nil {
 		t.Errorf("expected no error for non-localhost with allowed_origins set, got: %v", err)
-	}
-}
+		}
+		}
 
+		func TestValidate_WildcardAllowedOriginsRejected(t *testing.T) {
+		cfg := &Config{
+		Host:           "0.0.0.0",
+		Auth:           AuthConfig{Mode: "token", Token: "secret"},
+		HubAuth:        HubAuthConfig{Token: "hub-secret"},
+		AllowedOrigins: []string{"*"},
+		Heartbeat: HeartbeatConfig{
+		        Interval: 30 * time.Second,
+		        Timeout:  10 * time.Second,
+		},
+		AgentTTL: 5 * time.Minute,
+		}
+		err := validate(cfg)
+		if err == nil {
+		t.Fatal("expected error for wildcard allowed_origins")
+		}
+		if !strings.Contains(err.Error(), "wildcard origins") {
+		t.Errorf("expected error explaining wildcard origins are not permitted, got: %v", err)
+		}
+		}
 func TestValidate_TokenAuthWithoutTokenOrEnvVar(t *testing.T) {
 	cfg := &Config{
 		Host:    "127.0.0.1",

@@ -221,6 +221,11 @@ func validate(cfg *Config) error {
 		}
 	}
 
+	for _, origin := range cfg.AllowedOrigins {
+		if origin == "*" {
+			return fmt.Errorf("wildcard origins are not permitted in allowed_origins (specify explicit origins)")
+		}
+	}
 	switch cfg.Auth.Mode {
 	case "none":
 		// ok — only allowed on localhost
