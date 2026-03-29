@@ -470,20 +470,29 @@ func TestServeTerminal_LargeSnapshotReplay(t *testing.T) {
 	// The client must set a read limit large enough for the snapshot frame.
 	conn.SetReadLimit(int64(bufSize + 1))
 
-	// Read frames and accumulate total data received.
-	var totalReceived int
+	// Read frames and accumulate total data received. Track the largest
+	// single frame to verify the snapshot arrived as one oversized message
+	// (not many small ones that happen to sum past 32 KB).
+	var totalReceived, maxFrameSize int
 	for {
 		_, data, readErr := conn.Read(ctx)
 		if readErr != nil {
 			t.Fatalf("read failed: %v (totalReceived=%d)", readErr, totalReceived)
 		}
 		if len(data) > 1 && data[0] == '0' {
-			totalReceived += len(data) - 1 // subtract the '0' prefix
+			framePayload := len(data) - 1 // subtract the '0' prefix
+			totalReceived += framePayload
+			if framePayload > maxFrameSize {
+				maxFrameSize = framePayload
+			}
 		}
 		if totalReceived > 32*1024 {
 			break
 		}
 	}
 
-	t.Logf("received %d bytes of terminal data (>32KB confirms large snapshot replay works)", totalReceived)
+	if maxFrameSize <= 32*1024 {
+		t.Errorf("largest frame was %d bytes; expected >32KB to confirm snapshot replay as a single large message", maxFrameSize)
+	}
+	t.Logf("received %d bytes of terminal data; largest frame %d bytes", totalReceived, maxFrameSize)
 }
