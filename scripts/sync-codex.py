@@ -25,11 +25,32 @@ def parse_frontmatter(path: Path) -> dict[str, str]:
     if not match:
         return fields
 
-    for line in match.group(1).splitlines():
+    lines = match.group(1).splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i]
         if ":" not in line:
+            i += 1
             continue
         key, value = line.split(":", 1)
-        fields[key.strip()] = value.strip().strip("\"'")
+        key = key.strip()
+        value = value.strip()
+
+        if value in {">", "|"}:
+            block_lines: list[str] = []
+            i += 1
+            while i < len(lines):
+                next_line = lines[i]
+                if next_line.startswith(" ") or next_line.startswith("\t"):
+                    block_lines.append(next_line.strip())
+                    i += 1
+                    continue
+                break
+            fields[key] = " ".join(part for part in block_lines if part).strip()
+            continue
+
+        fields[key] = value.strip("\"'")
+        i += 1
     return fields
 
 
