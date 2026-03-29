@@ -266,7 +266,18 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 			return retSess, &Error{Code: ErrInvalidArgument, Message: errMsg}
 		}
 		if len(v) > maxEnvVarValueLen {
-			errMsg := fmt.Sprintf("env var value for key %q too long (max %d bytes)", k, maxEnvVarValueLen)
+			errMsg := fmt.Sprintf("env var value for key %q too long: %d bytes (max %d)", k, len(v), maxEnvVarValueLen)
+			_ = m.store.Transition(sessionID, StateError, func(s *Session) {
+				s.ErrorMessage = errMsg
+			})
+			retSess, getErr := m.mustGet(sessionID)
+			if getErr != nil {
+				return nil, fmt.Errorf("%s; %w", errMsg, getErr)
+			}
+			return retSess, &Error{Code: ErrInvalidArgument, Message: errMsg}
+		}
+		if strings.ContainsRune(v, '\x00') {
+			errMsg := fmt.Sprintf("env var value for key %q contains invalid character", k)
 			_ = m.store.Transition(sessionID, StateError, func(s *Session) {
 				s.ErrorMessage = errMsg
 			})

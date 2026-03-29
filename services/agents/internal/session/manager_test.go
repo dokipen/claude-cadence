@@ -180,9 +180,12 @@ func TestCreate_EnvVarValueTooLong(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected ErrInvalidArgument for 4097-byte env var value, got nil")
 		}
-		sesErr, ok := err.(*Error)
-		if !ok || sesErr.Code != ErrInvalidArgument {
-			t.Errorf("expected ErrInvalidArgument for 4097-byte env var value, got %v", err)
+		var sessionErr *Error
+		if !errors.As(err, &sessionErr) {
+			t.Fatalf("expected *Error, got %T", err)
+		}
+		if sessionErr.Code != ErrInvalidArgument {
+			t.Errorf("expected ErrInvalidArgument, got %v", sessionErr.Code)
 		}
 	})
 }
