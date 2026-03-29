@@ -33,7 +33,6 @@ export function CreateTicketDialog({
       sessionNameRef.current = `${safeProjectId ? safeProjectId + "-" : ""}ticket-` + Date.now();
       el.showModal();
     } else if (!open && el.open) {
-      setPrompt("");
       el.close();
     }
 
@@ -42,14 +41,17 @@ export function CreateTicketDialog({
     };
   }, [open, safeProjectId]);
 
-  const handleClose = useCallback(() => {
-    dialogRef.current?.close();
-    onClose();
-  }, [onClose]);
+  const handleClose = useCallback(
+    (clear: any = false) => {
+      if (clear === true) setPrompt("");
+      onClose();
+    },
+    [onClose],
+  );
 
   const handleLaunched = useCallback(
     (_session: Session, _agentName: string) => {
-      handleClose();
+      handleClose(true);
     },
     [handleClose],
   );
