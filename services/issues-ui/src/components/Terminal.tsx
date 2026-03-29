@@ -48,7 +48,7 @@ const LIGHT_THEME: ITheme = {
   magenta: "#6F42C1",     // github purple, 5.3:1
   cyan: "#1B7C83",        // teal, 4.7:1
   white: "#57606A",       // cadence gray, 4.5:1
-  brightBlack: "#6E7781", // github secondary, 3.4:1 (dim text — intentional compromise)
+  brightBlack: "#656D76", // github secondary darker, 5.0:1
   brightRed: "#A40E26",   // deep red, 7.8:1
   brightGreen: "#0C6427", // deep green, 6.5:1
   brightYellow: "#3D2200", // deep amber, 12.8:1
