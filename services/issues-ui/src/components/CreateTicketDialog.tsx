@@ -18,15 +18,17 @@ export function CreateTicketDialog({
 }: CreateTicketDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [prompt, setPrompt] = useState("");
+  // Constrain projectId to [a-z0-9-] to prevent unexpected characters in the session name.
+  const safeProjectId = projectId?.replace(/[^a-z0-9-]/g, "") ?? "";
   // Generated once per open — stable for the lifetime of a single dialog session.
-  const sessionNameRef = useRef(`${projectId ? projectId + "-" : ""}ticket-` + Date.now());
+  const sessionNameRef = useRef(`${safeProjectId ? safeProjectId + "-" : ""}ticket-` + Date.now());
 
   useEffect(() => {
     const el = dialogRef.current;
     if (!el) return;
 
     if (open && !el.open) {
-      sessionNameRef.current = `${projectId ? projectId + "-" : ""}ticket-` + Date.now();
+      sessionNameRef.current = `${safeProjectId ? safeProjectId + "-" : ""}ticket-` + Date.now();
       el.showModal();
     } else if (!open && el.open) {
       setPrompt("");
@@ -61,11 +63,11 @@ export function CreateTicketDialog({
   );
 
   const trimmedPrompt = prompt.trim();
-  // Normalize whitespace before passing to the command to avoid newlines
-  // or other control characters reaching the PTY.
+  // Normalize whitespace then strip non-printable control characters before
+  // passing to the command to prevent ANSI escape injection via the PTY.
   const normalizedPrompt = trimmedPrompt
     .replace(/\s+/g, " ")
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+    .replace(/[\x00-\x1f\x7f]/g, "");
 
   return (
     <dialog
@@ -101,7 +103,7 @@ export function CreateTicketDialog({
             autoComplete="off"
           />
         </div>
-        {open && trimmedPrompt !== "" && (
+        {open && normalizedPrompt !== "" && (
           <AgentLauncher
             ticketNumber={0}
             repoUrl={repoUrl}
