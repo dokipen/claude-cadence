@@ -36,6 +36,7 @@ type Manager struct {
 	processAlive  func(pid int) bool
 	killProcess   func(pid int) error // injectable for tests; defaults to sending SIGKILL
 	ptyReconnect  func(id, slavePath string) error // injectable for tests; defaults to m.pty.Reattach
+	ptyDestroy    func(id string) error             // injectable for tests; defaults to m.pty.Destroy
 }
 
 // NewManager creates a new session Manager.
@@ -69,6 +70,13 @@ func NewManager(store *Store, ptyManager *pty.PTYManager, gitClient *git.Client,
 		m.ptyReconnect = func(id, slavePath string) error {
 			return fmt.Errorf("pty manager not configured")
 		}
+	}
+	if ptyManager != nil {
+		m.ptyDestroy = func(id string) error {
+			return m.pty.Destroy(id)
+		}
+	} else {
+		m.ptyDestroy = func(id string) error { return nil }
 	}
 	return m
 }
@@ -401,10 +409,22 @@ func (m *Manager) Destroy(id string, force bool) error {
 		return &Error{Code: ErrFailedPrecondition, Message: "session is running; use force=true to destroy"}
 	}
 
-	_ = m.store.Transition(id, StateDestroying)
+	if err := m.store.Transition(id, StateDestroying); err != nil {
+		var sessErr *Error
+		if errors.As(err, &sessErr) && sessErr.Code == ErrNotFound {
+			// Concurrent cleaner already removed the session; postcondition satisfied.
+			return nil
+		}
+		var transErr *InvalidTransitionError
+		if errors.As(err, &transErr) && transErr.To == StateDestroying {
+			// A concurrent Destroy() already claimed this session; postcondition satisfied.
+			return nil
+		}
+		return err
+	}
 
-	if m.pty != nil {
-		if err := m.pty.Destroy(sess.ID); err != nil {
+	if m.ptyDestroy != nil {
+		if err := m.ptyDestroy(sess.ID); err != nil {
 			slog.Warn("failed to destroy PTY session", "session", sess.ID, "error", err)
 		}
 	}
