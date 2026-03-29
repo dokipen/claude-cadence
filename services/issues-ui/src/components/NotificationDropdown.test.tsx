@@ -465,6 +465,37 @@ describe("NotificationDropdown — controls do not navigate", () => {
 
     expect(queryByTestId("notification-dropdown")).toBeTruthy();
   });
+
+  it("clicking a select option keeps the dropdown open", () => {
+    const sessions = [
+      makeAgentSession("lead", {
+        id: "sess-select-open",
+        promptType: "select",
+        promptContext: "? Pick one\n  Option A\n❯ Option B",
+      }),
+    ];
+    const { getByTestId, queryByTestId } = render(
+      <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
+    );
+    fireEvent.click(getByTestId("notification-trigger"));
+    fireEvent.click(getByTestId("btn-option-0"));
+    expect(queryByTestId("notification-dropdown")).toBeTruthy();
+  });
+
+  it("clicking the Send button keeps the dropdown open", () => {
+    const sessions = [
+      makeAgentSession("lead", {
+        id: "sess-text-open",
+        promptType: "text",
+      }),
+    ];
+    const { getByTestId, queryByTestId } = render(
+      <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
+    );
+    fireEvent.click(getByTestId("notification-trigger"));
+    fireEvent.click(getByTestId("btn-send"));
+    expect(queryByTestId("notification-dropdown")).toBeTruthy();
+  });
 });
 
 describe("NotificationDropdown — ticket title", () => {
@@ -689,42 +720,6 @@ describe("NotificationDropdown — select prompt delta variants", () => {
   });
 });
 
-describe("NotificationDropdown — controls do not navigate (select and text)", () => {
-  it("clicking a select option keeps the dropdown open", async () => {
-    const sessions = [
-      makeAgentSession("lead", {
-        id: "sess-select-open",
-        promptType: "select",
-        promptContext: "? Pick one\n  Option A\n❯ Option B",
-      }),
-    ];
-    const { getByTestId, queryByTestId } = render(
-      <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
-    );
-    fireEvent.click(getByTestId("notification-trigger"));
-
-    fireEvent.click(getByTestId("btn-option-0"));
-
-    expect(queryByTestId("notification-dropdown")).toBeTruthy();
-  });
-
-  it("clicking the Send button keeps the dropdown open", async () => {
-    const sessions = [
-      makeAgentSession("lead", {
-        id: "sess-text-open",
-        promptType: "text",
-      }),
-    ];
-    const { getByTestId, queryByTestId } = render(
-      <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
-    );
-    fireEvent.click(getByTestId("notification-trigger"));
-
-    fireEvent.click(getByTestId("btn-send"));
-
-    expect(queryByTestId("notification-dropdown")).toBeTruthy();
-  });
-});
 
 describe("NotificationDropdown — text input Enter key submission", () => {
   it("pressing Enter in the text input calls sendSessionInput with typed text + \\n", async () => {
