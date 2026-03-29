@@ -44,9 +44,9 @@ export const AgentLauncher = forwardRef<AgentLauncherHandle, AgentLauncherProps>
   const selected = profiles[selectedIndex] ?? profiles[0];
 
   const handleLaunch = useCallback(async () => {
+    if (!selected) return;
     if (launchingRef.current) return;
     launchingRef.current = true;
-    if (!selected) return;
     setLaunching(true);
     setError(null);
 
