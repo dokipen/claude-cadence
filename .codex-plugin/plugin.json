@@ -1,0 +1,23 @@
+{
+  "name": "cadence",
+  "version": "0.1.0",
+  "description": "Issue-driven, multi-agent development workflow with git worktrees, structured phases, and specialist delegation",
+  "repository": "https://github.com/dokipen/claude-cadence",
+  "license": "MIT",
+  "skills": "./codex/skills",
+  "interface": {
+    "displayName": "Cadence",
+    "shortDescription": "Claude Cadence compatibility layer for Codex",
+    "longDescription": "Thin Codex packaging that reuses Claude Cadence prompts, scripts, and CLAUDE.md as the source of truth.",
+    "developerName": "Bob Corsaro",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Write"],
+    "websiteURL": "https://github.com/dokipen/claude-cadence",
+    "defaultPrompt": [
+      "Use $lead to implement a ticket with Cadence.",
+      "Use $refine to bring an unrefined ticket to ready.",
+      "Use $create-ticket to create a new Cadence ticket."
+    ],
+    "brandColor": "#2563EB"
+  }
+}
