@@ -1,43 +1,42 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { forwardRef, useImperativeHandle } from "react";
+import { CreateTicketDialog } from "./CreateTicketDialog";
 
 // Mock CSS modules
 vi.mock("../styles/dialog.module.css", () => ({ default: {} }));
 
-// Hoisted mock launch fn so it's accessible in the vi.mock factory and in tests.
-const { mockLaunch } = vi.hoisted(() => ({ mockLaunch: vi.fn() }));
+const mockLaunch = vi.hoisted(() => vi.fn());
 
-// Mock AgentLauncher — uses forwardRef so ref forwarding works in tests.
-vi.mock("./AgentLauncher", () => {
-  const { forwardRef, useImperativeHandle } = require("react");
-  return {
-    AgentLauncher: forwardRef(
-      (
-        {
-          command,
-          sessionName,
-        }: {
-          command?: string;
-          sessionName?: string;
-          [key: string]: unknown;
-        },
-        ref: any,
-      ) => {
-        useImperativeHandle(ref, () => ({ launch: mockLaunch }));
-        return (
-          <div
-            data-testid="agent-launcher"
-            data-command={command}
-            data-session-name={sessionName}
-          />
-        );
+// Mock AgentLauncher — captures command and sessionName as data attributes
+// so tests can inspect which props were passed.
+vi.mock("./AgentLauncher", () => ({
+  AgentLauncher: forwardRef(
+    (
+      {
+        command,
+        sessionName,
+      }: {
+        command?: string;
+        sessionName?: string;
+        [key: string]: unknown;
       },
-    ),
-  };
-});
-
-import { CreateTicketDialog } from "./CreateTicketDialog";
+      ref,
+    ) => {
+      useImperativeHandle(ref, () => ({
+        launch: mockLaunch,
+      }));
+      return (
+        <div
+          data-testid="agent-launcher"
+          data-command={command}
+          data-session-name={sessionName}
+        />
+      );
+    },
+  ),
+}));
 
 // jsdom does not implement showModal/close on HTMLDialogElement.
 beforeEach(() => {
@@ -185,7 +184,6 @@ describe("CreateTicketDialog", () => {
     expect(textarea).toHaveAttribute("autocomplete", "off");
   });
 
-<<<<<<< HEAD
   it("strips C0/DEL/C1 control characters from prompt before building command", () => {
     render(<CreateTicketDialog {...defaultProps} open={true} />);
 
@@ -242,32 +240,38 @@ describe("CreateTicketDialog", () => {
     const launcher = screen.getByTestId("agent-launcher");
     const sessionName = launcher.getAttribute("data-session-name") ?? "";
     expect(sessionName).toMatch(/^my-project-ticket-/);
-=======
+  });
+
   it("pressing Enter in textarea calls launch on the AgentLauncher", () => {
-    render(
-      <CreateTicketDialog {...defaultProps} open={true} />,
-    );
+    render(<CreateTicketDialog {...defaultProps} open={true} />);
 
     const textarea = screen.getByTestId("ticket-prompt") as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "Some ticket text" } });
 
     // Launcher should be rendered now
-    expect(screen.getByTestId("agent-launcher")).toBeTruthy();
+    expect(screen.queryByTestId("agent-launcher")).not.toBeNull();
 
     fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
     expect(mockLaunch).toHaveBeenCalledTimes(1);
   });
 
   it("pressing Shift+Enter in textarea does NOT call launch", () => {
-    render(
-      <CreateTicketDialog {...defaultProps} open={true} />,
-    );
+    render(<CreateTicketDialog {...defaultProps} open={true} />);
 
     const textarea = screen.getByTestId("ticket-prompt") as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "Some ticket text" } });
 
     fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true });
     expect(mockLaunch).not.toHaveBeenCalled();
->>>>>>> e36f711 (feat(#484): press Enter in create-ticket dialog to submit)
+  });
+
+  it("pressing Enter when prompt is empty (launcherRef is null) does not call launch", () => {
+    render(<CreateTicketDialog {...defaultProps} open={true} />);
+
+    const textarea = screen.getByTestId("ticket-prompt") as HTMLTextAreaElement;
+    // prompt is empty by default
+
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+    expect(mockLaunch).not.toHaveBeenCalled();
   });
 });
