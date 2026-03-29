@@ -381,6 +381,25 @@ sudo chmod 600 /etc/agentd/env
 sudo systemctl restart agentd
 ```
 
+### Security: allowed_origins (required for production)
+
+The agent-hub's terminal WebSocket endpoint checks the browser `Origin` header against
+the `allowed_origins` list in the agent-hub config. When `allowed_origins` is empty, the
+check is skipped and terminal WebSocket connections are accepted from any browser origin
+(CSRF risk).
+
+**For production deployments, `allowed_origins` must be set** in the agent-hub config to
+the URL(s) of the frontend served by your reverse proxy:
+
+```yaml
+allowed_origins:
+  - "https://your-cadence-domain.example.com"
+```
+
+agent-hub emits a startup warning when `allowed_origins` is unset and the server is
+bound to a non-loopback address. The dev container config (`config.container.yaml`)
+ships with `allowed_origins: ["http://localhost"]`.
+
 ### Verifying hub registration
 
 After the service starts, verify the agent appears in the hub:
