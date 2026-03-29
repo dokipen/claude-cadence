@@ -5,9 +5,9 @@ import {
   ListToolsRequestSchema,
   type CallToolResult,
 } from "@modelcontextprotocol/sdk/types.js";
-import { gql } from "graphql-request";
-import { bootstrapAuth, getClient } from "./client.js";
-import { getAuthToken, getDefaultProjectId, getDefaultProjectName, setResolvedProjectId } from "./config.js";
+import { bootstrapAuth } from "./client.js";
+import { getAuthToken, getDefaultProjectId, getDefaultProjectName, setResolvedProjectId, cacheProjectIdByName } from "./config.js";
+import { resolveProjectName } from "./projects.js";
 import {
   ticketCreate,
   ticketGet,
@@ -17,28 +17,6 @@ import {
 } from "./tools/tickets.js";
 import { labelList, labelAdd, labelRemove } from "./tools/labels.js";
 import { commentAdd } from "./tools/comments.js";
-
-// --- Project name resolution ---
-
-const GET_PROJECT_BY_NAME = gql`
-  query GetProjectByName($name: String!) {
-    projectByName(name: $name) {
-      id
-      name
-    }
-  }
-`;
-
-async function resolveProjectName(name: string): Promise<string> {
-  const client = getClient();
-  const data = await client.request<{
-    projectByName: { id: string; name: string } | null;
-  }>(GET_PROJECT_BY_NAME, { name });
-  if (!data.projectByName) {
-    throw new Error(`Project not found: "${name}"`);
-  }
-  return data.projectByName.id;
-}
 
 // --- Startup validation ---
 
@@ -61,6 +39,7 @@ if (projectName && !projectId) {
   try {
     const resolvedId = await resolveProjectName(projectName);
     setResolvedProjectId(resolvedId);
+    cacheProjectIdByName(projectName, resolvedId);
     process.stderr.write(`Resolved project "${projectName}" => ${resolvedId}\n`);
   } catch (error) {
     process.stderr.write(
@@ -98,7 +77,11 @@ const TOOLS = [
         },
         projectId: {
           type: "string",
-          description: "Project ID (falls back to ISSUES_PROJECT_ID env var)",
+          description: "Project CUID (takes precedence over projectName; falls back to ISSUES_PROJECT_ID env var)",
+        },
+        projectName: {
+          type: "string",
+          description: "Project name (resolved to CUID if projectId is not provided)",
         },
       },
       required: ["title"],
@@ -117,15 +100,20 @@ const TOOLS = [
           properties: {
             id: { type: "string", description: "Ticket CUID" },
             projectId: { type: "string", description: "Ignored when id is used" },
+            projectName: { type: "string", description: "Ignored when id is used" },
           },
         },
         {
-          required: ["number", "projectId"],
+          required: ["number"],
           properties: {
             number: { type: "number", description: "Ticket number (integer)" },
             projectId: {
               type: "string",
-              description: "Project ID (required with number; falls back to ISSUES_PROJECT_ID)",
+              description: "Project CUID (takes precedence over projectName; falls back to ISSUES_PROJECT_ID)",
+            },
+            projectName: {
+              type: "string",
+              description: "Project name (resolved to CUID if projectId is not provided)",
             },
           },
         },
@@ -134,6 +122,7 @@ const TOOLS = [
         id: { type: "string" },
         number: { type: "number" },
         projectId: { type: "string" },
+        projectName: { type: "string" },
       },
     },
   },
@@ -165,7 +154,11 @@ const TOOLS = [
         },
         projectId: {
           type: "string",
-          description: "Project ID filter (falls back to ISSUES_PROJECT_ID env var)",
+          description: "Project CUID filter (takes precedence over projectName; falls back to ISSUES_PROJECT_ID env var)",
+        },
+        projectName: {
+          type: "string",
+          description: "Project name filter (resolved to CUID if projectId is not provided)",
         },
       },
     },
@@ -281,6 +274,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         priority: params.priority as string | undefined,
         storyPoints: params.storyPoints as number | undefined,
         projectId: params.projectId as string | undefined,
+        projectName: params.projectName as string | undefined,
       });
 
     case "ticket_get":
@@ -288,6 +282,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         id: params.id as string | undefined,
         number: params.number as number | undefined,
         projectId: params.projectId as string | undefined,
+        projectName: params.projectName as string | undefined,
       });
 
     case "ticket_list":
@@ -298,6 +293,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         isBlocked: params.isBlocked as boolean | undefined,
         limit: params.limit as number | undefined,
         projectId: params.projectId as string | undefined,
+        projectName: params.projectName as string | undefined,
       });
 
     case "ticket_update":
