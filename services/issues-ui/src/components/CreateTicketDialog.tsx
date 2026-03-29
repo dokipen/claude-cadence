@@ -45,6 +45,7 @@ export function CreateTicketDialog({
 
   const handleLaunched = useCallback(
     (_session: Session, _agentName: string) => {
+      setPrompt("");
       handleClose();
     },
     [handleClose],
