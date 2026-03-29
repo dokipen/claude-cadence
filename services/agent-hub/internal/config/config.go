@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -199,7 +200,8 @@ func parseDurations(cfg *Config) error {
 
 func validate(cfg *Config) error {
 	// Require authentication for non-loopback bindings.
-	if cfg.Host != "127.0.0.1" && cfg.Host != "localhost" && cfg.Host != "::1" {
+	hostLower := strings.ToLower(cfg.Host)
+	if hostLower != "127.0.0.1" && hostLower != "localhost" && hostLower != "::1" {
 		if cfg.Auth.Mode == "none" {
 			return fmt.Errorf("authentication required for non-localhost bindings")
 		}
