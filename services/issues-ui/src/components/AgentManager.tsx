@@ -46,6 +46,8 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
   // One-shot guard: restore from sessionStorage the first time sessions are available.
   // Deferred so the restore fires even when sessions are empty at mount (e.g. the tab
   // was backgrounded before the initial fetch completed).
+  // selectedProject?.id is correct here: AgentManager always remounts on navigation,
+  // so hasRestoredRef resets and the restore re-runs with the current project value.
   const hasRestoredRef = useRef(false);
   useEffect(() => {
     if (hasRestoredRef.current || sessions.length === 0) return;
@@ -59,6 +61,8 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
         return [{ key, session: s.session, agentName: s.agentName, projectId: selectedProject?.id }];
       })
     );
+    // storedOpenKeys is a stable useState value (set once at mount, setter discarded).
+    // It is listed in deps to satisfy exhaustive-deps; in practice it never changes.
   }, [sessions, storedOpenKeys, selectedProject?.id]);
   const [minimizedKeys, setMinimizedKeys] = useState<Set<string>>(() => {
     try {

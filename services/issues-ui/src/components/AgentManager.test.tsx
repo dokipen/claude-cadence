@@ -282,15 +282,17 @@ describe("sessionStorage persistence", () => {
     // Pre-populate with a key that matches no provided session
     mockSessionStorage.setItem("cadence_open_windows", JSON.stringify([staleKey]));
 
-    // Render with no matching sessions — stale key should be dropped.
-    // Wrap in act to ensure all effects (including the persistence useEffect) flush.
+    // Render with no matching sessions. With the deferred restore, the restore
+    // effect bails because sessions=[] — but the persistence effect still fires
+    // on mount (openWindows=[]) and writes [] back to sessionStorage, which is
+    // the same observable result as eager stale-key cleanup.
     await act(async () => {
       render(
         <MemoryRouter><AgentManager sessions={[]} selectedProject={null} /></MemoryRouter>,
       );
     });
 
-    // The effect should have written an empty array back to sessionStorage
+    // The persistence effect should have written an empty array to sessionStorage
     const setItemCalls = mockSessionStorage.setItem.mock.calls;
     const openWindowsCalls = setItemCalls.filter(([key]) => key === "cadence_open_windows");
     expect(openWindowsCalls.length).toBeGreaterThan(0);
