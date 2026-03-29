@@ -3,12 +3,20 @@ import { Sparkles } from "lucide-react";
 import type { Ticket, TicketState, ActiveSessionInfo } from "../types";
 import { TicketCard } from "./TicketCard";
 import { RefineAllDialog } from "./RefineAllDialog";
+import { LeadAllDialog } from "./LeadAllDialog";
 import { CreateTicketDialog } from "./CreateTicketDialog";
 import { AnimatedCadenceIcon } from "./AnimatedCadenceIcon";
 import styles from "../styles/board.module.css";
 
 export function hasActiveRefineAllSession(sessions: ActiveSessionInfo[], projectId?: string): boolean {
   const prefix = projectId ? `${projectId}-refine-all-` : "refine-all-";
+  return sessions.some(
+    (s) => s.name.startsWith(prefix) && (s.state === "running" || s.state === "creating" || s.state === "destroying")
+  );
+}
+
+export function hasActiveLeadAllSession(sessions: ActiveSessionInfo[], projectId?: string): boolean {
+  const prefix = projectId ? `${projectId}-lead-all-` : "lead-all-";
   return sessions.some(
     (s) => s.name.startsWith(prefix) && (s.state === "running" || s.state === "creating" || s.state === "destroying")
   );
@@ -35,6 +43,7 @@ interface KanbanColumnProps {
 
 export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading, error, repoUrl, sessions, projectId }: KanbanColumnProps) {
   const [showRefineAll, setShowRefineAll] = useState(false);
+  const [showLeadAll, setShowLeadAll] = useState(false);
   const [showCreateTicket, setShowCreateTicket] = useState(false);
 
   const displayCount = loading
@@ -73,6 +82,21 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
             )}
           </button>
         )}
+        {state === "REFINED" && tickets.length > 0 && !loading && !hasNextPage && (
+          <button
+            className={styles.refineAllButton}
+            onClick={() => setShowLeadAll(true)}
+            data-testid="lead-all-button"
+            aria-label="Lead All"
+            title="Lead All"
+          >
+            {hasActiveLeadAllSession(sessions ?? [], projectId) ? (
+              <AnimatedCadenceIcon width={14} height={14} />
+            ) : (
+              <Sparkles size={14} />
+            )}
+          </button>
+        )}
         <span className={styles.columnCount} data-testid={`count-${state}`}>
           {displayCount}
         </span>
@@ -104,6 +128,15 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
         open={showRefineAll}
         onClose={() => setShowRefineAll(false)}
         projectId={projectId}
+      />
+    )}
+    {state === "REFINED" && (
+      <LeadAllDialog
+        repoUrl={repoUrl}
+        open={showLeadAll}
+        onClose={() => setShowLeadAll(false)}
+        projectId={projectId}
+        tickets={tickets}
       />
     )}
     {state === "BACKLOG" && (

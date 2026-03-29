@@ -17,6 +17,10 @@ vi.mock("./RefineAllDialog", () => ({
   RefineAllDialog: () => <div data-testid="refine-all-dialog" />,
 }));
 
+vi.mock("./LeadAllDialog", () => ({
+  LeadAllDialog: () => <div data-testid="lead-all-dialog" />,
+}));
+
 vi.mock("./CreateTicketDialog", () => ({
   CreateTicketDialog: ({
     open,
@@ -38,7 +42,7 @@ vi.mock("./TicketCard", () => ({
   TicketCard: () => <div data-testid="ticket-card" />,
 }));
 
-import { KanbanColumn, hasActiveRefineAllSession } from "./KanbanColumn";
+import { KanbanColumn, hasActiveRefineAllSession, hasActiveLeadAllSession } from "./KanbanColumn";
 
 // jsdom does not implement showModal/close on HTMLDialogElement.
 beforeEach(() => {
@@ -304,5 +308,176 @@ describe("KanbanColumn Refine All icon button", () => {
       />,
     );
     expect(screen.queryByTestId("refine-all-button")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hasActiveLeadAllSession unit tests
+// ---------------------------------------------------------------------------
+
+describe("hasActiveLeadAllSession", () => {
+  it("returns false for empty sessions", () => {
+    expect(hasActiveLeadAllSession([], "my-project")).toBe(false);
+  });
+
+  it("returns true when a running lead-all session exists with projectId prefix", () => {
+    const sessions: ActiveSessionInfo[] = [
+      { name: "my-project-lead-all-42", state: "running", sessionId: "s1", agentName: "leader" },
+    ];
+    expect(hasActiveLeadAllSession(sessions, "my-project")).toBe(true);
+  });
+
+  it("returns true for creating state", () => {
+    const sessions: ActiveSessionInfo[] = [
+      { name: "my-project-lead-all-42", state: "creating", sessionId: "s2", agentName: "leader" },
+    ];
+    expect(hasActiveLeadAllSession(sessions, "my-project")).toBe(true);
+  });
+
+  it("returns true for destroying state", () => {
+    const sessions: ActiveSessionInfo[] = [
+      { name: "my-project-lead-all-42", state: "destroying", sessionId: "s3", agentName: "leader" },
+    ];
+    expect(hasActiveLeadAllSession(sessions, "my-project")).toBe(true);
+  });
+
+  it("returns false when session state is not active", () => {
+    const sessions: ActiveSessionInfo[] = [
+      { name: "my-project-lead-all-42", state: "stopped", sessionId: "s4", agentName: "leader" },
+    ];
+    expect(hasActiveLeadAllSession(sessions, "my-project")).toBe(false);
+  });
+
+  it("returns false when session belongs to a different project", () => {
+    const sessions: ActiveSessionInfo[] = [
+      { name: "other-project-lead-all-42", state: "running", sessionId: "s5", agentName: "leader" },
+    ];
+    expect(hasActiveLeadAllSession(sessions, "my-project")).toBe(false);
+  });
+
+  it("falls back to bare lead-all- prefix when projectId is undefined", () => {
+    const sessions: ActiveSessionInfo[] = [
+      { name: "lead-all-42", state: "running", sessionId: "s6", agentName: "leader" },
+    ];
+    expect(hasActiveLeadAllSession(sessions, undefined)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Lead All icon button tests
+// ---------------------------------------------------------------------------
+
+describe("KanbanColumn Lead All icon button", () => {
+  const tickets = [makeTicket({ state: "REFINED" })];
+
+  it("shows lead-all button in REFINED column when tickets present", () => {
+    render(
+      <KanbanColumn
+        {...defaultProps}
+        state="REFINED"
+        tickets={tickets}
+        totalCount={1}
+      />,
+    );
+    expect(screen.getByTestId("lead-all-button")).toBeTruthy();
+  });
+
+  it("does not show lead-all button in BACKLOG column", () => {
+    render(
+      <KanbanColumn
+        {...defaultProps}
+        state="BACKLOG"
+        tickets={tickets}
+        totalCount={1}
+      />,
+    );
+    expect(screen.queryByTestId("lead-all-button")).toBeNull();
+  });
+
+  it("does not show lead-all button when no tickets", () => {
+    render(
+      <KanbanColumn
+        {...defaultProps}
+        state="REFINED"
+        tickets={[]}
+        totalCount={0}
+      />,
+    );
+    expect(screen.queryByTestId("lead-all-button")).toBeNull();
+  });
+
+  it("does not show lead-all button when loading", () => {
+    render(
+      <KanbanColumn
+        {...defaultProps}
+        state="REFINED"
+        tickets={tickets}
+        totalCount={1}
+        loading={true}
+      />,
+    );
+    expect(screen.queryByTestId("lead-all-button")).toBeNull();
+  });
+
+  it("does not show lead-all button when hasNextPage is true", () => {
+    render(
+      <KanbanColumn
+        {...defaultProps}
+        state="REFINED"
+        tickets={tickets}
+        totalCount={10}
+        hasNextPage={true}
+      />,
+    );
+    expect(screen.queryByTestId("lead-all-button")).toBeNull();
+  });
+
+  it("has aria-label on the lead-all button", () => {
+    render(
+      <KanbanColumn
+        {...defaultProps}
+        state="REFINED"
+        tickets={tickets}
+        totalCount={1}
+      />,
+    );
+    const button = screen.getByTestId("lead-all-button");
+    expect(button.getAttribute("aria-label")).toBe("Lead All");
+  });
+
+  it("renders LeadAllDialog for REFINED column", () => {
+    render(
+      <KanbanColumn
+        {...defaultProps}
+        state="REFINED"
+        tickets={tickets}
+        totalCount={1}
+      />,
+    );
+    expect(screen.getByTestId("lead-all-dialog")).toBeTruthy();
+  });
+
+  it("does not render LeadAllDialog for BACKLOG column", () => {
+    render(<KanbanColumn {...defaultProps} state="BACKLOG" />);
+    expect(screen.queryByTestId("lead-all-dialog")).toBeNull();
+  });
+
+  it("shows AnimatedCadenceIcon when a lead-all session is running", () => {
+    const sessions: ActiveSessionInfo[] = [
+      { name: "myproject-lead-all-42", state: "running", sessionId: "s1", agentName: "leader" },
+    ];
+    render(
+      <KanbanColumn
+        {...defaultProps}
+        state="REFINED"
+        tickets={tickets}
+        totalCount={1}
+        sessions={sessions}
+        projectId="myproject"
+      />,
+    );
+    expect(screen.queryByTestId("icon-sparkles")).toBeNull();
+    const button = screen.getByTestId("lead-all-button");
+    expect(button.querySelector("svg")).toBeTruthy();
   });
 });
