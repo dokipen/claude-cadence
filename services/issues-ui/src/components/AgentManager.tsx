@@ -13,49 +13,27 @@ import styles from "../styles/agents.module.css";
 
 interface AgentManagerProps {
   sessions: AgentSession[];
+  sessionsLoaded: boolean;
   selectedProject?: Project | null;
 }
 
-export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
+export function AgentManager({ sessions, sessionsLoaded, selectedProject }: AgentManagerProps) {
   const filteredSessions = selectedProject?.repository
     ? sessions.filter(
         (s) => normalizeRepo(s.session.repoUrl) === normalizeRepo(selectedProject.repository)
       )
     : sessions;
   const { agents, loading: agentsLoading } = useAgents(selectedProject?.repository);
-  const [openWindows, setOpenWindows] = useState<TiledWindow[]>(() => {
-    try {
-      const stored = sessionStorage.getItem("cadence_open_windows");
-      if (!stored) return [];
-      const storedKeys: string[] = JSON.parse(stored);
-      const sessionMap = new Map(sessions.map((s) => [sessionKey(s), s]));
-      return storedKeys.flatMap((key) => {
-        const s = sessionMap.get(key);
-        if (!s) return [];
-        // selectedProject?.id is correct here: AgentManager always remounts on navigation,
-        // so the lazy initializer always runs with the current selectedProject value.
-        return [{ key, session: s.session, agentName: s.agentName, projectId: selectedProject?.id }];
-      });
-    } catch {
-      return [];
-    }
-  });
+  // hasRestoredRef guards the persist effects from overwriting stored layout data
+  // before the deferred restore has had a chance to run (sessions load asynchronously).
+  const hasRestoredRef = useRef(false);
+  const [openWindows, setOpenWindows] = useState<TiledWindow[]>([]);
   // Ref kept in sync with openWindows state so callbacks can read current value
   // without listing openWindows in their dep arrays (which would invalidate
   // stable references on every window change).
   const openWindowsRef = useRef<TiledWindow[]>([]);
   openWindowsRef.current = openWindows;
-  const [minimizedKeys, setMinimizedKeys] = useState<Set<string>>(() => {
-    try {
-      const stored = sessionStorage.getItem("cadence_minimized_windows");
-      if (!stored) return new Set();
-      const storedKeys: string[] = JSON.parse(stored);
-      const liveKeys = new Set(sessions.map((s) => sessionKey(s)));
-      return new Set(storedKeys.filter((k) => liveKeys.has(k)));
-    } catch {
-      return new Set();
-    }
-  });
+  const [minimizedKeys, setMinimizedKeys] = useState<Set<string>>(new Set());
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem("cadence_sidebar_collapsed") === "true";
@@ -64,7 +42,43 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
     }
   });
 
+  // Deferred restore: sessions load asynchronously, so we can't restore from
+  // sessionStorage in a lazy initializer (sessions would be [] at mount time,
+  // causing the persist effect to overwrite stored keys before they're resolved).
+  // Instead, restore once sessionsLoaded becomes true.
   useEffect(() => {
+    if (hasRestoredRef.current || !sessionsLoaded) return;
+    hasRestoredRef.current = true;
+    const sessionMap = new Map(sessions.map((s) => [sessionKey(s), s]));
+    try {
+      const stored = sessionStorage.getItem("cadence_open_windows");
+      if (stored) {
+        const storedKeys: string[] = JSON.parse(stored);
+        const toRestore = storedKeys.flatMap((key) => {
+          const s = sessionMap.get(key);
+          if (!s) return [];
+          return [{ key, session: s.session, agentName: s.agentName, projectId: selectedProject?.id }];
+        });
+        if (toRestore.length > 0) setOpenWindows(toRestore);
+      }
+    } catch {
+      // ignore storage errors
+    }
+    try {
+      const stored = sessionStorage.getItem("cadence_minimized_windows");
+      if (stored) {
+        const storedKeys: string[] = JSON.parse(stored);
+        const liveKeys = new Set(sessions.map((s) => sessionKey(s)));
+        const valid = storedKeys.filter((k) => liveKeys.has(k));
+        if (valid.length > 0) setMinimizedKeys(new Set(valid));
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, [sessionsLoaded, sessions, selectedProject?.id]);
+
+  useEffect(() => {
+    if (!hasRestoredRef.current) return;
     try {
       sessionStorage.setItem("cadence_open_windows", JSON.stringify(openWindows.map((w) => w.key)));
     } catch {
@@ -73,6 +87,7 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
   }, [openWindows]);
 
   useEffect(() => {
+    if (!hasRestoredRef.current) return;
     try {
       sessionStorage.setItem("cadence_minimized_windows", JSON.stringify([...minimizedKeys]));
     } catch {
