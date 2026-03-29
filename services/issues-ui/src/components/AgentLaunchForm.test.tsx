@@ -3,11 +3,13 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, act, cleanup } from "@testing-library/react";
 import { create } from "@bufbuild/protobuf";
 import { AgentSchema, AgentProfileSchema } from "../gen/hub/v1/hub_pb";
-import type { Agent, AgentStatus } from "../types";
+import type { Agent, AgentStatus, Session } from "../types";
 
 vi.mock("../api/agentHubClient", () => ({
   createSession: vi.fn(),
 }));
+
+import { createSession } from "../api/agentHubClient";
 
 vi.mock("../styles/agents.module.css", () => ({
   default: {
@@ -355,5 +357,98 @@ describe("AgentLaunchForm profile filtering by repoUrl", () => {
     expect(options).toContain("generic-profile");
     expect(options).not.toContain("repo-b-profile");
     expect(options).not.toContain("repo-c-profile");
+  });
+});
+
+describe("AgentLaunchForm session name normalization", () => {
+  const makeSimpleAgent = (): Agent =>
+    makeAgent("host-a", "online", { "profile-a": "" });
+
+  const fakeSession = { id: "sess-1", name: "sess-1" } as unknown as Session;
+
+  async function fillAndSubmit(
+    getByTestId: (id: string) => HTMLElement,
+    nameValue: string,
+  ) {
+    await act(async () => {
+      fireEvent.change(getByTestId("host-select"), { target: { value: "host-a" } });
+    });
+    await act(async () => {
+      fireEvent.change(getByTestId("profile-select"), { target: { value: "profile-a" } });
+    });
+    await act(async () => {
+      fireEvent.change(getByTestId("name-input"), { target: { value: nameValue } });
+    });
+    await act(async () => {
+      fireEvent.submit(getByTestId("agent-launch-form"));
+    });
+  }
+
+  afterEach(() => {
+    cleanup();
+    vi.mocked(createSession).mockReset();
+  });
+
+  it("trims and lowercases mixed-case input before calling createSession", async () => {
+    vi.mocked(createSession).mockResolvedValue(fakeSession);
+    const { getByTestId } = render(
+      <AgentLaunchForm agents={[makeSimpleAgent()]} onLaunched={vi.fn()} />,
+    );
+    await fillAndSubmit(getByTestId, "  My Session  ");
+    expect(vi.mocked(createSession)).toHaveBeenCalledWith("host-a", "profile-a", "my-session");
+  });
+
+  it("replaces spaces with hyphens", async () => {
+    vi.mocked(createSession).mockResolvedValue(fakeSession);
+    const { getByTestId } = render(
+      <AgentLaunchForm agents={[makeSimpleAgent()]} onLaunched={vi.fn()} />,
+    );
+    await fillAndSubmit(getByTestId, "fix the bug");
+    expect(vi.mocked(createSession)).toHaveBeenCalledWith("host-a", "profile-a", "fix-the-bug");
+  });
+
+  it("collapses consecutive spaces and hyphens into a single hyphen", async () => {
+    vi.mocked(createSession).mockResolvedValue(fakeSession);
+    const { getByTestId } = render(
+      <AgentLaunchForm agents={[makeSimpleAgent()]} onLaunched={vi.fn()} />,
+    );
+    await fillAndSubmit(getByTestId, "fix  the--bug");
+    expect(vi.mocked(createSession)).toHaveBeenCalledWith("host-a", "profile-a", "fix-the-bug");
+  });
+
+  it("passes through an already-valid slug unchanged", async () => {
+    vi.mocked(createSession).mockResolvedValue(fakeSession);
+    const { getByTestId } = render(
+      <AgentLaunchForm agents={[makeSimpleAgent()]} onLaunched={vi.fn()} />,
+    );
+    await fillAndSubmit(getByTestId, "lead-42");
+    expect(vi.mocked(createSession)).toHaveBeenCalledWith("host-a", "profile-a", "lead-42");
+  });
+
+  it("preserves underscores", async () => {
+    vi.mocked(createSession).mockResolvedValue(fakeSession);
+    const { getByTestId } = render(
+      <AgentLaunchForm agents={[makeSimpleAgent()]} onLaunched={vi.fn()} />,
+    );
+    await fillAndSubmit(getByTestId, "my_session");
+    expect(vi.mocked(createSession)).toHaveBeenCalledWith("host-a", "profile-a", "my_session");
+  });
+
+  it("shows a specific error and does not call createSession when name is whitespace-only", async () => {
+    const { getByTestId, getByText } = render(
+      <AgentLaunchForm agents={[makeSimpleAgent()]} onLaunched={vi.fn()} />,
+    );
+    await fillAndSubmit(getByTestId, "   ");
+    expect(getByText("Session name cannot be empty.")).toBeTruthy();
+    expect(vi.mocked(createSession)).not.toHaveBeenCalled();
+  });
+
+  it("shows a specific error and does not call createSession when name normalizes to empty", async () => {
+    const { getByTestId, getByText } = render(
+      <AgentLaunchForm agents={[makeSimpleAgent()]} onLaunched={vi.fn()} />,
+    );
+    await fillAndSubmit(getByTestId, "---");
+    expect(getByText("Session name cannot be empty.")).toBeTruthy();
+    expect(vi.mocked(createSession)).not.toHaveBeenCalled();
   });
 });
