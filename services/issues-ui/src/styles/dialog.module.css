@@ -87,3 +87,17 @@
 .dialogConfirmButton:hover {
   opacity: 0.9;
 }
+
+.promptTextarea {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-family: inherit;
+  resize: vertical;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 0.5rem;
+}

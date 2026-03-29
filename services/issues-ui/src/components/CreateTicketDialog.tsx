@@ -93,7 +93,7 @@ export function CreateTicketDialog({
             id="ticket-prompt-input"
             data-testid="ticket-prompt"
             rows={4}
-            style={{ width: "100%", boxSizing: "border-box", marginTop: "0.5rem" }}
+            className={styles.promptTextarea}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             autoComplete="off"
