@@ -142,7 +142,7 @@
 .notificationDropdown {
   position: absolute;
   top: calc(100% + 4px);
-  right: 0;
+  left: 0;
   min-width: 320px;
   max-height: 360px;
   overflow-y: auto;
