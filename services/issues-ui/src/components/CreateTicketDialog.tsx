@@ -29,24 +29,25 @@ export function CreateTicketDialog({
       sessionNameRef.current = `${projectId ? projectId + "-" : ""}ticket-` + Date.now();
       el.showModal();
     } else if (!open && el.open) {
-      setPrompt("");
       el.close();
     }
 
     return () => {
       if (el.open) el.close();
     };
-  }, [open]);
+  }, [open, projectId]);
 
-  const handleClose = useCallback(() => {
-    dialogRef.current?.close();
-    onClose();
-  }, [onClose]);
+  const handleClose = useCallback(
+    (clear: any = false) => {
+      if (clear === true) setPrompt("");
+      onClose();
+    },
+    [onClose],
+  );
 
   const handleLaunched = useCallback(
     (_session: Session, _agentName: string) => {
-      setPrompt("");
-      handleClose();
+      handleClose(true);
     },
     [handleClose],
   );

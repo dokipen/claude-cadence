@@ -83,30 +83,35 @@ describe("CreateTicketDialog", () => {
     expect(HTMLDialogElement.prototype.showModal).toHaveBeenCalledTimes(1);
   });
 
-  it("calls close and onClose when cancel button clicked", () => {
+  it("calls onClose when cancel button clicked", () => {
     const onClose = vi.fn();
-    render(
+    const { rerender } = render(
       <CreateTicketDialog {...defaultProps} open={true} onClose={onClose} />,
     );
 
     fireEvent.click(screen.getByTestId("dialog-close"));
 
-    expect(HTMLDialogElement.prototype.close).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledTimes(1);
+    
+    // After parent re-renders with open=false, dialog should close
+    rerender(<CreateTicketDialog {...defaultProps} open={false} onClose={onClose} />);
+    expect(HTMLDialogElement.prototype.close).toHaveBeenCalled();
   });
 
-  it("calls close and onClose on backdrop click", () => {
+  it("calls onClose on backdrop click", () => {
     const onClose = vi.fn();
-    render(
+    const { rerender } = render(
       <CreateTicketDialog {...defaultProps} open={true} onClose={onClose} />,
     );
 
     const dialog = screen.getByTestId("create-ticket-dialog");
-    // Simulate a click directly on the dialog element (the backdrop area)
     fireEvent.click(dialog);
 
-    expect(HTMLDialogElement.prototype.close).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledTimes(1);
+
+    // After parent re-renders with open=false, dialog should close
+    rerender(<CreateTicketDialog {...defaultProps} open={false} onClose={onClose} />);
+    expect(HTMLDialogElement.prototype.close).toHaveBeenCalled();
   });
 
   it("does not render AgentLauncher when prompt is empty", () => {
@@ -165,36 +170,51 @@ describe("CreateTicketDialog", () => {
   });
 
   it("clears textarea after successful submission (onLaunched fires)", () => {
-    render(<CreateTicketDialog {...defaultProps} open={true} />);
+    const onClose = vi.fn();
+    const { rerender } = render(
+      <CreateTicketDialog {...defaultProps} open={true} onClose={onClose} />,
+    );
 
-    const textarea = screen.getByTestId(
-      "ticket-prompt",
-    ) as HTMLTextAreaElement;
+    const textarea = screen.getByTestId("ticket-prompt") as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "My new ticket" } });
     expect(textarea.value).toBe("My new ticket");
 
     // Simulate a successful agent launch
     fireEvent.click(screen.getByTestId("mock-launch"));
 
+    // Prompt should be cleared.
     expect(textarea.value).toBe("");
+
+    // onClose should be called.
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    // After parent re-renders with open=false, dialog should close
+    rerender(<CreateTicketDialog {...defaultProps} open={false} onClose={onClose} />);
+    expect(HTMLDialogElement.prototype.close).toHaveBeenCalled();
   });
 
   it("preserves textarea content when cancelled (not a successful launch)", () => {
     const onClose = vi.fn();
-    render(
+    const { rerender } = render(
       <CreateTicketDialog {...defaultProps} open={true} onClose={onClose} />,
     );
 
-    const textarea = screen.getByTestId(
-      "ticket-prompt",
-    ) as HTMLTextAreaElement;
+    const textarea = screen.getByTestId("ticket-prompt") as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "In-progress thought" } });
     expect(textarea.value).toBe("In-progress thought");
 
     // Cancel without launching
     fireEvent.click(screen.getByTestId("dialog-close"));
 
-    // Cancel does not call setPrompt("") directly — prompt is unchanged
-    expect(textarea.value).toBe("In-progress thought");
+    // After parent re-renders with open=false, dialog should close
+    rerender(<CreateTicketDialog {...defaultProps} open={false} onClose={onClose} />);
+    expect(HTMLDialogElement.prototype.close).toHaveBeenCalled();
+
+    // Reopen the dialog
+    rerender(<CreateTicketDialog {...defaultProps} open={true} onClose={onClose} />);
+
+    // Prompt should NOT be cleared.
+    const textareaAfter = screen.getByTestId("ticket-prompt") as HTMLTextAreaElement;
+    expect(textareaAfter.value).toBe("In-progress thought");
   });
 });
