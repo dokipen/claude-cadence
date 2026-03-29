@@ -170,4 +170,62 @@ describe("CreateTicketDialog", () => {
     const textarea = screen.getByTestId("ticket-prompt");
     expect(textarea).toHaveAttribute("autocomplete", "off");
   });
+
+  it("strips C0/DEL/C1 control characters from prompt before building command", () => {
+    render(<CreateTicketDialog {...defaultProps} open={true} />);
+
+    const textarea = screen.getByTestId("ticket-prompt") as HTMLTextAreaElement;
+    // \x1b = ESC (C0), \x7f = DEL, \u009b = 8-bit CSI (C1)
+    fireEvent.change(textarea, {
+      target: { value: "hello\x00\x01\x1bworld\x7f\u009b" },
+    });
+
+    const launcher = screen.getByTestId("agent-launcher");
+    expect(launcher.getAttribute("data-command")).toBe(
+      "/create-ticket helloworld",
+    );
+  });
+
+  it("does not render AgentLauncher when prompt contains only control characters", () => {
+    render(<CreateTicketDialog {...defaultProps} open={true} />);
+
+    const textarea = screen.getByTestId("ticket-prompt") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "\x00\x01\x1b\x7f" } });
+
+    expect(screen.queryByTestId("agent-launcher")).toBeNull();
+  });
+
+  it("sanitizes invalid characters from projectId in sessionName", () => {
+    render(
+      <CreateTicketDialog
+        {...defaultProps}
+        open={true}
+        projectId="my project/id!"
+      />,
+    );
+
+    const textarea = screen.getByTestId("ticket-prompt") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "Some prompt" } });
+
+    const launcher = screen.getByTestId("agent-launcher");
+    const sessionName = launcher.getAttribute("data-session-name") ?? "";
+    expect(sessionName).toMatch(/^myprojectid-ticket-/);
+  });
+
+  it("passes sessionName with valid projectId prefix to AgentLauncher", () => {
+    render(
+      <CreateTicketDialog
+        {...defaultProps}
+        open={true}
+        projectId="my-project"
+      />,
+    );
+
+    const textarea = screen.getByTestId("ticket-prompt") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "Some prompt" } });
+
+    const launcher = screen.getByTestId("agent-launcher");
+    const sessionName = launcher.getAttribute("data-session-name") ?? "";
+    expect(sessionName).toMatch(/^my-project-ticket-/);
+  });
 });
