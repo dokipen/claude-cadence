@@ -41,11 +41,13 @@ vi.mock("./AgentLaunchForm", () => ({
   },
 }));
 
-// Capture onMinimize from TilingLayout so the test can invoke it
+// Capture onMinimize and windows from TilingLayout so tests can inspect them
 let capturedOnMinimize: ((key: string) => void) | undefined;
+let capturedWindows: { key: string }[] | undefined;
 vi.mock("./TilingLayout", () => ({
-  TilingLayout: ({ onMinimize }: { onMinimize: (key: string) => void }) => {
+  TilingLayout: ({ onMinimize, windows }: { onMinimize: (key: string) => void; windows: { key: string }[] }) => {
     capturedOnMinimize = onMinimize;
+    capturedWindows = windows;
     return <div data-testid="tiling-layout" />;
   },
 }));
@@ -56,6 +58,7 @@ import { AgentManager } from "./AgentManager";
 afterEach(() => {
   capturedOnMinimize = undefined;
   capturedRepoUrl = undefined;
+  capturedWindows = undefined;
   cleanup();
 });
 
@@ -262,12 +265,14 @@ describe("sessionStorage persistence", () => {
     // Pre-populate sessionStorage
     mockSessionStorage.setItem("cadence_open_windows", JSON.stringify([key]));
 
-    const { getByTestId } = render(
-      <MemoryRouter><AgentManager sessions={sessions} selectedProject={null} /></MemoryRouter>,
-    );
+    await act(async () => {
+      render(
+        <MemoryRouter><AgentManager sessions={sessions} selectedProject={null} /></MemoryRouter>,
+      );
+    });
 
-    // TilingLayout should be rendered (not the empty state), meaning window is open
-    expect(getByTestId("tiling-layout")).toBeDefined();
+    // The deferred restore effect should have fired and populated the windows
+    expect(capturedWindows?.some((w) => w.key === key)).toBe(true);
   });
 
   it("drops stale keys from sessionStorage on mount when session no longer exists", async () => {
@@ -292,6 +297,34 @@ describe("sessionStorage persistence", () => {
     const lastCall = openWindowsCalls[openWindowsCalls.length - 1];
     const stored: string[] = JSON.parse(lastCall[1]);
     expect(stored).toHaveLength(0);
+  });
+
+  it("defers open window restore until sessions arrive when initially empty", async () => {
+    const agentName = "test-agent";
+    const sessionId = "sess-deferred-1";
+    const key = `${agentName}:${sessionId}`;
+
+    // Pre-populate sessionStorage (saved from a prior page load)
+    mockSessionStorage.setItem("cadence_open_windows", JSON.stringify([key]));
+
+    // Mount with no sessions — simulates the tab being hidden before the first fetch
+    const { rerender } = render(
+      <MemoryRouter><AgentManager sessions={[]} selectedProject={null} /></MemoryRouter>,
+    );
+
+    // Restore should not have fired yet: sessions were empty at mount
+    expect(capturedWindows).toHaveLength(0);
+
+    // Sessions arrive (tab became visible, fetch completed)
+    const session = makeSession(sessionId, agentName);
+    await act(async () => {
+      rerender(
+        <MemoryRouter><AgentManager sessions={[session]} selectedProject={null} /></MemoryRouter>,
+      );
+    });
+
+    // Deferred restore should now have fired and the stored window should be open
+    expect(capturedWindows?.some((w) => w.key === key)).toBe(true);
   });
 
   it("rehydrates minimized windows from sessionStorage on mount", async () => {

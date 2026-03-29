@@ -23,19 +23,17 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
       )
     : sessions;
   const { agents, loading: agentsLoading } = useAgents(selectedProject?.repository);
-  const [openWindows, setOpenWindows] = useState<TiledWindow[]>(() => {
+  // Initialized to [] and populated by the deferred restore effect below.
+  // A lazy initializer would run at mount before sessions are available when the
+  // tab is backgrounded during the initial fetch, permanently losing the stored layout.
+  const [openWindows, setOpenWindows] = useState<TiledWindow[]>([]);
+  // Snapshot the stored keys at mount before the persistence effect can overwrite them.
+  // The deferred restore reads from this snapshot instead of re-reading sessionStorage,
+  // so sessions arriving after mount still find the original saved layout.
+  const [storedOpenKeys] = useState<string[]>(() => {
     try {
       const stored = sessionStorage.getItem("cadence_open_windows");
-      if (!stored) return [];
-      const storedKeys: string[] = JSON.parse(stored);
-      const sessionMap = new Map(sessions.map((s) => [sessionKey(s), s]));
-      return storedKeys.flatMap((key) => {
-        const s = sessionMap.get(key);
-        if (!s) return [];
-        // selectedProject?.id is correct here: AgentManager always remounts on navigation,
-        // so the lazy initializer always runs with the current selectedProject value.
-        return [{ key, session: s.session, agentName: s.agentName, projectId: selectedProject?.id }];
-      });
+      return stored ? (JSON.parse(stored) as string[]) : [];
     } catch {
       return [];
     }
@@ -45,6 +43,23 @@ export function AgentManager({ sessions, selectedProject }: AgentManagerProps) {
   // stable references on every window change).
   const openWindowsRef = useRef<TiledWindow[]>([]);
   openWindowsRef.current = openWindows;
+  // One-shot guard: restore from sessionStorage the first time sessions are available.
+  // Deferred so the restore fires even when sessions are empty at mount (e.g. the tab
+  // was backgrounded before the initial fetch completed).
+  const hasRestoredRef = useRef(false);
+  useEffect(() => {
+    if (hasRestoredRef.current || sessions.length === 0) return;
+    hasRestoredRef.current = true;
+    if (storedOpenKeys.length === 0) return;
+    const sessionMap = new Map(sessions.map((s) => [sessionKey(s), s]));
+    setOpenWindows(
+      storedOpenKeys.flatMap((key) => {
+        const s = sessionMap.get(key);
+        if (!s) return [];
+        return [{ key, session: s.session, agentName: s.agentName, projectId: selectedProject?.id }];
+      })
+    );
+  }, [sessions, storedOpenKeys, selectedProject?.id]);
   const [minimizedKeys, setMinimizedKeys] = useState<Set<string>>(() => {
     try {
       const stored = sessionStorage.getItem("cadence_minimized_windows");
