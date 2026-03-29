@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, forwardRef, useImperativeHandle } from "react";
 import { createSession } from "../api/agentHubClient";
 import { useAgents, useAgentProfiles } from "../hooks/useAgents";
 import type { Session } from "../types";
@@ -14,7 +14,11 @@ interface AgentLauncherProps {
   buttonLabel?: string;
 }
 
-export function AgentLauncher({
+export interface AgentLauncherHandle {
+  launch: () => void;
+}
+
+export const AgentLauncher = forwardRef<AgentLauncherHandle, AgentLauncherProps>(function AgentLauncher({
   ticketNumber,
   repoUrl,
   onLaunched,
@@ -22,7 +26,7 @@ export function AgentLauncher({
   command = `/lead ${ticketNumber}`,
   sessionName = `lead-${ticketNumber}`,
   buttonLabel = "Lead",
-}: AgentLauncherProps) {
+}: AgentLauncherProps, ref) {
   const { agents, loading: agentsLoading, error: agentsError } = useAgents(repoUrl);
   const profiles = useAgentProfiles(repoUrl, agents);
   const singleMatch = profiles.length === 1;
@@ -55,6 +59,8 @@ export function AgentLauncher({
       setLaunching(false);
     }
   }, [selected, command, sessionName, onLaunched]);
+
+  useImperativeHandle(ref, () => ({ launch: handleLaunch }), [handleLaunch]);
 
   if (agentsLoading) {
     return <div className={styles.launcherMessage}>Loading agents…</div>;
@@ -126,4 +132,4 @@ export function AgentLauncher({
       </button>
     </div>
   );
-}
+});
