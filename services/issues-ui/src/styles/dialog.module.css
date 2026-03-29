@@ -106,3 +106,12 @@
   outline: none;
   border-color: var(--primary);
 }
+
+.profileCheckboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0.25rem 0;
+}

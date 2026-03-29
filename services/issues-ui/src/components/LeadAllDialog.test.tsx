@@ -294,7 +294,7 @@ describe("LeadAllDialog confirm launches sessions", () => {
     );
   });
 
-  it("shows launch error when createSession throws", async () => {
+  it("shows launch error when all sessions fail", async () => {
     mockCreateSession.mockRejectedValue(new Error("Network error"));
     render(<LeadAllDialog {...defaultProps} open={true} />);
     fireEvent.click(screen.getByTestId("profile-checkbox-agent-1/default"));
@@ -304,7 +304,7 @@ describe("LeadAllDialog confirm launches sessions", () => {
     expect(screen.getByTestId("launch-error").textContent).toBe("Network error");
   });
 
-  it("does not close dialog when createSession throws", async () => {
+  it("does not close dialog when all sessions fail", async () => {
     const onClose = vi.fn();
     mockCreateSession.mockRejectedValue(new Error("oops"));
     render(
@@ -314,6 +314,34 @@ describe("LeadAllDialog confirm launches sessions", () => {
     await act(async () => {
       fireEvent.click(screen.getByTestId("confirm-button"));
     });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("shows partial-failure message when some sessions fail", async () => {
+    const tickets = [
+      makeTicket({ number: 1 }),
+      makeTicket({ id: "t2", number: 2 }),
+      makeTicket({ id: "t3", number: 3 }),
+    ];
+    mockCreateSession
+      .mockResolvedValueOnce({} as never)
+      .mockRejectedValueOnce(new Error("Timeout"))
+      .mockResolvedValueOnce({} as never);
+    const onClose = vi.fn();
+    render(
+      <LeadAllDialog
+        {...defaultProps}
+        open={true}
+        tickets={tickets}
+        onClose={onClose}
+      />
+    );
+    fireEvent.click(screen.getByTestId("profile-checkbox-agent-1/default"));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("confirm-button"));
+    });
+    expect(screen.getByTestId("launch-error").textContent).toContain("1 of 3");
+    expect(screen.getByTestId("launch-error").textContent).toContain("Timeout");
     expect(onClose).not.toHaveBeenCalled();
   });
 });

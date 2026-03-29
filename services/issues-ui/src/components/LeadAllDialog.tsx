@@ -85,27 +85,32 @@ export function LeadAllDialog({
     setLaunching(true);
     setLaunchError(null);
 
-    try {
-      await Promise.all(
-        tickets.map((ticket) => {
-          const assigned =
-            selectedProfiles[Math.floor(Math.random() * selectedProfiles.length)];
-          const sessionName = `${projectId ? projectId + "-" : ""}lead-all-${ticket.number}`;
-          const command = `/lead ${ticket.number}`;
-          const cappedCommand =
-            command.length > 500 ? command.slice(0, 500) + "…" : command;
-          return createSession(assigned.agent, assigned.profileName, sessionName, [
-            cappedCommand,
-          ]);
-        })
-      );
+    const results = await Promise.allSettled(
+      tickets.map((ticket) => {
+        const assigned =
+          selectedProfiles[Math.floor(Math.random() * selectedProfiles.length)];
+        const sessionName = `${projectId ? projectId + "-" : ""}lead-all-${ticket.number}`;
+        return createSession(assigned.agent, assigned.profileName, sessionName, [
+          `/lead ${ticket.number}`,
+        ]);
+      })
+    );
+
+    const failures = results.filter((r) => r.status === "rejected");
+    setLaunching(false);
+
+    if (failures.length === 0) {
       handleClose();
-    } catch (err) {
+    } else {
+      const firstReason =
+        failures[0].status === "rejected" && failures[0].reason instanceof Error
+          ? failures[0].reason.message
+          : "Failed to launch agents";
       setLaunchError(
-        err instanceof Error ? err.message : "Failed to launch agents"
+        failures.length === tickets.length
+          ? firstReason
+          : `${failures.length} of ${tickets.length} tickets failed to launch: ${firstReason}`
       );
-    } finally {
-      setLaunching(false);
     }
   }, [profiles, selectedKeys, tickets, projectId, handleClose]);
 
@@ -154,14 +159,7 @@ export function LeadAllDialog({
                   return (
                     <label
                       key={key}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.5rem",
-                        fontSize: "0.85rem",
-                        cursor: "pointer",
-                        padding: "0.25rem 0",
-                      }}
+                      className={styles.profileCheckboxLabel}
                     >
                       <input
                         type="checkbox"
