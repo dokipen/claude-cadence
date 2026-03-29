@@ -416,3 +416,127 @@ func TestHandleSendInput_UnknownAgentReturns404(t *testing.T) {
 		t.Errorf("expected 404 for unknown agent, got %d", rw.Code)
 	}
 }
+
+// startTestHubWithNamedProfile creates a hub and connects a simulated agent
+// whose "default" profile has a non-empty Name field.
+func startTestHubWithNamedProfile(t *testing.T, agentName, profileName string) *hub.Hub {
+	t.Helper()
+
+	h := hub.New(30*time.Second, 5*time.Second, 0, 5*time.Minute, 0)
+	h.Start()
+	t.Cleanup(h.Stop)
+
+	agentToken := "test-agent-token"
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ws/agent", handleAgentWebSocket(h, agentToken))
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws/agent"
+	conn, _, err := websocket.Dial(context.Background(), wsURL, &websocket.DialOptions{
+		HTTPHeader: http.Header{"Authorization": {"Bearer " + agentToken}},
+	})
+	if err != nil {
+		t.Fatalf("dial agent ws: %v", err)
+	}
+	t.Cleanup(func() { conn.Close(websocket.StatusNormalClosure, "test done") })
+
+	regReq, _ := hub.NewRequest("reg-1", "register", &hub.RegisterParams{
+		Name: agentName,
+		Profiles: map[string]hub.ProfileInfo{
+			"default": {Name: profileName, Description: "test", Repo: "https://github.com/test/repo"},
+		},
+	})
+	data, _ := json.Marshal(regReq)
+	if err := conn.Write(context.Background(), websocket.MessageText, data); err != nil {
+		t.Fatalf("write register: %v", err)
+	}
+	if _, _, err := conn.Read(context.Background()); err != nil {
+		t.Fatalf("read register ack: %v", err)
+	}
+
+	go func() {
+		for {
+			_, msg, err := conn.Read(context.Background())
+			if err != nil {
+				return
+			}
+			var req hub.Request
+			json.Unmarshal(msg, &req)
+			var resp *hub.Response
+			if req.Method == "ping" {
+				resp, _ = hub.NewResponse(req.ID, map[string]bool{"pong": true})
+			} else {
+				resp, _ = hub.NewResponse(req.ID, map[string]string{"echo": req.Method})
+			}
+			respData, _ := json.Marshal(resp)
+			conn.Write(context.Background(), websocket.MessageText, respData)
+		}
+	}()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, ok := h.Get(agentName); ok {
+			return h
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("agent %q did not register in time", agentName)
+	return nil
+}
+
+func TestProfileName_ExposedInListAgents(t *testing.T) {
+	h := startTestHubWithNamedProfile(t, "named-profile-agent", "My Display Profile")
+
+	handler := handleListAgents(h)
+	req := httptest.NewRequest("GET", "/api/v1/agents", nil)
+	rw := httptest.NewRecorder()
+	handler.ServeHTTP(rw, req)
+
+	if rw.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rw.Code)
+	}
+
+	var body struct {
+		Agents []hub.AgentInfo `json:"agents"`
+	}
+	if err := json.NewDecoder(rw.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(body.Agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(body.Agents))
+	}
+	profile, ok := body.Agents[0].Profiles["default"]
+	if !ok {
+		t.Fatal("expected default profile in agent response")
+	}
+	if profile.Name != "My Display Profile" {
+		t.Errorf("expected profile Name %q, got %q", "My Display Profile", profile.Name)
+	}
+}
+
+func TestProfileName_ExposedInGetAgent(t *testing.T) {
+	h := startTestHubWithNamedProfile(t, "named-get-agent", "Named Get Profile")
+
+	handler := handleGetAgent(h)
+	req := httptest.NewRequest("GET", "/api/v1/agents/named-get-agent", nil)
+	req.SetPathValue("name", "named-get-agent")
+	rw := httptest.NewRecorder()
+	handler.ServeHTTP(rw, req)
+
+	if rw.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rw.Code)
+	}
+
+	var agentInfo hub.AgentInfo
+	if err := json.NewDecoder(rw.Body).Decode(&agentInfo); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	profile, ok := agentInfo.Profiles["default"]
+	if !ok {
+		t.Fatal("expected default profile in agent response")
+	}
+	if profile.Name != "Named Get Profile" {
+		t.Errorf("expected profile Name %q, got %q", "Named Get Profile", profile.Name)
+	}
+}
