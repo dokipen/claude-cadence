@@ -12,6 +12,9 @@ const {
   getGhPat,
   setResolvedAuthToken,
   setResolvedRefreshToken,
+  getCachedProjectIdByName,
+  cacheProjectIdByName,
+  clearProjectNameCache,
 } = await import("./config.js");
 
 describe("getAuthToken", () => {
@@ -118,31 +121,40 @@ describe("setResolvedAuthToken / setResolvedRefreshToken", () => {
 });
 
 describe("getCachedProjectIdByName / cacheProjectIdByName", () => {
-  // Import from the already-imported module at the top of this file.
-  // We need these helpers — re-import to get them from the live module.
-  it("returns undefined for an unknown project name", async () => {
-    const { getCachedProjectIdByName } = await import("./config.js");
+  beforeEach(() => {
+    clearProjectNameCache();
+  });
+
+  it("returns undefined for an unknown project name", () => {
     expect(getCachedProjectIdByName("unknown-project")).toBeUndefined();
   });
 
-  it("cacheProjectIdByName stores an ID that getCachedProjectIdByName retrieves", async () => {
-    const { getCachedProjectIdByName, cacheProjectIdByName } = await import("./config.js");
+  it("cacheProjectIdByName stores an ID that getCachedProjectIdByName retrieves", () => {
     cacheProjectIdByName("my-project", "cuid_abc123");
     expect(getCachedProjectIdByName("my-project")).toBe("cuid_abc123");
   });
 
-  it("cache is keyed by name — different names return different IDs", async () => {
-    const { getCachedProjectIdByName, cacheProjectIdByName } = await import("./config.js");
+  it("cache is keyed by name — different names return different IDs", () => {
     cacheProjectIdByName("project-a", "cuid_aaa");
     cacheProjectIdByName("project-b", "cuid_bbb");
     expect(getCachedProjectIdByName("project-a")).toBe("cuid_aaa");
     expect(getCachedProjectIdByName("project-b")).toBe("cuid_bbb");
   });
 
-  it("overwriting a cached entry returns the newer ID", async () => {
-    const { getCachedProjectIdByName, cacheProjectIdByName } = await import("./config.js");
+  it("overwriting a cached entry returns the newer ID", () => {
     cacheProjectIdByName("my-project", "cuid_old");
     cacheProjectIdByName("my-project", "cuid_new");
     expect(getCachedProjectIdByName("my-project")).toBe("cuid_new");
+  });
+
+  it("normalizes keys — case variants resolve to the same entry", () => {
+    cacheProjectIdByName("My-Project", "cuid_xyz");
+    expect(getCachedProjectIdByName("my-project")).toBe("cuid_xyz");
+    expect(getCachedProjectIdByName("MY-PROJECT")).toBe("cuid_xyz");
+  });
+
+  it("normalizes keys — trims surrounding whitespace", () => {
+    cacheProjectIdByName("  my-project  ", "cuid_xyz");
+    expect(getCachedProjectIdByName("my-project")).toBe("cuid_xyz");
   });
 });

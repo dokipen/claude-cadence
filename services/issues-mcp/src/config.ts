@@ -10,11 +10,15 @@ let resolvedProjectId: string | undefined;
 const projectNameCache = new Map<string, string>();
 
 export function getCachedProjectIdByName(name: string): string | undefined {
-  return projectNameCache.get(name);
+  return projectNameCache.get(name.trim().toLowerCase());
 }
 
 export function cacheProjectIdByName(name: string, id: string): void {
-  projectNameCache.set(name, id);
+  projectNameCache.set(name.trim().toLowerCase(), id);
+}
+
+export function clearProjectNameCache(): void {
+  projectNameCache.clear();
 }
 
 // In-memory token cache (set at startup or after refresh)

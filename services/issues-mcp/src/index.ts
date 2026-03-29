@@ -6,7 +6,7 @@ import {
   type CallToolResult,
 } from "@modelcontextprotocol/sdk/types.js";
 import { bootstrapAuth } from "./client.js";
-import { getAuthToken, getDefaultProjectId, getDefaultProjectName, setResolvedProjectId, cacheProjectIdByName } from "./config.js";
+import { getAuthToken, getDefaultProjectId, getDefaultProjectName, setResolvedProjectId } from "./config.js";
 import { resolveProjectName } from "./projects.js";
 import {
   ticketCreate,
@@ -39,7 +39,6 @@ if (projectName && !projectId) {
   try {
     const resolvedId = await resolveProjectName(projectName);
     setResolvedProjectId(resolvedId);
-    cacheProjectIdByName(projectName, resolvedId);
     process.stderr.write(`Resolved project "${projectName}" => ${resolvedId}\n`);
   } catch (error) {
     process.stderr.write(
