@@ -193,6 +193,7 @@ export function TicketCard({
                 className={styles.cardCloseButton}
                 onClick={handleCloseClick}
                 aria-label="Close ticket"
+                title="Close ticket"
                 data-testid="card-close-button"
               >
                 <Archive size={14} />
@@ -206,6 +207,7 @@ export function TicketCard({
                     className={styles.sessionKillButton}
                     data-testid="session-kill-button"
                     aria-label="Stop session"
+                    title="Stop session"
                     onClick={handleKillClick}
                     disabled={killing}
                   >
