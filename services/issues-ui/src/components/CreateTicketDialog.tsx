@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import { AgentLauncher } from "./AgentLauncher";
+import type { AgentLauncherHandle } from "./AgentLauncher";
 import type { Session } from "../types";
 import styles from "../styles/dialog.module.css";
 
@@ -17,6 +18,7 @@ export function CreateTicketDialog({
   projectId,
 }: CreateTicketDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const launcherRef = useRef<AgentLauncherHandle>(null);
   const [prompt, setPrompt] = useState("");
   // Constrain projectId to [a-z0-9-] to prevent unexpected characters in the session name.
   const safeProjectId = projectId?.replace(/[^a-z0-9-]/g, "") ?? "";
@@ -62,6 +64,16 @@ export function CreateTicketDialog({
     [handleClose],
   );
 
+  const handleTextareaKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        launcherRef.current?.launch();
+      }
+    },
+    [],
+  );
+
   const trimmedPrompt = prompt.trim();
   // Normalize whitespace first (converts \t, \n, \r to spaces), then strip
   // remaining C0 controls, DEL, and C1 controls (U+0080-U+009F, which include
@@ -101,11 +113,13 @@ export function CreateTicketDialog({
             className={styles.promptTextarea}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={handleTextareaKeyDown}
             autoComplete="off"
           />
         </div>
         {open && normalizedPrompt !== "" && (
           <AgentLauncher
+            ref={launcherRef}
             ticketNumber={0}
             repoUrl={repoUrl}
             onLaunched={handleLaunched}
