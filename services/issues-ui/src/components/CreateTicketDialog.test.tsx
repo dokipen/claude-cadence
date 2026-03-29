@@ -178,8 +178,7 @@ describe("CreateTicketDialog", () => {
     const textarea = screen.getByTestId("ticket-prompt") as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "Some ticket text" } });
 
-    // Launcher should be rendered now
-    expect(screen.getByTestId("agent-launcher")).toBeTruthy();
+    expect(screen.getByTestId("agent-launcher")).not.toBeNull();
 
     fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
     expect(mockLaunch).toHaveBeenCalledTimes(1);
@@ -194,6 +193,15 @@ describe("CreateTicketDialog", () => {
     fireEvent.change(textarea, { target: { value: "Some ticket text" } });
 
     fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true });
+    expect(mockLaunch).not.toHaveBeenCalled();
+  });
+
+  it("pressing Enter on an empty prompt does not call launch", () => {
+    render(<CreateTicketDialog {...defaultProps} open={true} />);
+
+    const textarea = screen.getByTestId("ticket-prompt") as HTMLTextAreaElement;
+    // Prompt is empty — AgentLauncher is not rendered, launcherRef.current is null
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
     expect(mockLaunch).not.toHaveBeenCalled();
   });
 });
