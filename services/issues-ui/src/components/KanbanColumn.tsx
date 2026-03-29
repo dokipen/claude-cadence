@@ -17,7 +17,7 @@ export function getActiveRefineAllSession(sessions: ActiveSessionInfo[], project
 }
 
 export function hasActiveLeadAllSession(sessions: ActiveSessionInfo[], projectId?: string): boolean {
-  const prefix = projectId ? `${projectId}-lead-all-` : "lead-all-";
+  const prefix = projectId ? `${projectId}-lead-` : "lead-";
   return sessions.some(
     (s) => s.name.startsWith(prefix) && (s.state === "running" || s.state === "creating" || s.state === "destroying")
   );

@@ -322,42 +322,42 @@ describe("hasActiveLeadAllSession", () => {
 
   it("returns true when a running lead-all session exists with projectId prefix", () => {
     const sessions: ActiveSessionInfo[] = [
-      { name: "my-project-lead-all-42", state: "running", sessionId: "s1", agentName: "leader" },
+      { name: "my-project-lead-42", state: "running", sessionId: "s1", agentName: "leader" },
     ];
     expect(hasActiveLeadAllSession(sessions, "my-project")).toBe(true);
   });
 
   it("returns true for creating state", () => {
     const sessions: ActiveSessionInfo[] = [
-      { name: "my-project-lead-all-42", state: "creating", sessionId: "s2", agentName: "leader" },
+      { name: "my-project-lead-42", state: "creating", sessionId: "s2", agentName: "leader" },
     ];
     expect(hasActiveLeadAllSession(sessions, "my-project")).toBe(true);
   });
 
   it("returns true for destroying state", () => {
     const sessions: ActiveSessionInfo[] = [
-      { name: "my-project-lead-all-42", state: "destroying", sessionId: "s3", agentName: "leader" },
+      { name: "my-project-lead-42", state: "destroying", sessionId: "s3", agentName: "leader" },
     ];
     expect(hasActiveLeadAllSession(sessions, "my-project")).toBe(true);
   });
 
   it("returns false when session state is not active", () => {
     const sessions: ActiveSessionInfo[] = [
-      { name: "my-project-lead-all-42", state: "stopped", sessionId: "s4", agentName: "leader" },
+      { name: "my-project-lead-42", state: "stopped", sessionId: "s4", agentName: "leader" },
     ];
     expect(hasActiveLeadAllSession(sessions, "my-project")).toBe(false);
   });
 
   it("returns false when session belongs to a different project", () => {
     const sessions: ActiveSessionInfo[] = [
-      { name: "other-project-lead-all-42", state: "running", sessionId: "s5", agentName: "leader" },
+      { name: "other-project-lead-42", state: "running", sessionId: "s5", agentName: "leader" },
     ];
     expect(hasActiveLeadAllSession(sessions, "my-project")).toBe(false);
   });
 
-  it("falls back to bare lead-all- prefix when projectId is undefined", () => {
+  it("falls back to bare lead- prefix when projectId is undefined", () => {
     const sessions: ActiveSessionInfo[] = [
-      { name: "lead-all-42", state: "running", sessionId: "s6", agentName: "leader" },
+      { name: "lead-42", state: "running", sessionId: "s6", agentName: "leader" },
     ];
     expect(hasActiveLeadAllSession(sessions, undefined)).toBe(true);
   });
@@ -464,7 +464,7 @@ describe("KanbanColumn Lead All icon button", () => {
 
   it("shows AnimatedCadenceIcon when a lead-all session is running", () => {
     const sessions: ActiveSessionInfo[] = [
-      { name: "myproject-lead-all-42", state: "running", sessionId: "s1", agentName: "leader" },
+      { name: "myproject-lead-42", state: "running", sessionId: "s1", agentName: "leader" },
     ];
     render(
       <KanbanColumn
