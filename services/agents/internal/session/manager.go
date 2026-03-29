@@ -392,6 +392,11 @@ func (m *Manager) Destroy(id string, force bool) error {
 			// Concurrent cleaner already removed the session; postcondition satisfied.
 			return nil
 		}
+		var transErr *InvalidTransitionError
+		if errors.As(err, &transErr) && transErr.To == StateDestroying {
+			// A concurrent Destroy() already claimed this session; postcondition satisfied.
+			return nil
+		}
 		return err
 	}
 
