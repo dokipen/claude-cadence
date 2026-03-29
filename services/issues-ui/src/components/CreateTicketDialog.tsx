@@ -63,7 +63,9 @@ export function CreateTicketDialog({
   const trimmedPrompt = prompt.trim();
   // Normalize whitespace before passing to the command to avoid newlines
   // or other control characters reaching the PTY.
-  const normalizedPrompt = trimmedPrompt.replace(/\s+/g, " ");
+  const normalizedPrompt = trimmedPrompt
+    .replace(/\s+/g, " ")
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
 
   return (
     <dialog
