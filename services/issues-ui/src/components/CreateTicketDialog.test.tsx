@@ -137,6 +137,21 @@ describe("CreateTicketDialog", () => {
     );
   });
 
+  it("strips non-whitespace control characters from command", () => {
+    render(<CreateTicketDialog {...defaultProps} open={true} />);
+
+    const textarea = screen.getByTestId("ticket-prompt") as HTMLTextAreaElement;
+    // \x07 is BEL, \x1B is ESC, \x7F is DEL
+    fireEvent.change(textarea, {
+      target: { value: "clean\x07 text\x1B with\x7F controls" },
+    });
+
+    const launcher = screen.getByTestId("agent-launcher");
+    expect(launcher.getAttribute("data-command")).toBe(
+      "/create-ticket clean text with controls",
+    );
+  });
+
   it("passes sessionName starting with ticket- to AgentLauncher", () => {
     render(<CreateTicketDialog {...defaultProps} open={true} />);
 
