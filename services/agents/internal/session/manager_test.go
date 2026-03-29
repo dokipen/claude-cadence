@@ -575,3 +575,73 @@ func TestCreate_ConcurrentAutoNameNeverCollides(t *testing.T) {
 		seen[s.Name] = true
 	}
 }
+
+// TestDestroy_ConcurrentDeleteBetweenReconcileAndTransition reproduces the
+// TOCTOU race in Destroy(): store.Get succeeds, reconcile is called (which
+// calls ptyHasSession), a concurrent goroutine deletes the session, then
+// store.Transition(StateDestroying) returns ErrNotFound — which is silently
+// discarded — and pty.Destroy is still called on the already-deleted session.
+//
+// The test asserts that pty.Destroy is NOT called when the session was
+// concurrently deleted before Transition could run.  With the bug present,
+// pty.Destroy IS called, so the test fails.  After the fix it will pass.
+func TestDestroy_ConcurrentDeleteBetweenReconcileAndTransition(t *testing.T) {
+	store := NewStore()
+
+	// deleted is closed once the concurrent delete has completed.
+	deleted := make(chan struct{})
+	// reconciling is closed when ptyHasSession is first called (inside reconcile).
+	reconciling := make(chan struct{})
+
+	// Track whether ptyDestroy was invoked.
+	var ptyDestroyCalled bool
+
+	m := &Manager{
+		store:        store,
+		processAlive: func(pid int) bool { return false },
+		// ptyHasSession is the synchronisation hook: signal that reconcile has
+		// started, then wait for the concurrent delete to finish before returning.
+		ptyHasSession: func(id string) bool {
+			close(reconciling) // signal: we are inside reconcile now
+			<-deleted          // wait: concurrent delete has run
+			return true        // returning true means reconcile won't change state
+		},
+		ptyDestroy: func(id string) error {
+			ptyDestroyCalled = true
+			return nil
+		},
+	}
+
+	// Add a running session directly to the store.
+	sess := &Session{
+		ID:    "test-session-toctou",
+		Name:  "test-session-toctou",
+		State: StateRunning,
+	}
+	store.Add(sess)
+
+	// Goroutine: wait until reconcile has started, then delete the session.
+	go func() {
+		<-reconciling          // wait until ptyHasSession is entered
+		store.Delete(sess.ID)  // concurrent delete: removes session from store
+		close(deleted)         // signal: delete is done
+	}()
+
+	// Call Destroy with force=true. After reconcile (which sees ptyHasSession=true
+	// and leaves the session as StateRunning), the concurrent delete has already
+	// removed the session. store.Transition returns ErrNotFound, which is silently
+	// discarded, and then (with the bug) m.ptyDestroy is called anyway.
+	err := m.Destroy(sess.ID, true /*force*/)
+
+	// Destroy should return nil — the session is already gone, postcondition satisfied.
+	if err != nil {
+		t.Fatalf("Destroy() returned unexpected error: %v", err)
+	}
+
+	// The critical assertion: pty.Destroy must NOT be called when the session was
+	// concurrently deleted before Transition could mark it as Destroying.
+	// With the current bug, ptyDestroyCalled == true, causing this test to fail.
+	if ptyDestroyCalled {
+		t.Error("pty.Destroy was called after concurrent store.Delete — TOCTOU bug: Destroy() should detect that Transition returned ErrNotFound and skip cleanup")
+	}
+}
