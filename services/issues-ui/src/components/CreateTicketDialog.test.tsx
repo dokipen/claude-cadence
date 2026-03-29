@@ -194,7 +194,7 @@ describe("CreateTicketDialog", () => {
     // Cancel without launching
     fireEvent.click(screen.getByTestId("dialog-close"));
 
-    // Content must survive — if the user reopens, they should see their text
+    // Cancel does not call setPrompt("") directly — prompt is unchanged
     expect(textarea.value).toBe("In-progress thought");
   });
 });
