@@ -108,6 +108,10 @@ describe("normalizeSessionName", () => {
     it("returns empty string for all-hyphen input", () => {
       expect(normalizeSessionName("---")).toBe("");
     });
+
+    it("returns empty string for all-underscore input", () => {
+      expect(normalizeSessionName("___")).toBe("");
+    });
   });
 });
 
