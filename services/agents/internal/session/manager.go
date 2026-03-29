@@ -95,6 +95,7 @@ const (
 	maxExtraArgLen    = 4096
 	maxSessionNameLen = 255
 	maxEnvVarValueLen = 4096
+	maxEnvVarCount    = 64
 )
 
 // Create validates inputs, creates PTY session, starts command, returns Session.
@@ -110,6 +111,11 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		if strings.ContainsRune(arg, '\x00') {
 			return nil, &Error{Code: ErrInvalidArgument, Message: fmt.Sprintf("extra_args[%d] contains null byte", i)}
 		}
+	}
+
+	// Validate env var count.
+	if len(req.Env) > maxEnvVarCount {
+		return nil, &Error{Code: ErrInvalidArgument, Message: fmt.Sprintf("too many env vars: %d (max %d)", len(req.Env), maxEnvVarCount)}
 	}
 
 	// Validate profile exists.
