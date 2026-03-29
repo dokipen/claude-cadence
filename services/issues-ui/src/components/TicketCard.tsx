@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { Archive, StopCircle } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import type { Ticket } from "../types";
 import { PriorityBadge } from "./PriorityBadge";
@@ -194,7 +195,7 @@ export function TicketCard({
                 aria-label="Close ticket"
                 data-testid="card-close-button"
               >
-                &times;
+                <Archive size={14} />
               </button>
             )}
             {activeSession ? (
@@ -208,7 +209,7 @@ export function TicketCard({
                     onClick={handleKillClick}
                     disabled={killing}
                   >
-                    &#9632;
+                    <StopCircle size={14} />
                   </button>
                 )}
                 <button

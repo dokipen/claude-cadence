@@ -2,6 +2,11 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup, fireEvent, act } from "@testing-library/react";
 import React, { useEffect, useRef } from "react";
+
+vi.mock("lucide-react", () => ({
+  Archive: ({ size }: { size?: number }) => <svg data-testid="icon-archive" data-size={size} />,
+  StopCircle: ({ size }: { size?: number }) => <svg data-testid="icon-stop-circle" data-size={size} />,
+}));
 import type { ActiveSessionInfo, SessionState, Ticket } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -603,17 +608,20 @@ describe("kill session", () => {
 // ---------------------------------------------------------------------------
 
 describe('TicketCard visual distinction: kill session vs close ticket', () => {
-  it('session-kill-button does not show the same icon (x) as the close ticket button', () => {
+  it('session-kill-button uses StopCircle icon and card-close-button uses Archive icon', () => {
     const ticket = makeTicket({ state: 'REFINED', number: 5 });
     const sessions = [
       makeSession('lead-5', 'running', { agentName: 'agent1', sessionId: 'sess-abc' }),
     ];
     const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
 
+    // Kill session button contains the StopCircle icon
     const killButton = getByTestId('session-kill-button');
-    // The kill button should use a stop icon (■), not the × close icon
-    expect(killButton.textContent).toContain('■');
-    expect(killButton.textContent).not.toContain('×');
+    expect(killButton.querySelector('[data-testid="icon-stop-circle"]')).not.toBeNull();
+
+    // Close ticket button contains the Archive icon
+    const closeButton = getByTestId('card-close-button');
+    expect(closeButton.querySelector('[data-testid="icon-archive"]')).not.toBeNull();
   });
 
   it('kill session confirm dialog has distinct title and label from close ticket dialog', () => {
