@@ -1,9 +1,18 @@
 import { useState } from "react";
+import { Sparkles } from "lucide-react";
 import type { Ticket, TicketState, ActiveSessionInfo } from "../types";
 import { TicketCard } from "./TicketCard";
 import { RefineAllDialog } from "./RefineAllDialog";
 import { CreateTicketDialog } from "./CreateTicketDialog";
+import { AnimatedCadenceIcon } from "./AnimatedCadenceIcon";
 import styles from "../styles/board.module.css";
+
+export function hasActiveRefineAllSession(sessions: ActiveSessionInfo[], projectId?: string): boolean {
+  const prefix = projectId ? `${projectId}-refine-all-` : "refine-all-";
+  return sessions.some(
+    (s) => s.name.startsWith(prefix) && (s.state === "running" || s.state === "creating" || s.state === "destroying")
+  );
+}
 
 const STATE_LABELS: Record<TicketState, string> = {
   BACKLOG: "Backlog",
@@ -54,8 +63,14 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
             className={styles.refineAllButton}
             onClick={() => setShowRefineAll(true)}
             data-testid="refine-all-button"
+            aria-label="Refine All"
+            title="Refine All"
           >
-            Refine All
+            {hasActiveRefineAllSession(sessions ?? [], projectId) ? (
+              <AnimatedCadenceIcon width={14} height={14} />
+            ) : (
+              <Sparkles size={14} />
+            )}
           </button>
         )}
         <span className={styles.columnCount} data-testid={`count-${state}`}>
