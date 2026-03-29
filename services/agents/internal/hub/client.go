@@ -166,7 +166,7 @@ func (c *Client) connect(ctx context.Context) error {
 func (c *Client) register(ctx context.Context, conn *websocket.Conn) error {
 	profiles := make(map[string]profileInfo, len(c.profiles))
 	for name, p := range c.profiles {
-		profiles[name] = profileInfo{Description: p.Description, Repo: p.Repo, Type: p.Type}
+		profiles[name] = profileInfo{Name: p.Name, Description: p.Description, Repo: p.Repo, Type: p.Type}
 	}
 
 	params := registerParams{
@@ -442,6 +442,9 @@ type registerParams struct {
 }
 
 type profileInfo struct {
+	// Name is the optional human-readable display label. Falls back to the map
+	// key when empty.
+	Name        string `json:"name,omitempty"`
 	Description string `json:"description"`
 	Repo        string `json:"repo"`
 	Type        string `json:"type"`

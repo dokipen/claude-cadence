@@ -524,6 +524,53 @@ pty:
 	}
 }
 
+func TestProfileName_LoadsFromYAML(t *testing.T) {
+	yaml := `
+profiles:
+  myprofile:
+    command: echo test
+    name: My Display Name
+auth:
+  mode: none
+cleanup:
+  stale_session_ttl: 1h
+  session_reap_interval: 30s
+pty:
+  websocket_scheme: ws
+`
+	path := writeConfigFile(t, yaml)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if got := cfg.Profiles["myprofile"].Name; got != "My Display Name" {
+		t.Errorf("expected Name %q, got %q", "My Display Name", got)
+	}
+}
+
+func TestProfileName_AbsentIsEmpty(t *testing.T) {
+	yaml := `
+profiles:
+  myprofile:
+    command: echo test
+auth:
+  mode: none
+cleanup:
+  stale_session_ttl: 1h
+  session_reap_interval: 30s
+pty:
+  websocket_scheme: ws
+`
+	path := writeConfigFile(t, yaml)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if got := cfg.Profiles["myprofile"].Name; got != "" {
+		t.Errorf("expected empty Name for profile without name field, got %q", got)
+	}
+}
+
 func TestProfileType_InvalidTypeRejected(t *testing.T) {
 	yaml := `
 profiles:

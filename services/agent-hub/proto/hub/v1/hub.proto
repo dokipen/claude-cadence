@@ -39,6 +39,10 @@ message AgentProfile {
   string repo = 2;
   // type is "shell" or "agent". Empty string means "agent" (legacy default).
   string type = 3;
+  // name is an optional human-readable display label. When present, the UI
+  // displays this instead of the dictionary key. The dictionary key remains the
+  // internal identifier used to select and reference the profile.
+  optional string name = 4;
 }
 
 // Agent represents an available agent with its profiles and status.

@@ -43,6 +43,23 @@ const makeAgent = (
     ),
   }) as unknown as Agent;
 
+const makeAgentWithNamedProfiles = (
+  agentName: string,
+  status: AgentStatus,
+  profiles: Record<string, { repo: string; name?: string }>,
+): Agent =>
+  create(AgentSchema, {
+    name: agentName,
+    status,
+    lastSeen: "2024-01-01T00:00:00Z",
+    profiles: Object.fromEntries(
+      Object.entries(profiles).map(([profileKey, { repo, name }]) => [
+        profileKey,
+        create(AgentProfileSchema, { repo, ...(name !== undefined ? { name } : {}) }),
+      ]),
+    ),
+  }) as unknown as Agent;
+
 afterEach(() => cleanup());
 
 describe("AgentLaunchForm", () => {
@@ -232,6 +249,56 @@ describe("AgentLaunchForm", () => {
 
     const profileSelect = getByTestId("profile-select");
     expect(profileSelect).toHaveAttribute("autocomplete", "off");
+  });
+
+  it("displays profile name as option text when profile has a name field", async () => {
+    const agents = [
+      makeAgentWithNamedProfiles("host-a", "online", {
+        "my-profile-key": { repo: "", name: "My Display Name" },
+      }),
+    ];
+
+    const { getByTestId } = render(
+      <AgentLaunchForm agents={agents} onLaunched={vi.fn()} />,
+    );
+
+    await act(async () => {
+      fireEvent.change(getByTestId("host-select"), {
+        target: { value: "host-a" },
+      });
+    });
+
+    const profileSelect = getByTestId("profile-select");
+    const option = Array.from(profileSelect.querySelectorAll("option")).find(
+      (o) => o.value === "my-profile-key",
+    );
+    expect(option).toBeTruthy();
+    expect(option!.textContent).toBe("My Display Name");
+  });
+
+  it("falls back to map key as option text when profile has no name field", async () => {
+    const agents = [
+      makeAgentWithNamedProfiles("host-a", "online", {
+        "my-profile-key": { repo: "" },
+      }),
+    ];
+
+    const { getByTestId } = render(
+      <AgentLaunchForm agents={agents} onLaunched={vi.fn()} />,
+    );
+
+    await act(async () => {
+      fireEvent.change(getByTestId("host-select"), {
+        target: { value: "host-a" },
+      });
+    });
+
+    const profileSelect = getByTestId("profile-select");
+    const option = Array.from(profileSelect.querySelectorAll("option")).find(
+      (o) => o.value === "my-profile-key",
+    );
+    expect(option).toBeTruthy();
+    expect(option!.textContent).toBe("my-profile-key");
   });
 });
 

@@ -35,6 +35,9 @@ type RegisterParams struct {
 
 // ProfileInfo describes an agent profile.
 type ProfileInfo struct {
+	// Name is the optional human-readable display label. Falls back to the map
+	// key when empty.
+	Name        string `json:"name,omitempty"`
 	Description string `json:"description"`
 	Repo        string `json:"repo"`
 	Type        string `json:"type"`

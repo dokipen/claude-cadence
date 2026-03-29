@@ -140,6 +140,10 @@ type LogConfig struct {
 
 // Profile defines an agent profile with its command and repo.
 type Profile struct {
+	// Name is a human-readable display label for this profile. When present, the
+	// UI shows Name instead of the dictionary key. The dictionary key always
+	// remains the internal identifier used to select and reference the profile.
+	Name        string `yaml:"name"`
 	Repo        string `yaml:"repo"`
 	Command     string `yaml:"command"`
 	Description string `yaml:"description"`
