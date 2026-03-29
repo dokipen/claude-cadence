@@ -262,6 +262,10 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 				continue
 			}
 			strVal := fmt.Sprintf("%v", v)
+			if len(strVal) > maxEnvVarValueLen {
+				slog.Warn("skipping vault secret with over-length value", "key", k, "len", len(strVal), "max", maxEnvVarValueLen)
+				continue
+			}
 			envSlice = append(envSlice, fmt.Sprintf("%s=%s", envKey, strVal))
 		}
 	}

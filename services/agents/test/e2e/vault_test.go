@@ -215,6 +215,38 @@ func TestVault_NoSecret_PublicRepo(t *testing.T) {
 	}
 }
 
+func TestVault_OverLengthSecretSkipped(t *testing.T) {
+	vaultToken := "test-vault-token-overlength"
+	// Inject one normal secret and one over-length secret (> 4096 bytes).
+	overLengthVal := strings.Repeat("x", 4097)
+	secrets := map[string]map[string]interface{}{
+		"secret/data/agentd/test-repo": {
+			"normal_token":   "short-value",
+			"huge_secret":    overLengthVal,
+		},
+	}
+
+	env := setupVaultTestEnv(t, secrets, vaultToken)
+	name := uniqueSessionName(t)
+
+	// Session creation must succeed — the over-length secret is skipped with a
+	// warning, not treated as a hard error.
+	sess, err := env.mgr.Create(session.CreateRequest{
+		AgentProfile: "vault-sleeper",
+		SessionName:  name,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v (over-length vault value should be skipped, not rejected)", err)
+	}
+	t.Cleanup(func() {
+		env.mgr.Destroy(sess.ID, true)
+	})
+
+	if sess.State != session.StateRunning {
+		t.Errorf("expected STATE_RUNNING, got %v", sess.State)
+	}
+}
+
 func TestVault_SecretRetrieval(t *testing.T) {
 	vaultToken := "test-vault-token-retrieval"
 	secrets := map[string]map[string]interface{}{
