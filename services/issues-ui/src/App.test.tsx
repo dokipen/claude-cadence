@@ -44,6 +44,7 @@ vi.mock("./components/TicketDetail", () => ({ TicketDetail: () => null }));
 const PROJECTS = [
   { id: "proj-a", name: "Project A" },
   { id: "proj-b", name: "Project B" },
+  { id: "my_project", name: "My Project" },
 ];
 
 function resolveTargetProject(projects: typeof PROJECTS): string {
@@ -78,8 +79,18 @@ describe("ProjectRedirect sessionStorage resolution", () => {
 });
 
 describe("ProjectRedirect format validation", () => {
-  it("rejects a project ID with underscores (underscore rejected by agentd sessionNameRe)", () => {
+  it("accepts a project ID with a non-leading underscore (agentd sessionNameRe allows underscore)", () => {
     sessionStorage.setItem(STORAGE_KEY, "my_project");
+    expect(resolveTargetProject(PROJECTS)).toBe("my_project");
+  });
+
+  it("rejects a project ID with a leading underscore", () => {
+    sessionStorage.setItem(STORAGE_KEY, "_myproject");
+    expect(resolveTargetProject(PROJECTS)).toBe("proj-a");
+  });
+
+  it("rejects a project ID with a leading hyphen", () => {
+    sessionStorage.setItem(STORAGE_KEY, "-myproject");
     expect(resolveTargetProject(PROJECTS)).toBe("proj-a");
   });
 
