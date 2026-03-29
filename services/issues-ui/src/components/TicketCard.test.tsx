@@ -2,6 +2,11 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup, fireEvent, act } from "@testing-library/react";
 import React, { useEffect, useRef } from "react";
+
+vi.mock("lucide-react", () => ({
+  Archive: ({ size }: { size?: number }) => <svg data-testid="icon-archive" data-size={size} />,
+  StopCircle: ({ size }: { size?: number }) => <svg data-testid="icon-stop-circle" data-size={size} />,
+}));
 import type { ActiveSessionInfo, SessionState, Ticket } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -25,7 +30,7 @@ const { mockHubFetch, mockOptimisticSetDestroying, mockOptimisticResetState, Moc
 });
 
 // Mock CSS modules
-vi.mock("../styles/card.module.css", () => ({ default: {} }));
+vi.mock("../styles/card.module.css", () => ({ default: new Proxy({}, { get: (_t, key) => String(key) }) }));
 vi.mock("../styles/agents.module.css", () => ({ default: {} }));
 vi.mock("../styles/animated-icon.module.css", () => ({ default: {} }));
 
@@ -33,15 +38,19 @@ vi.mock("../styles/animated-icon.module.css", () => ({ default: {} }));
 vi.mock("./ConfirmDialog", () => ({
   ConfirmDialog: ({
     open,
+    title,
+    confirmLabel,
     onConfirm,
     onCancel,
   }: {
     open: boolean;
+    title?: string;
+    confirmLabel?: string;
     onConfirm?: () => void;
     onCancel?: () => void;
   }) =>
     open ? (
-      <div data-testid="confirm-dialog">
+      <div data-testid="confirm-dialog" data-title={title} data-confirm-label={confirmLabel}>
         <button data-testid="confirm-dialog-confirm" onClick={onConfirm}>
           Confirm
         </button>
@@ -591,5 +600,55 @@ describe("kill session", () => {
 
     expect(mockOptimisticResetState).toHaveBeenCalledWith("sess-err", "running");
     expect(getByTestId("card-kill-error")).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TicketCard visual distinction — kill session vs close ticket buttons
+// ---------------------------------------------------------------------------
+
+describe('TicketCard visual distinction: kill session vs close ticket', () => {
+  it('session-kill-button uses StopCircle icon and card-close-button uses Archive icon', () => {
+    const ticket = makeTicket({ state: 'REFINED', number: 5 });
+    const sessions = [
+      makeSession('lead-5', 'running', { agentName: 'agent1', sessionId: 'sess-abc' }),
+    ];
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
+
+    // Kill session button contains the StopCircle icon
+    const killButton = getByTestId('session-kill-button');
+    expect(killButton.querySelector('[data-testid="icon-stop-circle"]')).not.toBeNull();
+
+    // Close ticket button contains the Archive icon
+    const closeButton = getByTestId('card-close-button');
+    expect(closeButton.querySelector('[data-testid="icon-archive"]')).not.toBeNull();
+  });
+
+  it('kill session confirm dialog has distinct title and label from close ticket dialog', () => {
+    const ticket = makeTicket({ state: 'REFINED', number: 5 });
+    const sessions = [
+      makeSession('lead-5', 'running', { agentName: 'agent1', sessionId: 'sess-abc' }),
+    ];
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
+
+    // Open kill session dialog
+    fireEvent.click(getByTestId('session-kill-button'));
+    const killDialog = getByTestId('confirm-dialog');
+    expect(killDialog.dataset.title).toBe('Stop session?');
+    expect(killDialog.dataset.confirmLabel).toBe('Stop session');
+  });
+
+  it('session-kill-button and card-close-button have different CSS class names', () => {
+    const ticket = makeTicket({ state: 'REFINED', number: 5 });
+    const sessions = [
+      makeSession('lead-5', 'running', { agentName: 'agent1', sessionId: 'sess-abc' }),
+    ];
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
+
+    const killButton = getByTestId('session-kill-button');
+    const closeButton = getByTestId('card-close-button');
+
+    // Each button must use a distinct CSS class so they can be styled differently
+    expect(killButton.className).not.toBe(closeButton.className);
   });
 });

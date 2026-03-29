@@ -52,6 +52,7 @@ function NotificationItem({ ws, projectId, projectName, onClose }: NotificationI
   const [sent, setSent] = useState(false);
   const [textInput, setTextInput] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const sentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const ticketNumber = parseTicketNumber(ws.session.name);
   const { ticket } = useTicketByNumber(projectId, ticketNumber ?? undefined);
@@ -61,12 +62,19 @@ function NotificationItem({ ws, projectId, projectName, onClose }: NotificationI
   const promptContext = ws.session.promptContext ?? "";
   const promptType = ws.session.promptType ?? "";
 
+  useEffect(() => {
+    return () => {
+      if (sentTimerRef.current) clearTimeout(sentTimerRef.current);
+    };
+  }, []);
+
   async function handleSend(text: string) {
     setError(null);
     try {
       await sendSessionInput(ws.agentName, ws.session.id, text);
       setSent(true);
-      setTimeout(() => setSent(false), 1000);
+      if (sentTimerRef.current) clearTimeout(sentTimerRef.current);
+      sentTimerRef.current = setTimeout(() => setSent(false), 1000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send");
     }

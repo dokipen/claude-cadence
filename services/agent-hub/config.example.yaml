@@ -10,9 +10,11 @@ hub_auth:
 
 # allowed_origins limits which browser origins can connect to the terminal WebSocket.
 # Set this to the frontend URL(s) served by your reverse proxy (e.g. Caddy).
-# When empty, connections from any origin are accepted (not recommended for production).
-# allowed_origins:
-#   - "https://cadence.whatisbackdoor.com"
+# Required when binding to a non-loopback address or running behind a reverse proxy:
+# when empty, the terminal WebSocket accepts connections from any browser origin (CSRF
+# risk) and a startup warning is emitted.
+allowed_origins:
+  - "https://your-domain.example.com"
 
 heartbeat:
   interval: "30s"

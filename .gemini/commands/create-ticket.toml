@@ -1,0 +1,6 @@
+description = "Create a ticket in the project's issue tracker and stop"
+prompt = """
+Activate the 'create-ticket' skill for '{{args}}' and follow its workflow.
+Collect title, description, and acceptance criteria, then create the ticket and STOP.
+Do NOT begin implementation.
+"""

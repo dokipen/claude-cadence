@@ -8,6 +8,7 @@ interface ConfirmDialogProps {
   confirmLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
+  anchorRect?: DOMRect;
 }
 
 export function ConfirmDialog({
@@ -17,6 +18,7 @@ export function ConfirmDialog({
   confirmLabel = "Confirm",
   onConfirm,
   onCancel,
+  anchorRect,
 }: ConfirmDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -26,14 +28,40 @@ export function ConfirmDialog({
 
     if (open && !el.open) {
       el.showModal();
+      if (anchorRect) {
+        // Double-rAF ensures a layout pass has occurred so offsetWidth/offsetHeight are valid
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          el.style.position = 'fixed';
+          el.style.margin = '0';
+          const gap = 8;
+          let top = anchorRect.bottom + gap;
+          let left = anchorRect.left;
+          const dialogWidth = el.offsetWidth;
+          const dialogHeight = el.offsetHeight;
+          if (left + dialogWidth > window.innerWidth - gap) {
+            left = window.innerWidth - dialogWidth - gap;
+          }
+          if (left < gap) left = gap;
+          if (top + dialogHeight > window.innerHeight - gap) {
+            top = anchorRect.top - dialogHeight - gap;
+          }
+          if (top < gap) top = gap;
+          el.style.top = `${top}px`;
+          el.style.left = `${left}px`;
+        }));
+      }
     } else if (!open && el.open) {
       el.close();
+      el.style.position = '';
+      el.style.margin = '';
+      el.style.top = '';
+      el.style.left = '';
     }
 
     return () => {
       if (el.open) el.close();
     };
-  }, [open]);
+  }, [open, anchorRect]);
 
   const handleClose = useCallback(() => {
     onCancel();

@@ -5,6 +5,12 @@ import type { Ticket, ActiveSessionInfo } from "../types";
 
 // Mock CSS modules
 vi.mock("../styles/board.module.css", () => ({ default: {} }));
+vi.mock("../styles/animated-icon.module.css", () => ({ default: {} }));
+
+// Mock lucide-react icons used in KanbanColumn
+vi.mock("lucide-react", () => ({
+  Sparkles: ({ size }: { size?: number }) => <svg data-testid="icon-sparkles" data-size={size} />,
+}));
 
 // Mock child components to keep tests focused on KanbanColumn logic
 vi.mock("./RefineAllDialog", () => ({
@@ -32,7 +38,7 @@ vi.mock("./TicketCard", () => ({
   TicketCard: () => <div data-testid="ticket-card" />,
 }));
 
-import { KanbanColumn } from "./KanbanColumn";
+import { KanbanColumn, hasActiveRefineAllSession } from "./KanbanColumn";
 
 // jsdom does not implement showModal/close on HTMLDialogElement.
 beforeEach(() => {
@@ -151,5 +157,152 @@ describe("KanbanColumn CreateTicketDialog", () => {
 
     expect(screen.getByTestId("create-ticket-dialog")).toBeTruthy();
     expect(screen.getByTestId("refine-all-dialog")).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hasActiveRefineAllSession unit tests
+// ---------------------------------------------------------------------------
+
+describe("hasActiveRefineAllSession", () => {
+  it("returns false for empty sessions", () => {
+    expect(hasActiveRefineAllSession([], "my-project")).toBe(false);
+  });
+
+  it("returns true when a running refine-all session exists with projectId prefix", () => {
+    const sessions: ActiveSessionInfo[] = [
+      { name: "my-project-refine-all-1234", state: "running", sessionId: "s1", agentName: "refiner" },
+    ];
+    expect(hasActiveRefineAllSession(sessions, "my-project")).toBe(true);
+  });
+
+  it("returns true for creating state", () => {
+    const sessions: ActiveSessionInfo[] = [
+      { name: "my-project-refine-all-9999", state: "creating", sessionId: "s2", agentName: "refiner" },
+    ];
+    expect(hasActiveRefineAllSession(sessions, "my-project")).toBe(true);
+  });
+
+  it("returns true for destroying state", () => {
+    const sessions: ActiveSessionInfo[] = [
+      { name: "my-project-refine-all-9999", state: "destroying", sessionId: "s3", agentName: "refiner" },
+    ];
+    expect(hasActiveRefineAllSession(sessions, "my-project")).toBe(true);
+  });
+
+  it("returns false when session state is not active", () => {
+    const sessions: ActiveSessionInfo[] = [
+      { name: "my-project-refine-all-1234", state: "stopped", sessionId: "s4", agentName: "refiner" },
+    ];
+    expect(hasActiveRefineAllSession(sessions, "my-project")).toBe(false);
+  });
+
+  it("returns false when session belongs to a different project", () => {
+    const sessions: ActiveSessionInfo[] = [
+      { name: "other-project-refine-all-1234", state: "running", sessionId: "s5", agentName: "refiner" },
+    ];
+    expect(hasActiveRefineAllSession(sessions, "my-project")).toBe(false);
+  });
+
+  it("falls back to bare refine-all- prefix when projectId is undefined", () => {
+    const sessions: ActiveSessionInfo[] = [
+      { name: "refine-all-1234", state: "running", sessionId: "s6", agentName: "refiner" },
+    ];
+    expect(hasActiveRefineAllSession(sessions, undefined)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Refine All icon button tests
+// ---------------------------------------------------------------------------
+
+describe("KanbanColumn Refine All icon button", () => {
+  const tickets = [makeTicket()];
+
+  it("shows Sparkles icon when no active refine-all session", () => {
+    render(
+      <KanbanColumn
+        {...defaultProps}
+        state="BACKLOG"
+        tickets={tickets}
+        totalCount={1}
+        sessions={[]}
+      />,
+    );
+    expect(screen.getByTestId("icon-sparkles")).toBeTruthy();
+    expect(screen.queryByTestId("animated-cadence-icon")).toBeNull();
+  });
+
+  it("shows AnimatedCadenceIcon when a refine-all session is running", () => {
+    const sessions: ActiveSessionInfo[] = [
+      { name: "myproject-refine-all-1234", state: "running", sessionId: "s1", agentName: "refiner" },
+    ];
+    render(
+      <KanbanColumn
+        {...defaultProps}
+        state="BACKLOG"
+        tickets={tickets}
+        totalCount={1}
+        sessions={sessions}
+        projectId="myproject"
+      />,
+    );
+    // AnimatedCadenceIcon renders an SVG; no Sparkles icon should appear
+    expect(screen.queryByTestId("icon-sparkles")).toBeNull();
+    const button = screen.getByTestId("refine-all-button");
+    expect(button.querySelector("svg")).toBeTruthy();
+  });
+
+  it("has aria-label on the refine-all button", () => {
+    render(
+      <KanbanColumn
+        {...defaultProps}
+        state="BACKLOG"
+        tickets={tickets}
+        totalCount={1}
+      />,
+    );
+    const button = screen.getByTestId("refine-all-button");
+    expect(button.getAttribute("aria-label")).toBe("Refine All");
+  });
+
+  it("opens RefineAllDialog when refine-all button is clicked", () => {
+    render(
+      <KanbanColumn
+        {...defaultProps}
+        state="BACKLOG"
+        tickets={tickets}
+        totalCount={1}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("refine-all-button"));
+    // RefineAllDialog mock is always rendered; button click should not throw
+    expect(screen.getByTestId("refine-all-dialog")).toBeTruthy();
+  });
+
+  it("does not show refine-all button when loading", () => {
+    render(
+      <KanbanColumn
+        {...defaultProps}
+        state="BACKLOG"
+        tickets={tickets}
+        totalCount={1}
+        loading={true}
+      />,
+    );
+    expect(screen.queryByTestId("refine-all-button")).toBeNull();
+  });
+
+  it("does not show refine-all button when hasNextPage is true", () => {
+    render(
+      <KanbanColumn
+        {...defaultProps}
+        state="BACKLOG"
+        tickets={tickets}
+        totalCount={10}
+        hasNextPage={true}
+      />,
+    );
+    expect(screen.queryByTestId("refine-all-button")).toBeNull();
   });
 });

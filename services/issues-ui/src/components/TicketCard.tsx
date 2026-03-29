@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { Archive, StopCircle } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import type { Ticket } from "../types";
 import { PriorityBadge } from "./PriorityBadge";
@@ -38,8 +39,10 @@ export function TicketCard({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [anchorRect, setAnchorRect] = useState<DOMRect | undefined>(undefined);
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
+  const [closeAnchorRect, setCloseAnchorRect] = useState<DOMRect | undefined>(undefined);
   const [closed, setClosed] = useState(false);
   const [showKillConfirm, setShowKillConfirm] = useState(false);
+  const [killAnchorRect, setKillAnchorRect] = useState<DOMRect | undefined>(undefined);
   const [killing, setKilling] = useState(false);
   const [killError, setKillError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -85,6 +88,8 @@ export function TicketCard({
     (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      setCloseAnchorRect(rect);
       setConfirmCloseOpen(true);
     },
     [],
@@ -115,6 +120,8 @@ export function TicketCard({
       console.warn("Kill session: invalid session data", err);
       return;
     }
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setKillAnchorRect(rect);
     setKillError(null);
     setShowKillConfirm(true);
   }, [activeSession]);
@@ -186,9 +193,10 @@ export function TicketCard({
                 className={styles.cardCloseButton}
                 onClick={handleCloseClick}
                 aria-label="Close ticket"
+                title="Close ticket"
                 data-testid="card-close-button"
               >
-                &times;
+                <Archive size={14} />
               </button>
             )}
             {activeSession ? (
@@ -198,11 +206,12 @@ export function TicketCard({
                     type="button"
                     className={styles.sessionKillButton}
                     data-testid="session-kill-button"
-                    aria-label="Kill session"
+                    aria-label="Stop session"
+                    title="Stop session"
                     onClick={handleKillClick}
                     disabled={killing}
                   >
-                    &times;
+                    <StopCircle size={14} />
                   </button>
                 )}
                 <button
@@ -267,14 +276,16 @@ export function TicketCard({
         confirmLabel="Close ticket"
         onConfirm={handleConfirmClose}
         onCancel={handleCancelClose}
+        anchorRect={closeAnchorRect}
       />
       <ConfirmDialog
         open={showKillConfirm}
-        title="Kill session?"
-        message="Kill session? This will terminate the agent immediately."
-        confirmLabel="Kill session"
+        title="Stop session?"
+        message="Stop session? This will terminate the agent immediately."
+        confirmLabel="Stop session"
         onConfirm={handleConfirmKill}
         onCancel={handleCancelKill}
+        anchorRect={killAnchorRect}
       />
     </>
   );

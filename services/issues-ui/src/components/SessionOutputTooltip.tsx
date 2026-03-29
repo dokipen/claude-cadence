@@ -28,11 +28,34 @@ export function SessionOutputTooltip({ session, children }: SessionOutputTooltip
     if (wrapperRef.current) {
       const rect = wrapperRef.current.getBoundingClientRect();
       const margin = 8;
-      const width = Math.min(600, window.innerWidth - rect.left - margin);
-      const tooltipLeft = rect.left + rect.width / 2 - width / 2;
-      const left = Math.max(margin, Math.min(tooltipLeft, window.innerWidth - width - margin));
-      const top = rect.bottom + 4;
-      const height = window.innerHeight - top - margin;
+      // Compute max achievable width in each direction, then pick the roomier side
+      const maxWidthRight = Math.min(600, window.innerWidth - rect.left - margin);
+      const maxWidthLeft = Math.min(600, rect.right - margin);
+      let left: number, width: number;
+      if (maxWidthRight >= maxWidthLeft) {
+        // Enough space to the right — center below icon, clamp to viewport
+        width = maxWidthRight;
+        const tooltipLeft = rect.left + rect.width / 2 - width / 2;
+        left = Math.max(margin, Math.min(tooltipLeft, window.innerWidth - width - margin));
+      } else {
+        // Near the right edge (e.g. "close" lane) — anchor to bottom-left of icon
+        width = maxWidthLeft;
+        left = Math.max(margin, rect.right - width);
+      }
+      const centerY = rect.top + rect.height / 2;
+      let top: number, height: number;
+
+      if (centerY > window.innerHeight / 2) {
+        // Lower half — position ABOVE
+        const bottom = rect.top - 4;
+        top = margin;
+        height = bottom - top;
+      } else {
+        // Upper half — position BELOW
+        top = rect.bottom + 4;
+        height = window.innerHeight - top - margin;
+      }
+
       setCoords({ top, left, width, height });
     }
     setVisible(true);

@@ -36,6 +36,7 @@ type Manager struct {
 	processAlive  func(pid int) bool
 	killProcess   func(pid int) error // injectable for tests; defaults to sending SIGKILL
 	ptyReconnect  func(id, slavePath string) error // injectable for tests; defaults to m.pty.Reattach
+	ptyDestroy    func(id string) error             // injectable for tests; defaults to m.pty.Destroy
 }
 
 // NewManager creates a new session Manager.
@@ -70,6 +71,13 @@ func NewManager(store *Store, ptyManager *pty.PTYManager, gitClient *git.Client,
 			return fmt.Errorf("pty manager not configured")
 		}
 	}
+	if ptyManager != nil {
+		m.ptyDestroy = func(id string) error {
+			return m.pty.Destroy(id)
+		}
+	} else {
+		m.ptyDestroy = func(id string) error { return nil }
+	}
 	return m
 }
 
@@ -86,6 +94,8 @@ const (
 	maxExtraArgs      = 64
 	maxExtraArgLen    = 4096
 	maxSessionNameLen = 255
+	maxEnvVarValueLen = 4096
+	maxEnvVarCount    = 64
 )
 
 // Create validates inputs, creates PTY session, starts command, returns Session.
@@ -101,6 +111,11 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		if strings.ContainsRune(arg, '\x00') {
 			return nil, &Error{Code: ErrInvalidArgument, Message: fmt.Sprintf("extra_args[%d] contains null byte", i)}
 		}
+	}
+
+	// Validate env var count.
+	if len(req.Env) > maxEnvVarCount {
+		return nil, &Error{Code: ErrInvalidArgument, Message: fmt.Sprintf("too many env vars: %d (max %d)", len(req.Env), maxEnvVarCount)}
 	}
 
 	// Validate profile exists.
@@ -247,6 +262,14 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 				continue
 			}
 			strVal := fmt.Sprintf("%v", v)
+			if len(strVal) > maxEnvVarValueLen {
+				slog.Warn("skipping vault secret with over-length value", "key", k, "len", len(strVal), "max", maxEnvVarValueLen)
+				continue
+			}
+			if strings.ContainsRune(strVal, '\x00') {
+				slog.Warn("skipping vault secret with null byte in value", "key", k)
+				continue
+			}
 			envSlice = append(envSlice, fmt.Sprintf("%s=%s", envKey, strVal))
 		}
 	}
@@ -255,6 +278,28 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	for k, v := range req.Env {
 		if !envKeyRe.MatchString(k) {
 			errMsg := fmt.Sprintf("invalid env var key: %q", k)
+			_ = m.store.Transition(sessionID, StateError, func(s *Session) {
+				s.ErrorMessage = errMsg
+			})
+			retSess, getErr := m.mustGet(sessionID)
+			if getErr != nil {
+				return nil, fmt.Errorf("%s; %w", errMsg, getErr)
+			}
+			return retSess, &Error{Code: ErrInvalidArgument, Message: errMsg}
+		}
+		if len(v) > maxEnvVarValueLen {
+			errMsg := fmt.Sprintf("env var value for key %q too long: %d bytes (max %d)", k, len(v), maxEnvVarValueLen)
+			_ = m.store.Transition(sessionID, StateError, func(s *Session) {
+				s.ErrorMessage = errMsg
+			})
+			retSess, getErr := m.mustGet(sessionID)
+			if getErr != nil {
+				return nil, fmt.Errorf("%s; %w", errMsg, getErr)
+			}
+			return retSess, &Error{Code: ErrInvalidArgument, Message: errMsg}
+		}
+		if strings.ContainsRune(v, '\x00') {
+			errMsg := fmt.Sprintf("env var value for key %q contains invalid character", k)
 			_ = m.store.Transition(sessionID, StateError, func(s *Session) {
 				s.ErrorMessage = errMsg
 			})
@@ -378,10 +423,22 @@ func (m *Manager) Destroy(id string, force bool) error {
 		return &Error{Code: ErrFailedPrecondition, Message: "session is running; use force=true to destroy"}
 	}
 
-	_ = m.store.Transition(id, StateDestroying)
+	if err := m.store.Transition(id, StateDestroying); err != nil {
+		var sessErr *Error
+		if errors.As(err, &sessErr) && sessErr.Code == ErrNotFound {
+			// Concurrent cleaner already removed the session; postcondition satisfied.
+			return nil
+		}
+		var transErr *InvalidTransitionError
+		if errors.As(err, &transErr) && transErr.To == StateDestroying {
+			// A concurrent Destroy() already claimed this session; postcondition satisfied.
+			return nil
+		}
+		return err
+	}
 
-	if m.pty != nil {
-		if err := m.pty.Destroy(sess.ID); err != nil {
+	if m.ptyDestroy != nil {
+		if err := m.ptyDestroy(sess.ID); err != nil {
 			slog.Warn("failed to destroy PTY session", "session", sess.ID, "error", err)
 		}
 	}

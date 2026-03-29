@@ -1,7 +1,8 @@
-import type { Agent } from "../types";
+import type { Agent, ActiveSessionInfo, SessionState } from "../types";
 import type { AgentSession } from "../hooks/useAllSessions";
 import styles from "../styles/agents.module.css";
 import { stripProjectPrefix } from "../utils/sessionName";
+import { SessionOutputTooltip } from "./SessionOutputTooltip";
 
 interface SessionListProps {
   agents: Agent[];
@@ -67,6 +68,27 @@ export function SessionList({ agents, sessions, openKeys, minimizedKeys, onSessi
                   const isRunning = as.session.state === "running";
                   const isDestroying = as.session.state === "destroying";
                   const isCreating = as.session.state === "creating";
+                  const isActive = isRunning || isCreating || isDestroying;
+                  const sessionInfo: ActiveSessionInfo | null =
+                    isActive && as.session.id && as.agentName
+                      ? {
+                          name: as.session.name,
+                          state: as.session.state as SessionState,
+                          sessionId: as.session.id,
+                          agentName: as.agentName,
+                        }
+                      : null;
+                  const sessionContent = (
+                    <>
+                      <span className={styles.sessionDot}>
+                        {as.session.waitingForInput ? "◉" : isMinimized ? "▼" : isCreating ? "◌" : isRunning || isDestroying ? "●" : "○"}
+                      </span>
+                      <span className={styles.sessionName}>
+                        {stripProjectPrefix(as.session.name)}
+                        {DEBUG_SESSION_STATE && ` [${as.session.state}][${as.stateSource ?? "?"}]`}
+                      </span>
+                    </>
+                  );
                   return (
                     <button
                       key={as.session.id}
@@ -76,13 +98,13 @@ export function SessionList({ agents, sessions, openKeys, minimizedKeys, onSessi
                       data-testid="sidebar-session"
                       title={`${as.session.name} (${as.session.state})`}
                     >
-                      <span className={styles.sessionDot}>
-                        {as.session.waitingForInput ? "◉" : isMinimized ? "▼" : isCreating ? "◌" : isRunning || isDestroying ? "●" : "○"}
-                      </span>
-                      <span className={styles.sessionName}>
-                        {stripProjectPrefix(as.session.name)}
-                        {DEBUG_SESSION_STATE && ` [${as.session.state}][${as.stateSource ?? "?"}]`}
-                      </span>
+                      {sessionInfo ? (
+                        <SessionOutputTooltip session={sessionInfo}>
+                          {sessionContent}
+                        </SessionOutputTooltip>
+                      ) : (
+                        sessionContent
+                      )}
                     </button>
                   );
                 })}

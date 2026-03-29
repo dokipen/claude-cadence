@@ -1,12 +1,17 @@
 package session
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
+	"github.com/dokipen/claude-cadence/services/agents/internal/vault"
 )
 
 func newCreateTestManager(profiles map[string]config.Profile) *Manager {
@@ -137,6 +142,108 @@ func TestCreate_SessionNameTooLong(t *testing.T) {
 		sesErr, ok := err.(*Error)
 		if !ok || sesErr.Code != ErrInvalidArgument {
 			t.Errorf("expected ErrInvalidArgument for 256-char name, got %v", err)
+		}
+	})
+}
+
+func TestCreate_EnvVarValueTooLong(t *testing.T) {
+	profiles := map[string]config.Profile{
+		"default": {Command: "echo {{.SessionName}}"},
+	}
+
+	// Build boundary-value env var values (all lowercase a).
+	value4096 := strings.Repeat("a", 4096)
+	value4097 := strings.Repeat("a", 4097)
+
+	t.Run("exactly 4096 bytes accepted", func(t *testing.T) {
+		m := newCreateTestManager(profiles)
+		var gotInvalidArg bool
+		func() {
+			defer func() { recover() }() // swallow nil-PTY panic; that means validation passed
+			_, err := m.Create(CreateRequest{
+				AgentProfile: "default",
+				SessionName:  "test-session",
+				Env:          map[string]string{"KEY": value4096},
+			})
+			var sesErr *Error
+			if errors.As(err, &sesErr) && sesErr.Code == ErrInvalidArgument {
+				gotInvalidArg = true
+			}
+		}()
+		if gotInvalidArg {
+			t.Errorf("expected 4096-byte env var value to be accepted, got ErrInvalidArgument")
+		}
+	})
+
+	t.Run("4097 bytes rejected", func(t *testing.T) {
+		m := newCreateTestManager(profiles)
+		_, err := m.Create(CreateRequest{
+			AgentProfile: "default",
+			SessionName:  "test-session",
+			Env:          map[string]string{"KEY": value4097},
+		})
+		if err == nil {
+			t.Fatalf("expected ErrInvalidArgument for 4097-byte env var value, got nil")
+		}
+		var sessionErr *Error
+		if !errors.As(err, &sessionErr) {
+			t.Fatalf("expected *Error, got %T", err)
+		}
+		if sessionErr.Code != ErrInvalidArgument {
+			t.Errorf("expected ErrInvalidArgument, got %v", sessionErr.Code)
+		}
+	})
+}
+
+func TestCreate_EnvVarCountTooMany(t *testing.T) {
+	profiles := map[string]config.Profile{
+		"default": {Command: "echo {{.SessionName}}"},
+	}
+
+	t.Run("exactly 64 env vars accepted", func(t *testing.T) {
+		m := newCreateTestManager(profiles)
+		env := make(map[string]string, 64)
+		for i := range 64 {
+			env[fmt.Sprintf("KEY_%d", i)] = "value"
+		}
+		var gotInvalidArg bool
+		func() {
+			defer func() { recover() }() // swallow nil-PTY panic; that means validation passed
+			_, err := m.Create(CreateRequest{
+				AgentProfile: "default",
+				SessionName:  "test-session",
+				Env:          env,
+			})
+			var sesErr *Error
+			if errors.As(err, &sesErr) && sesErr.Code == ErrInvalidArgument {
+				gotInvalidArg = true
+			}
+		}()
+		if gotInvalidArg {
+			t.Errorf("expected 64 env vars to be accepted, got ErrInvalidArgument")
+		}
+	})
+
+	t.Run("65 env vars rejected", func(t *testing.T) {
+		m := newCreateTestManager(profiles)
+		env := make(map[string]string, 65)
+		for i := range 65 {
+			env[fmt.Sprintf("KEY_%d", i)] = "value"
+		}
+		_, err := m.Create(CreateRequest{
+			AgentProfile: "default",
+			SessionName:  "test-session",
+			Env:          env,
+		})
+		if err == nil {
+			t.Fatalf("expected ErrInvalidArgument for 65 env vars, got nil")
+		}
+		var sessionErr *Error
+		if !errors.As(err, &sessionErr) {
+			t.Fatalf("expected *Error, got %T", err)
+		}
+		if sessionErr.Code != ErrInvalidArgument {
+			t.Errorf("expected ErrInvalidArgument, got %v", sessionErr.Code)
 		}
 	})
 }
@@ -573,5 +680,180 @@ func TestCreate_ConcurrentAutoNameNeverCollides(t *testing.T) {
 			t.Errorf("duplicate session name %q found in store", s.Name)
 		}
 		seen[s.Name] = true
+	}
+}
+
+// TestDestroy_ConcurrentDeleteBetweenReconcileAndTransition reproduces the
+// TOCTOU race in Destroy(): store.Get succeeds, reconcile is called (which
+// calls ptyHasSession), a concurrent goroutine deletes the session, then
+// store.Transition(StateDestroying) returns ErrNotFound — which is silently
+// discarded — and pty.Destroy is still called on the already-deleted session.
+//
+// The test asserts that pty.Destroy is NOT called when the session was
+// concurrently deleted before Transition could run.  With the bug present,
+// pty.Destroy IS called, so the test fails.  After the fix it will pass.
+func TestDestroy_ConcurrentDeleteBetweenReconcileAndTransition(t *testing.T) {
+	store := NewStore()
+
+	// deleted is closed once the concurrent delete has completed.
+	deleted := make(chan struct{})
+	// reconciling is closed when ptyHasSession is first called (inside reconcile).
+	reconciling := make(chan struct{})
+
+	// Track whether ptyDestroy was invoked.
+	var ptyDestroyCalled bool
+
+	m := &Manager{
+		store:        store,
+		processAlive: func(pid int) bool { return false },
+		// ptyHasSession is the synchronisation hook: signal that reconcile has
+		// started, then wait for the concurrent delete to finish before returning.
+		ptyHasSession: func(id string) bool {
+			close(reconciling) // signal: we are inside reconcile now
+			<-deleted          // wait: concurrent delete has run
+			return true        // returning true means reconcile won't change state
+		},
+		ptyDestroy: func(id string) error {
+			ptyDestroyCalled = true
+			return nil
+		},
+	}
+
+	// Add a running session directly to the store.
+	sess := &Session{
+		ID:    "test-session-toctou",
+		Name:  "test-session-toctou",
+		State: StateRunning,
+	}
+	store.Add(sess)
+
+	// Goroutine: wait until reconcile has started, then delete the session.
+	go func() {
+		<-reconciling          // wait until ptyHasSession is entered
+		store.Delete(sess.ID)  // concurrent delete: removes session from store
+		close(deleted)         // signal: delete is done
+	}()
+
+	// Call Destroy with force=true. After reconcile (which sees ptyHasSession=true
+	// and leaves the session as StateRunning), the concurrent delete has already
+	// removed the session. store.Transition returns ErrNotFound, which is silently
+	// discarded, and then (with the bug) m.ptyDestroy is called anyway.
+	err := m.Destroy(sess.ID, true /*force*/)
+
+	// Destroy should return nil — the session is already gone, postcondition satisfied.
+	if err != nil {
+		t.Fatalf("Destroy() returned unexpected error: %v", err)
+	}
+
+	// The critical assertion: pty.Destroy must NOT be called when the session was
+	// concurrently deleted before Transition could mark it as Destroying.
+	// With the current bug, ptyDestroyCalled == true, causing this test to fail.
+	if ptyDestroyCalled {
+		t.Error("pty.Destroy was called after concurrent store.Delete — TOCTOU bug: Destroy() should detect that Transition returned ErrNotFound and skip cleanup")
+	}
+}
+
+// fakeVaultHTTPServer returns a test server that serves a single KV v2 secret at the given path.
+func fakeVaultHTTPServer(t *testing.T, secretPath string, data map[string]interface{}) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v1/")
+		if trimmed != secretPath {
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, `{"errors":["not found"]}`)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": map[string]interface{}{"data": data},
+		})
+	}))
+}
+
+func TestCreate_VaultOverLengthValueSkipped(t *testing.T) {
+	// Vault secrets that exceed maxEnvVarValueLen must be skipped with a warning,
+	// not treated as a hard error. Session creation must succeed.
+	overLengthVal := strings.Repeat("x", maxEnvVarValueLen+1)
+	srv := fakeVaultHTTPServer(t, "secret/data/test", map[string]interface{}{
+		"normal_key": "short-value",
+		"huge_key":   overLengthVal,
+	})
+	t.Cleanup(srv.Close)
+
+	vaultClient, err := vault.NewClient(&config.VaultConfig{
+		Address:    srv.URL,
+		AuthMethod: "token",
+		Token:      "unused",
+	})
+	if err != nil {
+		t.Fatalf("vault.NewClient: %v", err)
+	}
+
+	profiles := map[string]config.Profile{
+		"vault-profile": {
+			Command:     "sleep 3600",
+			VaultSecret: "secret/data/test",
+		},
+	}
+	m := newCreateTestManager(profiles)
+	m.vault = vaultClient
+
+	var gotInvalidArg bool
+	func() {
+		defer func() { recover() }() // swallow nil-PTY panic; means validation passed
+		_, createErr := m.Create(CreateRequest{
+			AgentProfile: "vault-profile",
+			SessionName:  "test-vault-overlength",
+		})
+		var sesErr *Error
+		if errors.As(createErr, &sesErr) && sesErr.Code == ErrInvalidArgument {
+			gotInvalidArg = true
+		}
+	}()
+
+	if gotInvalidArg {
+		t.Error("over-length vault value should be skipped with a warning, not rejected with ErrInvalidArgument")
+	}
+}
+
+func TestCreate_VaultNullByteValueSkipped(t *testing.T) {
+	// Vault secrets containing null bytes must be skipped with a warning.
+	srv := fakeVaultHTTPServer(t, "secret/data/test", map[string]interface{}{
+		"null_key": "value\x00with-null",
+	})
+	t.Cleanup(srv.Close)
+
+	vaultClient, err := vault.NewClient(&config.VaultConfig{
+		Address:    srv.URL,
+		AuthMethod: "token",
+		Token:      "unused",
+	})
+	if err != nil {
+		t.Fatalf("vault.NewClient: %v", err)
+	}
+
+	profiles := map[string]config.Profile{
+		"vault-profile": {
+			Command:     "sleep 3600",
+			VaultSecret: "secret/data/test",
+		},
+	}
+	m := newCreateTestManager(profiles)
+	m.vault = vaultClient
+
+	var gotInvalidArg bool
+	func() {
+		defer func() { recover() }() // swallow nil-PTY panic; means validation passed
+		_, createErr := m.Create(CreateRequest{
+			AgentProfile: "vault-profile",
+			SessionName:  "test-vault-nullbyte",
+		})
+		var sesErr *Error
+		if errors.As(createErr, &sesErr) && sesErr.Code == ErrInvalidArgument {
+			gotInvalidArg = true
+		}
+	}()
+
+	if gotInvalidArg {
+		t.Error("vault value with null byte should be skipped with a warning, not rejected with ErrInvalidArgument")
 	}
 }

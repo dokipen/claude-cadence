@@ -239,6 +239,101 @@ describe("SessionOutputTooltip", () => {
     expect(xtermInstances[0].onData).not.toHaveBeenCalled();
   });
 
+  describe("tooltip positioning", () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("anchors tooltip to bottom-left when icon is near the right viewport edge", async () => {
+      vi.stubGlobal("innerWidth", 1200);
+      vi.stubGlobal("innerHeight", 800);
+
+      const session = makeSession();
+      const { getByTestId, container } = render(
+        <SessionOutputTooltip session={session}>
+          <span>icon</span>
+        </SessionOutputTooltip>,
+      );
+
+      const wrapper = container.firstChild as Element;
+      vi.spyOn(wrapper, "getBoundingClientRect").mockReturnValue({
+        left: 1160, right: 1180, top: 70, bottom: 100, width: 20, height: 30,
+        x: 1160, y: 70, toJSON: () => ({}),
+      } as DOMRect);
+
+      await act(async () => {
+        fireEvent.mouseEnter(wrapper);
+      });
+
+      const tooltip = getByTestId("session-output-tooltip");
+      // maxWidthLeft = min(600, 1180 - 8) = 600 > maxWidthRight = min(600, 1200 - 1160 - 8) = 32
+      // → left-anchor: left = max(8, 1180 - 600) = 580; top = 100 + 4 = 104
+      expect(tooltip.style.top).toBe("104px");
+      expect(tooltip.style.left).toBe("580px");
+      expect(tooltip.style.width).toBe("600px");
+      expect(tooltip.style.height).toBe("688px"); // 800 - 104 - 8
+    });
+
+    it("clamps tooltip to viewport left edge when icon is near the left viewport edge", async () => {
+      vi.stubGlobal("innerWidth", 1200);
+      vi.stubGlobal("innerHeight", 800);
+
+      const session = makeSession();
+      const { getByTestId, container } = render(
+        <SessionOutputTooltip session={session}>
+          <span>icon</span>
+        </SessionOutputTooltip>,
+      );
+
+      const wrapper = container.firstChild as Element;
+      vi.spyOn(wrapper, "getBoundingClientRect").mockReturnValue({
+        left: 20, right: 40, top: 70, bottom: 100, width: 20, height: 30,
+        x: 20, y: 70, toJSON: () => ({}),
+      } as DOMRect);
+
+      await act(async () => {
+        fireEvent.mouseEnter(wrapper);
+      });
+
+      const tooltip = getByTestId("session-output-tooltip");
+      // maxWidthRight = min(600, 1200 - 20 - 8) = 600 >= maxWidthLeft = min(600, 40 - 8) = 32
+      // → right/center: width=600; tooltipLeft = 20+10-300 = -270; left = max(8, -270) = 8
+      expect(tooltip.style.top).toBe("104px");
+      expect(tooltip.style.left).toBe("8px");
+      expect(tooltip.style.width).toBe("600px");
+      expect(tooltip.style.height).toBe("688px");
+    });
+
+    it("positions tooltip ABOVE when icon is in the lower half of the viewport", async () => {
+      vi.stubGlobal("innerWidth", 1200);
+      vi.stubGlobal("innerHeight", 800);
+
+      const session = makeSession();
+      const { getByTestId, container } = render(
+        <SessionOutputTooltip session={session}>
+          <span>icon</span>
+        </SessionOutputTooltip>,
+      );
+
+      const wrapper = container.firstChild as Element;
+      // Lower half: centerY = 600 + 30/2 = 615 > 800/2 = 400
+      vi.spyOn(wrapper, "getBoundingClientRect").mockReturnValue({
+        left: 590, right: 610, top: 600, bottom: 630, width: 20, height: 30,
+        x: 590, y: 600, toJSON: () => ({}),
+      } as DOMRect);
+
+      await act(async () => {
+        fireEvent.mouseEnter(wrapper);
+      });
+
+      const tooltip = getByTestId("session-output-tooltip");
+      // top = margin = 8px
+      // height = rect.top - 4 - margin = 600 - 4 - 8 = 588px
+      expect(tooltip.style.top).toBe("8px");
+      expect(tooltip.style.height).toBe("588px");
+    });
+  });
+
   it("closes WebSocket and disposes xterm on mouseleave", async () => {
     const session = makeSession();
     const { container } = render(
