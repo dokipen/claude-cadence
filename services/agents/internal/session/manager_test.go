@@ -2,6 +2,7 @@ package session
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -179,6 +180,59 @@ func TestCreate_EnvVarValueTooLong(t *testing.T) {
 		})
 		if err == nil {
 			t.Fatalf("expected ErrInvalidArgument for 4097-byte env var value, got nil")
+		}
+		var sessionErr *Error
+		if !errors.As(err, &sessionErr) {
+			t.Fatalf("expected *Error, got %T", err)
+		}
+		if sessionErr.Code != ErrInvalidArgument {
+			t.Errorf("expected ErrInvalidArgument, got %v", sessionErr.Code)
+		}
+	})
+}
+
+func TestCreate_EnvVarCountTooMany(t *testing.T) {
+	profiles := map[string]config.Profile{
+		"default": {Command: "echo {{.SessionName}}"},
+	}
+
+	t.Run("exactly 64 env vars accepted", func(t *testing.T) {
+		m := newCreateTestManager(profiles)
+		env := make(map[string]string, 64)
+		for i := range 64 {
+			env[fmt.Sprintf("KEY_%d", i)] = "value"
+		}
+		var gotInvalidArg bool
+		func() {
+			defer func() { recover() }() // swallow nil-PTY panic; that means validation passed
+			_, err := m.Create(CreateRequest{
+				AgentProfile: "default",
+				SessionName:  "test-session",
+				Env:          env,
+			})
+			var sesErr *Error
+			if errors.As(err, &sesErr) && sesErr.Code == ErrInvalidArgument {
+				gotInvalidArg = true
+			}
+		}()
+		if gotInvalidArg {
+			t.Errorf("expected 64 env vars to be accepted, got ErrInvalidArgument")
+		}
+	})
+
+	t.Run("65 env vars rejected", func(t *testing.T) {
+		m := newCreateTestManager(profiles)
+		env := make(map[string]string, 65)
+		for i := range 65 {
+			env[fmt.Sprintf("KEY_%d", i)] = "value"
+		}
+		_, err := m.Create(CreateRequest{
+			AgentProfile: "default",
+			SessionName:  "test-session",
+			Env:          env,
+		})
+		if err == nil {
+			t.Fatalf("expected ErrInvalidArgument for 65 env vars, got nil")
 		}
 		var sessionErr *Error
 		if !errors.As(err, &sessionErr) {
