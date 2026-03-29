@@ -94,6 +94,7 @@ const (
 	RPCErrAlreadyExists      = -32002
 	RPCErrInvalidArgument    = -32003
 	RPCErrFailedPrecondition = -32004
+	RPCErrResourceExhausted  = -32005
 	RPCErrInternal           = -32000
 )
 

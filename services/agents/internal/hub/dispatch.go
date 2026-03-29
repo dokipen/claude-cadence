@@ -16,11 +16,12 @@ import (
 
 // JSON-RPC error codes matching the hub protocol.
 const (
-	rpcErrNotFound           = -32001
-	rpcErrAlreadyExists      = -32002
-	rpcErrInvalidArgument    = -32003
-	rpcErrFailedPrecondition = -32004
-	rpcErrInternal           = -32000
+	rpcErrNotFound            = -32001
+	rpcErrAlreadyExists       = -32002
+	rpcErrInvalidArgument     = -32003
+	rpcErrFailedPrecondition  = -32004
+	rpcErrResourceExhausted   = -32005
+	rpcErrInternal            = -32000
 )
 
 // Dispatcher implements SessionDispatcher by calling the session manager directly.
@@ -290,6 +291,8 @@ func mapSessionError(err error) *rpcError {
 		return &rpcError{Code: rpcErrInvalidArgument, Message: sessErr.Message}
 	case session.ErrFailedPrecondition:
 		return &rpcError{Code: rpcErrFailedPrecondition, Message: sessErr.Message}
+	case session.ErrResourceExhausted:
+		return &rpcError{Code: rpcErrResourceExhausted, Message: sessErr.Message}
 	default:
 		slog.Error("internal session error", "error", sessErr)
 		return &rpcError{Code: rpcErrInternal, Message: "internal error"}

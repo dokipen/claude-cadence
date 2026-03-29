@@ -180,6 +180,7 @@ func TestMapSessionError(t *testing.T) {
 		{session.ErrAlreadyExists, rpcErrAlreadyExists, "test"},
 		{session.ErrInvalidArgument, rpcErrInvalidArgument, "test"},
 		{session.ErrFailedPrecondition, rpcErrFailedPrecondition, "test"},
+		{session.ErrResourceExhausted, rpcErrResourceExhausted, "test"},
 		{session.ErrInternal, rpcErrInternal, "internal error"},
 	}
 
