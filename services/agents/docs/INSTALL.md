@@ -396,8 +396,9 @@ allowed_origins:
   - "https://your-cadence-domain.example.com"
 ```
 
-agent-hub emits a startup warning when `allowed_origins` is unset. The dev container
-config (`config.container.yaml`) ships with `allowed_origins: ["http://localhost"]`.
+agent-hub emits a startup warning when `allowed_origins` is unset and the server is
+bound to a non-loopback address. The dev container config (`config.container.yaml`)
+ships with `allowed_origins: ["http://localhost"]`.
 
 ### Verifying hub registration
 
