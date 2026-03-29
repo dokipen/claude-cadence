@@ -42,8 +42,20 @@ export function SessionOutputTooltip({ session, children }: SessionOutputTooltip
         width = maxWidthLeft;
         left = Math.max(margin, rect.right - width);
       }
-      const top = rect.bottom + 4;
-      const height = window.innerHeight - top - margin;
+      const centerY = rect.top + rect.height / 2;
+      let top: number, height: number;
+
+      if (centerY > window.innerHeight / 2) {
+        // Lower half — position ABOVE
+        const bottom = rect.top - 4;
+        top = margin;
+        height = bottom - top;
+      } else {
+        // Upper half — position BELOW
+        top = rect.bottom + 4;
+        height = window.innerHeight - top - margin;
+      }
+
       setCoords({ top, left, width, height });
     }
     setVisible(true);
