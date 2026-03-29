@@ -332,6 +332,53 @@ describe("SessionOutputTooltip", () => {
       expect(tooltip.style.top).toBe("8px");
       expect(tooltip.style.height).toBe("588px");
     });
+
+    it("recomputes coordinates on window resize while visible", async () => {
+      vi.stubGlobal("innerWidth", 1200);
+      vi.stubGlobal("innerHeight", 800);
+
+      const session = makeSession();
+      const { getByTestId, container } = render(
+        <SessionOutputTooltip session={session}>
+          <span>icon</span>
+        </SessionOutputTooltip>,
+      );
+
+      const wrapper = container.firstChild as Element;
+      // Mock rect for lower half
+      const mockRect = {
+        left: 590, right: 610, top: 600, bottom: 630, width: 20, height: 30,
+        x: 590, y: 600, toJSON: () => ({}),
+      } as DOMRect;
+      vi.spyOn(wrapper, "getBoundingClientRect").mockReturnValue(mockRect);
+
+      await act(async () => {
+        fireEvent.mouseEnter(wrapper);
+      });
+
+      const tooltip = getByTestId("session-output-tooltip");
+      expect(tooltip.style.top).toBe("8px");
+      expect(tooltip.style.height).toBe("588px");
+
+      // Now change window size and trigger resize event
+      vi.stubGlobal("innerHeight", 400); // Now it's not in the lower half anymore since 615 > 400
+      
+      // Mock new rect (say it stayed in same absolute coords, but relative to viewport it's different now)
+      // Actually wrapper is lower half since centerY is 615 > 400/2=200
+      // Let's just mock a completely different rect to prove it recomputes
+      vi.spyOn(wrapper, "getBoundingClientRect").mockReturnValue({
+        left: 20, right: 40, top: 70, bottom: 100, width: 20, height: 30,
+        x: 20, y: 70, toJSON: () => ({}),
+      } as DOMRect);
+
+      await act(async () => {
+        window.dispatchEvent(new Event("resize"));
+      });
+
+      // Now it should be left-clamped and positioned BELOW
+      expect(tooltip.style.top).toBe("104px");
+      expect(tooltip.style.left).toBe("8px");
+    });
   });
 
   it("closes WebSocket and disposes xterm on mouseleave", async () => {
