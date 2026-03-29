@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { createSession } from "../api/agentHubClient";
 import { normalizeRepo } from "../hooks/useAgents";
+import { normalizeSessionName } from "../utils/sessionName";
 import type { Agent, Session } from "../types";
 import styles from "../styles/agents.module.css";
 
@@ -45,8 +46,14 @@ export function AgentLaunchForm({ agents, onLaunched, repoUrl }: AgentLaunchForm
     async (e: React.FormEvent) => {
       e.preventDefault();
 
-      if (!selectedHost || !selectedProfile || !name.trim()) {
+      if (!selectedHost || !selectedProfile) {
         setError("Host, profile, and name are all required.");
+        return;
+      }
+
+      const normalized = normalizeSessionName(name);
+      if (!normalized) {
+        setError("Session name cannot be empty.");
         return;
       }
 
@@ -54,7 +61,7 @@ export function AgentLaunchForm({ agents, onLaunched, repoUrl }: AgentLaunchForm
       setError(null);
 
       try {
-        const session = await createSession(selectedHost, selectedProfile, name.trim());
+        const session = await createSession(selectedHost, selectedProfile, normalized);
         onLaunched(session, selectedHost);
         setSelectedHost("");
         setSelectedProfile("");

@@ -6,3 +6,20 @@ export function stripProjectPrefix(name: string): string {
   }
   return name;
 }
+
+/**
+ * Normalize a user-supplied session name to a valid session identifier.
+ * - Lowercases the input
+ * - Replaces any character outside [a-z0-9_-] with a hyphen
+ * - Collapses consecutive hyphens into one
+ * - Strips leading and trailing hyphens
+ * Returns an empty string if no valid characters remain.
+ */
+export function normalizeSessionName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
