@@ -172,21 +172,26 @@ func TestDispatcher_GetTerminalEndpoint_WSSScheme(t *testing.T) {
 
 func TestMapSessionError(t *testing.T) {
 	tests := []struct {
-		code     session.ErrorCode
-		expected int
+		code            session.ErrorCode
+		expectedCode    int
+		expectedMessage string
 	}{
-		{session.ErrNotFound, rpcErrNotFound},
-		{session.ErrAlreadyExists, rpcErrAlreadyExists},
-		{session.ErrInvalidArgument, rpcErrInvalidArgument},
-		{session.ErrFailedPrecondition, rpcErrFailedPrecondition},
-		{session.ErrInternal, rpcErrInternal},
+		{session.ErrNotFound, rpcErrNotFound, "test"},
+		{session.ErrAlreadyExists, rpcErrAlreadyExists, "test"},
+		{session.ErrInvalidArgument, rpcErrInvalidArgument, "test"},
+		{session.ErrFailedPrecondition, rpcErrFailedPrecondition, "test"},
+		{session.ErrResourceExhausted, rpcErrResourceExhausted, "test"},
+		{session.ErrInternal, rpcErrInternal, "internal error"},
 	}
 
 	for _, tt := range tests {
 		err := &session.Error{Code: tt.code, Message: "test"}
 		rpcErr := mapSessionError(err)
-		if rpcErr.Code != tt.expected {
-			t.Errorf("ErrorCode %d: expected RPC code %d, got %d", tt.code, tt.expected, rpcErr.Code)
+		if rpcErr.Code != tt.expectedCode {
+			t.Errorf("ErrorCode %d: expected RPC code %d, got %d", tt.code, tt.expectedCode, rpcErr.Code)
+		}
+		if rpcErr.Message != tt.expectedMessage {
+			t.Errorf("ErrorCode %d: expected message %q, got %q", tt.code, tt.expectedMessage, rpcErr.Message)
 		}
 	}
 }
