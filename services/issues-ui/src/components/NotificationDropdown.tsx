@@ -22,8 +22,11 @@ function formatIdleDuration(idleSince: string | undefined): string {
   return `${hours}h ${minutes % 60}m`;
 }
 
+// Match any session name ending with -N (e.g. lead-42, refine-42, tester-42).
+// If no real ticket exists for the extracted number, useTicketByNumber returns null
+// and the UI falls back to displaying the session name — so over-matching is safe.
 function parseTicketNumber(sessionName: string): number | null {
-  const match = sessionName.match(/^lead-(\d+)/);
+  const match = sessionName.match(/-(\d+)$/);
   return match ? parseInt(match[1], 10) : null;
 }
 
