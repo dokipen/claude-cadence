@@ -1,13 +1,17 @@
 package session
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
+	"github.com/dokipen/claude-cadence/services/agents/internal/vault"
 )
 
 func newCreateTestManager(profiles map[string]config.Profile) *Manager {
@@ -746,5 +750,110 @@ func TestDestroy_ConcurrentDeleteBetweenReconcileAndTransition(t *testing.T) {
 	// With the current bug, ptyDestroyCalled == true, causing this test to fail.
 	if ptyDestroyCalled {
 		t.Error("pty.Destroy was called after concurrent store.Delete — TOCTOU bug: Destroy() should detect that Transition returned ErrNotFound and skip cleanup")
+	}
+}
+
+// fakeVaultHTTPServer returns a test server that serves a single KV v2 secret at the given path.
+func fakeVaultHTTPServer(t *testing.T, secretPath string, data map[string]interface{}) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v1/")
+		if trimmed != secretPath {
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, `{"errors":["not found"]}`)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": map[string]interface{}{"data": data},
+		})
+	}))
+}
+
+func TestCreate_VaultOverLengthValueSkipped(t *testing.T) {
+	// Vault secrets that exceed maxEnvVarValueLen must be skipped with a warning,
+	// not treated as a hard error. Session creation must succeed.
+	overLengthVal := strings.Repeat("x", maxEnvVarValueLen+1)
+	srv := fakeVaultHTTPServer(t, "secret/data/test", map[string]interface{}{
+		"normal_key": "short-value",
+		"huge_key":   overLengthVal,
+	})
+	t.Cleanup(srv.Close)
+
+	vaultClient, err := vault.NewClient(&config.VaultConfig{
+		Address:    srv.URL,
+		AuthMethod: "token",
+		Token:      "unused",
+	})
+	if err != nil {
+		t.Fatalf("vault.NewClient: %v", err)
+	}
+
+	profiles := map[string]config.Profile{
+		"vault-profile": {
+			Command:     "sleep 3600",
+			VaultSecret: "secret/data/test",
+		},
+	}
+	m := newCreateTestManager(profiles)
+	m.vault = vaultClient
+
+	var gotInvalidArg bool
+	func() {
+		defer func() { recover() }() // swallow nil-PTY panic; means validation passed
+		_, createErr := m.Create(CreateRequest{
+			AgentProfile: "vault-profile",
+			SessionName:  "test-vault-overlength",
+		})
+		var sesErr *Error
+		if errors.As(createErr, &sesErr) && sesErr.Code == ErrInvalidArgument {
+			gotInvalidArg = true
+		}
+	}()
+
+	if gotInvalidArg {
+		t.Error("over-length vault value should be skipped with a warning, not rejected with ErrInvalidArgument")
+	}
+}
+
+func TestCreate_VaultNullByteValueSkipped(t *testing.T) {
+	// Vault secrets containing null bytes must be skipped with a warning.
+	srv := fakeVaultHTTPServer(t, "secret/data/test", map[string]interface{}{
+		"null_key": "value\x00with-null",
+	})
+	t.Cleanup(srv.Close)
+
+	vaultClient, err := vault.NewClient(&config.VaultConfig{
+		Address:    srv.URL,
+		AuthMethod: "token",
+		Token:      "unused",
+	})
+	if err != nil {
+		t.Fatalf("vault.NewClient: %v", err)
+	}
+
+	profiles := map[string]config.Profile{
+		"vault-profile": {
+			Command:     "sleep 3600",
+			VaultSecret: "secret/data/test",
+		},
+	}
+	m := newCreateTestManager(profiles)
+	m.vault = vaultClient
+
+	var gotInvalidArg bool
+	func() {
+		defer func() { recover() }() // swallow nil-PTY panic; means validation passed
+		_, createErr := m.Create(CreateRequest{
+			AgentProfile: "vault-profile",
+			SessionName:  "test-vault-nullbyte",
+		})
+		var sesErr *Error
+		if errors.As(createErr, &sesErr) && sesErr.Code == ErrInvalidArgument {
+			gotInvalidArg = true
+		}
+	}()
+
+	if gotInvalidArg {
+		t.Error("vault value with null byte should be skipped with a warning, not rejected with ErrInvalidArgument")
 	}
 }

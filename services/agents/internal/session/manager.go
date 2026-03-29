@@ -266,6 +266,10 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 				slog.Warn("skipping vault secret with over-length value", "key", k, "len", len(strVal), "max", maxEnvVarValueLen)
 				continue
 			}
+			if strings.ContainsRune(strVal, '\x00') {
+				slog.Warn("skipping vault secret with null byte in value", "key", k)
+				continue
+			}
 			envSlice = append(envSlice, fmt.Sprintf("%s=%s", envKey, strVal))
 		}
 	}
