@@ -55,10 +55,6 @@ func main() {
 	}
 	slog.SetDefault(slog.New(handler))
 
-	if len(cfg.AllowedOrigins) == 0 && cfg.Host != "127.0.0.1" && cfg.Host != "localhost" && cfg.Host != "::1" {
-		slog.Warn("allowed_origins is not configured; terminal WebSocket accepts connections from any origin (set allowed_origins in config for production deployments)")
-	}
-
 	// Create hub.
 	h := hub.New(cfg.Heartbeat.Interval, cfg.Heartbeat.Timeout, cfg.Heartbeat.KeepaliveInterval, cfg.AgentTTL, cfg.Terminal.MaxSessions)
 	h.Start()
