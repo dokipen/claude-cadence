@@ -5,24 +5,37 @@ import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 // Mock CSS modules
 vi.mock("../styles/dialog.module.css", () => ({ default: {} }));
 
-// Mock AgentLauncher — captures command and sessionName as data attributes
-// so tests can inspect which props were passed.
-vi.mock("./AgentLauncher", () => ({
-  AgentLauncher: ({
-    command,
-    sessionName,
-  }: {
-    command?: string;
-    sessionName?: string;
-    [key: string]: unknown;
-  }) => (
-    <div
-      data-testid="agent-launcher"
-      data-command={command}
-      data-session-name={sessionName}
-    />
-  ),
-}));
+// Hoisted mock launch fn so it's accessible in the vi.mock factory and in tests.
+const { mockLaunch } = vi.hoisted(() => ({ mockLaunch: vi.fn() }));
+
+// Mock AgentLauncher — uses forwardRef so ref forwarding works in tests.
+vi.mock("./AgentLauncher", () => {
+  const { forwardRef, useImperativeHandle } = require("react");
+  return {
+    AgentLauncher: forwardRef(
+      (
+        {
+          command,
+          sessionName,
+        }: {
+          command?: string;
+          sessionName?: string;
+          [key: string]: unknown;
+        },
+        ref: any,
+      ) => {
+        useImperativeHandle(ref, () => ({ launch: mockLaunch }));
+        return (
+          <div
+            data-testid="agent-launcher"
+            data-command={command}
+            data-session-name={sessionName}
+          />
+        );
+      },
+    ),
+  };
+});
 
 import { CreateTicketDialog } from "./CreateTicketDialog";
 
@@ -48,6 +61,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  mockLaunch.mockClear();
 });
 
 // ---------------------------------------------------------------------------
@@ -154,5 +168,40 @@ describe("CreateTicketDialog", () => {
 
     const textarea = screen.getByTestId("ticket-prompt");
     expect(textarea).toHaveAttribute("autocomplete", "off");
+  });
+
+  it("pressing Enter in textarea calls launch on the AgentLauncher", () => {
+    render(
+      <CreateTicketDialog {...defaultProps} open={true} />,
+    );
+
+    const textarea = screen.getByTestId("ticket-prompt") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "Some ticket text" } });
+
+    expect(screen.getByTestId("agent-launcher")).not.toBeNull();
+
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+    expect(mockLaunch).toHaveBeenCalledTimes(1);
+  });
+
+  it("pressing Shift+Enter in textarea does NOT call launch", () => {
+    render(
+      <CreateTicketDialog {...defaultProps} open={true} />,
+    );
+
+    const textarea = screen.getByTestId("ticket-prompt") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "Some ticket text" } });
+
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true });
+    expect(mockLaunch).not.toHaveBeenCalled();
+  });
+
+  it("pressing Enter on an empty prompt does not call launch", () => {
+    render(<CreateTicketDialog {...defaultProps} open={true} />);
+
+    const textarea = screen.getByTestId("ticket-prompt") as HTMLTextAreaElement;
+    // Prompt is empty — AgentLauncher is not rendered, launcherRef.current is null
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+    expect(mockLaunch).not.toHaveBeenCalled();
   });
 });

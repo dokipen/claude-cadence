@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import { AgentLauncher } from "./AgentLauncher";
+import type { AgentLauncherHandle } from "./AgentLauncher";
 import type { Session } from "../types";
 import styles from "../styles/dialog.module.css";
 
@@ -17,6 +18,7 @@ export function CreateTicketDialog({
   projectId,
 }: CreateTicketDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const launcherRef = useRef<AgentLauncherHandle>(null);
   const [prompt, setPrompt] = useState("");
   // Generated once per open — stable for the lifetime of a single dialog session.
   const sessionNameRef = useRef(`${projectId ? projectId + "-" : ""}ticket-` + Date.now());
@@ -60,6 +62,16 @@ export function CreateTicketDialog({
     [handleClose],
   );
 
+  const handleTextareaKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        launcherRef.current?.launch();
+      }
+    },
+    [],
+  );
+
   const trimmedPrompt = prompt.trim();
   // Normalize whitespace before passing to the command to avoid newlines
   // or other control characters reaching the PTY.
@@ -96,11 +108,13 @@ export function CreateTicketDialog({
             style={{ width: "100%", boxSizing: "border-box", marginTop: "0.5rem" }}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={handleTextareaKeyDown}
             autoComplete="off"
           />
         </div>
         {open && trimmedPrompt !== "" && (
           <AgentLauncher
+            ref={launcherRef}
             ticketNumber={0}
             repoUrl={repoUrl}
             onLaunched={handleLaunched}
