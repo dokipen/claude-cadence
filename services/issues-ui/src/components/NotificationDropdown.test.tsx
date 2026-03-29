@@ -465,6 +465,37 @@ describe("NotificationDropdown — controls do not navigate", () => {
 
     expect(queryByTestId("notification-dropdown")).toBeTruthy();
   });
+
+  it("clicking a select option keeps the dropdown open", () => {
+    const sessions = [
+      makeAgentSession("lead", {
+        id: "sess-select-open",
+        promptType: "select",
+        promptContext: "? Pick one\n  Option A\n❯ Option B",
+      }),
+    ];
+    const { getByTestId, queryByTestId } = render(
+      <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
+    );
+    fireEvent.click(getByTestId("notification-trigger"));
+    fireEvent.click(getByTestId("btn-option-0"));
+    expect(queryByTestId("notification-dropdown")).toBeTruthy();
+  });
+
+  it("clicking the Send button keeps the dropdown open", () => {
+    const sessions = [
+      makeAgentSession("lead", {
+        id: "sess-text-open",
+        promptType: "text",
+      }),
+    ];
+    const { getByTestId, queryByTestId } = render(
+      <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
+    );
+    fireEvent.click(getByTestId("notification-trigger"));
+    fireEvent.click(getByTestId("btn-send"));
+    expect(queryByTestId("notification-dropdown")).toBeTruthy();
+  });
 });
 
 describe("NotificationDropdown — ticket title", () => {
@@ -579,11 +610,52 @@ describe("NotificationDropdown — Sent state", () => {
   it("Yes button becomes disabled after click", async () => {
     vi.useFakeTimers();
 
+    try {
+      const sessions = [
+        makeAgentSession("lead", {
+          id: "sess-sent",
+          promptType: "yesno",
+          promptContext: "Continue? (y/N)",
+        }),
+      ];
+      const { getByTestId } = render(
+        <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
+      );
+      fireEvent.click(getByTestId("notification-trigger"));
+
+      const yesBtn = getByTestId("btn-yes") as HTMLButtonElement;
+      expect(yesBtn.disabled).toBe(false);
+
+      fireEvent.click(yesBtn);
+
+      // After async sendSessionInput resolves, setSent(true) is called
+      await vi.waitFor(() => {
+        expect(yesBtn.disabled).toBe(true);
+      });
+
+      // After the 1s timeout, the button reverts
+      vi.runAllTimers();
+      await vi.waitFor(() => {
+        expect(yesBtn.disabled).toBe(false);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("NotificationDropdown — select prompt delta variants", () => {
+  // currentIndex = 1 (❯ Option B)
+  const selectContext = "? Pick one\n  Option A\n❯ Option B\n  Option C";
+
+  it("clicking the already-selected option sends only \\r (zero delta)", async () => {
+    const agentName = "lead";
+    const sessionId = "sess-select-zero";
     const sessions = [
-      makeAgentSession("lead", {
-        id: "sess-sent",
-        promptType: "yesno",
-        promptContext: "Continue? (y/N)",
+      makeAgentSession(agentName, {
+        id: sessionId,
+        promptType: "select",
+        promptContext: selectContext,
       }),
     ];
     const { getByTestId } = render(
@@ -591,22 +663,129 @@ describe("NotificationDropdown — Sent state", () => {
     );
     fireEvent.click(getByTestId("notification-trigger"));
 
-    const yesBtn = getByTestId("btn-yes") as HTMLButtonElement;
-    expect(yesBtn.disabled).toBe(false);
+    // Click Option B (index 1) — delta = 0, just \r
+    fireEvent.click(getByTestId("btn-option-1"));
 
-    fireEvent.click(yesBtn);
-
-    // After async sendSessionInput resolves, setSent(true) is called
     await vi.waitFor(() => {
-      expect(yesBtn.disabled).toBe(true);
+      expect(sendSessionInput).toHaveBeenCalledWith(agentName, sessionId, "\r");
     });
+  });
 
-    // After the 1s timeout, the button reverts
-    vi.runAllTimers();
+  it("clicking an earlier option sends up-arrow sequence (negative delta)", async () => {
+    const agentName = "lead";
+    const sessionId = "sess-select-up";
+    const sessions = [
+      makeAgentSession(agentName, {
+        id: sessionId,
+        promptType: "select",
+        promptContext: selectContext,
+      }),
+    ];
+    const { getByTestId } = render(
+      <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
+    );
+    fireEvent.click(getByTestId("notification-trigger"));
+
+    // Click Option A (index 0) — delta = 0 - 1 = -1, one up arrow + \r
+    fireEvent.click(getByTestId("btn-option-0"));
+
     await vi.waitFor(() => {
-      expect(yesBtn.disabled).toBe(false);
+      expect(sendSessionInput).toHaveBeenCalledWith(agentName, sessionId, "\x1b[A\r");
     });
+  });
 
-    vi.useRealTimers();
+  it("clicking an option two steps away sends two arrow keys (multi-step delta)", async () => {
+    const agentName = "lead";
+    const sessionId = "sess-select-multi";
+    // currentIndex = 0 (❯ Option A)
+    const multiStepContext = "? Pick one\n❯ Option A\n  Option B\n  Option C";
+    const sessions = [
+      makeAgentSession(agentName, {
+        id: sessionId,
+        promptType: "select",
+        promptContext: multiStepContext,
+      }),
+    ];
+    const { getByTestId } = render(
+      <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
+    );
+    fireEvent.click(getByTestId("notification-trigger"));
+
+    // Click Option C (index 2) — delta = 2, two down arrows + \r
+    fireEvent.click(getByTestId("btn-option-2"));
+
+    await vi.waitFor(() => {
+      expect(sendSessionInput).toHaveBeenCalledWith(agentName, sessionId, "\x1b[B\x1b[B\r");
+    });
+  });
+});
+
+
+describe("NotificationDropdown — text input Enter key submission", () => {
+  it("pressing Enter in the text input calls sendSessionInput with typed text + \\n", async () => {
+    const agentName = "lead";
+    const sessionId = "sess-enter";
+    const sessions = [
+      makeAgentSession(agentName, {
+        id: sessionId,
+        promptType: "text",
+      }),
+    ];
+    const { getByTestId } = render(
+      <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
+    );
+    fireEvent.click(getByTestId("notification-trigger"));
+
+    const input = getByTestId("text-input") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "hello" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await vi.waitFor(() => {
+      expect(sendSessionInput).toHaveBeenCalledWith(agentName, sessionId, "hello\n");
+    });
+  });
+});
+
+describe("NotificationDropdown — unknown promptType fallback", () => {
+  it("renders no controls when promptType is unrecognized", () => {
+    const sessions = [
+      makeAgentSession("lead", {
+        id: "sess-unknown",
+        promptType: "unknown-type" as never,
+      }),
+    ];
+    const { getByTestId, queryByTestId } = render(
+      <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
+    );
+    fireEvent.click(getByTestId("notification-trigger"));
+
+    expect(queryByTestId("btn-yes")).toBeNull();
+    expect(queryByTestId("btn-no")).toBeNull();
+    expect(queryByTestId("btn-option-0")).toBeNull();
+    expect(queryByTestId("btn-send")).toBeNull();
+    expect(queryByTestId("text-input")).toBeNull();
+  });
+});
+
+describe("NotificationDropdown — yesno with empty promptContext", () => {
+  it("renders Yes/No buttons but no promptContext pre-block when promptContext is empty", () => {
+    const sessions = [
+      makeAgentSession("lead", {
+        id: "sess-yesno-empty",
+        promptType: "yesno",
+        promptContext: "",
+      }),
+    ];
+    const { getByTestId } = render(
+      <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
+    );
+    fireEvent.click(getByTestId("notification-trigger"));
+
+    expect(getByTestId("btn-yes")).toBeTruthy();
+    expect(getByTestId("btn-no")).toBeTruthy();
+
+    // No promptContext text should appear in a <pre> element
+    const item = getByTestId("notification-item");
+    expect(item.querySelector("pre")).toBeNull();
   });
 });
