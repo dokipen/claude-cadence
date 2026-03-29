@@ -203,6 +203,9 @@ func validate(cfg *Config) error {
 		if cfg.Auth.Mode == "none" {
 			return fmt.Errorf("authentication required for non-localhost bindings")
 		}
+		if len(cfg.AllowedOrigins) == 0 {
+			return fmt.Errorf("allowed_origins required for non-localhost bindings (set allowed_origins or bind to loopback)")
+		}
 	}
 
 	switch cfg.Auth.Mode {
