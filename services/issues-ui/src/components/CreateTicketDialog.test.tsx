@@ -6,21 +6,29 @@ import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 vi.mock("../styles/dialog.module.css", () => ({ default: {} }));
 
 // Mock AgentLauncher — captures command and sessionName as data attributes
-// so tests can inspect which props were passed.
+// so tests can inspect which props were passed. Exposes a "mock-launch" button
+// to simulate a successful launch (calls onLaunched).
 vi.mock("./AgentLauncher", () => ({
   AgentLauncher: ({
     command,
     sessionName,
+    onLaunched,
   }: {
     command?: string;
     sessionName?: string;
+    onLaunched?: (session: unknown, agentName: string) => void;
     [key: string]: unknown;
   }) => (
     <div
       data-testid="agent-launcher"
       data-command={command}
       data-session-name={sessionName}
-    />
+    >
+      <button
+        data-testid="mock-launch"
+        onClick={() => onLaunched?.({}, "test-agent")}
+      />
+    </div>
   ),
 }));
 
@@ -154,5 +162,39 @@ describe("CreateTicketDialog", () => {
 
     const textarea = screen.getByTestId("ticket-prompt");
     expect(textarea).toHaveAttribute("autocomplete", "off");
+  });
+
+  it("clears textarea after successful submission (onLaunched fires)", () => {
+    render(<CreateTicketDialog {...defaultProps} open={true} />);
+
+    const textarea = screen.getByTestId(
+      "ticket-prompt",
+    ) as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "My new ticket" } });
+    expect(textarea.value).toBe("My new ticket");
+
+    // Simulate a successful agent launch
+    fireEvent.click(screen.getByTestId("mock-launch"));
+
+    expect(textarea.value).toBe("");
+  });
+
+  it("preserves textarea content when cancelled (not a successful launch)", () => {
+    const onClose = vi.fn();
+    render(
+      <CreateTicketDialog {...defaultProps} open={true} onClose={onClose} />,
+    );
+
+    const textarea = screen.getByTestId(
+      "ticket-prompt",
+    ) as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "In-progress thought" } });
+    expect(textarea.value).toBe("In-progress thought");
+
+    // Cancel without launching
+    fireEvent.click(screen.getByTestId("dialog-close"));
+
+    // Content must survive — if the user reopens, they should see their text
+    expect(textarea.value).toBe("In-progress thought");
   });
 });
