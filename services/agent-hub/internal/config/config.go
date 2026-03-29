@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -198,10 +199,20 @@ func parseDurations(cfg *Config) error {
 	return nil
 }
 
+// isLoopbackHost reports whether host is a loopback address.
+// It handles symbolic "localhost", all 127.0.0.0/8 IPv4 addresses,
+// ::1, and IPv4-mapped loopback forms like ::ffff:127.0.0.1.
+func isLoopbackHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
 func validate(cfg *Config) error {
 	// Require authentication for non-loopback bindings.
-	hostLower := strings.ToLower(cfg.Host)
-	if hostLower != "127.0.0.1" && hostLower != "localhost" && hostLower != "::1" {
+	if !isLoopbackHost(cfg.Host) {
 		if cfg.Auth.Mode == "none" {
 			return fmt.Errorf("authentication required for non-localhost bindings")
 		}
