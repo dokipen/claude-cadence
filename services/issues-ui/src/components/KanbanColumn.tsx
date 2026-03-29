@@ -16,13 +16,6 @@ export function getActiveRefineAllSession(sessions: ActiveSessionInfo[], project
   ) ?? null;
 }
 
-export function hasActiveLeadAllSession(sessions: ActiveSessionInfo[], projectId?: string): boolean {
-  const prefix = projectId ? `${projectId}-lead-all-` : "lead-all-";
-  return sessions.some(
-    (s) => s.name.startsWith(prefix) && (s.state === "running" || s.state === "creating" || s.state === "destroying")
-  );
-}
-
 const STATE_LABELS: Record<TicketState, string> = {
   BACKLOG: "Backlog",
   REFINED: "Refined",
@@ -99,11 +92,7 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
             aria-label="Lead All"
             title="Lead All"
           >
-            {hasActiveLeadAllSession(sessions ?? [], projectId) ? (
-              <AnimatedCadenceIcon width={14} height={14} />
-            ) : (
-              <Sparkles size={14} />
-            )}
+            <Sparkles size={14} />
           </button>
         )}
         <span className={styles.columnCount} data-testid={`count-${state}`}>
