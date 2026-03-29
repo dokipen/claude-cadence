@@ -132,6 +132,11 @@ func (c *Client) runTerminalRelay(
 	}
 	defer localConn.CloseNow()
 
+	// ServeTerminal replays the full ring-buffer snapshot on connect, which can
+	// exceed coder/websocket's default 32 KB read limit. Set the read limit to
+	// the configured buffer size + 1 byte (for the ttyd frame prefix).
+	localConn.SetReadLimit(int64(ptyMgr.BufferSize() + 1))
+
 	slog.Debug("relay: terminal relay started", "session_id", ptySessID)
 
 	// outputDone signals that the PTY→hub goroutine has exited.

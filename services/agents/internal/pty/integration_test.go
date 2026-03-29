@@ -397,3 +397,93 @@ func TestServeTerminal_ConcurrentReconnect_WriterSurvives(t *testing.T) {
 	}
 
 }
+
+// TestServeTerminal_LargeSnapshotReplay verifies that a WebSocket client can
+// receive a snapshot replay larger than the default coder/websocket read limit
+// of 32 KB. This exercises the scenario described in issue #531 where vim
+// sessions fill the ring buffer past 32 KB and the relay's localConn read
+// would fail silently.
+func TestServeTerminal_LargeSnapshotReplay(t *testing.T) {
+	// Use a 64 KB buffer so the snapshot exceeds the default 32 KB WS read limit.
+	const bufSize = 64 * 1024
+	m := internalpty.NewPTYManager(internalpty.PTYConfig{BufferSize: bufSize})
+
+	// Create a session that writes >32 KB of data to the PTY.
+	// We use printf in a loop to emit enough data to fill the ring buffer
+	// well past the default WebSocket read limit.
+	err := m.Create("large-snapshot-test", t.TempDir(),
+		[]string{"sh", "-c", "dd if=/dev/zero bs=1024 count=40 2>/dev/null | tr '\\0' 'A'; sleep 30"},
+		nil, 80, 24)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	t.Cleanup(func() { m.Destroy("large-snapshot-test") })
+
+	// Poll until the ring buffer contains >32 KB of data.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		buf, readErr := m.ReadBuffer("large-snapshot-test")
+		if readErr != nil {
+			t.Fatalf("ReadBuffer failed: %v", readErr)
+		}
+		if len(buf) > 32*1024 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for >32KB in ring buffer; got %d bytes", len(buf))
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// Start an HTTP server that serves the terminal WebSocket.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen failed: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws/terminal", func(w http.ResponseWriter, r *http.Request) {
+		conn, acceptErr := websocket.Accept(w, r, &websocket.AcceptOptions{
+			InsecureSkipVerify: true,
+		})
+		if acceptErr != nil {
+			return
+		}
+		defer conn.CloseNow()
+		_ = m.ServeTerminal(r.Context(), "large-snapshot-test", conn)
+	})
+	srv := &http.Server{Handler: mux}
+	go srv.Serve(ln) //nolint:errcheck
+	t.Cleanup(func() { srv.Close() })
+
+	wsURL := "ws://" + ln.Addr().String() + "/ws/terminal"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, _, dialErr := websocket.Dial(ctx, wsURL, nil)
+	if dialErr != nil {
+		t.Fatalf("dial failed: %v", dialErr)
+	}
+	defer conn.CloseNow()
+
+	// The client must set a read limit large enough for the snapshot frame.
+	conn.SetReadLimit(int64(bufSize + 1))
+
+	// Read frames and accumulate total data received.
+	var totalReceived int
+	for {
+		_, data, readErr := conn.Read(ctx)
+		if readErr != nil {
+			t.Fatalf("read failed: %v (totalReceived=%d)", readErr, totalReceived)
+		}
+		if len(data) > 1 && data[0] == '0' {
+			totalReceived += len(data) - 1 // subtract the '0' prefix
+		}
+		if totalReceived > 32*1024 {
+			break
+		}
+	}
+
+	t.Logf("received %d bytes of terminal data (>32KB confirms large snapshot replay works)", totalReceived)
+}

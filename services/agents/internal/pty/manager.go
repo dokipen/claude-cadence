@@ -300,6 +300,11 @@ func (p *PTYManager) Reattach(id, slavePath string) error {
 	return nil
 }
 
+// BufferSize returns the configured ring buffer capacity in bytes.
+func (m *PTYManager) BufferSize() int {
+	return m.cfg.BufferSize
+}
+
 // ReadBuffer returns a snapshot of the ring buffer for the given session.
 func (m *PTYManager) ReadBuffer(id string) ([]byte, error) {
 	sess, err := m.Get(id)
