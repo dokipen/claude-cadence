@@ -1,0 +1,5 @@
+description = "Refine GitHub issues to quality standards"
+prompt = """
+Activate the 'refine' skill for issue {{args}} and follow its workflow.
+Do not start implementation.
+"""

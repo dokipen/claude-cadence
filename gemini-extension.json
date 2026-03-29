@@ -1,0 +1,9 @@
+{
+  "name": "cadence",
+  "version": "0.1.0",
+  "description": "Issue-driven, multi-agent development workflow with git worktrees, structured phases, and specialist delegation",
+  "contextFileName": "CLAUDE.md",
+  "skillsPath": ".gemini/skills",
+  "agentsPath": ".gemini/agents",
+  "commandsPath": ".gemini/commands"
+}
