@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, forwardRef, useImperativeHandle } from "react";
+import { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from "react";
 import { createSession } from "../api/agentHubClient";
 import { useAgents, useAgentProfiles } from "../hooks/useAgents";
 import type { Session } from "../types";
@@ -33,6 +33,7 @@ export const AgentLauncher = forwardRef<AgentLauncherHandle, AgentLauncherProps>
 
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [launching, setLaunching] = useState(false);
+  const launchingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   // Reset selection when profiles change (agents go online/offline)
@@ -44,6 +45,8 @@ export const AgentLauncher = forwardRef<AgentLauncherHandle, AgentLauncherProps>
 
   const handleLaunch = useCallback(async () => {
     if (!selected) return;
+    if (launchingRef.current) return;
+    launchingRef.current = true;
     setLaunching(true);
     setError(null);
 
@@ -57,6 +60,7 @@ export const AgentLauncher = forwardRef<AgentLauncherHandle, AgentLauncherProps>
       setError(err instanceof Error ? err.message : "Failed to launch agent");
     } finally {
       setLaunching(false);
+      launchingRef.current = false;
     }
   }, [selected, command, sessionName, onLaunched]);
 
