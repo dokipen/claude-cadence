@@ -2,6 +2,7 @@ import { gql } from "graphql-request";
 import { type CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { getClient } from "../client.js";
 import { getDefaultProjectId } from "../config.js";
+import { resolveProjectName } from "../projects.js";
 
 // --- GraphQL Documents ---
 
@@ -232,8 +233,13 @@ function err(message: string): CallToolResult {
   };
 }
 
-function resolveProjectId(projectId: string | undefined): string | undefined {
-  return projectId ?? getDefaultProjectId();
+async function resolveProjectId(
+  projectId: string | undefined,
+  projectName: string | undefined
+): Promise<string | undefined> {
+  if (projectId !== undefined) return projectId;
+  if (projectName !== undefined) return resolveProjectName(projectName);
+  return getDefaultProjectId();
 }
 
 // --- Tool handlers ---
@@ -246,12 +252,13 @@ export interface TicketCreateParams {
   priority?: string;
   storyPoints?: number;
   projectId?: string;
+  projectName?: string;
 }
 
 export async function ticketCreate(params: TicketCreateParams): Promise<CallToolResult> {
   try {
     const client = getClient();
-    const pid = resolveProjectId(params.projectId);
+    const pid = await resolveProjectId(params.projectId, params.projectName);
     if (!pid) {
       return err("projectId is required (pass it explicitly or set ISSUES_PROJECT_ID)");
     }
@@ -277,6 +284,7 @@ export interface TicketGetParams {
   id?: string;
   number?: number;
   projectId?: string;
+  projectName?: string;
 }
 
 export async function ticketGet(params: TicketGetParams): Promise<CallToolResult> {
@@ -284,7 +292,7 @@ export async function ticketGet(params: TicketGetParams): Promise<CallToolResult
     const client = getClient();
 
     if (params.number !== undefined) {
-      const pid = resolveProjectId(params.projectId);
+      const pid = await resolveProjectId(params.projectId, params.projectName);
       if (!pid) {
         return err("projectId is required when fetching by ticket number");
       }
@@ -319,12 +327,13 @@ export interface TicketListParams {
   isBlocked?: boolean;
   limit?: number;
   projectId?: string;
+  projectName?: string;
 }
 
 export async function ticketList(params: TicketListParams): Promise<CallToolResult> {
   try {
     const client = getClient();
-    const pid = resolveProjectId(params.projectId);
+    const pid = await resolveProjectId(params.projectId, params.projectName);
     const limit = Math.min(params.limit ?? 20, 100);
 
     const variables: Record<string, unknown> = { first: limit };

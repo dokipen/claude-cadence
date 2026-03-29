@@ -6,6 +6,21 @@ const DEFAULT_API_URL = "http://localhost:4000/graphql";
 // Avoids mutating process.env with derived state.
 let resolvedProjectId: string | undefined;
 
+// In-session cache: project name → CUID
+const projectNameCache = new Map<string, string>();
+
+export function getCachedProjectIdByName(name: string): string | undefined {
+  return projectNameCache.get(name.trim().toLowerCase());
+}
+
+export function cacheProjectIdByName(name: string, id: string): void {
+  projectNameCache.set(name.trim().toLowerCase(), id);
+}
+
+export function clearProjectNameCache(): void {
+  projectNameCache.clear();
+}
+
 // In-memory token cache (set at startup or after refresh)
 let _resolvedToken: string | undefined;
 let _resolvedRefreshToken: string | undefined;
