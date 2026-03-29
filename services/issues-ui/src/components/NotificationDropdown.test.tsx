@@ -47,10 +47,7 @@ afterEach(() => {
 });
 
 beforeEach(() => {
-  vi.restoreAllMocks();
-  // Re-apply default mock after restoreAllMocks
-  vi.mocked(useTicketByNumber).mockReturnValue({ ticket: null, loading: false, error: null });
-  vi.mocked(sendSessionInput).mockResolvedValue(undefined);
+  vi.resetAllMocks();
 });
 
 // ---------------------------------------------------------------------------
