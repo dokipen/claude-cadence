@@ -303,6 +303,35 @@ describe("SessionOutputTooltip", () => {
       expect(tooltip.style.width).toBe("600px");
       expect(tooltip.style.height).toBe("688px");
     });
+
+    it("positions tooltip ABOVE when icon is in the lower half of the viewport", async () => {
+      vi.stubGlobal("innerWidth", 1200);
+      vi.stubGlobal("innerHeight", 800);
+
+      const session = makeSession();
+      const { getByTestId, container } = render(
+        <SessionOutputTooltip session={session}>
+          <span>icon</span>
+        </SessionOutputTooltip>,
+      );
+
+      const wrapper = container.firstChild as Element;
+      // Lower half: centerY = 600 + 30/2 = 615 > 800/2 = 400
+      vi.spyOn(wrapper, "getBoundingClientRect").mockReturnValue({
+        left: 590, right: 610, top: 600, bottom: 630, width: 20, height: 30,
+        x: 590, y: 600, toJSON: () => ({}),
+      } as DOMRect);
+
+      await act(async () => {
+        fireEvent.mouseEnter(wrapper);
+      });
+
+      const tooltip = getByTestId("session-output-tooltip");
+      // top = margin = 8px
+      // height = rect.top - 4 - margin = 600 - 4 - 8 = 588px
+      expect(tooltip.style.top).toBe("8px");
+      expect(tooltip.style.height).toBe("588px");
+    });
   });
 
   it("closes WebSocket and disposes xterm on mouseleave", async () => {
