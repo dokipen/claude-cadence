@@ -390,3 +390,21 @@ func TestMapPTYError(t *testing.T) {
 		})
 	}
 }
+
+func TestDispatcher_JSONErrorLeakage(t *testing.T) {
+	d := newTestDispatcher()
+
+	// Provide params that are valid JSON but have a type mismatch for a field.
+	// env should be map[string]string, not a number.
+	params := json.RawMessage(`{"env": 123}`)
+	_, rpcErr := d.CreateSession(params)
+
+	if rpcErr == nil {
+		t.Fatal("expected rpcError for type mismatch")
+	}
+
+	// Verify that the error message is sanitized and does not contain Go-isms.
+	if rpcErr.Message != "invalid parameters" {
+		t.Errorf("expected message %q, got %q", "invalid parameters", rpcErr.Message)
+	}
+}

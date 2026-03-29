@@ -45,7 +45,7 @@ func NewDispatcher(manager *session.Manager, advertiseAddress string, webSocketS
 func (d *Dispatcher) CreateSession(params json.RawMessage) (json.RawMessage, *rpcError) {
 	var p createSessionParams
 	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, &rpcError{Code: rpcErrInvalidArgument, Message: "invalid params: " + err.Error()}
+		return nil, mapUnmarshalError("CreateSession", err)
 	}
 
 	sess, err := d.manager.Create(session.CreateRequest{
@@ -66,7 +66,7 @@ func (d *Dispatcher) CreateSession(params json.RawMessage) (json.RawMessage, *rp
 func (d *Dispatcher) GetSession(params json.RawMessage) (json.RawMessage, *rpcError) {
 	var p getSessionParams
 	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, &rpcError{Code: rpcErrInvalidArgument, Message: "invalid params: " + err.Error()}
+		return nil, mapUnmarshalError("GetSession", err)
 	}
 
 	sess, err := d.manager.Get(p.SessionID)
@@ -81,7 +81,7 @@ func (d *Dispatcher) GetSession(params json.RawMessage) (json.RawMessage, *rpcEr
 func (d *Dispatcher) ListSessions(params json.RawMessage) (json.RawMessage, *rpcError) {
 	var p listSessionsParams
 	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, &rpcError{Code: rpcErrInvalidArgument, Message: "invalid params: " + err.Error()}
+		return nil, mapUnmarshalError("ListSessions", err)
 	}
 
 	sessions, err := d.manager.List(p.AgentProfile)
@@ -123,7 +123,7 @@ func (d *Dispatcher) ListSessions(params json.RawMessage) (json.RawMessage, *rpc
 func (d *Dispatcher) DestroySession(params json.RawMessage) (json.RawMessage, *rpcError) {
 	var p destroySessionParams
 	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, &rpcError{Code: rpcErrInvalidArgument, Message: "invalid params: " + err.Error()}
+		return nil, mapUnmarshalError("DestroySession", err)
 	}
 
 	if err := d.manager.Destroy(p.SessionID, p.Force); err != nil {
@@ -142,7 +142,7 @@ func (d *Dispatcher) DestroySession(params json.RawMessage) (json.RawMessage, *r
 func (d *Dispatcher) GetTerminalEndpoint(params json.RawMessage) (json.RawMessage, *rpcError) {
 	var p getTerminalEndpointParams
 	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, &rpcError{Code: rpcErrInvalidArgument, Message: "invalid params: " + err.Error()}
+		return nil, mapUnmarshalError("GetTerminalEndpoint", err)
 	}
 
 	sessionID, err := uuid.Parse(p.SessionID)
@@ -305,7 +305,7 @@ func (d *Dispatcher) GetDiagnostics(ctx context.Context, params json.RawMessage)
 	var p getDiagnosticsParams
 	if len(params) > 0 {
 		if err := json.Unmarshal(params, &p); err != nil {
-			return nil, &rpcError{Code: rpcErrInvalidArgument, Message: "invalid params: " + err.Error()}
+			return nil, mapUnmarshalError("GetDiagnostics", err)
 		}
 	}
 	if p.SinceMinutes <= 0 {
@@ -426,7 +426,7 @@ func (d *Dispatcher) SendInput(params json.RawMessage) (json.RawMessage, *rpcErr
 		Text      string `json:"text"`
 	}
 	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, &rpcError{Code: rpcErrInvalidArgument, Message: "invalid params: " + err.Error()}
+		return nil, mapUnmarshalError("SendInput", err)
 	}
 	if d.pty == nil {
 		return nil, &rpcError{Code: rpcErrInternal, Message: "PTY manager not available"}
@@ -452,4 +452,9 @@ func marshalResult(v any) (json.RawMessage, *rpcError) {
 	return nil, &rpcError{Code: rpcErrInternal, Message: "internal error"}
 	}
 	return b, nil
+}
+
+func mapUnmarshalError(method string, err error) *rpcError {
+	slog.Warn("invalid params", "method", method, "error", err)
+	return &rpcError{Code: rpcErrInvalidArgument, Message: "invalid parameters"}
 }
