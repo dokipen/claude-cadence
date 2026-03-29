@@ -389,7 +389,8 @@ check is skipped and terminal WebSocket connections are accepted from any browse
 (CSRF risk).
 
 **For production deployments, `allowed_origins` must be set** in the agent-hub config to
-the URL(s) of the frontend served by your reverse proxy:
+the URL(s) of the frontend served by your reverse proxy. Wildcard origins (e.g., `["*"]`)
+are explicitly disallowed and will cause agent-hub to refuse to start.
 
 ```yaml
 allowed_origins:

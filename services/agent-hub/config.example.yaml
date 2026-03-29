@@ -12,7 +12,7 @@ hub_auth:
 # Set this to the frontend URL(s) served by your reverse proxy (e.g. Caddy).
 # Required when binding to a non-loopback address or running behind a reverse proxy:
 # when empty, the terminal WebSocket accepts connections from any browser origin (CSRF
-# risk) and a startup warning is emitted.
+# risk) and a startup warning is emitted. Wildcards (e.g., "*") are explicitly disallowed.
 allowed_origins:
   - "https://your-domain.example.com"
 
