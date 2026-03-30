@@ -279,10 +279,17 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       // Filter Device Attributes queries emitted by xterm.js — the shell is not
       // in a state to consume the response and interprets the trailing bytes as
       // literal keystrokes.
-      //   DA1: ESC[c, ESC[0c  — emitted on init/reconnect
-      //   DA2: ESC[2c         — emitted on focus/click
+      //   DA1: ESC[c, ESC[0c    — emitted on init/reconnect
+      //   DA2: ESC[>c, ESC[>0c  — DA2 query (CSI > c); observed as ESC[2c on click
       term.onData((data) => {
-        if (data === "\x1b[c" || data === "\x1b[0c" || data === "\x1b[2c") return;
+        if (
+          data === "\x1b[c" ||
+          data === "\x1b[0c" ||
+          data === "\x1b[2c" ||
+          data === "\x1b[>c" ||
+          data === "\x1b[>0c"
+        )
+          return;
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(CMD_INPUT + data);
         }

@@ -553,7 +553,7 @@ describe("Terminal", () => {
       return term.onData.mock.calls[0][0] as (data: string) => void;
     }
 
-    it("does not forward ESC[2c (DA2 query) to the WebSocket", () => {
+    it("does not forward ESC[2c (DA2 observed on click) to the WebSocket", () => {
       render(<Terminal agentName="agent-1" sessionId="sess-1" />);
       const ws = MockWebSocket.instances[0];
       act(() => { ws.simulateOpen(); });
@@ -561,6 +561,30 @@ describe("Terminal", () => {
       ws.send.mockClear();
       const onData = getOnDataCallback();
       act(() => { onData("\x1b[2c"); });
+
+      expect(ws.send).not.toHaveBeenCalled();
+    });
+
+    it("does not forward ESC[>c (DA2 query) to the WebSocket", () => {
+      render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+      const ws = MockWebSocket.instances[0];
+      act(() => { ws.simulateOpen(); });
+
+      ws.send.mockClear();
+      const onData = getOnDataCallback();
+      act(() => { onData("\x1b[>c"); });
+
+      expect(ws.send).not.toHaveBeenCalled();
+    });
+
+    it("does not forward ESC[>0c (DA2 query variant) to the WebSocket", () => {
+      render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+      const ws = MockWebSocket.instances[0];
+      act(() => { ws.simulateOpen(); });
+
+      ws.send.mockClear();
+      const onData = getOnDataCallback();
+      act(() => { onData("\x1b[>0c"); });
 
       expect(ws.send).not.toHaveBeenCalled();
     });
