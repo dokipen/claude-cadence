@@ -141,10 +141,11 @@ func (m *PTYManager) Create(id, workdir string, command []string, env []string, 
 				copy(chunk, buf[:n])
 				_, _ = sess.rb.Write(chunk)
 				sess.mu.Lock()
-				for _, w := range sess.writers {
+				writers := append([]io.Writer(nil), sess.writers...)
+				sess.mu.Unlock()
+				for _, w := range writers {
 					_, _ = w.Write(chunk)
 				}
-				sess.mu.Unlock()
 			}
 			if readErr != nil {
 				// Reap the child before signalling done. waitOnce ensures
@@ -286,10 +287,11 @@ func (p *PTYManager) Reattach(id, slavePath string) error {
 				copy(chunk, buf[:n])
 				_, _ = sess.rb.Write(chunk)
 				sess.mu.Lock()
-				for _, w := range sess.writers {
+				writers := append([]io.Writer(nil), sess.writers...)
+				sess.mu.Unlock()
+				for _, w := range writers {
 					_, _ = w.Write(chunk)
 				}
-				sess.mu.Unlock()
 			}
 			if readErr != nil {
 				return
@@ -358,8 +360,13 @@ func (m *PTYManager) ServeTerminal(ctx context.Context, id string, conn *websock
 	// Capture snapshot and register writer atomically under sess.mu.
 	// This prevents bytes written between snapshot capture and writer registration
 	// from being missed or duplicated: the PTY read goroutine blocks on sess.mu
-	// after writing to the ring buffer, so the snapshot and registration are
-	// seen atomically relative to the fan-out path.
+	// while snapshotting writers, so the snapshot and registration are seen
+	// atomically relative to the fan-out path.
+	//
+	// Note: the PTY read goroutine releases sess.mu before calling w.Write, so
+	// ServeTerminal's conn.Write (called via wf) does not hold sess.mu. Concurrent
+	// writes to the same *websocket.Conn from the PTY goroutine and the snapshot
+	// replay below are safe because coder/websocket serialises writes internally.
 	sess.mu.Lock()
 	snapshot := sess.rb.Snapshot()
 	sess.writerGen++

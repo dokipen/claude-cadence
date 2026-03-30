@@ -2,6 +2,7 @@ package pty_test
 
 import (
 	"bytes"
+	"os/exec"
 	"context"
 	"net"
 	"net/http"
@@ -498,4 +499,244 @@ func TestServeTerminal_LargeSnapshotReplay(t *testing.T) {
 		t.Errorf("largest frame was %d bytes; expected >32KB to confirm snapshot replay as a single large message", maxFrameSize)
 	}
 	t.Logf("received %d bytes of terminal data; largest frame %d bytes", totalReceived, maxFrameSize)
+}
+
+// vimTestConn wraps a WebSocket connection with a background read goroutine
+// that drains frames onto a channel. This avoids the problem where cancelling
+// a read context on a coder/websocket connection closes the entire connection.
+type vimTestConn struct {
+	conn   *websocket.Conn
+	frames chan string // terminal data payloads (prefix byte stripped)
+}
+
+// newVimTestConn dials wsURL and starts a background goroutine that reads
+// frames until ctx is cancelled or the connection closes. All data frames
+// (prefix byte '0') are sent to the returned channel.
+func newVimTestConn(t *testing.T, ctx context.Context, wsURL string) *vimTestConn {
+	t.Helper()
+	conn, _, dialErr := websocket.Dial(ctx, wsURL, nil)
+	if dialErr != nil {
+		t.Fatalf("dial failed: %v", dialErr)
+	}
+	conn.SetReadLimit(1 << 20)
+
+	tc := &vimTestConn{
+		conn:   conn,
+		frames: make(chan string, 1024),
+	}
+
+	go func() {
+		defer close(tc.frames)
+		for {
+			_, data, readErr := conn.Read(ctx)
+			if readErr != nil {
+				return
+			}
+			if len(data) > 1 && data[0] == '0' {
+				tc.frames <- string(data[1:])
+			}
+		}
+	}()
+
+	return tc
+}
+
+// sendInput sends a ttyd input frame (prefix '0' + payload) to the PTY.
+func (tc *vimTestConn) sendInput(ctx context.Context, t *testing.T, label string, payload []byte) {
+	t.Helper()
+	msg := make([]byte, len(payload)+1)
+	msg[0] = '0'
+	copy(msg[1:], payload)
+	if writeErr := tc.conn.Write(ctx, websocket.MessageBinary, msg); writeErr != nil {
+		t.Fatalf("%s: failed to send input: %v", label, writeErr)
+	}
+}
+
+// collectFor drains the frames channel for dur, returning everything received.
+func (tc *vimTestConn) collectFor(dur time.Duration) string {
+	timer := time.NewTimer(dur)
+	defer timer.Stop()
+	var sb strings.Builder
+	for {
+		select {
+		case chunk, ok := <-tc.frames:
+			if !ok {
+				return sb.String()
+			}
+			sb.WriteString(chunk)
+		case <-timer.C:
+			return sb.String()
+		}
+	}
+}
+
+// startVimTestServer creates a PTY session and HTTP/WebSocket server following
+// the pattern used by other integration tests. Returns the WebSocket URL.
+func startVimTestServer(t *testing.T, sessionID string, m *internalpty.PTYManager) string {
+	t.Helper()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen failed: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws/terminal", func(w http.ResponseWriter, r *http.Request) {
+		conn, acceptErr := websocket.Accept(w, r, &websocket.AcceptOptions{
+			InsecureSkipVerify: true,
+		})
+		if acceptErr != nil {
+			return
+		}
+		defer conn.CloseNow()
+		_ = m.ServeTerminal(r.Context(), sessionID, conn)
+	})
+	srv := &http.Server{Handler: mux}
+	go srv.Serve(ln) //nolint:errcheck
+	t.Cleanup(func() { srv.Close() })
+
+	return "ws://" + ln.Addr().String() + "/ws/terminal"
+}
+
+// TestServeTerminal_VimNocompatible_OutputDelivery reproduces issue #527:
+// when vim enters nocompatible mode it sends terminal capability queries
+// (DA2/t_RV, cursor position/t_u7) that break the WebSocket output delivery
+// path. Input reaches vim and vim processes it, but output stops being
+// delivered to the client after the initial startup sequence.
+//
+// This test is expected to FAIL against the current code because step 8
+// (receiving output after typing "hello" in insert mode) never delivers
+// output through the WebSocket, demonstrating the bug.
+func TestServeTerminal_VimNocompatible_OutputDelivery(t *testing.T) {
+	vimPath, lookErr := exec.LookPath("vim")
+	if lookErr != nil {
+		t.Skip("vim not found in PATH; skipping vim nocompatible output delivery test")
+	}
+	t.Logf("using vim at %s", vimPath)
+
+	m := internalpty.NewPTYManager(internalpty.PTYConfig{})
+
+	sessionID := "vim-nocompat-test"
+	if createErr := m.Create(sessionID, t.TempDir(), []string{"sh"}, nil, 80, 24); createErr != nil {
+		t.Fatalf("Create failed: %v", createErr)
+	}
+	t.Cleanup(func() { m.Destroy(sessionID) })
+
+	wsURL := startVimTestServer(t, sessionID, m)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	tc := newVimTestConn(t, ctx, wsURL)
+	defer tc.conn.CloseNow()
+
+	// Step 4: Wait for shell prompt output.
+	promptOutput := tc.collectFor(3 * time.Second)
+	if len(promptOutput) == 0 {
+		t.Fatal("step 4: timed out waiting for shell prompt; no output received")
+	}
+	t.Logf("step 4: shell prompt received (%d bytes)", len(promptOutput))
+
+	// Step 5: Launch vim with nocompatible mode.
+	tc.sendInput(ctx, t, "step 5", []byte("vim -u NONE --cmd \"set nocompatible\"\r"))
+
+	// Step 6: Read output for a few seconds — should see vim's screen
+	// (alternate buffer switch, tildes, etc.).
+	vimStartOutput := tc.collectFor(4 * time.Second)
+	if len(vimStartOutput) == 0 {
+		t.Fatal("step 6: no output received after vim start — vim may not have launched")
+	}
+	t.Logf("step 6: vim startup output received (%d bytes)", len(vimStartOutput))
+
+	// Step 7: Enter insert mode, type "hello", then ESC back to normal mode.
+	tc.sendInput(ctx, t, "step 7", []byte("ihello\x1b"))
+
+	// Step 8: Read output — should see vim's response (cursor movement,
+	// "hello" text, mode change). THIS IS THE ASSERTION EXPECTED TO FAIL.
+	insertOutput := tc.collectFor(4 * time.Second)
+	if len(insertOutput) == 0 {
+		t.Errorf("step 8 FAIL (bug #527): no output received after typing in vim nocompatible mode; "+
+			"input reached vim but WebSocket writer stopped delivering output after terminal capability queries")
+	} else {
+		t.Logf("step 8: insert output received (%d bytes)", len(insertOutput))
+	}
+
+	// Step 9: Quit vim.
+	tc.sendInput(ctx, t, "step 9", []byte(":q!\r"))
+
+	// Step 10: Read output — should see vim exit and shell return.
+	quitOutput := tc.collectFor(4 * time.Second)
+	if len(quitOutput) == 0 {
+		t.Logf("step 10: no output received after :q! (vim may already have exited silently)")
+	} else {
+		t.Logf("step 10: quit output received (%d bytes)", len(quitOutput))
+	}
+}
+
+// TestServeTerminal_VimCompatible_OutputDelivery is the control companion to
+// TestServeTerminal_VimNocompatible_OutputDelivery. It runs vim without
+// nocompatible mode (vim -u NONE) and asserts that output is correctly
+// delivered at every interaction step. This test is expected to PASS.
+func TestServeTerminal_VimCompatible_OutputDelivery(t *testing.T) {
+	vimPath, lookErr := exec.LookPath("vim")
+	if lookErr != nil {
+		t.Skip("vim not found in PATH; skipping vim compatible output delivery test")
+	}
+	t.Logf("using vim at %s", vimPath)
+
+	m := internalpty.NewPTYManager(internalpty.PTYConfig{})
+
+	sessionID := "vim-compat-test"
+	if createErr := m.Create(sessionID, t.TempDir(), []string{"sh"}, nil, 80, 24); createErr != nil {
+		t.Fatalf("Create failed: %v", createErr)
+	}
+	t.Cleanup(func() { m.Destroy(sessionID) })
+
+	wsURL := startVimTestServer(t, sessionID, m)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	tc := newVimTestConn(t, ctx, wsURL)
+	defer tc.conn.CloseNow()
+
+	// Step 4: Wait for shell prompt output.
+	promptOutput := tc.collectFor(3 * time.Second)
+	if len(promptOutput) == 0 {
+		t.Fatal("step 4: timed out waiting for shell prompt; no output received")
+	}
+	t.Logf("step 4: shell prompt received (%d bytes)", len(promptOutput))
+
+	// Step 5: Launch vim in compatible mode (no nocompatible).
+	tc.sendInput(ctx, t, "step 5", []byte("vim -u NONE\r"))
+
+	// Step 6: Read output — should see vim's screen (alternate buffer, tildes).
+	vimStartOutput := tc.collectFor(4 * time.Second)
+	if len(vimStartOutput) == 0 {
+		t.Fatal("step 6: no output received after vim start")
+	}
+	t.Logf("step 6: vim startup output received (%d bytes)", len(vimStartOutput))
+
+	// Step 7: Enter insert mode, type "hello", then ESC.
+	tc.sendInput(ctx, t, "step 7", []byte("ihello\x1b"))
+
+	// Step 8: Read output — control path should deliver output normally.
+	insertOutput := tc.collectFor(4 * time.Second)
+	if len(insertOutput) == 0 {
+		t.Errorf("step 8: no output received after typing in vim compatible mode; " +
+			"expected cursor movement / text echo from vim")
+	} else {
+		t.Logf("step 8: insert output received (%d bytes)", len(insertOutput))
+	}
+
+	// Step 9: Quit vim.
+	tc.sendInput(ctx, t, "step 9", []byte(":q!\r"))
+
+	// Step 10: Read output — should see shell return.
+	quitOutput := tc.collectFor(4 * time.Second)
+	if len(quitOutput) == 0 {
+		t.Logf("step 10: no output after :q! (vim may have exited cleanly with no shell echo)")
+	} else {
+		t.Logf("step 10: quit output received (%d bytes)", len(quitOutput))
+	}
 }

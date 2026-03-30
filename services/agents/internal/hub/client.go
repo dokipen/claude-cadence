@@ -51,8 +51,9 @@ type Client struct {
 
 	// terminalRelayCh maps session ID → channel for incoming binary relay
 	// frames from the hub (browser input forwarded to the PTY session).
-	relayCh   map[string]chan []byte
-	relayChMu sync.Mutex
+	relayCh     map[string]chan []byte
+	relayCancel map[string]context.CancelFunc
+	relayChMu   sync.Mutex
 }
 
 // NewClient creates a new hub client.
@@ -65,13 +66,14 @@ func NewClient(cfg config.HubConfig, profiles map[string]config.Profile, ttyd co
 		mgr = ptyMgr[0]
 	}
 	return &Client{
-		cfg:        cfg,
-		profiles:   profiles,
-		ttyd:       ttyd,
-		dispatcher: dispatcher,
-		ptyMgr:     mgr,
-		done:       make(chan struct{}),
-		relayCh:    make(map[string]chan []byte),
+		cfg:         cfg,
+		profiles:    profiles,
+		ttyd:        ttyd,
+		dispatcher:  dispatcher,
+		ptyMgr:      mgr,
+		done:        make(chan struct{}),
+		relayCh:     make(map[string]chan []byte),
+		relayCancel: make(map[string]context.CancelFunc),
 	}
 }
 
@@ -347,8 +349,18 @@ func (c *Client) RegisterRelaySession(sessionID string, relayCancel context.Canc
 	}
 	ch := make(chan []byte, terminalRelayChannelBufSize)
 	c.relayChMu.Lock()
+	// Cancel any existing relay goroutine for this session (e.g. React strict
+	// mode double-connect) before registering the new channel. This prevents
+	// zombie relay goroutines that hold local TCP listeners and HTTP servers.
+	// oldCancel is called after releasing the lock to avoid holding relayChMu
+	// during an external cancel call.
+	oldCancel, hasOldCancel := c.relayCancel[sessionID]
 	c.relayCh[sessionID] = ch
+	c.relayCancel[sessionID] = relayCancel
 	c.relayChMu.Unlock()
+	if hasOldCancel {
+		oldCancel()
+	}
 	var once sync.Once
 	cleanup := func() {
 		once.Do(func() {
@@ -356,6 +368,7 @@ func (c *Client) RegisterRelaySession(sessionID string, relayCancel context.Canc
 			// Only delete if the map still points to OUR channel.
 			if c.relayCh[sessionID] == ch {
 				delete(c.relayCh, sessionID)
+				delete(c.relayCancel, sessionID)
 			}
 			c.relayChMu.Unlock()
 			// Cancel the relay goroutine's context so it stops attempting

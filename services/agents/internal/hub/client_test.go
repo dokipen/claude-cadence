@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -78,7 +79,8 @@ func TestRegisterRelaySession_NormalizesUUIDKey(t *testing.T) {
 	const uppercaseID = "550E8400-E29B-41D4-A716-446655440000"
 
 	c := &Client{
-		relayCh: make(map[string]chan []byte),
+		relayCh:     make(map[string]chan []byte),
+		relayCancel: make(map[string]context.CancelFunc),
 	}
 
 	// relayCancel is a no-op; we only care about channel dispatch here.
@@ -118,7 +120,8 @@ func TestRegisterRelaySession_NormalizesUUIDKey(t *testing.T) {
 
 func TestRegisterRelaySession_StaleCleanupDoesNotClobberLiveRegistration(t *testing.T) {
 	c := &Client{
-		relayCh: make(map[string]chan []byte),
+		relayCh:     make(map[string]chan []byte),
+		relayCancel: make(map[string]context.CancelFunc),
 	}
 
 	const sessionID = "12345678-1234-1234-1234-123456789abc"
@@ -153,13 +156,17 @@ func TestRegisterRelaySession_StaleCleanupDoesNotClobberLiveRegistration(t *test
 		t.Fatal("timed out waiting for payload on ch2: stale cleanup may have clobbered the live registration")
 	}
 
-	// cleanup2 must remove the map entry.
+	// cleanup2 must remove the map entries.
 	cleanup2()
 
 	c.relayChMu.Lock()
-	_, exists := c.relayCh[parsed.String()]
+	_, chExists := c.relayCh[parsed.String()]
+	_, cancelExists := c.relayCancel[parsed.String()]
 	c.relayChMu.Unlock()
-	if exists {
-		t.Fatal("map entry still present after cleanup2()")
+	if chExists {
+		t.Fatal("relayCh entry still present after cleanup2()")
+	}
+	if cancelExists {
+		t.Fatal("relayCancel entry still present after cleanup2()")
 	}
 }
