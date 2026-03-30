@@ -99,6 +99,12 @@ export function Terminal({ agentName, sessionId, onResumeSession }: TerminalProp
   const copyHandlerRef = useRef<((e: ClipboardEvent) => void) | null>(null);
   // true while auto-retrying after a drop (distinct from initial "connecting" text)
   const reconnectingRef = useRef(false);
+  // true when the user has scrolled up from the bottom; suppresses auto-scroll-to-bottom on new output
+  const userScrolledUpRef = useRef(false);
+  // the viewport line the user scrolled to; only updated by user-initiated scrolls, not our own scrollToLine calls
+  const scrollRestoreTargetRef = useRef<number | null>(null);
+  // set to true around programmatic scrollToLine calls to prevent onScroll from overwriting the user's tracked position
+  const suppressScrollTrackingRef = useRef(false);
   const [connState, setConnState] = useState<ConnectionState>("connecting");
 
   const connect = useCallback(() => {
@@ -115,6 +121,9 @@ export function Terminal({ agentName, sessionId, onResumeSession }: TerminalProp
       retryCountRef.current = 0;
       reconnectingRef.current = false;
     }
+    userScrolledUpRef.current = false;
+    scrollRestoreTargetRef.current = null;
+    suppressScrollTrackingRef.current = false;
     isAutoRetryRef.current = false;
     everConnectedRef.current = false;
 
@@ -159,6 +168,22 @@ export function Terminal({ agentName, sessionId, onResumeSession }: TerminalProp
     term.loadAddon(fit);
     term.open(container);
     fit.fit();
+
+    // Track whether the user has scrolled up so we can preserve their position
+    // when new output arrives instead of forcing a jump to the bottom.
+    // Programmatic scrollToLine calls (in the write callback below) set
+    // suppressScrollTrackingRef so they don't overwrite the user's intended target.
+    term.onScroll(() => {
+      if (suppressScrollTrackingRef.current) return;
+      const buf = term.buffer.active;
+      if (buf.viewportY + term.rows < buf.length) {
+        userScrolledUpRef.current = true;
+        scrollRestoreTargetRef.current = buf.viewportY;
+      } else {
+        userScrolledUpRef.current = false;
+        scrollRestoreTargetRef.current = null;
+      }
+    });
 
     // Guard against double-write: keyboard handler sets this flag so the DOM
     // copy event (which may fire immediately after) skips its own clipboard write.
@@ -263,7 +288,21 @@ export function Terminal({ agentName, sessionId, onResumeSession }: TerminalProp
         const cmd = String.fromCharCode(view[0]);
         if (cmd === MSG_OUTPUT) {
           // Strip the type prefix and write the rest to xterm.
-          term.write(view.slice(1));
+          // If the user has scrolled up, restore their position after the write
+          // so new output doesn't forcibly jump them to the bottom.
+          // scrollRestoreTargetRef holds the stable user-set viewport position and is
+          // only updated by user-initiated scroll events (onScroll with the suppress
+          // guard inactive), so rapid-burst writes all restore to the same target.
+          if (userScrolledUpRef.current && scrollRestoreTargetRef.current !== null) {
+            const target = scrollRestoreTargetRef.current;
+            term.write(view.slice(1), () => {
+              suppressScrollTrackingRef.current = true;
+              termRef.current?.scrollToLine(target);
+              suppressScrollTrackingRef.current = false;
+            });
+          } else {
+            term.write(view.slice(1));
+          }
         }
         // SET_WINDOW_TITLE and SET_PREFERENCES are ignored for now.
       } else if (typeof ev.data === "string") {
@@ -271,7 +310,16 @@ export function Terminal({ agentName, sessionId, onResumeSession }: TerminalProp
         if (ev.data.length < 1) return;
         const cmd = ev.data[0];
         if (cmd === MSG_OUTPUT) {
-          term.write(ev.data.slice(1));
+          if (userScrolledUpRef.current && scrollRestoreTargetRef.current !== null) {
+            const target = scrollRestoreTargetRef.current;
+            term.write(ev.data.slice(1), () => {
+              suppressScrollTrackingRef.current = true;
+              termRef.current?.scrollToLine(target);
+              suppressScrollTrackingRef.current = false;
+            });
+          } else {
+            term.write(ev.data.slice(1));
+          }
         }
       }
     };
@@ -345,6 +393,48 @@ export function Terminal({ agentName, sessionId, onResumeSession }: TerminalProp
       termRef.current.options.theme = isDark ? DARK_THEME : LIGHT_THEME;
     }
   }, [isDark]);
+
+  // Touch-scroll support: translate vertical swipe gestures into xterm scrollLines() calls.
+  // xterm.js only handles wheel events natively; touch events require manual translation.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    let lastTouchY = 0;
+
+    const onTouchStart = (e: TouchEvent) => {
+      lastTouchY = e.touches[0].clientY;
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault(); // prevent the browser from intercepting as a page scroll
+      if (!e.touches.length) return; // guard: touchcancel can empty the list before touchmove
+      const currentY = e.touches[0].clientY;
+      const deltaY = lastTouchY - currentY; // positive = finger moved up = scroll toward newer content
+      lastTouchY = currentY;
+
+      const term = termRef.current;
+      if (!term) return;
+
+      // Approximate pixels per line from font size (12px font → ~18px rendered line height).
+      const fontSize = typeof term.options.fontSize === "number" && term.options.fontSize > 0
+        ? term.options.fontSize
+        : 12;
+      const pixelsPerLine = fontSize * 1.5;
+      const lines = Math.round(deltaY / pixelsPerLine);
+      if (lines !== 0) {
+        term.scrollLines(lines);
+      }
+    };
+
+    container.addEventListener("touchstart", onTouchStart, { passive: true });
+    container.addEventListener("touchmove", onTouchMove, { passive: false });
+
+    return () => {
+      container.removeEventListener("touchstart", onTouchStart);
+      container.removeEventListener("touchmove", onTouchMove);
+    };
+  }, []);
 
   // Handle resize — debounced with rAF to avoid flooding CMD_RESIZE on rapid window drag
   useEffect(() => {

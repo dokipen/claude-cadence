@@ -14,13 +14,17 @@ vi.mock("@xterm/xterm", () => ({
     dispose = vi.fn();
     onData = vi.fn();
     onResize = vi.fn();
+    onScroll = vi.fn();
     write = vi.fn();
     focus = vi.fn();
+    scrollLines = vi.fn();
+    scrollToLine = vi.fn();
     attachCustomKeyEventHandler = vi.fn();
     getSelection = vi.fn(() => "");
     cols = 80;
     rows = 24;
     options: Record<string, unknown> = {};
+    buffer: { active: { viewportY: number; length: number } } = { active: { viewportY: 0, length: 24 } };
     constructor(opts?: Record<string, unknown>) {
       this.options = opts ?? {};
       xtermInstances.push(this as unknown as { focus: ReturnType<typeof vi.fn>; options: Record<string, unknown>; attachCustomKeyEventHandler: ReturnType<typeof vi.fn>; getSelection: ReturnType<typeof vi.fn> });
@@ -537,6 +541,153 @@ describe("Terminal", () => {
       act(() => { onData("a"); });
 
       expect(ws.send).toHaveBeenCalledWith("0a");
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Mobile scroll: touch swipe and auto-scroll position preservation (issue #561)
+  // ---------------------------------------------------------------------------
+  describe("mobile scroll", () => {
+    type MockTermExtended = {
+      onScroll: ReturnType<typeof vi.fn>;
+      scrollLines: ReturnType<typeof vi.fn>;
+      scrollToLine: ReturnType<typeof vi.fn>;
+      write: ReturnType<typeof vi.fn>;
+      buffer: { active: { viewportY: number; length: number } };
+    };
+
+    function renderConnected() {
+      render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+      act(() => { MockWebSocket.instances[0].simulateOpen(); });
+    }
+
+    it("calls scrollLines with a positive value when the user swipes upward", () => {
+      renderConnected();
+      const container = screen.getByTestId("terminal-container");
+      const term = xtermInstances[0] as unknown as MockTermExtended;
+
+      act(() => {
+        const touchStart = new Event("touchstart", { bubbles: true });
+        Object.defineProperty(touchStart, "touches", { value: [{ clientY: 300, clientX: 0 }] });
+        container.dispatchEvent(touchStart);
+
+        const touchMove = new Event("touchmove", { bubbles: true, cancelable: true });
+        Object.defineProperty(touchMove, "touches", { value: [{ clientY: 200, clientX: 0 }] });
+        container.dispatchEvent(touchMove);
+      });
+
+      // Swiping up (finger moves from y=300 to y=200) should scroll toward newer content (positive lines)
+      expect(term.scrollLines).toHaveBeenCalledWith(expect.any(Number));
+      const [lines] = term.scrollLines.mock.calls[0] as [number];
+      expect(lines).toBeGreaterThan(0);
+    });
+
+    it("calls scrollLines with a negative value when the user swipes downward", () => {
+      renderConnected();
+      const container = screen.getByTestId("terminal-container");
+      const term = xtermInstances[0] as unknown as MockTermExtended;
+
+      act(() => {
+        const touchStart = new Event("touchstart", { bubbles: true });
+        Object.defineProperty(touchStart, "touches", { value: [{ clientY: 100, clientX: 0 }] });
+        container.dispatchEvent(touchStart);
+
+        const touchMove = new Event("touchmove", { bubbles: true, cancelable: true });
+        Object.defineProperty(touchMove, "touches", { value: [{ clientY: 250, clientX: 0 }] });
+        container.dispatchEvent(touchMove);
+      });
+
+      // Swiping down (finger moves from y=100 to y=250) should scroll toward older content (negative lines)
+      expect(term.scrollLines).toHaveBeenCalledWith(expect.any(Number));
+      const [lines] = term.scrollLines.mock.calls[0] as [number];
+      expect(lines).toBeLessThan(0);
+    });
+
+    it("passes a scroll-restore callback to write() when new output arrives while user is scrolled up", () => {
+      renderConnected();
+      const ws = MockWebSocket.instances[0];
+      const term = xtermInstances[0] as unknown as MockTermExtended;
+
+      // Simulate user scrolled up via onScroll: viewportY=10, length=100, rows=24 → 10+24 < 100
+      term.buffer.active.viewportY = 10;
+      term.buffer.active.length = 100;
+      const onScrollCb = term.onScroll.mock.calls[0][0] as () => void;
+      act(() => { onScrollCb(); }); // sets userScrolledUpRef=true AND scrollRestoreTargetRef=10
+
+      term.write.mockClear();
+
+      // Simulate receiving terminal output (binary frame: prefix "0" + data)
+      const outputFrame = new Uint8Array([0x30, 0x48, 0x65, 0x6c, 0x6c, 0x6f]); // "0Hello"
+      act(() => { ws.onmessage!({ data: outputFrame.buffer } as MessageEvent); });
+
+      expect(term.write).toHaveBeenCalledTimes(1);
+      const [, writeCallback] = term.write.mock.calls[0] as [unknown, unknown];
+      expect(typeof writeCallback).toBe("function");
+    });
+
+    it("does not pass a scroll-restore callback to write() when user is at the bottom", () => {
+      renderConnected();
+      const ws = MockWebSocket.instances[0];
+      const term = xtermInstances[0] as unknown as MockTermExtended;
+
+      // User is at bottom (default): userScrolledUpRef is false, scrollRestoreTargetRef is null
+      term.write.mockClear();
+
+      const outputFrame = new Uint8Array([0x30, 0x48, 0x65, 0x6c, 0x6c, 0x6f]);
+      act(() => { ws.onmessage!({ data: outputFrame.buffer } as MessageEvent); });
+
+      expect(term.write).toHaveBeenCalledTimes(1);
+      const [, writeCallback] = term.write.mock.calls[0] as [unknown, unknown];
+      expect(writeCallback).toBeUndefined();
+    });
+
+    it("resets scroll-preserve state when user scrolls back to the bottom", () => {
+      renderConnected();
+      const ws = MockWebSocket.instances[0];
+      const term = xtermInstances[0] as unknown as MockTermExtended;
+
+      // Step 1: simulate user scrolling up
+      term.buffer.active.viewportY = 10;
+      term.buffer.active.length = 100;
+      const onScrollCb = term.onScroll.mock.calls[0][0] as () => void;
+      act(() => { onScrollCb(); }); // userScrolledUpRef=true
+
+      // Step 2: simulate user scrolling back to the bottom
+      term.buffer.active.viewportY = 76; // 76 + 24 = 100 = length → at bottom
+      act(() => { onScrollCb(); }); // userScrolledUpRef=false
+
+      term.write.mockClear();
+
+      // Step 3: new output should NOT get a restore callback
+      const outputFrame = new Uint8Array([0x30, 0x48, 0x65, 0x6c, 0x6c, 0x6f]);
+      act(() => { ws.onmessage!({ data: outputFrame.buffer } as MessageEvent); });
+
+      expect(term.write).toHaveBeenCalledTimes(1);
+      const [, writeCallback] = term.write.mock.calls[0] as [unknown, unknown];
+      expect(writeCallback).toBeUndefined();
+    });
+
+    it("calls e.preventDefault() on touchmove to prevent the browser from intercepting the gesture", () => {
+      renderConnected();
+      const container = screen.getByTestId("terminal-container");
+
+      act(() => {
+        const touchStart = new Event("touchstart", { bubbles: true });
+        Object.defineProperty(touchStart, "touches", { value: [{ clientY: 300, clientX: 0 }] });
+        container.dispatchEvent(touchStart);
+      });
+
+      let defaultPrevented = false;
+      // Attach a second listener that reads e.defaultPrevented after the component's handler fires
+      container.addEventListener("touchmove", (e) => { defaultPrevented = e.defaultPrevented; });
+
+      act(() => {
+        const touchMove = new Event("touchmove", { bubbles: true, cancelable: true });
+        Object.defineProperty(touchMove, "touches", { value: [{ clientY: 200, clientX: 0 }] });
+        container.dispatchEvent(touchMove);
+      });
+
+      expect(defaultPrevented).toBe(true);
     });
   });
 
