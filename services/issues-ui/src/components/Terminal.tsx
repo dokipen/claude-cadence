@@ -238,7 +238,11 @@ export function Terminal({ agentName, sessionId, onResumeSession }: TerminalProp
       }
 
       // Forward terminal input to ttyd with the INPUT prefix.
+      // Filter DA1 Device Attributes queries (ESC[c, ESC[0c) — xterm.js emits
+      // these on init/reconnect, but the shell is not in a state to consume the
+      // response and interprets the tail ("1;2c") as literal keystrokes.
       term.onData((data) => {
+        if (data === "\x1b[c" || data === "\x1b[0c") return;
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(CMD_INPUT + data);
         }
