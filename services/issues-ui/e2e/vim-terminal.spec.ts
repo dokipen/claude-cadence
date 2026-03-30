@@ -91,13 +91,19 @@ async function waitForRunning(
  *
  * The WebSocket is created inside the browser page so Playwright's CDP
  * websocket instrumentation captures it.
+ *
+ * key allows multiple simultaneous connections on the same page (e.g. for
+ * the strict-mode double-connect test). State is stored as window.__<key>WS
+ * and window.__<key>Output.
  */
 async function connectTerminalWS(
   page: import("@playwright/test").Page,
   wsUrl: string,
+  key = "ttyd",
 ): Promise<{
   send: (text: string) => Promise<void>;
   output: () => string;
+  clearOutput: () => Promise<void>;
   waitForOutput: (
     matcher: string | RegExp,
     timeoutMs?: number,
@@ -107,13 +113,13 @@ async function connectTerminalWS(
   // Inject a thin ttyd WebSocket client into the page.
   // We store shared state on window so the helpers can access it.
   await page.evaluate(
-    ({ url }) => {
+    ({ url, k }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const w = window as any;
-      w.__ttydOutput = "";
-      w.__ttydWS = new WebSocket(url, ["tty"]);
-      w.__ttydWS.binaryType = "arraybuffer";
-      w.__ttydWS.addEventListener("message", (ev: MessageEvent) => {
+      w[`__${k}Output`] = "";
+      w[`__${k}WS`] = new WebSocket(url, ["tty"]);
+      w[`__${k}WS`].binaryType = "arraybuffer";
+      w[`__${k}WS`].addEventListener("message", (ev: MessageEvent) => {
         let bytes: Uint8Array;
         if (ev.data instanceof ArrayBuffer) {
           bytes = new Uint8Array(ev.data);
@@ -125,33 +131,42 @@ async function connectTerminalWS(
         }
         // First byte is the ttyd frame type ('0' = data). Skip it.
         if (bytes.length > 1 && bytes[0] === 0x30 /* '0' */) {
-          w.__ttydOutput += new TextDecoder("utf-8", {
+          w[`__${k}Output`] += new TextDecoder("utf-8", {
             fatal: false,
           }).decode(bytes.slice(1));
         }
       });
     },
-    { url: wsUrl },
+    { url: wsUrl, k: key },
   );
 
   const send = async (text: string) => {
     await page.evaluate(
-      ({ t }) => {
+      ({ t, k }) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const ws = (window as any).__ttydWS as WebSocket;
+        const ws = (window as any)[`__${k}WS`] as WebSocket;
         // Send as binary ArrayBuffer so the hub relay receives MessageBinary.
         const encoded = new TextEncoder().encode(t);
         ws.send(encoded.buffer);
       },
-      { t: text },
+      { t: text, k: key },
     );
   };
 
   const output = () =>
-    page.evaluate(() => {
+    page.evaluate(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (window as any).__ttydOutput as string;
-    }) as unknown as string;
+      ({ k }) => (window as any)[`__${k}Output`] as string,
+      { k: key },
+    ) as unknown as string;
+
+  const clearOutput = async () => {
+    await page.evaluate(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ({ k }) => { (window as any)[`__${k}Output`] = ""; },
+      { k: key },
+    );
+  };
 
   const waitForOutput = async (
     matcher: string | RegExp,
@@ -161,7 +176,8 @@ async function connectTerminalWS(
     while (Date.now() < deadline) {
       const current = await page.evaluate(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        () => (window as any).__ttydOutput as string,
+        ({ k }) => (window as any)[`__${k}Output`] as string,
+        { k: key },
       );
       if (
         typeof matcher === "string"
@@ -174,7 +190,8 @@ async function connectTerminalWS(
     }
     const current = await page.evaluate(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      () => (window as any).__ttydOutput as string,
+      ({ k }) => (window as any)[`__${k}Output`] as string,
+      { k: key },
     );
     throw new Error(
       `Timed out waiting for output to match ${matcher}. ` +
@@ -183,13 +200,14 @@ async function connectTerminalWS(
   };
 
   const close = async () => {
-    await page.evaluate(() => {
+    await page.evaluate(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).__ttydWS?.close();
-    });
+      ({ k }) => { (window as any)[`__${k}WS`]?.close(); },
+      { k: key },
+    );
   };
 
-  return { send, output: output as () => string, waitForOutput, close };
+  return { send, output: output as () => string, clearOutput, waitForOutput, close };
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -243,10 +261,7 @@ test.describe("vim nocompatible input regression", () => {
     // Clear output before launching vim so the ring buffer replay (which may
     // contain \x1b[?1049h from a previous session) doesn't trigger a false
     // "vim started" detection.
-    await page.evaluate(() => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).__ttydOutput = "";
-    });
+    await term.clearOutput();
 
     // Launch vim with nocompatible mode.
     await term.send(inputFrame("vim -u NONE --cmd 'set nocompatible'\r"));
@@ -260,42 +275,34 @@ test.describe("vim nocompatible input regression", () => {
     await page.waitForTimeout(300);
     console.log(`[vim-test] Vim started`);
 
-    // Clear again so we only see vim's response to our input.
-    await page.evaluate(() => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).__ttydOutput = "";
-    });
+    // Write a file from vim to prove it received our keystrokes end-to-end.
+    // This is immune to false positives from PTY echo or ring buffer replay:
+    // the file can only exist if vim received 'i', the content, ESC, and :wq.
+    const tmpFile = `/tmp/vimtest_nocompat_${sessionId}`;
+    console.log(`[vim-test] Writing file via vim: ${tmpFile}`);
 
-    // Enter insert mode. If vim is responsive, it outputs "-- INSERT --".
-    await term.send(inputFrame("i"));
-
-    // Wait for vim to confirm it received the 'i' keystroke. "-- INSERT --"
-    // is only ever output by vim itself — the shell cannot produce it.
-    // If this times out, vim is unresponsive (the bug).
+    // Enter insert mode, type content, ESC, write and quit.
+    await term.send(inputFrame(`i`));
     console.log(`[vim-test] Waiting for -- INSERT -- mode indicator...`);
     await term.waitForOutput("-- INSERT --", 5_000);
     console.log(`[vim-test] vim entered insert mode`);
 
-    // Type the marker text and confirm it appears in vim's output.
-    const marker = "VIMTEST_NOCOMPAT_OK";
-    await term.send(inputFrame(marker));
-    await page.waitForTimeout(300);
+    await term.send(inputFrame(`VIMTEST_NOCOMPAT_OK\x1b:w ${tmpFile}\r:q!\r`));
 
-    const out = await page.evaluate(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      () => (window as any).__ttydOutput as string,
-    );
-    console.log(
-      `[vim-test] Output after typing (${out.length} chars): ${JSON.stringify(out.slice(0, 400))}`,
-    );
+    // Wait for vim to exit (alternate screen is restored: \x1b[?1049l).
+    await term.clearOutput();
+    await term.waitForOutput("\x1b[?1049l", 8_000);
+    console.log(`[vim-test] vim exited`);
 
-    expect(out).toContain(marker);
+    // Back at shell — check the file was created.
+    await term.clearOutput();
+    await term.send(inputFrame(`cat ${tmpFile}\r`));
+    const shellOut = await term.waitForOutput("VIMTEST_NOCOMPAT_OK", 5_000);
+    console.log(`[vim-test] File contents: ${JSON.stringify(shellOut.slice(0, 200))}`);
 
-    // Clean up: quit vim without saving, then destroy the session.
-    await term.send(inputFrame("\x1b:q!\r")); // ESC then :q!
+    expect(shellOut).toContain("VIMTEST_NOCOMPAT_OK");
+
     await term.close();
-
-    // Destroy the session so it doesn't linger.
     await fetch(`${QA_URL}/api/v1/agents/${QA_AGENT}/sessions/${sessionId}`, {
       method: "DELETE",
     });
@@ -323,10 +330,7 @@ test.describe("vim nocompatible input regression", () => {
     await page.waitForTimeout(200);
 
     // Clear before launching so ring buffer replay doesn't fool the detector.
-    await page.evaluate(() => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).__ttydOutput = "";
-    });
+    await term.clearOutput();
 
     // Launch vim in compatible mode (default, no nocompatible).
     await term.send(inputFrame("vim -u NONE\r"));
@@ -334,23 +338,129 @@ test.describe("vim nocompatible input regression", () => {
     await term.waitForOutput("\x1b[?1049h", 20_000);
     await page.waitForTimeout(300);
 
-    await page.evaluate(() => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).__ttydOutput = "";
-    });
+    await term.clearOutput();
 
-    // Compatible mode vim does not display "-- INSERT --"; it enters insert
-    // mode silently. Just type the marker and confirm it appears.
-    const marker = "VIMTEST_COMPAT_OK";
-    await term.send(inputFrame("i" + marker));
+    // Compatible mode vim does not display "-- INSERT --", so we use the same
+    // file-write approach: if the file exists with the right content, vim
+    // received and processed the keystrokes.
+    const tmpFile = `/tmp/vimtest_compat_${sessionId}`;
+    await term.send(inputFrame(`iVIMTEST_COMPAT_OK\x1b:w ${tmpFile}\r:q!\r`));
 
-    const out = await term.waitForOutput(marker, 5_000);
+    await term.clearOutput();
+    await term.waitForOutput("\x1b[?1049l", 8_000);
+
+    await term.clearOutput();
+    await term.send(inputFrame(`cat ${tmpFile}\r`));
+    const shellOut = await term.waitForOutput("VIMTEST_COMPAT_OK", 5_000);
     console.log(
-      `[vim-test] Compatible baseline output: ${JSON.stringify(out.slice(0, 400))}`,
+      `[vim-test] Compatible baseline file contents: ${JSON.stringify(shellOut.slice(0, 200))}`,
     );
 
-    await term.send(inputFrame("\x1b:q!\r"));
+    expect(shellOut).toContain("VIMTEST_COMPAT_OK");
+
     await term.close();
+    await fetch(`${QA_URL}/api/v1/agents/${QA_AGENT}/sessions/${sessionId}`, {
+      method: "DELETE",
+    });
+  });
+
+  /**
+   * Regression test for the nil-writers window introduced by PR #670.
+   *
+   * React strict mode mounts every component twice in development. On the
+   * terminal page this produces two rapid WebSocket connections to the same
+   * session:
+   *
+   *   mount#1  → WS1 opens → hub creates relay#1 → ServeTerminal#1 registers wf1
+   *   unmount#1 (strict-mode) — WS1 stays open briefly
+   *   mount#2  → WS2 opens → hub creates relay#2 → RegisterRelaySession calls
+   *              oldCancel(), immediately cancelling relay#1's context
+   *              → ServeTerminal#1 exits, setting sess.writers = nil
+   *              → before ServeTerminal#2 registers wf2: nil-writers window
+   *
+   * During the nil-writers window all PTY output goes to the ring buffer but
+   * never reaches the browser. vim is alive and accepting input, but the
+   * browser sees nothing — appearing completely unresponsive.
+   *
+   * The fix (aa6c83a) removes oldCancel() so relay#1 self-terminates via the
+   * writerGen generation check instead, eliminating the gap.
+   *
+   * This test reproduces the scenario: open WS1, wait for relay#1 to settle,
+   * open WS2 simultaneously (while WS1 is still open), close WS1 a moment
+   * later, then verify vim nocompatible receives input on WS2.
+   */
+  test("vim nocompatible receives input after strict-mode double-connect", async ({
+    page,
+  }) => {
+    const sessionId = await createBashSession(QA_URL!);
+    console.log(`[vim-reconnect] Created session: ${sessionId}`);
+    await waitForRunning(QA_URL!, sessionId);
+    await page.goto(`${QA_URL}/`);
+
+    const qaOrigin = new URL(QA_URL!);
+    const wsScheme = qaOrigin.protocol === "https:" ? "wss" : "ws";
+    const wsUrl = `${wsScheme}://${qaOrigin.host}/ws/terminal/${QA_AGENT}/${sessionId}`;
+
+    // WS1 — first mount (React strict-mode: opens but is replaced immediately).
+    console.log(`[vim-reconnect] Opening WS1 (first/discarded connection)`);
+    const term1 = await connectTerminalWS(page, wsUrl, "ttyd1");
+
+    // Let relay#1 settle: ServeTerminal#1 must have registered its writer before
+    // WS2 opens, otherwise WS2 arrives before the relay is established and the
+    // double-connect scenario doesn't apply.
+    await page.waitForTimeout(300);
+
+    // WS2 — second mount (the real connection, while WS1 is still open).
+    // This is the moment that triggers the nil-writers bug: RegisterRelaySession
+    // sees an existing relay and (before the fix) calls oldCancel(), cancelling
+    // relay#1's context before relay#2 has registered its writer.
+    console.log(`[vim-reconnect] Opening WS2 (second/live connection) while WS1 still open`);
+    const term2 = await connectTerminalWS(page, wsUrl, "ttyd2");
+
+    // Close WS1 shortly after — simulating React's strict-mode first-mount cleanup.
+    await page.waitForTimeout(50);
+    await term1.close();
+    console.log(`[vim-reconnect] WS1 closed`);
+
+    // Let WS2's relay settle and replay the ring buffer.
+    await page.waitForTimeout(1000);
+
+    await term2.send(resizeFrame(220, 50));
+    await page.waitForTimeout(200);
+
+    // Clear WS2 output before vim launch — ring buffer may contain stale escape
+    // sequences from prior sessions.
+    await term2.clearOutput();
+
+    console.log(`[vim-reconnect] Launching vim nocompatible on WS2`);
+    await term2.send(inputFrame("vim -u NONE --cmd 'set nocompatible'\r"));
+    await term2.waitForOutput("\x1b[?1049h", 20_000);
+    await page.waitForTimeout(300);
+    console.log(`[vim-reconnect] Vim started on WS2`);
+
+    await term2.send(inputFrame(`i`));
+    await term2.waitForOutput("-- INSERT --", 5_000);
+    console.log(`[vim-reconnect] Vim entered insert mode`);
+
+    const tmpFile = `/tmp/vimtest_reconnect_${sessionId}`;
+    await term2.send(
+      inputFrame(`VIMTEST_RECONNECT_OK\x1b:w ${tmpFile}\r:q!\r`),
+    );
+
+    await term2.clearOutput();
+    await term2.waitForOutput("\x1b[?1049l", 8_000);
+    console.log(`[vim-reconnect] Vim exited`);
+
+    await term2.clearOutput();
+    await term2.send(inputFrame(`cat ${tmpFile}\r`));
+    const shellOut = await term2.waitForOutput("VIMTEST_RECONNECT_OK", 5_000);
+    console.log(
+      `[vim-reconnect] File contents: ${JSON.stringify(shellOut.slice(0, 200))}`,
+    );
+
+    expect(shellOut).toContain("VIMTEST_RECONNECT_OK");
+
+    await term2.close();
     await fetch(`${QA_URL}/api/v1/agents/${QA_AGENT}/sessions/${sessionId}`, {
       method: "DELETE",
     });
