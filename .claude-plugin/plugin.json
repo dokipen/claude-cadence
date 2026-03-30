@@ -1,5 +1,16 @@
 {
   "name": "cadence",
   "version": "0.1.0",
-  "description": "Issue-driven, multi-agent development workflow with git worktrees, structured phases, and specialist delegation"
+  "description": "Issue-driven, multi-agent development workflow with git worktrees, structured phases, and specialist delegation",
+  "mcpServers": {
+    "issues-mcp": {
+      "command": "node",
+      "args": [
+        "./services/issues-mcp/dist/index.js"
+      ],
+      "env": {
+        "PATH": "$PATH"
+      }
+    }
+  }
 }
