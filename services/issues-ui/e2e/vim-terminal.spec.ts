@@ -22,6 +22,8 @@
 import { test, expect } from "@playwright/test";
 
 const QA_URL = process.env.QA_URL?.replace(/\/$/, "");
+const QA_AGENT = process.env.QA_AGENT ?? "dev";
+const QA_PROFILE = process.env.QA_PROFILE ?? "bash";
 
 // ttyd framing: all frames start with a 1-byte type prefix.
 // '0' (0x30) = terminal data; '1' (0x31) = resize JSON.
@@ -46,10 +48,10 @@ function resizeFrame(cols: number, rows: number): string {
  * Uses the REST API proxied through Caddy, which injects the auth header.
  */
 async function createBashSession(qaUrl: string): Promise<string> {
-  const resp = await fetch(`${qaUrl}/api/v1/agents/dev/sessions`, {
+  const resp = await fetch(`${qaUrl}/api/v1/agents/${QA_AGENT}/sessions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ agent_profile: "bash" }),
+    body: JSON.stringify({ agent_profile: QA_PROFILE }),
   });
   if (!resp.ok) {
     const body = await resp.text();
@@ -72,7 +74,7 @@ async function waitForRunning(
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const resp = await fetch(
-      `${qaUrl}/api/v1/agents/dev/sessions/${sessionId}`,
+      `${qaUrl}/api/v1/agents/${QA_AGENT}/sessions/${sessionId}`,
     );
     if (resp.ok) {
       const data = (await resp.json()) as { session: { state: string } };
@@ -224,8 +226,9 @@ test.describe("vim nocompatible input regression", () => {
     // origin as the Caddy proxy (connect-src 'self' in the CSP allows it).
     await page.goto(`${QA_URL}/`);
 
-    const wsHost = new URL(QA_URL!).host;
-    const wsUrl = `ws://${wsHost}/ws/terminal/dev/${sessionId}`;
+    const qaOrigin = new URL(QA_URL!);
+    const wsScheme = qaOrigin.protocol === "https:" ? "wss" : "ws";
+    const wsUrl = `${wsScheme}://${qaOrigin.host}/ws/terminal/${QA_AGENT}/${sessionId}`;
     console.log(`[vim-test] Connecting WebSocket: ${wsUrl}`);
 
     const term = await connectTerminalWS(page, wsUrl);
@@ -237,34 +240,53 @@ test.describe("vim nocompatible input regression", () => {
     await term.send(resizeFrame(220, 50));
     await page.waitForTimeout(200);
 
-    // Launch vim with nocompatible mode.
-    await term.send(inputFrame("vim -u NONE --cmd 'set nocompatible'\r"));
-
-    // Wait for vim to start. The startup screen always contains "VIM" in the
-    // splash text or "~" empty-line tildes in the buffer area.
-    console.log(`[vim-test] Waiting for vim startup screen...`);
-    await term.waitForOutput(/~|\x1b\[/, 20_000);
-    console.log(`[vim-test] Vim started`);
-
-    // Clear accumulated output so we can check only the response to our input.
+    // Clear output before launching vim so the ring buffer replay (which may
+    // contain \x1b[?1049h from a previous session) doesn't trigger a false
+    // "vim started" detection.
     await page.evaluate(() => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (window as any).__ttydOutput = "";
     });
 
-    // Enter insert mode and type a unique marker string.
-    const marker = "VIMTEST_NOCOMPAT_OK";
-    await term.send(inputFrame("i" + marker));
-    await page.waitForTimeout(500);
+    // Launch vim with nocompatible mode.
+    await term.send(inputFrame("vim -u NONE --cmd 'set nocompatible'\r"));
 
-    // Assert the marker appears in terminal output. If vim is unresponsive
-    // (the bug), it will never echo the typed characters and this fails.
+    // Wait for vim to fully own the terminal: \x1b[?1049h switches to the
+    // alternate screen buffer and is only sent once vim has initialised and
+    // disabled the PTY's echo mode.
+    console.log(`[vim-test] Waiting for vim to take over terminal...`);
+    await term.waitForOutput("\x1b[?1049h", 20_000);
+    // Give vim a moment to finish drawing its initial screen.
+    await page.waitForTimeout(300);
+    console.log(`[vim-test] Vim started`);
+
+    // Clear again so we only see vim's response to our input.
+    await page.evaluate(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).__ttydOutput = "";
+    });
+
+    // Enter insert mode. If vim is responsive, it outputs "-- INSERT --".
+    await term.send(inputFrame("i"));
+
+    // Wait for vim to confirm it received the 'i' keystroke. "-- INSERT --"
+    // is only ever output by vim itself — the shell cannot produce it.
+    // If this times out, vim is unresponsive (the bug).
+    console.log(`[vim-test] Waiting for -- INSERT -- mode indicator...`);
+    await term.waitForOutput("-- INSERT --", 5_000);
+    console.log(`[vim-test] vim entered insert mode`);
+
+    // Type the marker text and confirm it appears in vim's output.
+    const marker = "VIMTEST_NOCOMPAT_OK";
+    await term.send(inputFrame(marker));
+    await page.waitForTimeout(300);
+
     const out = await page.evaluate(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       () => (window as any).__ttydOutput as string,
     );
     console.log(
-      `[vim-test] Output after typing (${out.length} chars): ${JSON.stringify(out.slice(0, 300))}`,
+      `[vim-test] Output after typing (${out.length} chars): ${JSON.stringify(out.slice(0, 400))}`,
     );
 
     expect(out).toContain(marker);
@@ -274,7 +296,7 @@ test.describe("vim nocompatible input regression", () => {
     await term.close();
 
     // Destroy the session so it doesn't linger.
-    await fetch(`${QA_URL}/api/v1/agents/dev/sessions/${sessionId}`, {
+    await fetch(`${QA_URL}/api/v1/agents/${QA_AGENT}/sessions/${sessionId}`, {
       method: "DELETE",
     });
   });
@@ -291,41 +313,45 @@ test.describe("vim nocompatible input regression", () => {
     await waitForRunning(QA_URL!, sessionId);
     await page.goto(`${QA_URL}/`);
 
-    const wsHost = new URL(QA_URL!).host;
-    const wsUrl = `ws://${wsHost}/ws/terminal/dev/${sessionId}`;
+    const qaOrigin = new URL(QA_URL!);
+    const wsScheme = qaOrigin.protocol === "https:" ? "wss" : "ws";
+    const wsUrl = `${wsScheme}://${qaOrigin.host}/ws/terminal/${QA_AGENT}/${sessionId}`;
     const term = await connectTerminalWS(page, wsUrl);
 
     await page.waitForTimeout(1000);
     await term.send(resizeFrame(220, 50));
     await page.waitForTimeout(200);
 
+    // Clear before launching so ring buffer replay doesn't fool the detector.
+    await page.evaluate(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).__ttydOutput = "";
+    });
+
     // Launch vim in compatible mode (default, no nocompatible).
     await term.send(inputFrame("vim -u NONE\r"));
 
-    await term.waitForOutput(/~|\x1b\[/, 20_000);
+    await term.waitForOutput("\x1b[?1049h", 20_000);
+    await page.waitForTimeout(300);
 
     await page.evaluate(() => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (window as any).__ttydOutput = "";
     });
 
+    // Compatible mode vim does not display "-- INSERT --"; it enters insert
+    // mode silently. Just type the marker and confirm it appears.
     const marker = "VIMTEST_COMPAT_OK";
     await term.send(inputFrame("i" + marker));
-    await page.waitForTimeout(500);
 
-    const out = await page.evaluate(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      () => (window as any).__ttydOutput as string,
-    );
+    const out = await term.waitForOutput(marker, 5_000);
     console.log(
-      `[vim-test] Compatible baseline output: ${JSON.stringify(out.slice(0, 300))}`,
+      `[vim-test] Compatible baseline output: ${JSON.stringify(out.slice(0, 400))}`,
     );
-
-    expect(out).toContain(marker);
 
     await term.send(inputFrame("\x1b:q!\r"));
     await term.close();
-    await fetch(`${QA_URL}/api/v1/agents/dev/sessions/${sessionId}`, {
+    await fetch(`${QA_URL}/api/v1/agents/${QA_AGENT}/sessions/${sessionId}`, {
       method: "DELETE",
     });
   });
