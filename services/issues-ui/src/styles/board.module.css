@@ -4,8 +4,6 @@
   gap: 0.75rem;
   padding: 0.75rem;
   flex: 1;
-  min-height: 0;
-  overflow: hidden;
 }
 
 .noProject {
@@ -21,8 +19,6 @@
   background: var(--bg);
   border-radius: 8px;
   border: 1px solid var(--border);
-  min-height: 0;
-  overflow: hidden;
 }
 
 .columnHeader {
@@ -89,7 +85,6 @@
 
 .columnBody {
   flex: 1;
-  overflow-y: auto;
   padding: 0.5rem;
   display: flex;
   flex-direction: column;
@@ -131,10 +126,5 @@
 @media (max-width: 768px) {
   .board {
     grid-template-columns: 1fr;
-    overflow-y: auto;
-  }
-
-  .column {
-    max-height: 400px;
   }
 }

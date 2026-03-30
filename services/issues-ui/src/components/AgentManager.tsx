@@ -226,7 +226,12 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
 
   const handleLaunched = useCallback((session: Session, agentName: string) => {
     optimisticAddSession(session, agentName);
-  }, [optimisticAddSession]);
+    const key = `${agentName}:${session.id}`;
+    setOpenWindows((prev) => {
+      if (prev.some((w) => w.key === key)) return prev;
+      return [...prev, { key, session, agentName, projectId: selectedProject?.id }];
+    });
+  }, [optimisticAddSession, selectedProject?.id]);
 
   const loading = agentsLoading;
 
