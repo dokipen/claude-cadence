@@ -20,8 +20,10 @@ const { mockVisualViewport } = vi.hoisted(() => ({
 vi.mock("../styles/agents.module.css", () => ({
   default: {
     mobileSessionView: "mobileSessionView",
+    mobileHeader: "mobileHeader",
     mobileSessionContent: "mobileSessionContent",
     mobileBackButton: "mobileBackButton",
+    mobileCloseButton: "mobileCloseButton",
   },
 }));
 
@@ -55,20 +57,21 @@ afterEach(() => {
 });
 
 describe("MobileSessionView", () => {
-  it("renders the back button and terminal", () => {
+  it("renders back button, close button, and terminal", () => {
     const win = makeWindow("sess-1", "test-agent");
     const { getByRole, getByTestId } = render(
-      <MobileSessionView win={win} onBack={vi.fn()} />,
+      <MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />,
     );
 
     expect(getByRole("button", { name: /back to agent list/i })).not.toBeNull();
+    expect(getByRole("button", { name: /close session/i })).not.toBeNull();
     expect(getByTestId("terminal")).not.toBeNull();
   });
 
   it("passes agentName and sessionId to Terminal", () => {
     const win = makeWindow("sess-1", "test-agent");
     const { getByTestId } = render(
-      <MobileSessionView win={win} onBack={vi.fn()} />,
+      <MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />,
     );
 
     const terminal = getByTestId("terminal");
@@ -80,7 +83,7 @@ describe("MobileSessionView", () => {
     const win = makeWindow("sess-2", "test-agent");
     const onBack = vi.fn();
     const { getByRole } = render(
-      <MobileSessionView win={win} onBack={onBack} />,
+      <MobileSessionView win={win} onBack={onBack} onClose={vi.fn()} />,
     );
 
     await act(async () => {
@@ -88,6 +91,20 @@ describe("MobileSessionView", () => {
     });
 
     expect(onBack).toHaveBeenCalledOnce();
+  });
+
+  it("calls onClose when the close button is clicked", async () => {
+    const win = makeWindow("sess-2b", "test-agent");
+    const onClose = vi.fn();
+    const { getByRole } = render(
+      <MobileSessionView win={win} onBack={vi.fn()} onClose={onClose} />,
+    );
+
+    await act(async () => {
+      fireEvent.click(getByRole("button", { name: /close session/i }));
+    });
+
+    expect(onClose).toHaveBeenCalledOnce();
   });
 
   describe("visualViewport height tracking", () => {
@@ -113,7 +130,7 @@ describe("MobileSessionView", () => {
     it("sets initial height from visualViewport", () => {
       const win = makeWindow("sess-3", "test-agent");
       const { getByTestId } = render(
-        <MobileSessionView win={win} onBack={vi.fn()} onMinimize={vi.fn()} onTerminated={vi.fn()} />,
+        <MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />,
       );
 
       const container = getByTestId("mobile-session-view");
@@ -123,7 +140,7 @@ describe("MobileSessionView", () => {
     it("registers resize and scroll listeners on visualViewport", () => {
       const win = makeWindow("sess-4", "test-agent");
       render(
-        <MobileSessionView win={win} onBack={vi.fn()} onMinimize={vi.fn()} onTerminated={vi.fn()} />,
+        <MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />,
       );
 
       expect(mockVisualViewport.addEventListener).toHaveBeenCalledWith("resize", expect.any(Function));
@@ -134,7 +151,7 @@ describe("MobileSessionView", () => {
     it("removes both listeners on unmount", () => {
       const win = makeWindow("sess-5", "test-agent");
       const { unmount } = render(
-        <MobileSessionView win={win} onBack={vi.fn()} onMinimize={vi.fn()} onTerminated={vi.fn()} />,
+        <MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />,
       );
 
       unmount();
@@ -146,7 +163,7 @@ describe("MobileSessionView", () => {
     it("updates height when visualViewport fires a resize event", async () => {
       const win = makeWindow("sess-6", "test-agent");
       const { getByTestId } = render(
-        <MobileSessionView win={win} onBack={vi.fn()} onMinimize={vi.fn()} onTerminated={vi.fn()} />,
+        <MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />,
       );
 
       // Simulate keyboard appearing: viewport shrinks from 800 to 500
@@ -163,7 +180,7 @@ describe("MobileSessionView", () => {
     it("updates height when visualViewport fires a scroll event (iOS keyboard)", async () => {
       const win = makeWindow("sess-7", "test-agent");
       const { getByTestId } = render(
-        <MobileSessionView win={win} onBack={vi.fn()} onMinimize={vi.fn()} onTerminated={vi.fn()} />,
+        <MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />,
       );
 
       // Simulate iOS keyboard appearing via scroll event

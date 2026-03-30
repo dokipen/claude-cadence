@@ -255,6 +255,18 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
     setMobileView("list");
   }, []);
 
+  const handleMobileClose = useCallback(() => {
+    const win = openWindowsRef.current[openWindowsRef.current.length - 1];
+    if (!win) return;
+    setOpenWindows((prev) => prev.filter((w) => w.key !== win.key));
+    setMinimizedKeys((prev) => {
+      const next = new Set(prev);
+      next.delete(win.key);
+      return next;
+    });
+    setMobileView("list");
+  }, []);
+
   return (
     <div className={styles.agentManager} data-testid="agent-manager">
       <AgentLaunchForm agents={agents} onLaunched={handleLaunched} repoUrl={selectedProject?.repository} />
@@ -290,6 +302,7 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
         <MobileSessionView
           win={openWindows[openWindows.length - 1]}
           onBack={handleMobileBack}
+          onClose={handleMobileClose}
         />
       )}
     </div>

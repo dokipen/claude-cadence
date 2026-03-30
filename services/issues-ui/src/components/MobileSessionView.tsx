@@ -6,9 +6,10 @@ import styles from "../styles/agents.module.css";
 interface MobileSessionViewProps {
   win: TiledWindow;
   onBack: () => void;
+  onClose: () => void;
 }
 
-export function MobileSessionView({ win, onBack }: MobileSessionViewProps) {
+export function MobileSessionView({ win, onBack, onClose }: MobileSessionViewProps) {
   const [viewportHeight, setViewportHeight] = useState<number>(
     () => window.visualViewport?.height ?? window.innerHeight,
   );
@@ -36,13 +37,22 @@ export function MobileSessionView({ win, onBack }: MobileSessionViewProps) {
       style={{ height: viewportHeight }}
       data-testid="mobile-session-view"
     >
-      <button
-        className={styles.mobileBackButton}
-        onClick={onBack}
-        aria-label="Back to agent list"
-      >
-        ← Back
-      </button>
+      <div className={styles.mobileHeader}>
+        <button
+          className={styles.mobileBackButton}
+          onClick={onBack}
+          aria-label="Back to agent list"
+        >
+          ← Back
+        </button>
+        <button
+          className={styles.mobileCloseButton}
+          onClick={onClose}
+          aria-label="Close session"
+        >
+          ✕
+        </button>
+      </div>
       <div className={styles.mobileSessionContent}>
         <Terminal agentName={win.agentName} sessionId={win.session.id} />
       </div>

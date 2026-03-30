@@ -92,11 +92,10 @@ vi.mock("./TilingLayout", () => ({
 }));
 
 vi.mock("./MobileSessionView", () => ({
-  MobileSessionView: ({ onBack }: { onBack: () => void; win: unknown }) => (
+  MobileSessionView: ({ onBack, onClose }: { onBack: () => void; onClose: () => void; win: unknown }) => (
     <div data-testid="mobile-session-view">
-      <button onClick={onBack} aria-label="Back to agent list">
-        ← Back
-      </button>
+      <button onClick={onBack} aria-label="Back to agent list">← Back</button>
+      <button onClick={onClose} aria-label="Close session">✕</button>
     </div>
   ),
 }));

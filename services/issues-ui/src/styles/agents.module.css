@@ -777,24 +777,42 @@
   flex-direction: column;
 }
 
-/* Mobile back button — only rendered inside MobileSessionView (mobile-only component) */
-.mobileBackButton {
-  display: block;
-  padding: 0.5rem 0.75rem;
+/* Mobile session header — only rendered inside MobileSessionView (mobile-only component) */
+.mobileHeader {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
   background: var(--surface);
-  border: none;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.mobileBackButton,
+.mobileCloseButton {
+  padding: 0.5rem 0.75rem;
+  background: transparent;
+  border: none;
   color: var(--primary);
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
-  text-align: left;
-  width: 100%;
-  flex-shrink: 0;
 }
 
-.mobileBackButton:hover {
-  background: rgba(128, 128, 128, 0.08);
+.mobileBackButton {
+  text-align: left;
+  flex: 1;
+}
+
+.mobileCloseButton {
+  flex-shrink: 0;
+  font-size: 1.1rem;
+}
+
+@media (hover: hover) {
+  .mobileBackButton:hover,
+  .mobileCloseButton:hover {
+    background: rgba(128, 128, 128, 0.08);
+  }
 }
 
 @media (max-width: 768px) {
