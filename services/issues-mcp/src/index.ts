@@ -93,35 +93,23 @@ const TOOLS = [
       "Exactly one of `id` or `number` must be provided.",
     inputSchema: {
       type: "object",
-      oneOf: [
-        {
-          required: ["id"],
-          properties: {
-            id: { type: "string", description: "Ticket CUID" },
-            projectId: { type: "string", description: "Ignored when id is used" },
-            projectName: { type: "string", description: "Ignored when id is used" },
-          },
-        },
-        {
-          required: ["number"],
-          properties: {
-            number: { type: "number", description: "Ticket number (integer)" },
-            projectId: {
-              type: "string",
-              description: "Project CUID (takes precedence over projectName; falls back to ISSUES_PROJECT_ID)",
-            },
-            projectName: {
-              type: "string",
-              description: "Project name (resolved to CUID if projectId is not provided)",
-            },
-          },
-        },
-      ],
       properties: {
-        id: { type: "string" },
-        number: { type: "number" },
-        projectId: { type: "string" },
-        projectName: { type: "string" },
+        id: {
+          type: "string",
+          description: "Ticket CUID. Provide id OR number (not both).",
+        },
+        number: {
+          type: "number",
+          description: "Ticket number (integer). Provide number OR id (not both). Requires projectId, projectName, or ISSUES_PROJECT_ID env var.",
+        },
+        projectId: {
+          type: "string",
+          description: "Project CUID (takes precedence over projectName; falls back to ISSUES_PROJECT_ID). Ignored when id is used.",
+        },
+        projectName: {
+          type: "string",
+          description: "Project name (resolved to CUID if projectId is not provided). Ignored when id is used.",
+        },
       },
     },
   },
