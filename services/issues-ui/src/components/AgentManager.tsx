@@ -335,7 +335,7 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
               <div className={styles.tilingEmpty} data-testid="tiling-area">
                 <p>Loading sessions…</p>
               </div>
-            ) : selectedProject && filteredSessions.length === 0 ? (
+            ) : selectedProject && filteredSessions.length === 0 && openWindows.length === 0 ? (
               <div className={styles.tilingEmpty} data-testid="tiling-area">
                 <p>No sessions for {selectedProject.name}.</p>
               </div>
