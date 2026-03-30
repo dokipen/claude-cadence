@@ -49,7 +49,7 @@ async function createBashSession(qaUrl: string): Promise<string> {
   const resp = await fetch(`${qaUrl}/api/v1/agents/dev/sessions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ profile: "bash" }),
+    body: JSON.stringify({ agent_profile: "bash" }),
   });
   if (!resp.ok) {
     const body = await resp.text();
@@ -57,8 +57,8 @@ async function createBashSession(qaUrl: string): Promise<string> {
       `Failed to create session: ${resp.status} ${resp.statusText} — ${body}`,
     );
   }
-  const data = (await resp.json()) as { id: string };
-  return data.id;
+  const data = (await resp.json()) as { session: { id: string } };
+  return data.session.id;
 }
 
 /**
@@ -75,8 +75,8 @@ async function waitForRunning(
       `${qaUrl}/api/v1/agents/dev/sessions/${sessionId}`,
     );
     if (resp.ok) {
-      const data = (await resp.json()) as { state: string };
-      if (data.state === "running") return;
+      const data = (await resp.json()) as { session: { state: string } };
+      if (data.session?.state === "running") return;
     }
     await new Promise((r) => setTimeout(r, 500));
   }
@@ -220,8 +220,9 @@ test.describe("vim nocompatible input regression", () => {
     await waitForRunning(QA_URL!, sessionId);
     console.log(`[vim-test] Session is running`);
 
-    // Navigate to about:blank so we have a real page context for WebSocket.
-    await page.goto("about:blank");
+    // Navigate to the issues-ui home page so the WebSocket shares the same
+    // origin as the Caddy proxy (connect-src 'self' in the CSP allows it).
+    await page.goto(`${QA_URL}/`);
 
     const wsHost = new URL(QA_URL!).host;
     const wsUrl = `ws://${wsHost}/ws/terminal/dev/${sessionId}`;
@@ -288,7 +289,7 @@ test.describe("vim nocompatible input regression", () => {
   }) => {
     const sessionId = await createBashSession(QA_URL!);
     await waitForRunning(QA_URL!, sessionId);
-    await page.goto("about:blank");
+    await page.goto(`${QA_URL}/`);
 
     const wsHost = new URL(QA_URL!).host;
     const wsUrl = `ws://${wsHost}/ws/terminal/dev/${sessionId}`;
