@@ -22,6 +22,7 @@ vi.mock("../styles/agents.module.css", () => ({
     sidebarSession: "session",
     sidebarSessionMinimized: "sidebarSessionMinimized",
     mobileBackButton: "mobileBackButton",
+    mobileEscButton: "mobileEscButton",
     mobileSessionView: "mobileSessionView",
     mobileSessionContent: "mobileSessionContent",
     tilingContainer: "tilingContainer",

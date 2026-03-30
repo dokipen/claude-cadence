@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, fireEvent, act, cleanup } from "@testing-library/react";
+import { forwardRef, useImperativeHandle } from "react";
 import { create } from "@bufbuild/protobuf";
 import { SessionSchema } from "../gen/hub/v1/hub_pb";
 import type { TiledWindow } from "./TilingLayout";
+import type { TerminalHandle } from "./Terminal";
 
 // ---------------------------------------------------------------------------
 // Hoisted mutable state
@@ -23,14 +25,20 @@ vi.mock("../styles/agents.module.css", () => ({
     mobileHeader: "mobileHeader",
     mobileSessionContent: "mobileSessionContent",
     mobileBackButton: "mobileBackButton",
+    mobileEscButton: "mobileEscButton",
     mobileCloseButton: "mobileCloseButton",
   },
 }));
 
-// Mock Terminal — it depends on xterm and WebSocket which are unavailable in jsdom
+// Mock Terminal — it depends on xterm and WebSocket which are unavailable in jsdom.
+// Wrapped in forwardRef + useImperativeHandle so MobileSessionView can call sendInput via ref.
+const mockSendInput = vi.fn();
 vi.mock("./Terminal", () => ({
-  Terminal: ({ agentName, sessionId }: { agentName: string; sessionId: string }) => (
-    <div data-testid="terminal" data-agent={agentName} data-session={sessionId} />
+  Terminal: forwardRef<TerminalHandle, { agentName: string; sessionId: string }>(
+    function MockTerminal({ agentName, sessionId }, ref) {
+      useImperativeHandle(ref, () => ({ sendInput: mockSendInput }));
+      return <div data-testid="terminal" data-agent={agentName} data-session={sessionId} />;
+    }
   ),
 }));
 
@@ -53,17 +61,19 @@ const makeWindow = (id: string, agentName: string): TiledWindow => ({
 });
 
 afterEach(() => {
+  mockSendInput.mockReset();
   cleanup();
 });
 
 describe("MobileSessionView", () => {
-  it("renders back button, close button, and terminal", () => {
+  it("renders back button, esc button, close button, and terminal", () => {
     const win = makeWindow("sess-1", "test-agent");
     const { getByRole, getByTestId } = render(
       <MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />,
     );
 
     expect(getByRole("button", { name: /back to agent list/i })).not.toBeNull();
+    expect(getByRole("button", { name: /send escape/i })).not.toBeNull();
     expect(getByRole("button", { name: /close session/i })).not.toBeNull();
     expect(getByTestId("terminal")).not.toBeNull();
   });
@@ -105,6 +115,19 @@ describe("MobileSessionView", () => {
     });
 
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("sends escape character to terminal when Esc button is clicked", async () => {
+    const win = makeWindow("sess-2c", "test-agent");
+    const { getByRole } = render(
+      <MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />,
+    );
+
+    await act(async () => {
+      fireEvent.click(getByRole("button", { name: /send escape/i }));
+    });
+
+    expect(mockSendInput).toHaveBeenCalledWith("\x1b");
   });
 
   describe("visualViewport height tracking", () => {

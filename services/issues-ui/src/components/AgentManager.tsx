@@ -8,8 +8,6 @@ import { AgentLaunchForm } from "./AgentLaunchForm";
 import { MobileSessionView } from "./MobileSessionView";
 import { useSessionsContext } from "../hooks/SessionsContext";
 import { useIsMobile } from "../hooks/useIsMobile";
-import { hubFetch, HubError } from "../api/agentHubClient";
-import { validateSessionId, validateAgentProfile } from "../utils/validateSession";
 import type { TiledWindow } from "./TilingLayout";
 import type { AgentSession } from "../hooks/useAllSessions";
 import type { Session } from "../types";
@@ -235,7 +233,7 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
     });
   }, []);
 
-  const { optimisticAddSession, optimisticSetDestroying, optimisticResetState } = useSessionsContext();
+  const { optimisticAddSession } = useSessionsContext();
 
   const handleLaunched = useCallback((session: Session, agentName: string) => {
     optimisticAddSession(session, agentName);
@@ -257,26 +255,9 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
     setMobileView("list");
   }, []);
 
-  const handleMobileClose = useCallback(async () => {
+  const handleMobileClose = useCallback(() => {
     const win = openWindowsRef.current[openWindowsRef.current.length - 1];
     if (!win) return;
-    if (!validateSessionId(win.session.id) || !validateAgentProfile(win.agentName)) {
-      console.warn("[AgentManager] Refusing to stop session: invalid id or agentName");
-      return;
-    }
-    const originalState = win.session.state;
-    optimisticSetDestroying(win.session.id);
-    try {
-      await hubFetch(
-        `/agents/${encodeURIComponent(win.agentName)}/sessions/${encodeURIComponent(win.session.id)}?force=true`,
-        { method: "DELETE" },
-      );
-    } catch (err) {
-      if (!(err instanceof HubError && err.status === 404)) {
-        optimisticResetState(win.session.id, originalState);
-        return;
-      }
-    }
     setOpenWindows((prev) => prev.filter((w) => w.key !== win.key));
     setMinimizedKeys((prev) => {
       const next = new Set(prev);
@@ -284,7 +265,7 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
       return next;
     });
     setMobileView("list");
-  }, [optimisticSetDestroying, optimisticResetState]);
+  }, []);
 
   return (
     <div className={styles.agentManager} data-testid="agent-manager">

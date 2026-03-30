@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useState, useCallback, useImperativeHandle, forwardRef } from "react";
 import { Terminal as XTerm, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
@@ -7,6 +7,10 @@ import { useDarkMode } from "../hooks/useDarkMode";
 import { validateAgentProfile, validateSessionId } from "../utils/validateSession";
 
 type ConnectionState = "connecting" | "connected" | "reconnecting" | "disconnected" | "error";
+
+export interface TerminalHandle {
+  sendInput: (text: string) => void;
+}
 
 const DARK_THEME: ITheme = {
   // Cadence dark palette — all foreground colors verified ≥ 4.5:1 contrast vs #0d1117
@@ -80,7 +84,7 @@ function buildWsUrl(agentName: string, sessionId: string): string {
   return `${proto}//${window.location.host}/ws/terminal/${encodeURIComponent(agentName)}/${encodeURIComponent(sessionId)}`;
 }
 
-export function Terminal({ agentName, sessionId, onResumeSession }: TerminalProps) {
+export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal({ agentName, sessionId, onResumeSession }, ref) {
   const isDark = useDarkMode();
   // Ref keeps `connect` stable: reading isDarkRef.current inside the callback
   // picks up the latest value without adding isDark to connect's dependency array,
@@ -106,6 +110,15 @@ export function Terminal({ agentName, sessionId, onResumeSession }: TerminalProp
   // set to true around programmatic scrollToLine calls to prevent onScroll from overwriting the user's tracked position
   const suppressScrollTrackingRef = useRef(false);
   const [connState, setConnState] = useState<ConnectionState>("connecting");
+
+  useImperativeHandle(ref, () => ({
+    sendInput: (text: string) => {
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(CMD_INPUT + text);
+      }
+    },
+  }));
 
   const connect = useCallback(() => {
     // Clear any pending retry timer
@@ -508,4 +521,4 @@ export function Terminal({ agentName, sessionId, onResumeSession }: TerminalProp
       )}
     </div>
   );
-}
+});

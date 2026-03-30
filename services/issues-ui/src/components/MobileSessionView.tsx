@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Terminal } from "./Terminal";
+import type { TerminalHandle } from "./Terminal";
 import type { TiledWindow } from "./TilingLayout";
 import styles from "../styles/agents.module.css";
 
@@ -10,6 +11,7 @@ interface MobileSessionViewProps {
 }
 
 export function MobileSessionView({ win, onBack, onClose }: MobileSessionViewProps) {
+  const terminalRef = useRef<TerminalHandle>(null);
   const [viewportHeight, setViewportHeight] = useState<number>(
     () => window.visualViewport?.height ?? window.innerHeight,
   );
@@ -46,6 +48,13 @@ export function MobileSessionView({ win, onBack, onClose }: MobileSessionViewPro
           ← Back
         </button>
         <button
+          className={styles.mobileEscButton}
+          onClick={() => terminalRef.current?.sendInput("\x1b")}
+          aria-label="Send Escape"
+        >
+          Esc
+        </button>
+        <button
           className={styles.mobileCloseButton}
           onClick={onClose}
           aria-label="Close session"
@@ -54,7 +63,7 @@ export function MobileSessionView({ win, onBack, onClose }: MobileSessionViewPro
         </button>
       </div>
       <div className={styles.mobileSessionContent}>
-        <Terminal agentName={win.agentName} sessionId={win.session.id} />
+        <Terminal ref={terminalRef} agentName={win.agentName} sessionId={win.session.id} />
       </div>
     </div>
   );

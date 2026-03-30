@@ -788,6 +788,7 @@
 }
 
 .mobileBackButton,
+.mobileEscButton,
 .mobileCloseButton {
   padding: 0.5rem 0.75rem;
   background: transparent;
@@ -803,13 +804,18 @@
   flex: 1;
 }
 
+.mobileEscButton,
 .mobileCloseButton {
   flex-shrink: 0;
+}
+
+.mobileCloseButton {
   font-size: 1.1rem;
 }
 
 @media (hover: hover) {
   .mobileBackButton:hover,
+  .mobileEscButton:hover,
   .mobileCloseButton:hover {
     background: rgba(128, 128, 128, 0.08);
   }
