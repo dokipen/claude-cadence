@@ -754,3 +754,68 @@
   outline: 2px solid var(--primary-light);
   outline-offset: -2px;
 }
+
+/* Mobile: panel visibility wrapper */
+.mobilePane {
+  display: contents;
+}
+
+.mobilePaneHidden {
+  display: none !important;
+}
+
+/* Mobile back button (hidden on desktop) */
+.mobileBackButton {
+  display: none;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--primary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.mobileBackButton:hover {
+  background: rgba(128, 128, 128, 0.08);
+}
+
+@media (max-width: 768px) {
+  .mobileBackButton {
+    display: block;
+  }
+
+  .mobilePane {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* Sidebar fills full width on mobile */
+  .mobilePane .sidebarWrapper {
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .mobilePane .sessionSidebar {
+    width: 100%;
+    min-width: 0;
+    border-right: none;
+  }
+
+  .mobilePane .sidebarToggle {
+    display: none;
+  }
+
+  /* Tiling container becomes a column (back button + layout) */
+  .tilingContainer {
+    flex-direction: column;
+  }
+}
