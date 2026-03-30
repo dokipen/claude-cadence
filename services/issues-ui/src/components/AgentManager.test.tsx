@@ -4,7 +4,15 @@ import { render, fireEvent, act, cleanup } from "@testing-library/react";
 import { create } from "@bufbuild/protobuf";
 import { SessionSchema } from "../gen/hub/v1/hub_pb";
 import type { AgentSession } from "../hooks/useAllSessions";
+import type { Session } from "../types";
 import { makeSessionStorageMock } from '../test-utils/makeSessionStorageMock';
+
+// ---------------------------------------------------------------------------
+// Hoisted mutable state
+// ---------------------------------------------------------------------------
+const { mockOptimisticAddSession } = vi.hoisted(() => ({
+  mockOptimisticAddSession: vi.fn(),
+}));
 
 // Mock CSS modules
 vi.mock("../styles/agents.module.css", () => ({
@@ -13,6 +21,15 @@ vi.mock("../styles/agents.module.css", () => ({
     sidebarSession: "session",
     sidebarSessionMinimized: "sidebarSessionMinimized",
   },
+}));
+
+// Mock SessionsContext
+vi.mock("../hooks/SessionsContext", () => ({
+  useSessionsContext: vi.fn(() => ({
+    optimisticAddSession: mockOptimisticAddSession,
+    optimisticSetDestroying: vi.fn(),
+    optimisticResetState: vi.fn(),
+  })),
 }));
 
 // Mock useAgents hook
@@ -34,10 +51,21 @@ vi.mock("../hooks/useAgents", () => ({
 
 // Capture repoUrl prop from AgentLaunchForm for assertions
 let capturedRepoUrl: string | undefined;
+const FAKE_LAUNCHED_SESSION = { id: "launched-sess-1", name: "my-session" } as unknown as Session;
+const FAKE_LAUNCHED_AGENT = "test-agent";
 vi.mock("./AgentLaunchForm", () => ({
-  AgentLaunchForm: ({ repoUrl }: { repoUrl?: string }) => {
+  AgentLaunchForm: ({ repoUrl, onLaunched }: { repoUrl?: string; onLaunched: (s: Session, agentName: string) => void }) => {
     capturedRepoUrl = repoUrl;
-    return <div data-testid="agent-launch-form" />;
+    return (
+      <div data-testid="agent-launch-form">
+        <button
+          data-testid="launch-trigger"
+          onClick={() => onLaunched(FAKE_LAUNCHED_SESSION, FAKE_LAUNCHED_AGENT)}
+        >
+          Launch
+        </button>
+      </div>
+    );
   },
 }));
 
@@ -59,6 +87,7 @@ afterEach(() => {
   capturedOnMinimize = undefined;
   capturedWindows = [];
   capturedRepoUrl = undefined;
+  mockOptimisticAddSession.mockReset();
   cleanup();
 });
 
@@ -352,5 +381,49 @@ describe("sessionStorage persistence", () => {
     // The session button should have the minimized CSS class
     const sessionBtn = getAllByTestId("sidebar-session")[0];
     expect(sessionBtn.className).toContain("sidebarSessionMinimized");
+  });
+});
+
+describe("AgentManager — auto-open on launch", () => {
+  it("opens a tiled window for the new session after form submission", async () => {
+    const { getByTestId } = render(
+      <MemoryRouter><AgentManager sessions={[]} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
+    );
+
+    await act(async () => {
+      fireEvent.click(getByTestId("launch-trigger"));
+    });
+
+    const expectedKey = `${FAKE_LAUNCHED_AGENT}:${FAKE_LAUNCHED_SESSION.id}`;
+    expect(capturedWindows.some((w) => w.key === expectedKey)).toBe(true);
+  });
+
+  it("calls optimisticAddSession with the new session", async () => {
+    const { getByTestId } = render(
+      <MemoryRouter><AgentManager sessions={[]} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
+    );
+
+    await act(async () => {
+      fireEvent.click(getByTestId("launch-trigger"));
+    });
+
+    expect(mockOptimisticAddSession).toHaveBeenCalledWith(FAKE_LAUNCHED_SESSION, FAKE_LAUNCHED_AGENT);
+  });
+
+  it("does not add a duplicate window if launched twice with the same session", async () => {
+    const { getByTestId } = render(
+      <MemoryRouter><AgentManager sessions={[]} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
+    );
+
+    await act(async () => {
+      fireEvent.click(getByTestId("launch-trigger"));
+    });
+    await act(async () => {
+      fireEvent.click(getByTestId("launch-trigger"));
+    });
+
+    const expectedKey = `${FAKE_LAUNCHED_AGENT}:${FAKE_LAUNCHED_SESSION.id}`;
+    const matches = capturedWindows.filter((w) => w.key === expectedKey);
+    expect(matches).toHaveLength(1);
   });
 });
