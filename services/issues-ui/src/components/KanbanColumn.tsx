@@ -116,7 +116,7 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
         {!loading &&
           !error &&
           tickets.map((ticket) => (
-            <TicketCard key={ticket.id} ticket={ticket} repoUrl={repoUrl} sessions={sessions} projectId={projectId} />
+            <TicketCard key={ticket.id} ticket={ticket} repoUrl={repoUrl} sessions={sessions} projectId={projectId} activeRefineAll={state === "BACKLOG" ? activeRefineAllSession : null} />
           ))}
       </div>
     </div>
