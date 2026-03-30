@@ -246,10 +246,18 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
 
   const loading = agentsLoading;
 
+  const handleMobileBack = useCallback(() => {
+    openWindowsRef.current.forEach((w) => {
+      setMinimizedKeys((prev) => new Set(prev).add(w.key));
+    });
+    setOpenWindows([]);
+    setMobileView("list");
+  }, []);
+
   const mobileBackButton = isMobile && mobileView === "session" ? (
     <button
       className={styles.mobileBackButton}
-      onClick={() => setMobileView("list")}
+      onClick={handleMobileBack}
       aria-label="Back to agent list"
     >
       ← Back
