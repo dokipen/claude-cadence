@@ -234,6 +234,21 @@ func (m *PTYManager) WaitError(id string) (error, error) {
 	}
 }
 
+// HasActiveWriter reports whether the session currently has at least one active
+// writer registered. Used in tests to verify the writer is never nil between
+// ServeTerminal calls (no nil-writers window during relay handoff).
+func (m *PTYManager) HasActiveWriter(id string) bool {
+	m.mu.RLock()
+	sess, ok := m.sessions[id]
+	m.mu.RUnlock()
+	if !ok {
+		return false
+	}
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	return len(sess.writers) > 0
+}
+
 // GetSlavePath returns the /dev/pts/N slave path for the given session, or
 // an empty string if the session does not exist or has no slave path recorded.
 func (p *PTYManager) GetSlavePath(id string) string {

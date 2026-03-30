@@ -740,3 +740,133 @@ func TestServeTerminal_VimCompatible_OutputDelivery(t *testing.T) {
 		t.Logf("step 10: quit output received (%d bytes)", len(quitOutput))
 	}
 }
+
+// TestServeTerminal_WriterNeverNilDuringHandoff verifies that sess.writers is
+// never nil during the window between ServeTerminal#1 being cancelled and
+// ServeTerminal#2 registering its writer.
+//
+// This directly reproduces the regression introduced by PR #670's oldCancel()
+// call in RegisterRelaySession: when the old relay's context was cancelled
+// immediately upon registration of a new relay (React strict-mode double-connect),
+// ServeTerminal#1 could exit and nil sess.writers before ServeTerminal#2 had
+// registered, creating a window where PTY output was silently dropped to the ring
+// buffer and never delivered to the browser.
+//
+// The fix (PR #675) removes the oldCancel() call so relay#1 stays alive until
+// relay#2's ServeTerminal atomically takes over via the writerGen check. This test
+// verifies the pty-layer invariant: writers is non-nil whenever a relay is active.
+//
+// The test fails with pre-fix code (unconditional cancel before B registers) and
+// passes with the fix (no cancel; or cancel only after B has registered).
+func TestServeTerminal_WriterNeverNilDuringHandoff(t *testing.T) {
+	m := internalpty.NewPTYManager(internalpty.PTYConfig{})
+
+	const sessID = "writer-handoff-test"
+	if err := m.Create(sessID, t.TempDir(), []string{"sh", "-c", "sleep 60"}, nil, 80, 24); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	t.Cleanup(func() { m.Destroy(sessID) })
+
+	wsURL := startVimTestServer(t, sessID, m)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Step 1: Connect client A and wait for ServeTerminal#1 to register its writer.
+	ctxA, cancelA := context.WithCancel(ctx)
+	connA, _, dialErrA := websocket.Dial(ctxA, wsURL, nil)
+	if dialErrA != nil {
+		cancelA()
+		t.Fatalf("client A dial: %v", dialErrA)
+	}
+	go func() {
+		for {
+			if _, _, err := connA.Read(ctxA); err != nil {
+				return
+			}
+		}
+	}()
+	deadline := time.Now().Add(2 * time.Second)
+	for !m.HasActiveWriter(sessID) {
+		if time.Now().After(deadline) {
+			cancelA()
+			t.Fatal("timed out waiting for ServeTerminal#1 to register writer")
+		}
+		time.Sleep(1 * time.Millisecond)
+	}
+	t.Log("step 1: ServeTerminal#1 registered; HasActiveWriter=true")
+
+	// Step 2: Poll HasActiveWriter in a tight loop while the handoff happens.
+	// Any nil observed here represents the bug.
+	writerNilObserved := false
+	pollDone := make(chan struct{})
+	go func() {
+		defer close(pollDone)
+		end := time.Now().Add(300 * time.Millisecond)
+		for time.Now().Before(end) {
+			if !m.HasActiveWriter(sessID) {
+				writerNilObserved = true
+			}
+			time.Sleep(100 * time.Microsecond)
+		}
+	}()
+
+	// Step 3: Connect client B and wait for ServeTerminal#2 to register its
+	// writer. 50ms is generous — the HTTP upgrade + ServeTerminal lock acquisition
+	// takes <5ms on localhost. After this sleep both wf1 (A) and wf2 (B) are
+	// registered and writerGen has been incremented by B.
+	connB, _, dialErrB := websocket.Dial(ctx, wsURL, nil)
+	if dialErrB != nil {
+		cancelA()
+		t.Fatalf("client B dial: %v", dialErrB)
+	}
+	defer connB.CloseNow()
+	time.Sleep(50 * time.Millisecond) // let ServeTerminal#2 register its writer
+
+	// Step 4: Cancel A AFTER B has registered its writer.
+	//
+	// Pre-fix pty code (before PR #670): ServeTerminal#1's deferred cleanup
+	//   unconditionally set sess.writers = nil, even though B was already
+	//   registered — creating a nil-writers window until B's next write.
+	//
+	// Post-fix pty code (writerGen, PR #670): ServeTerminal#1's deferred cleanup
+	//   checks if sess.writerGen == myGen. Since B incremented writerGen, A's
+	//   defer is a no-op and sess.writers stays [wf2]. No nil-writers window.
+	cancelA()
+	connA.CloseNow()
+
+	<-pollDone
+
+	if writerNilObserved {
+		t.Errorf("FAIL (nil-writers regression #527): sess.writers was nil during ServeTerminal handoff — " +
+			"PTY output was silently dropped to the ring buffer during this window; " +
+			"this is the regression from PR #670's oldCancel() call")
+	} else {
+		t.Log("PASS: sess.writers was never nil during the handoff window")
+	}
+
+	// Verify client B receives output after the handoff.
+	if writeErr := m.WriteInput(sessID, []byte("echo HANDOFF_OK\n")); writeErr != nil {
+		t.Fatalf("WriteInput: %v", writeErr)
+	}
+	ctxB, cancelB := context.WithTimeout(ctx, 5*time.Second)
+	defer cancelB()
+	var received strings.Builder
+	for {
+		_, data, readErr := connB.Read(ctxB)
+		if readErr != nil {
+			break
+		}
+		if len(data) > 1 && data[0] == '0' {
+			received.WriteString(string(data[1:]))
+		}
+		if strings.Contains(received.String(), "HANDOFF_OK") {
+			break
+		}
+	}
+	if !strings.Contains(received.String(), "HANDOFF_OK") {
+		t.Errorf("client B did not receive PTY output after handoff")
+	} else {
+		t.Log("PASS: client B received output after handoff")
+	}
+}
