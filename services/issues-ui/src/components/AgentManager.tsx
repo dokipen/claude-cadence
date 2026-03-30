@@ -204,7 +204,8 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
       next.delete(key);
       return next;
     });
-  }, []);
+    if (isMobile) setMobileView("list");
+  }, [isMobile]);
 
   const handleReorder = useCallback((dragKey: string, dropKey: string) => {
     setOpenWindows((prev) => {
