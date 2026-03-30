@@ -1,4 +1,6 @@
 root_dir: /var/lib/agentd
+log:
+  level: debug
 session:
   dir: /var/lib/agentd/sessions
 auth:
@@ -10,12 +12,11 @@ hub:
   token_env_var: HUB_AGENT_TOKEN
 pty:
   websocket_scheme: ws
-# advertise_address is used both as the HTTP bind address and as the host:port
-# returned to agent-hub for terminal proxy back-connections. "agentd" resolves
-# to this container's bridge IP via /etc/hosts (set by Docker when hostname: agentd
-# is configured in docker-compose.dev.yml). agent-hub resolves it via Docker DNS.
-ttyd:
-  advertise_address: "agentd:4142"
+# advertise_address is intentionally omitted here so the relay path is used
+# (agentd sends {relay: true} in getTerminalEndpoint responses). This allows
+# integration testing of the relay path in the docker-compose stack.
+# For direct-dial (hub back-connects to agentd:4142), set: agentd:4142
+ttyd: {}
 profiles:
   bash:
     repo: "https://github.com/dokipen/claude-cadence.git"

@@ -117,15 +117,13 @@ func TestRunTerminalRelay_LargeSnapshotReplay(t *testing.T) {
 	defer hubConn.CloseNow()
 
 	// Build a minimal Client. runTerminalRelay uses relayCh (via
-	// RegisterRelaySession), relayCancel (zombie cleanup), writeMu (protecting
-	// hubConn writes), and dispatcher (DestroySession when the PTY exits).
-	// newTestDispatcher provides a real in-memory Dispatcher; DestroySession
-	// will return notFound for our ephemeral session, which the relay handles
-	// gracefully (logs and continues).
+	// RegisterRelaySession), writeMu (protecting hubConn writes), and dispatcher
+	// (DestroySession when the PTY exits). newTestDispatcher provides a real
+	// in-memory Dispatcher; DestroySession will return notFound for our
+	// ephemeral session, which the relay handles gracefully (logs and continues).
 	c := &Client{
-		relayCh:     make(map[string]chan []byte),
-		relayCancel: make(map[string]context.CancelFunc),
-		dispatcher:  newTestDispatcher(),
+		relayCh:    make(map[string]chan []byte),
+		dispatcher: newTestDispatcher(),
 	}
 
 	go c.runTerminalRelay(relayCtx, relayCancel, hubConn, sessID, m)
@@ -222,9 +220,8 @@ func TestRelayIntegration_VimNocompatible_OutputDelivery(t *testing.T) {
 	// dispatcher is required: runTerminalRelay calls c.dispatcher.DestroySession
 	// when the PTY exits while the hub is still connected.
 	c := &Client{
-		relayCh:     make(map[string]chan []byte),
-		relayCancel: make(map[string]context.CancelFunc),
-		dispatcher:  newTestDispatcher(),
+		relayCh:    make(map[string]chan []byte),
+		dispatcher: newTestDispatcher(),
 	}
 
 	relayCtx, relayCancel := context.WithCancel(context.Background())
@@ -335,5 +332,197 @@ func TestRelayIntegration_VimNocompatible_OutputDelivery(t *testing.T) {
 		t.Log("step 12: relay goroutine exited cleanly")
 	case <-time.After(10 * time.Second):
 		t.Error("step 12: relay goroutine did not exit within 10s after cancel")
+	}
+}
+
+// TestRelayIntegration_StrictModeReconnect_WritersContinuous verifies that the
+// relay path remains functional after a React strict-mode double-connect. React
+// strict mode mounts components twice, producing two runTerminalRelay goroutines
+// for the same session within ~16ms of each other.
+//
+// The regression fixed here (PR #675) was introduced by PR #670: the old
+// RegisterRelaySession called oldCancel() on the previous relay's context
+// immediately when relay#2 registered. This cancelled relay#1's context before
+// relay#2's ServeTerminal had a chance to register its writer, opening a brief
+// nil-writers window where PTY output went to the ring buffer only.
+//
+// What this test covers:
+//   - After relay#2 completes its startup, the relay path (PTY→hub) is intact and
+//     user input is delivered end-to-end. This is the steady-state after reconnect.
+//   - Structural regression guard: if the relayCancel map and oldCancel() call are
+//     reintroduced without initializing the map in the test Client struct, the test
+//     panics (nil map access) — ensuring the test catches the structural regression.
+//
+// What this test does NOT cover:
+//   - The exact ~1-5ms nil-writers window between relay#1's ServeTerminal exiting
+//     and relay#2's ServeTerminal registering. Reliably targeting that window would
+//     require either test hooks in production code or a lower-level pty package test.
+//     The atomic writer handoff is validated by the writerGen logic in ServeTerminal.
+func TestRelayIntegration_StrictModeReconnect_WritersContinuous(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping relay integration test in short mode")
+	}
+
+	// Step 1: Create a PTY session with a shell.
+	ptyMgr := pty.NewPTYManager(pty.PTYConfig{})
+	sessUUID := uuid.New()
+	ptySessID := sessUUID.String()
+
+	if createErr := ptyMgr.Create(ptySessID, t.TempDir(), []string{"sh"}, nil, 80, 24); createErr != nil {
+		t.Fatalf("Create PTY session failed: %v", createErr)
+	}
+	t.Cleanup(func() { ptyMgr.Destroy(ptySessID) })
+
+	// Step 2: Create a mock hub WebSocket pair.
+	var hubServerConn *websocket.Conn
+	hubServerReady := make(chan struct{})
+
+	mockHub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, acceptErr := websocket.Accept(w, r, &websocket.AcceptOptions{
+			InsecureSkipVerify: true,
+		})
+		if acceptErr != nil {
+			t.Logf("mock hub accept error: %v", acceptErr)
+			return
+		}
+		hubServerConn = conn
+		close(hubServerReady)
+		<-r.Context().Done()
+	}))
+	t.Cleanup(mockHub.Close)
+
+	hubURL := "ws" + strings.TrimPrefix(mockHub.URL, "http")
+
+	dialCtx, dialCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer dialCancel()
+
+	hubClientConn, _, dialErr := websocket.Dial(dialCtx, hubURL, nil)
+	if dialErr != nil {
+		t.Fatalf("dial mock hub failed: %v", dialErr)
+	}
+	dialCancel()
+
+	select {
+	case <-hubServerReady:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for mock hub server connection")
+	}
+	t.Cleanup(func() { hubServerConn.CloseNow() })
+	t.Cleanup(func() { hubClientConn.CloseNow() })
+
+	// Step 3: Create a single shared Client. Both relay goroutines share this
+	// Client so that RegisterRelaySession for relay#2 replaces relay#1's input
+	// channel while relay#1's ServeTerminal stays alive for the atomic handoff.
+	c := &Client{
+		relayCh:    make(map[string]chan []byte),
+		dispatcher: newTestDispatcher(),
+	}
+
+	testCtx, testCancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer testCancel()
+
+	// Step 4: Start output collector goroutine reading from hubServerConn.
+	outputFrames := make(chan string, 4096)
+	go func() {
+		for {
+			_, data, readErr := hubServerConn.Read(testCtx)
+			if readErr != nil {
+				return
+			}
+			_, payload, decodeErr := decodeTerminalFrame(data)
+			if decodeErr != nil {
+				continue
+			}
+			// ttyd server→client frame: byte '0' + terminal bytes.
+			if len(payload) > 1 && payload[0] == '0' {
+				select {
+				case outputFrames <- string(payload[1:]):
+				default:
+				}
+			}
+		}
+	}()
+
+	collectFor := func(dur time.Duration) string {
+		timer := time.NewTimer(dur)
+		defer timer.Stop()
+		var sb strings.Builder
+		for {
+			select {
+			case chunk, ok := <-outputFrames:
+				if !ok {
+					return sb.String()
+				}
+				sb.WriteString(chunk)
+			case <-timer.C:
+				return sb.String()
+			}
+		}
+	}
+
+	sendInput := func(payload []byte) {
+		t.Helper()
+		frame := encodeTerminalFrame(sessUUID, payload)
+		c.dispatchBinaryFrame(frame)
+	}
+
+	// Step 5: Start relay#1.
+	relayCtx1, relayCancel1 := context.WithCancel(testCtx)
+	relay1Done := make(chan struct{})
+	go func() {
+		defer close(relay1Done)
+		c.runTerminalRelay(relayCtx1, relayCancel1, hubClientConn, ptySessID, ptyMgr)
+	}()
+
+	// Wait for shell prompt to confirm relay#1 is delivering output.
+	promptOutput := collectFor(3 * time.Second)
+	if len(promptOutput) == 0 {
+		t.Fatal("step 5: timed out waiting for shell prompt from relay#1; no output received")
+	}
+	t.Logf("step 5: shell prompt received (%d bytes) from relay#1", len(promptOutput))
+
+	// Step 6: Simulate React strict mode — wait 16ms then start relay#2 on the
+	// SAME Client. With the fix, RegisterRelaySession does NOT cancel relay#1's
+	// context; relay#1 stays alive until relay#2's ServeTerminal atomically
+	// replaces it via the generation-based writer handoff.
+	time.Sleep(16 * time.Millisecond)
+
+	relayCtx2, relayCancel2 := context.WithCancel(testCtx)
+	relay2Done := make(chan struct{})
+	go func() {
+		defer close(relay2Done)
+		c.runTerminalRelay(relayCtx2, relayCancel2, hubClientConn, ptySessID, ptyMgr)
+	}()
+
+	// Step 7: Wait for relay#2 to fully set up (loopback WS + ServeTerminal).
+	// The snapshot replay from relay#2 should arrive as output.
+	relay2Output := collectFor(3 * time.Second)
+	t.Logf("step 7: relay#2 startup output (%d bytes)", len(relay2Output))
+
+	// Step 8: Send a command through relay#2 and verify the echo arrives.
+	// This confirms writers is non-nil and the relay path is intact.
+	sendInput([]byte("0echo alive\r"))
+
+	echoOutput := collectFor(3 * time.Second)
+	if !strings.Contains(echoOutput, "alive") {
+		t.Errorf("step 8 FAIL (bug #527 strict-mode regression): echo output not received after relay#2 reconnect; "+
+			"got %d bytes: %q — nil-writers window caused output to go to ring buffer only",
+			len(echoOutput), echoOutput)
+	} else {
+		t.Logf("step 8 PASS: echo output received (%d bytes) confirming relay path intact after reconnect", len(echoOutput))
+	}
+
+	// Cleanup: cancel both relays and wait for them to exit.
+	relayCancel1()
+	relayCancel2()
+	select {
+	case <-relay1Done:
+	case <-time.After(10 * time.Second):
+		t.Error("relay#1 goroutine did not exit within 10s")
+	}
+	select {
+	case <-relay2Done:
+	case <-time.After(10 * time.Second):
+		t.Error("relay#2 goroutine did not exit within 10s")
 	}
 }

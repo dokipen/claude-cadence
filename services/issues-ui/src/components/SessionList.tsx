@@ -121,6 +121,7 @@ export function SessionList({ agents, sessions, openKeys, minimizedKeys, onSessi
                         onClick={() => !isDestroying && onSessionClick(as)}
                         disabled={isDestroying}
                         data-testid="sidebar-session"
+                        data-session-id={as.session.id}
                         title={`${as.session.name} (${as.session.state})`}
                       >
                         {sessionInfo ? (

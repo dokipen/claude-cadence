@@ -1,7 +1,6 @@
 package hub
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -79,8 +78,7 @@ func TestRegisterRelaySession_NormalizesUUIDKey(t *testing.T) {
 	const uppercaseID = "550E8400-E29B-41D4-A716-446655440000"
 
 	c := &Client{
-		relayCh:     make(map[string]chan []byte),
-		relayCancel: make(map[string]context.CancelFunc),
+		relayCh: make(map[string]chan []byte),
 	}
 
 	// relayCancel is a no-op; we only care about channel dispatch here.
@@ -120,8 +118,7 @@ func TestRegisterRelaySession_NormalizesUUIDKey(t *testing.T) {
 
 func TestRegisterRelaySession_StaleCleanupDoesNotClobberLiveRegistration(t *testing.T) {
 	c := &Client{
-		relayCh:     make(map[string]chan []byte),
-		relayCancel: make(map[string]context.CancelFunc),
+		relayCh: make(map[string]chan []byte),
 	}
 
 	const sessionID = "12345678-1234-1234-1234-123456789abc"
@@ -161,12 +158,8 @@ func TestRegisterRelaySession_StaleCleanupDoesNotClobberLiveRegistration(t *test
 
 	c.relayChMu.Lock()
 	_, chExists := c.relayCh[parsed.String()]
-	_, cancelExists := c.relayCancel[parsed.String()]
 	c.relayChMu.Unlock()
 	if chExists {
 		t.Fatal("relayCh entry still present after cleanup2()")
-	}
-	if cancelExists {
-		t.Fatal("relayCancel entry still present after cleanup2()")
 	}
 }

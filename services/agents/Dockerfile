@@ -16,7 +16,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o agentd ./cmd/agentd
 # Runtime stage
 FROM alpine:3.21
 
-RUN apk add --no-cache git ca-certificates bash
+RUN apk add --no-cache git ca-certificates bash vim
 
 RUN addgroup -S agentd && adduser -S agentd -G agentd
 
