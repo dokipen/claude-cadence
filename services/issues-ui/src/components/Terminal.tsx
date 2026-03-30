@@ -276,11 +276,13 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       }
 
       // Forward terminal input to ttyd with the INPUT prefix.
-      // Filter DA1 Device Attributes queries (ESC[c, ESC[0c) — xterm.js emits
-      // these on init/reconnect, but the shell is not in a state to consume the
-      // response and interprets the tail ("1;2c") as literal keystrokes.
+      // Filter Device Attributes queries emitted by xterm.js — the shell is not
+      // in a state to consume the response and interprets the trailing bytes as
+      // literal keystrokes.
+      //   DA1: ESC[c, ESC[0c  — emitted on init/reconnect
+      //   DA2: ESC[2c         — emitted on focus/click
       term.onData((data) => {
-        if (data === "\x1b[c" || data === "\x1b[0c") return;
+        if (data === "\x1b[c" || data === "\x1b[0c" || data === "\x1b[2c") return;
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(CMD_INPUT + data);
         }

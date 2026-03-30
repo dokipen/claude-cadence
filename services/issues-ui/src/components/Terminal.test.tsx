@@ -545,6 +545,40 @@ describe("Terminal", () => {
   });
 
   // ---------------------------------------------------------------------------
+  // DA2 Device Attributes query filtering (issue #567)
+  // ---------------------------------------------------------------------------
+  describe("DA2 Device Attributes query filtering", () => {
+    function getOnDataCallback() {
+      const term = xtermInstances[0] as unknown as { onData: ReturnType<typeof vi.fn> };
+      return term.onData.mock.calls[0][0] as (data: string) => void;
+    }
+
+    it("does not forward ESC[2c (DA2 query) to the WebSocket", () => {
+      render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+      const ws = MockWebSocket.instances[0];
+      act(() => { ws.simulateOpen(); });
+
+      ws.send.mockClear();
+      const onData = getOnDataCallback();
+      act(() => { onData("\x1b[2c"); });
+
+      expect(ws.send).not.toHaveBeenCalled();
+    });
+
+    it("still forwards normal keystrokes after DA2 filtering is in place", () => {
+      render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+      const ws = MockWebSocket.instances[0];
+      act(() => { ws.simulateOpen(); });
+
+      ws.send.mockClear();
+      const onData = getOnDataCallback();
+      act(() => { onData("a"); });
+
+      expect(ws.send).toHaveBeenCalledWith("0a");
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // Mobile scroll: touch swipe and auto-scroll position preservation (issue #561)
   // ---------------------------------------------------------------------------
   describe("mobile scroll", () => {
