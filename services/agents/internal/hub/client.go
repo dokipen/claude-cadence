@@ -51,9 +51,8 @@ type Client struct {
 
 	// terminalRelayCh maps session ID → channel for incoming binary relay
 	// frames from the hub (browser input forwarded to the PTY session).
-	relayCh     map[string]chan []byte
-	relayCancel map[string]context.CancelFunc
-	relayChMu   sync.Mutex
+	relayCh   map[string]chan []byte
+	relayChMu sync.Mutex
 }
 
 // NewClient creates a new hub client.
@@ -66,14 +65,13 @@ func NewClient(cfg config.HubConfig, profiles map[string]config.Profile, ttyd co
 		mgr = ptyMgr[0]
 	}
 	return &Client{
-		cfg:         cfg,
-		profiles:    profiles,
-		ttyd:        ttyd,
-		dispatcher:  dispatcher,
-		ptyMgr:      mgr,
-		done:        make(chan struct{}),
-		relayCh:     make(map[string]chan []byte),
-		relayCancel: make(map[string]context.CancelFunc),
+		cfg:        cfg,
+		profiles:   profiles,
+		ttyd:       ttyd,
+		dispatcher: dispatcher,
+		ptyMgr:     mgr,
+		done:       make(chan struct{}),
+		relayCh:    make(map[string]chan []byte),
 	}
 }
 
@@ -335,10 +333,16 @@ func (c *Client) writeResponse(ctx context.Context, conn *websocket.Conn, resp *
 
 // RegisterRelaySession creates a buffered input channel for terminal relay
 // frames destined for sessionID. relayCancel is the CancelFunc for the relay
-// goroutine's derived context; it is invoked from the cleanup alongside the
-// channel close so that hub reconnects tear down the old relay immediately.
+// goroutine's derived context; it is stored in the cleanup so that hub
+// reconnects tear down the relay when the channel is unregistered.
 // Returns the channel and a cleanup function that removes the registration.
 // The caller must invoke cleanup when the relay session ends.
+//
+// When a new relay for the same session registers (e.g. React strict-mode
+// double-connect), the old relay's context is NOT cancelled immediately.
+// The old relay's ServeTerminal keeps its writers entry until relay#2's
+// ServeTerminal atomically replaces it via the generation check, eliminating
+// the nil-writers window that caused the PR #670 regression.
 func (c *Client) RegisterRelaySession(sessionID string, relayCancel context.CancelFunc) (<-chan []byte, func()) {
 	// Normalize to canonical lowercase UUID form so the key always matches
 	// dispatchBinaryFrame's lookup, which uses uuid.UUID.String().
@@ -349,18 +353,14 @@ func (c *Client) RegisterRelaySession(sessionID string, relayCancel context.Canc
 	}
 	ch := make(chan []byte, terminalRelayChannelBufSize)
 	c.relayChMu.Lock()
-	// Cancel any existing relay goroutine for this session (e.g. React strict
-	// mode double-connect) before registering the new channel. This prevents
-	// zombie relay goroutines that hold local TCP listeners and HTTP servers.
-	// oldCancel is called after releasing the lock to avoid holding relayChMu
-	// during an external cancel call.
-	oldCancel, hasOldCancel := c.relayCancel[sessionID]
+	// Replace the input channel for the session. The old relay goroutine will
+	// self-terminate: its localConn.Read ends when ServeTerminal#2 replaces the
+	// writers entry, and its inputCh is replaced here (new input goes to relay#2).
+	// We do NOT cancel the old relay's context here — doing so would tear down
+	// ServeTerminal#1 before ServeTerminal#2 has registered its writer, creating
+	// a nil-writers window where PTY output is lost to the ring buffer only.
 	c.relayCh[sessionID] = ch
-	c.relayCancel[sessionID] = relayCancel
 	c.relayChMu.Unlock()
-	if hasOldCancel {
-		oldCancel()
-	}
 	var once sync.Once
 	cleanup := func() {
 		once.Do(func() {
@@ -368,7 +368,6 @@ func (c *Client) RegisterRelaySession(sessionID string, relayCancel context.Canc
 			// Only delete if the map still points to OUR channel.
 			if c.relayCh[sessionID] == ch {
 				delete(c.relayCh, sessionID)
-				delete(c.relayCancel, sessionID)
 			}
 			c.relayChMu.Unlock()
 			// Cancel the relay goroutine's context so it stops attempting
