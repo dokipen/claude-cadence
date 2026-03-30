@@ -101,6 +101,10 @@ export function Terminal({ agentName, sessionId, onResumeSession }: TerminalProp
   const reconnectingRef = useRef(false);
   // true when the user has scrolled up from the bottom; suppresses auto-scroll-to-bottom on new output
   const userScrolledUpRef = useRef(false);
+  // the viewport line the user scrolled to; only updated by user-initiated scrolls, not our own scrollToLine calls
+  const scrollRestoreTargetRef = useRef<number | null>(null);
+  // set to true around programmatic scrollToLine calls to prevent onScroll from overwriting the user's tracked position
+  const suppressScrollTrackingRef = useRef(false);
   const [connState, setConnState] = useState<ConnectionState>("connecting");
 
   const connect = useCallback(() => {
@@ -118,6 +122,8 @@ export function Terminal({ agentName, sessionId, onResumeSession }: TerminalProp
       reconnectingRef.current = false;
     }
     userScrolledUpRef.current = false;
+    scrollRestoreTargetRef.current = null;
+    suppressScrollTrackingRef.current = false;
     isAutoRetryRef.current = false;
     everConnectedRef.current = false;
 
@@ -165,9 +171,18 @@ export function Terminal({ agentName, sessionId, onResumeSession }: TerminalProp
 
     // Track whether the user has scrolled up so we can preserve their position
     // when new output arrives instead of forcing a jump to the bottom.
+    // Programmatic scrollToLine calls (in the write callback below) set
+    // suppressScrollTrackingRef so they don't overwrite the user's intended target.
     term.onScroll(() => {
+      if (suppressScrollTrackingRef.current) return;
       const buf = term.buffer.active;
-      userScrolledUpRef.current = buf.viewportY + term.rows < buf.length;
+      if (buf.viewportY + term.rows < buf.length) {
+        userScrolledUpRef.current = true;
+        scrollRestoreTargetRef.current = buf.viewportY;
+      } else {
+        userScrolledUpRef.current = false;
+        scrollRestoreTargetRef.current = null;
+      }
     });
 
     // Guard against double-write: keyboard handler sets this flag so the DOM
@@ -275,9 +290,16 @@ export function Terminal({ agentName, sessionId, onResumeSession }: TerminalProp
           // Strip the type prefix and write the rest to xterm.
           // If the user has scrolled up, restore their position after the write
           // so new output doesn't forcibly jump them to the bottom.
-          if (userScrolledUpRef.current) {
-            const savedY = term.buffer.active.viewportY;
-            term.write(view.slice(1), () => { termRef.current?.scrollToLine(savedY); });
+          // scrollRestoreTargetRef holds the stable user-set viewport position and is
+          // only updated by user-initiated scroll events (onScroll with the suppress
+          // guard inactive), so rapid-burst writes all restore to the same target.
+          if (userScrolledUpRef.current && scrollRestoreTargetRef.current !== null) {
+            const target = scrollRestoreTargetRef.current;
+            term.write(view.slice(1), () => {
+              suppressScrollTrackingRef.current = true;
+              termRef.current?.scrollToLine(target);
+              suppressScrollTrackingRef.current = false;
+            });
           } else {
             term.write(view.slice(1));
           }
@@ -288,9 +310,13 @@ export function Terminal({ agentName, sessionId, onResumeSession }: TerminalProp
         if (ev.data.length < 1) return;
         const cmd = ev.data[0];
         if (cmd === MSG_OUTPUT) {
-          if (userScrolledUpRef.current) {
-            const savedY = term.buffer.active.viewportY;
-            term.write(ev.data.slice(1), () => { termRef.current?.scrollToLine(savedY); });
+          if (userScrolledUpRef.current && scrollRestoreTargetRef.current !== null) {
+            const target = scrollRestoreTargetRef.current;
+            term.write(ev.data.slice(1), () => {
+              suppressScrollTrackingRef.current = true;
+              termRef.current?.scrollToLine(target);
+              suppressScrollTrackingRef.current = false;
+            });
           } else {
             term.write(ev.data.slice(1));
           }
@@ -382,6 +408,7 @@ export function Terminal({ agentName, sessionId, onResumeSession }: TerminalProp
 
     const onTouchMove = (e: TouchEvent) => {
       e.preventDefault(); // prevent the browser from intercepting as a page scroll
+      if (!e.touches.length) return; // guard: touchcancel can empty the list before touchmove
       const currentY = e.touches[0].clientY;
       const deltaY = lastTouchY - currentY; // positive = finger moved up = scroll toward newer content
       lastTouchY = currentY;
