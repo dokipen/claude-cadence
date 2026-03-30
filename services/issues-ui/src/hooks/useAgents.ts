@@ -33,12 +33,14 @@ export function useAgents(repo?: string): UseAgentsResult {
       fetchAgents(repo)
         .then((result) => {
           if (!cancelled) {
-            setAgents(result.agents);
+            const sortedAgents = [...result.agents].sort((a, b) =>
+              a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
+            );
+            setAgents(sortedAgents);
             consecutiveFailures = 0;
             setError(null);
           }
-        })
-        .catch(() => {
+        })        .catch(() => {
           if (!cancelled) {
             consecutiveFailures++;
             if (
