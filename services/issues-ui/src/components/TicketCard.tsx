@@ -241,12 +241,15 @@ export function TicketCard({
                 </button>
               </>
             ) : activeRefineAll ? (
+              // Refine All is a batch operation — not specific to this card, so no navigation on click.
               <div
                 className={styles.activeSessionLogo}
                 data-testid="active-session-logo"
                 aria-label="Refine All in progress"
               >
-                {activeRefineAll.sessionId && activeRefineAll.agentName ? (
+                {activeRefineAll.sessionId && activeRefineAll.agentName &&
+                  validateSessionId(activeRefineAll.sessionId) &&
+                  validateAgentProfile(activeRefineAll.agentName) ? (
                   <SessionOutputTooltip session={activeRefineAll}>
                     <AnimatedCadenceIcon />
                   </SessionOutputTooltip>
