@@ -13,6 +13,7 @@ const mockLaunch = vi.hoisted(() => vi.fn());
 // so tests can inspect which props were passed. Exposes a "mock-launch" button
 // to simulate a successful launch (calls onLaunched).
 vi.mock("./AgentLauncher", () => ({
+  MAX_SESSION_COMMAND_LENGTH: 500,
   AgentLauncher: forwardRef(
     (
       {
@@ -195,6 +196,13 @@ describe("CreateTicketDialog", () => {
 
     const textarea = screen.getByTestId("ticket-prompt");
     expect(textarea).toHaveAttribute("autocomplete", "off");
+  });
+
+  it("caps ticket-prompt length to keep /create-ticket command within launcher limit", () => {
+    render(<CreateTicketDialog {...defaultProps} open={true} />);
+
+    const textarea = screen.getByTestId("ticket-prompt");
+    expect(textarea).toHaveAttribute("maxlength", "485");
   });
 
 

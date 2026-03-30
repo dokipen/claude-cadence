@@ -6,20 +6,14 @@ import { RefineAllDialog } from "./RefineAllDialog";
 import { LeadAllDialog } from "./LeadAllDialog";
 import { CreateTicketDialog } from "./CreateTicketDialog";
 import { AnimatedCadenceIcon } from "./AnimatedCadenceIcon";
+import { SessionOutputTooltip } from "./SessionOutputTooltip";
 import styles from "../styles/board.module.css";
 
-export function hasActiveRefineAllSession(sessions: ActiveSessionInfo[], projectId?: string): boolean {
+export function getActiveRefineAllSession(sessions: ActiveSessionInfo[], projectId?: string): ActiveSessionInfo | null {
   const prefix = projectId ? `${projectId}-refine-all-` : "refine-all-";
-  return sessions.some(
+  return sessions.find(
     (s) => s.name.startsWith(prefix) && (s.state === "running" || s.state === "creating" || s.state === "destroying")
-  );
-}
-
-export function hasActiveLeadAllSession(sessions: ActiveSessionInfo[], projectId?: string): boolean {
-  const prefix = projectId ? `${projectId}-lead-all-` : "lead-all-";
-  return sessions.some(
-    (s) => s.name.startsWith(prefix) && (s.state === "running" || s.state === "creating" || s.state === "destroying")
-  );
+  ) ?? null;
 }
 
 const STATE_LABELS: Record<TicketState, string> = {
@@ -45,6 +39,8 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
   const [showRefineAll, setShowRefineAll] = useState(false);
   const [showLeadAll, setShowLeadAll] = useState(false);
   const [showCreateTicket, setShowCreateTicket] = useState(false);
+
+  const activeRefineAllSession = getActiveRefineAllSession(sessions ?? [], projectId);
 
   const displayCount = loading
     ? "…"
@@ -75,8 +71,14 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
             aria-label="Refine All"
             title="Refine All"
           >
-            {hasActiveRefineAllSession(sessions ?? [], projectId) ? (
-              <AnimatedCadenceIcon width={14} height={14} />
+            {activeRefineAllSession ? (
+              activeRefineAllSession.sessionId && activeRefineAllSession.agentName ? (
+                <SessionOutputTooltip session={activeRefineAllSession}>
+                  <AnimatedCadenceIcon width={14} height={14} />
+                </SessionOutputTooltip>
+              ) : (
+                <AnimatedCadenceIcon width={14} height={14} />
+              )
             ) : (
               <Sparkles size={14} />
             )}
@@ -90,11 +92,7 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
             aria-label="Lead All"
             title="Lead All"
           >
-            {hasActiveLeadAllSession(sessions ?? [], projectId) ? (
-              <AnimatedCadenceIcon width={14} height={14} />
-            ) : (
-              <Sparkles size={14} />
-            )}
+            <Sparkles size={14} />
           </button>
         )}
         <span className={styles.columnCount} data-testid={`count-${state}`}>

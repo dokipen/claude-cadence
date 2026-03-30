@@ -42,7 +42,7 @@ vi.mock("./TicketCard", () => ({
   TicketCard: () => <div data-testid="ticket-card" />,
 }));
 
-import { KanbanColumn, hasActiveRefineAllSession, hasActiveLeadAllSession } from "./KanbanColumn";
+import { KanbanColumn, getActiveRefineAllSession } from "./KanbanColumn";
 
 // jsdom does not implement showModal/close on HTMLDialogElement.
 beforeEach(() => {
@@ -165,54 +165,54 @@ describe("KanbanColumn CreateTicketDialog", () => {
 });
 
 // ---------------------------------------------------------------------------
-// hasActiveRefineAllSession unit tests
+// getActiveRefineAllSession unit tests
 // ---------------------------------------------------------------------------
 
-describe("hasActiveRefineAllSession", () => {
+describe("getActiveRefineAllSession", () => {
   it("returns false for empty sessions", () => {
-    expect(hasActiveRefineAllSession([], "my-project")).toBe(false);
+    expect(getActiveRefineAllSession([], "my-project")).toBeFalsy();
   });
 
   it("returns true when a running refine-all session exists with projectId prefix", () => {
     const sessions: ActiveSessionInfo[] = [
       { name: "my-project-refine-all-1234", state: "running", sessionId: "s1", agentName: "refiner" },
     ];
-    expect(hasActiveRefineAllSession(sessions, "my-project")).toBe(true);
+    expect(getActiveRefineAllSession(sessions, "my-project")).toBeTruthy();
   });
 
   it("returns true for creating state", () => {
     const sessions: ActiveSessionInfo[] = [
       { name: "my-project-refine-all-9999", state: "creating", sessionId: "s2", agentName: "refiner" },
     ];
-    expect(hasActiveRefineAllSession(sessions, "my-project")).toBe(true);
+    expect(getActiveRefineAllSession(sessions, "my-project")).toBeTruthy();
   });
 
   it("returns true for destroying state", () => {
     const sessions: ActiveSessionInfo[] = [
       { name: "my-project-refine-all-9999", state: "destroying", sessionId: "s3", agentName: "refiner" },
     ];
-    expect(hasActiveRefineAllSession(sessions, "my-project")).toBe(true);
+    expect(getActiveRefineAllSession(sessions, "my-project")).toBeTruthy();
   });
 
   it("returns false when session state is not active", () => {
     const sessions: ActiveSessionInfo[] = [
       { name: "my-project-refine-all-1234", state: "stopped", sessionId: "s4", agentName: "refiner" },
     ];
-    expect(hasActiveRefineAllSession(sessions, "my-project")).toBe(false);
+    expect(getActiveRefineAllSession(sessions, "my-project")).toBeFalsy();
   });
 
   it("returns false when session belongs to a different project", () => {
     const sessions: ActiveSessionInfo[] = [
       { name: "other-project-refine-all-1234", state: "running", sessionId: "s5", agentName: "refiner" },
     ];
-    expect(hasActiveRefineAllSession(sessions, "my-project")).toBe(false);
+    expect(getActiveRefineAllSession(sessions, "my-project")).toBeFalsy();
   });
 
   it("falls back to bare refine-all- prefix when projectId is undefined", () => {
     const sessions: ActiveSessionInfo[] = [
       { name: "refine-all-1234", state: "running", sessionId: "s6", agentName: "refiner" },
     ];
-    expect(hasActiveRefineAllSession(sessions, undefined)).toBe(true);
+    expect(getActiveRefineAllSession(sessions, undefined)).toBeTruthy();
   });
 });
 
@@ -311,57 +311,6 @@ describe("KanbanColumn Refine All icon button", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// hasActiveLeadAllSession unit tests
-// ---------------------------------------------------------------------------
-
-describe("hasActiveLeadAllSession", () => {
-  it("returns false for empty sessions", () => {
-    expect(hasActiveLeadAllSession([], "my-project")).toBe(false);
-  });
-
-  it("returns true when a running lead-all session exists with projectId prefix", () => {
-    const sessions: ActiveSessionInfo[] = [
-      { name: "my-project-lead-all-42", state: "running", sessionId: "s1", agentName: "leader" },
-    ];
-    expect(hasActiveLeadAllSession(sessions, "my-project")).toBe(true);
-  });
-
-  it("returns true for creating state", () => {
-    const sessions: ActiveSessionInfo[] = [
-      { name: "my-project-lead-all-42", state: "creating", sessionId: "s2", agentName: "leader" },
-    ];
-    expect(hasActiveLeadAllSession(sessions, "my-project")).toBe(true);
-  });
-
-  it("returns true for destroying state", () => {
-    const sessions: ActiveSessionInfo[] = [
-      { name: "my-project-lead-all-42", state: "destroying", sessionId: "s3", agentName: "leader" },
-    ];
-    expect(hasActiveLeadAllSession(sessions, "my-project")).toBe(true);
-  });
-
-  it("returns false when session state is not active", () => {
-    const sessions: ActiveSessionInfo[] = [
-      { name: "my-project-lead-all-42", state: "stopped", sessionId: "s4", agentName: "leader" },
-    ];
-    expect(hasActiveLeadAllSession(sessions, "my-project")).toBe(false);
-  });
-
-  it("returns false when session belongs to a different project", () => {
-    const sessions: ActiveSessionInfo[] = [
-      { name: "other-project-lead-all-42", state: "running", sessionId: "s5", agentName: "leader" },
-    ];
-    expect(hasActiveLeadAllSession(sessions, "my-project")).toBe(false);
-  });
-
-  it("falls back to bare lead-all- prefix when projectId is undefined", () => {
-    const sessions: ActiveSessionInfo[] = [
-      { name: "lead-all-42", state: "running", sessionId: "s6", agentName: "leader" },
-    ];
-    expect(hasActiveLeadAllSession(sessions, undefined)).toBe(true);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Lead All icon button tests
@@ -462,22 +411,4 @@ describe("KanbanColumn Lead All icon button", () => {
     expect(screen.queryByTestId("lead-all-dialog")).toBeNull();
   });
 
-  it("shows AnimatedCadenceIcon when a lead-all session is running", () => {
-    const sessions: ActiveSessionInfo[] = [
-      { name: "myproject-lead-all-42", state: "running", sessionId: "s1", agentName: "leader" },
-    ];
-    render(
-      <KanbanColumn
-        {...defaultProps}
-        state="REFINED"
-        tickets={tickets}
-        totalCount={1}
-        sessions={sessions}
-        projectId="myproject"
-      />,
-    );
-    expect(screen.queryByTestId("icon-sparkles")).toBeNull();
-    const button = screen.getByTestId("lead-all-button");
-    expect(button.querySelector("svg")).toBeTruthy();
-  });
 });

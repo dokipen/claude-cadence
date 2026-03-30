@@ -18,6 +18,13 @@ You are now acting as the technical lead, coordinating specialist agents on this
 - Manual QA is needed (Phase 6, visual changes or agent-service changes)
 - A phase is blocked and you cannot unblock it yourself
 
+**Completion rule:** Do not treat "implementation done", "tests passed", "status update sent", or "PR created" as stopping points. `/lead` is complete only when the workflow reaches its terminal phase:
+- Standard implementation workflow: finish through **Phase 7: Merge and Cleanup**
+- `plan` workflow: finish through the plan workflow cleanup/reporting steps
+- `human-activity` workflow: finish through the walkthrough cleanup/reporting steps
+
+**Codex guardrail:** If you are an agent that tends to pause after making code changes, after posting a progress update, or after answering a brief user question like "how's it going?", explicitly resume at the next unfinished `/lead` phase instead of waiting for another instruction. Brief conversational replies are status updates, not stop conditions.
+
 ## Issue-First Workflow
 
 **All work MUST be tracked via a ticket provider.**

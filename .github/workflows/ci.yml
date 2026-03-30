@@ -28,6 +28,7 @@ jobs:
       issues-service: ${{ steps.filter.outputs.issues-service }}
       issues-ui: ${{ steps.filter.outputs.issues-ui }}
       agent-service: ${{ steps.filter.outputs.agent-service }}
+      agent-hub: ${{ steps.filter.outputs.agent-hub }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,6 +45,8 @@ jobs:
               - 'services/agent-hub/proto/**'
             agent-service:
               - 'services/agents/**'
+            agent-hub:
+              - 'services/agent-hub/**'
       - name: Cleanup workspace
         if: always()
         run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
@@ -238,6 +241,32 @@ jobs:
         if: always()
         run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
 
+  agent-hub-test:
+    needs: changes
+    if: needs.changes.outputs.agent-hub == 'true'
+    # fork → ubuntu-latest; internal → self-hosted (see SECURITY comment above)
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: true
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/agent-hub/go.mod
+          cache-dependency-path: services/agent-hub/go.sum
+      - name: Clear Go build cache
+        working-directory: services/agent-hub
+        run: go clean -cache
+      - name: Run go vet
+        working-directory: services/agent-hub
+        run: go vet ./...
+      - name: Run tests
+        working-directory: services/agent-hub
+        run: go test -v ./...
+      - name: Cleanup workspace
+        if: always()
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
+
   shellcheck:
     # fork → ubuntu-latest; internal → self-hosted (see SECURITY comment above)
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
@@ -262,6 +291,7 @@ jobs:
       - issues-service-docker
       - issues-ui-ci
       - agent-service-test
+      - agent-hub-test
       - shellcheck
     runs-on: ubuntu-latest
     steps:
@@ -273,6 +303,7 @@ jobs:
           ISSUES_DOCKER: ${{ needs.issues-service-docker.result }}
           ISSUES_UI: ${{ needs.issues-ui-ci.result }}
           AGENT_TEST: ${{ needs.agent-service-test.result }}
+          AGENT_HUB_TEST: ${{ needs.agent-hub-test.result }}
           SHELLCHECK: ${{ needs.shellcheck.result }}
         run: |
           echo "Changes:        $CHANGES"
@@ -281,10 +312,11 @@ jobs:
           echo "Issues Docker:  $ISSUES_DOCKER"
           echo "Issues UI:      $ISSUES_UI"
           echo "Agent service:  $AGENT_TEST"
+          echo "Agent hub:      $AGENT_HUB_TEST"
           echo "Shellcheck:     $SHELLCHECK"
 
           # Fail if any job failed or was cancelled (skipped is OK — means path filter excluded it)
-          for result in "$CHANGES" "$ISSUES_TEST" "$ISSUES_CLI" "$ISSUES_DOCKER" "$ISSUES_UI" "$AGENT_TEST" "$SHELLCHECK"; do
+          for result in "$CHANGES" "$ISSUES_TEST" "$ISSUES_CLI" "$ISSUES_DOCKER" "$ISSUES_UI" "$AGENT_TEST" "$AGENT_HUB_TEST" "$SHELLCHECK"; do
             if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
               echo "::error::One or more CI jobs failed or were cancelled"
               exit 1

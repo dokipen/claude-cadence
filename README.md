@@ -4,6 +4,22 @@ An issue-driven, multi-agent development workflow plugin for [Claude Code](https
 
 Claude Cadence provides a structured development workflow with git worktrees, phased implementation, specialist agent delegation, and GitHub issue tracking — all stack-agnostic and customizable per project.
 
+This repo also includes a thin Codex compatibility layer that reuses the existing Claude prompts, scripts, and `CLAUDE.md` as the source of truth. See [docs/codex-compatibility.md](docs/codex-compatibility.md).
+
+## Codex
+
+Codex support is packaged as a compatibility layer rather than a second copy of the workflow docs:
+
+- `.codex-plugin/plugin.json` registers the plugin for Codex
+- `codex/skills/` contains generated thin wrappers for commands, shared skills, and specialist roles
+- `scripts/sync-codex.py` regenerates those wrappers from the canonical Claude source files
+
+When updating Cadence workflows, edit the existing Claude files first and then run:
+
+```bash
+python3 scripts/sync-codex.py
+```
+
 ## Installation
 
 ### Git clone (simplest)

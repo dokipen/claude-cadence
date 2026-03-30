@@ -67,7 +67,6 @@ export function TicketCard({
       e.preventDefault();
       e.stopPropagation();
       if (
-        (ticket.state === "BACKLOG" || ticket.state === "CLOSED") &&
         activeSession?.agentName &&
         activeSession?.sessionId &&
         validateAgentProfile(activeSession.agentName) &&
@@ -78,7 +77,7 @@ export function TicketCard({
         navigate(`/ticket/${ticket.id}`);
       }
     },
-    [navigate, ticket.id, ticket.state, activeSession],
+    [navigate, ticket.id, activeSession],
   );
 
   const handleLaunchClick = useCallback(

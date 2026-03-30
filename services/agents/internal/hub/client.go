@@ -166,7 +166,7 @@ func (c *Client) connect(ctx context.Context) error {
 func (c *Client) register(ctx context.Context, conn *websocket.Conn) error {
 	profiles := make(map[string]profileInfo, len(c.profiles))
 	for name, p := range c.profiles {
-		profiles[name] = profileInfo{Description: p.Description, Repo: p.Repo, Type: p.Type}
+		profiles[name] = profileInfo{Name: p.Name, Description: p.Description, Repo: p.Repo, Type: p.Type}
 	}
 
 	params := registerParams{
@@ -353,7 +353,10 @@ func (c *Client) RegisterRelaySession(sessionID string, relayCancel context.Canc
 	cleanup := func() {
 		once.Do(func() {
 			c.relayChMu.Lock()
-			delete(c.relayCh, sessionID)
+			// Only delete if the map still points to OUR channel.
+			if c.relayCh[sessionID] == ch {
+				delete(c.relayCh, sessionID)
+			}
 			c.relayChMu.Unlock()
 			// Cancel the relay goroutine's context so it stops attempting
 			// writes on a stale hub connection (e.g., after hub reconnect).
@@ -439,6 +442,9 @@ type registerParams struct {
 }
 
 type profileInfo struct {
+	// Name is the optional human-readable display label. Falls back to the map
+	// key when empty.
+	Name        string `json:"name,omitempty"`
 	Description string `json:"description"`
 	Repo        string `json:"repo"`
 	Type        string `json:"type"`

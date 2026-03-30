@@ -159,6 +159,36 @@ describe("LeadAllDialog profile list", () => {
     ).toBeTruthy();
     expect(screen.getByTestId("profile-checkbox-agent-2/fast")).toBeTruthy();
   });
+  it("uses profile.name as display label when present instead of profileName dict key", () => {
+    const profileWithDisplayName = [
+      {
+        agent: "worker-agent",
+        profileName: "worker",
+        profile: { name: "My Display Name", type: "claude", repo: undefined },
+      },
+    ] as unknown as AgentProfileEntry[];
+    mockUseAgentProfiles.mockReturnValue(profileWithDisplayName);
+    render(<LeadAllDialog {...defaultProps} open={true} />);
+    // Should show profile.name ("My Display Name"), not profileName dict key ("worker")
+    expect(screen.getByText(/My Display Name/)).toBeTruthy();
+    expect(screen.queryByText(/worker/)).not.toBeInTheDocument();
+  });
+
+  it("falls back to profileName dict key when profile.name is absent", () => {
+    const profileWithoutName = [
+      {
+        agent: "worker-agent",
+        profileName: "worker",
+        profile: { name: "", type: "claude", repo: undefined },
+      },
+    ] as unknown as AgentProfileEntry[];
+    mockUseAgentProfiles.mockReturnValue(profileWithoutName);
+    render(<LeadAllDialog {...defaultProps} open={true} />);
+    // profile.name is empty, so the dict key ("worker") should appear in the label text content.
+    // The label renders as split text nodes, so use textContent of the profile-list container.
+    const list = screen.getByTestId("profile-list");
+    expect(list.textContent).toMatch(/\bworker\b/);
+  });
 
   it("shows loading message when agents are loading", () => {
     mockUseAgents.mockReturnValue({ agents: [], loading: true, error: null });
@@ -261,13 +291,13 @@ describe("LeadAllDialog confirm launches sessions", () => {
     expect(mockCreateSession).toHaveBeenCalledWith(
       "agent-1",
       "default",
-      "proj-lead-all-10",
+      "proj-lead-10",
       ["/lead 10"]
     );
     expect(mockCreateSession).toHaveBeenCalledWith(
       "agent-1",
       "default",
-      "proj-lead-all-20",
+      "proj-lead-20",
       ["/lead 20"]
     );
     expect(onClose).toHaveBeenCalled();
@@ -290,7 +320,7 @@ describe("LeadAllDialog confirm launches sessions", () => {
     expect(mockCreateSession).toHaveBeenCalledWith(
       "agent-1",
       "default",
-      "lead-all-5",
+      "lead-5",
       ["/lead 5"]
     );
   });

@@ -31,7 +31,7 @@ export function AgentLaunchForm({ agents, onLaunched, repoUrl }: AgentLaunchForm
         .filter(([, profile]) =>
           !repoUrl || !profile.repo || normalizeRepo(profile.repo) === normalizeRepo(repoUrl)
         )
-        .map(([name]) => name)
+        .map(([key, profile]) => ({ key, label: profile.name || key }))
     : [];
 
   const handleHostChange = useCallback(
@@ -122,9 +122,9 @@ export function AgentLaunchForm({ agents, onLaunched, repoUrl }: AgentLaunchForm
             data-testid="profile-select"
           >
             <option value="">— select profile —</option>
-            {profileOptions.map((p) => (
-              <option key={p} value={p}>
-                {p}
+            {profileOptions.map(({ key, label }) => (
+              <option key={key} value={key}>
+                {label}
               </option>
             ))}
           </select>

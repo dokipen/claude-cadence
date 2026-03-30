@@ -24,7 +24,7 @@ export function SessionOutputTooltip({ session, children }: SessionOutputTooltip
   const wrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const handleMouseEnter = useCallback(() => {
+  const updateCoords = useCallback(() => {
     if (wrapperRef.current) {
       const rect = wrapperRef.current.getBoundingClientRect();
       const margin = 8;
@@ -58,12 +58,24 @@ export function SessionOutputTooltip({ session, children }: SessionOutputTooltip
 
       setCoords({ top, left, width, height });
     }
-    setVisible(true);
   }, []);
+
+  const handleMouseEnter = useCallback(() => {
+    updateCoords();
+    setVisible(true);
+  }, [updateCoords]);
 
   const handleMouseLeave = useCallback(() => {
     setVisible(false);
   }, []);
+
+  useEffect(() => {
+    if (!visible) return;
+    window.addEventListener("resize", updateCoords);
+    return () => {
+      window.removeEventListener("resize", updateCoords);
+    };
+  }, [visible, updateCoords]);
 
   // Mount xterm and connect WebSocket when tooltip becomes visible
   useEffect(() => {

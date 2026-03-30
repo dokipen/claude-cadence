@@ -1,8 +1,10 @@
-import { useState, useCallback, useEffect, forwardRef, useImperativeHandle } from "react";
+import { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from "react";
 import { createSession } from "../api/agentHubClient";
 import { useAgents, useAgentProfiles } from "../hooks/useAgents";
 import type { Session } from "../types";
 import styles from "../styles/agents.module.css";
+
+export const MAX_SESSION_COMMAND_LENGTH = 500;
 
 interface AgentLauncherProps {
   ticketNumber: number;
@@ -33,6 +35,7 @@ export const AgentLauncher = forwardRef<AgentLauncherHandle, AgentLauncherProps>
 
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [launching, setLaunching] = useState(false);
+  const launchingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   // Reset selection when profiles change (agents go online/offline)
@@ -44,11 +47,15 @@ export const AgentLauncher = forwardRef<AgentLauncherHandle, AgentLauncherProps>
 
   const handleLaunch = useCallback(async () => {
     if (!selected) return;
+    if (launchingRef.current) return;
+    launchingRef.current = true;
     setLaunching(true);
     setError(null);
 
     const cappedCommand =
-      command.length > 500 ? command.slice(0, 500) + "…" : command;
+      command.length > MAX_SESSION_COMMAND_LENGTH
+        ? command.slice(0, MAX_SESSION_COMMAND_LENGTH) + "…"
+        : command;
 
     try {
       const session = await createSession(selected.agent, selected.profileName, sessionName, [cappedCommand]);
@@ -57,6 +64,7 @@ export const AgentLauncher = forwardRef<AgentLauncherHandle, AgentLauncherProps>
       setError(err instanceof Error ? err.message : "Failed to launch agent");
     } finally {
       setLaunching(false);
+      launchingRef.current = false;
     }
   }, [selected, command, sessionName, onLaunched]);
 
