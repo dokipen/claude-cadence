@@ -156,13 +156,17 @@ func TestRegisterRelaySession_StaleCleanupDoesNotClobberLiveRegistration(t *test
 		t.Fatal("timed out waiting for payload on ch2: stale cleanup may have clobbered the live registration")
 	}
 
-	// cleanup2 must remove the map entry.
+	// cleanup2 must remove the map entries.
 	cleanup2()
 
 	c.relayChMu.Lock()
-	_, exists := c.relayCh[parsed.String()]
+	_, chExists := c.relayCh[parsed.String()]
+	_, cancelExists := c.relayCancel[parsed.String()]
 	c.relayChMu.Unlock()
-	if exists {
-		t.Fatal("map entry still present after cleanup2()")
+	if chExists {
+		t.Fatal("relayCh entry still present after cleanup2()")
+	}
+	if cancelExists {
+		t.Fatal("relayCancel entry still present after cleanup2()")
 	}
 }

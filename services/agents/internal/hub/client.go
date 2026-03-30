@@ -352,12 +352,15 @@ func (c *Client) RegisterRelaySession(sessionID string, relayCancel context.Canc
 	// Cancel any existing relay goroutine for this session (e.g. React strict
 	// mode double-connect) before registering the new channel. This prevents
 	// zombie relay goroutines that hold local TCP listeners and HTTP servers.
-	if oldCancel, ok := c.relayCancel[sessionID]; ok {
-		oldCancel()
-	}
+	// oldCancel is called after releasing the lock to avoid holding relayChMu
+	// during an external cancel call.
+	oldCancel, hasOldCancel := c.relayCancel[sessionID]
 	c.relayCh[sessionID] = ch
 	c.relayCancel[sessionID] = relayCancel
 	c.relayChMu.Unlock()
+	if hasOldCancel {
+		oldCancel()
+	}
 	var once sync.Once
 	cleanup := func() {
 		once.Do(func() {
