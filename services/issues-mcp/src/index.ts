@@ -100,7 +100,7 @@ const TOOLS = [
         },
         number: {
           type: "number",
-          description: "Ticket number (integer). Provide number OR id (not both). Requires projectId or projectName.",
+          description: "Ticket number (integer). Provide number OR id (not both). Requires projectId, projectName, or ISSUES_PROJECT_ID env var.",
         },
         projectId: {
           type: "string",
