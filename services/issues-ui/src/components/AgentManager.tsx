@@ -5,6 +5,7 @@ import { useAgents, normalizeRepo } from "../hooks/useAgents";
 import { SessionList, sessionKey } from "./SessionList";
 import { TilingLayout } from "./TilingLayout";
 import { AgentLaunchForm } from "./AgentLaunchForm";
+import { MobileSessionView } from "./MobileSessionView";
 import { useSessionsContext } from "../hooks/SessionsContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import type { TiledWindow } from "./TilingLayout";
@@ -254,48 +255,56 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
     setMobileView("list");
   }, []);
 
-  const mobileBackButton = isMobile && mobileView === "session" ? (
-    <button
-      className={styles.mobileBackButton}
-      onClick={handleMobileBack}
-      aria-label="Back to agent list"
-    >
-      ← Back
-    </button>
-  ) : null;
+  const handleMobileClose = useCallback(() => {
+    const win = openWindowsRef.current[openWindowsRef.current.length - 1];
+    if (!win) return;
+    setOpenWindows((prev) => prev.filter((w) => w.key !== win.key));
+    setMinimizedKeys((prev) => {
+      const next = new Set(prev);
+      next.delete(win.key);
+      return next;
+    });
+    setMobileView("list");
+  }, []);
 
   return (
     <div className={styles.agentManager} data-testid="agent-manager">
       <AgentLaunchForm agents={agents} onLaunched={handleLaunched} repoUrl={selectedProject?.repository} />
       <div className={styles.agentManagerBody}>
-        <div className={`${styles.mobilePane} ${isMobile && mobileView === "session" ? styles.mobilePaneHidden : ""}`}>
-          <SessionList
-            agents={agents}
-            sessions={filteredSessions}
-            openKeys={openKeys}
-            minimizedKeys={minimizedKeys}
-            onSessionClick={handleSessionClick}
-            isCollapsed={isCollapsed}
-            onToggle={toggleSidebar}
-          />
-        </div>
-        <div className={`${styles.tilingContainer} ${isMobile && mobileView === "list" ? styles.mobilePaneHidden : ""}`}>
-          {mobileBackButton}
-          {loading && filteredSessions.length === 0 ? (
-            <div className={styles.tilingEmpty} data-testid="tiling-area">
-              <p>Loading sessions…</p>
-            </div>
-          ) : (
-            <TilingLayout
-              windows={openWindows}
-              onMinimize={handleMinimize}
-              onTerminated={handleTerminated}
-              onReorder={handleReorder}
-              onReorderAll={handleReorderAll}
-            />
-          )}
-        </div>
+        <SessionList
+          agents={agents}
+          sessions={filteredSessions}
+          openKeys={openKeys}
+          minimizedKeys={minimizedKeys}
+          onSessionClick={handleSessionClick}
+          isCollapsed={isCollapsed}
+          onToggle={toggleSidebar}
+        />
+        {!isMobile && (
+          <div className={styles.tilingContainer}>
+            {loading && filteredSessions.length === 0 ? (
+              <div className={styles.tilingEmpty} data-testid="tiling-area">
+                <p>Loading sessions…</p>
+              </div>
+            ) : (
+              <TilingLayout
+                windows={openWindows}
+                onMinimize={handleMinimize}
+                onTerminated={handleTerminated}
+                onReorder={handleReorder}
+                onReorderAll={handleReorderAll}
+              />
+            )}
+          </div>
+        )}
       </div>
+      {isMobile && mobileView === "session" && openWindows.length > 0 && (
+        <MobileSessionView
+          win={openWindows[openWindows.length - 1]}
+          onBack={handleMobileBack}
+          onClose={handleMobileClose}
+        />
+      )}
     </div>
   );
 }

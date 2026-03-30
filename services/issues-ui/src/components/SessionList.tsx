@@ -56,14 +56,6 @@ export function SessionList({ agents, sessions, openKeys, minimizedKeys, onSessi
         >
           <div className={styles.sidebarHeaderContainer}>
             <h3 className={styles.sidebarTitle}>Agents</h3>
-            <button
-              className={styles.sidebarClose}
-              onClick={onToggle}
-              aria-label="Close agent list"
-              data-testid="sidebar-close"
-            >
-              ×
-            </button>
           </div>
           {agents.length === 0 && (
             <p className={styles.sidebarEmpty}>No agents registered.</p>

@@ -756,67 +756,86 @@
   outline-offset: -2px;
 }
 
-/* Mobile: panel visibility wrapper */
-.mobilePane {
-  display: contents;
+/* Mobile full-screen session overlay */
+.mobileSessionView {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--background);
+  z-index: 100;
+  overflow: hidden;
 }
 
-.mobilePaneHidden {
-  display: none !important;
+.mobileSessionContent {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Mobile back button (hidden on desktop) */
-.mobileBackButton {
-  display: none;
-  padding: 0.5rem 0.75rem;
+/* Mobile session header — only rendered inside MobileSessionView (mobile-only component) */
+.mobileHeader {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
   background: var(--surface);
-  border: none;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.mobileBackButton,
+.mobileEscButton,
+.mobileCloseButton {
+  padding: 0.5rem 0.75rem;
+  background: transparent;
+  border: none;
   color: var(--primary);
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
+}
+
+.mobileBackButton {
   text-align: left;
-  width: 100%;
+  flex: 1;
+}
+
+.mobileEscButton,
+.mobileCloseButton {
   flex-shrink: 0;
 }
 
-.mobileBackButton:hover {
-  background: rgba(128, 128, 128, 0.08);
+.mobileCloseButton {
+  font-size: 1.1rem;
+}
+
+@media (hover: hover) {
+  .mobileBackButton:hover,
+  .mobileEscButton:hover,
+  .mobileCloseButton:hover {
+    background: rgba(128, 128, 128, 0.08);
+  }
 }
 
 @media (max-width: 768px) {
-  .mobileBackButton {
-    display: block;
-  }
-
-  .mobilePane {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
+  /* Sidebar fills full width when TilingLayout is not rendered on mobile */
+  .sidebarWrapper {
     flex: 1;
+    width: 100%;
     min-height: 0;
   }
 
-  /* Sidebar fills full width on mobile */
-  .mobilePane .sidebarWrapper {
-    width: 100%;
-    flex: 1;
-    min-height: 0;
-  }
-
-  .mobilePane .sessionSidebar {
+  .sessionSidebar {
     width: 100%;
     min-width: 0;
     border-right: none;
   }
 
-  .mobilePane .sidebarToggle {
+  .sidebarToggle {
     display: none;
-  }
-
-  /* Tiling container becomes a column (back button + layout) */
-  .tilingContainer {
-    flex-direction: column;
   }
 }
