@@ -141,10 +141,11 @@ func (m *PTYManager) Create(id, workdir string, command []string, env []string, 
 				copy(chunk, buf[:n])
 				_, _ = sess.rb.Write(chunk)
 				sess.mu.Lock()
-				for _, w := range sess.writers {
+				writers := append([]io.Writer(nil), sess.writers...)
+				sess.mu.Unlock()
+				for _, w := range writers {
 					_, _ = w.Write(chunk)
 				}
-				sess.mu.Unlock()
 			}
 			if readErr != nil {
 				// Reap the child before signalling done. waitOnce ensures
@@ -286,10 +287,11 @@ func (p *PTYManager) Reattach(id, slavePath string) error {
 				copy(chunk, buf[:n])
 				_, _ = sess.rb.Write(chunk)
 				sess.mu.Lock()
-				for _, w := range sess.writers {
+				writers := append([]io.Writer(nil), sess.writers...)
+				sess.mu.Unlock()
+				for _, w := range writers {
 					_, _ = w.Write(chunk)
 				}
-				sess.mu.Unlock()
 			}
 			if readErr != nil {
 				return

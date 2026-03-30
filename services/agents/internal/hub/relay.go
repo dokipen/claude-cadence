@@ -203,7 +203,7 @@ loop:
 			}
 			// payload is the raw ttyd client→server frame forwarded from the browser:
 			// byte '0' + input bytes, or byte '1' + JSON resize.
-			if writeErr := localConn.Write(ctx, websocket.MessageText, payload); writeErr != nil {
+			if writeErr := localConn.Write(ctx, websocket.MessageBinary, payload); writeErr != nil {
 				slog.Warn("relay: local WS write failed", "session_id", ptySessID, "error", writeErr)
 				break loop
 			}
