@@ -64,6 +64,9 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
   useEffect(() => {
     if (hasRestoredRef.current || !sessionsLoaded) return;
     hasRestoredRef.current = true;
+    // Set refs BEFORE state changes so persist effects always target the correct key.
+    currentProjectIdRef.current = selectedProject?.id;
+    prevProjectIdRef.current = selectedProject?.id ?? null;
     const sessionMap = new Map(sessions.map((s) => [sessionKey(s), s]));
     try {
       const stored = sessionStorage.getItem(storageKey("cadence_open_windows", selectedProject?.id));
@@ -91,8 +94,6 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
     } catch {
       // ignore storage errors
     }
-    currentProjectIdRef.current = selectedProject?.id;
-    prevProjectIdRef.current = selectedProject?.id ?? null;
   }, [sessionsLoaded, sessions, selectedProject?.id, isMobile]);
 
   // Project-switch effect: save/restore per-project window state when selectedProject changes.
