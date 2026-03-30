@@ -13,10 +13,15 @@ export interface TiledWindow {
 
 interface TilingLayoutProps {
   windows: TiledWindow[];
+  projectId?: string;
   onMinimize: (key: string) => void;
   onTerminated: (key: string) => void;
   onReorder?: (dragKey: string, dropKey: string) => void;
   onReorderAll?: (keys: string[]) => void;
+}
+
+function storageKey(base: string, projectId?: string): string {
+  return projectId ? `${base}:${projectId}` : base;
 }
 
 const MIN_RATIO = 0.15;
@@ -79,12 +84,13 @@ function getNodeRatio(root: LayoutNode | null, path: string): number {
   return node.type === "split" ? node.ratio : 0.5;
 }
 
-export function TilingLayout({ windows, onMinimize, onTerminated, onReorder, onReorderAll }: TilingLayoutProps) {
+export function TilingLayout({ windows, projectId, onMinimize, onTerminated, onReorder, onReorderAll }: TilingLayoutProps) {
   // All hooks first
   const [maximizedKey, setMaximizedKey] = useState<string | null>(null);
+  const currentProjectIdRef = useRef(projectId);
   const [ratios, setRatios] = useState<Map<string, number>>(() => {
     try {
-      const stored = sessionStorage.getItem("cadence_window_ratios");
+      const stored = sessionStorage.getItem(storageKey("cadence_window_ratios", projectId));
       if (!stored) return new Map();
       const entries: [string, number][] = JSON.parse(stored);
       if (!Array.isArray(entries)) return new Map();
@@ -149,8 +155,36 @@ export function TilingLayout({ windows, onMinimize, onTerminated, onReorder, onR
   }, [keysJson]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (currentProjectIdRef.current === projectId) return;
+    currentProjectIdRef.current = projectId;
     try {
-      sessionStorage.setItem("cadence_window_ratios", JSON.stringify([...ratios]));
+      const stored = sessionStorage.getItem(storageKey("cadence_window_ratios", projectId));
+      if (stored) {
+        const entries: [string, number][] = JSON.parse(stored);
+        if (Array.isArray(entries)) {
+          setRatios(
+            new Map(
+              entries.map(
+                ([k, v]) =>
+                  [k, Number.isFinite(v) ? Math.max(MIN_RATIO, Math.min(MAX_RATIO, v)) : MIN_RATIO] as [
+                    string,
+                    number,
+                  ]
+              )
+            )
+          );
+        }
+      } else {
+        setRatios(new Map());
+      }
+    } catch {
+      setRatios(new Map());
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(storageKey("cadence_window_ratios", currentProjectIdRef.current), JSON.stringify([...ratios]));
     } catch {
       // ignore storage errors
     }
