@@ -57,24 +57,26 @@ When `provider: github` (or no config), use `gh` CLI commands. Refer to the `git
 
 ### Issues API
 
-When `provider: issues-api`, use the `issues` CLI. Refer to the `issues-api` skill for full command reference.
+When `provider: issues-api`, prefer `mcp__issues__*` MCP tools when they are available in your tool list — they require no shell escaping and no CLI install. Fall back to the `issues` CLI when MCP tools are absent. Refer to the `issues-api` skill for the full command reference for both paths.
+
+The table below shows the CLI fallback commands. When `mcp__issues__*` tools are available, use them instead — see the `issues-api` skill for MCP tool signatures.
 
 **N** = ticket number (requires `--project`), **TICKET_ID** = CUID (no `--project` needed). Use `ticket view` to look up a ticket's CUID from its number.
 
-| Operation | Command |
-|-----------|---------|
-| List tickets | `issues ticket list --project $PROJECT [filters] --json` |
-| View ticket | `issues ticket view N --project $PROJECT --json` |
-| Create ticket | `issues ticket create --project $PROJECT --title "..." [options] --json` |
-| Update ticket | `issues ticket update TICKET_ID [options] --json` |
-| Add label | `issues label add TICKET_ID --label LABEL_ID --json` |
-| Remove label | `issues label remove TICKET_ID --label LABEL_ID --json` |
-| Comment | `issues comment add TICKET_ID --body "$(cat <<'EOF' ... EOF)" --json` |
-| Close ticket | `issues ticket transition TICKET_ID --to CLOSED --json` |
-| Check blockers | `issues ticket view N --project $PROJECT --json` (read `blockedBy` array) |
-| Check state | `issues ticket view N --project $PROJECT --json` (read `state` field) |
-| Check assignee | `issues ticket view N --project $PROJECT --json` (read `assignee` field) |
-| Check estimate | `issues ticket view N --project $PROJECT --json` (read `storyPoints` field) |
+| Operation | MCP tool (preferred) | CLI fallback |
+|-----------|----------------------|-------------|
+| List tickets | `mcp__issues__ticket_list` | `issues ticket list --project $PROJECT [filters] --json` |
+| View ticket | `mcp__issues__ticket_get` | `issues ticket view N --project $PROJECT --json` |
+| Create ticket | `mcp__issues__ticket_create` | `issues ticket create --project $PROJECT --title "..." [options] --json` |
+| Update ticket | `mcp__issues__ticket_update` | `issues ticket update TICKET_ID [options] --json` |
+| Add label | `mcp__issues__label_add` | `issues label add TICKET_ID --label LABEL_ID --json` |
+| Remove label | `mcp__issues__label_remove` | `issues label remove TICKET_ID --label LABEL_ID --json` |
+| Comment | `mcp__issues__comment_add` | `issues comment add TICKET_ID --body "$(cat <<'EOF' ... EOF)" --json` |
+| Close ticket | `mcp__issues__ticket_transition` | `issues ticket transition TICKET_ID --to CLOSED --json` |
+| Check blockers | `mcp__issues__ticket_get` (read `blockedBy`) | `issues ticket view N --project $PROJECT --json` (read `blockedBy` array) |
+| Check state | `mcp__issues__ticket_get` (read `state`) | `issues ticket view N --project $PROJECT --json` (read `state` field) |
+| Check assignee | `mcp__issues__ticket_get` (read `assignee`) | `issues ticket view N --project $PROJECT --json` (read `assignee` field) |
+| Check estimate | `mcp__issues__ticket_get` (read `storyPoints`) | `issues ticket view N --project $PROJECT --json` (read `storyPoints` field) |
 
 **Important:** Always use `--json` on `issues` CLI commands. This outputs structured JSON instead of chalk-formatted text, making output reliable for programmatic parsing. See the `issues-api` skill for details.
 
