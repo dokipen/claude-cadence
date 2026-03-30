@@ -335,14 +335,29 @@ func TestRelayIntegration_VimNocompatible_OutputDelivery(t *testing.T) {
 	}
 }
 
-// TestRelayIntegration_StrictModeReconnect_WritersContinuous verifies that PTY
-// output continues to reach the browser after a React strict-mode double-connect
-// (relay#1 cancelled immediately when relay#2 starts). This covers the regression
-// from PR #670: RegisterRelaySession cancelled the old relay's context immediately,
-// creating a nil-writers window between relay#1's cleanup and relay#2's setup.
+// TestRelayIntegration_StrictModeReconnect_WritersContinuous verifies that the
+// relay path remains functional after a React strict-mode double-connect. React
+// strict mode mounts components twice, producing two runTerminalRelay goroutines
+// for the same session within ~16ms of each other.
 //
-// The test should FAIL before the fix (nil-writers window means echo output goes
-// to ring buffer only) and PASS after (no cancellation, atomic writer handoff).
+// The regression fixed here (PR #675) was introduced by PR #670: the old
+// RegisterRelaySession called oldCancel() on the previous relay's context
+// immediately when relay#2 registered. This cancelled relay#1's context before
+// relay#2's ServeTerminal had a chance to register its writer, opening a brief
+// nil-writers window where PTY output went to the ring buffer only.
+//
+// What this test covers:
+//   - After relay#2 completes its startup, the relay path (PTY→hub) is intact and
+//     user input is delivered end-to-end. This is the steady-state after reconnect.
+//   - Structural regression guard: if the relayCancel map and oldCancel() call are
+//     reintroduced without initializing the map in the test Client struct, the test
+//     panics (nil map access) — ensuring the test catches the structural regression.
+//
+// What this test does NOT cover:
+//   - The exact ~1-5ms nil-writers window between relay#1's ServeTerminal exiting
+//     and relay#2's ServeTerminal registering. Reliably targeting that window would
+//     require either test hooks in production code or a lower-level pty package test.
+//     The atomic writer handoff is validated by the writerGen logic in ServeTerminal.
 func TestRelayIntegration_StrictModeReconnect_WritersContinuous(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping relay integration test in short mode")
