@@ -102,10 +102,17 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
     const newProjectId = selectedProject?.id ?? null;
     if (prevProjectIdRef.current === newProjectId) return; // no change
 
+    // Capture before updating: used below to detect the initial auto-selection.
+    const prevProjectId = prevProjectIdRef.current;
     prevProjectIdRef.current = newProjectId;
     currentProjectIdRef.current = selectedProject?.id;
 
     const sessionMap = new Map(sessions.map((s) => [sessionKey(s), s]));
+
+    // When transitioning from no-project to the first auto-selected project,
+    // preserve any windows opened via the ?session= URL param (hasAutoOpened).
+    // Subsequent manual project switches always restore from storage (or clear).
+    const isInitialAutoSelect = prevProjectId === null && newProjectId !== null;
 
     try {
       const stored = sessionStorage.getItem(storageKey("cadence_open_windows", selectedProject?.id));
@@ -119,7 +126,9 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
         setOpenWindows(toRestore);
         if (isMobile && toRestore.length > 0) setMobileView("session");
         else if (isMobile) setMobileView("list");
-      } else {
+      } else if (!isInitialAutoSelect) {
+        // Only clear on explicit project switches; preserve URL-param-opened windows
+        // on the first auto-selection that happens after the initial restore.
         setOpenWindows([]);
         if (isMobile) setMobileView("list");
       }
@@ -134,7 +143,7 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
         const liveKeys = new Set(sessions.map((s) => sessionKey(s)));
         const valid = storedKeys.filter((k) => liveKeys.has(k));
         setMinimizedKeys(new Set(valid));
-      } else {
+      } else if (!isInitialAutoSelect) {
         setMinimizedKeys(new Set());
       }
     } catch {
