@@ -742,3 +742,86 @@ describe('TicketCard visual distinction: kill session vs close ticket', () => {
     expect(killButton.className).not.toBe(closeButton.className);
   });
 });
+
+// ---------------------------------------------------------------------------
+// TicketCard activeRefineAll prop
+// ---------------------------------------------------------------------------
+
+describe("activeRefineAll prop", () => {
+  it("shows animated icon when activeRefineAll is set and no per-ticket session is active", () => {
+    const refineAllSession: ActiveSessionInfo = makeSession(
+      "myproject-refine-all-1234567890",
+      "running",
+      { agentName: "test-agent", sessionId: "session-123" },
+    );
+    const ticket = makeTicket({ state: "BACKLOG", number: 5 });
+    const { getByTestId, queryByTestId } = render(
+      <TicketCard ticket={ticket} sessions={[]} activeRefineAll={refineAllSession} />,
+    );
+    expect(getByTestId("active-session-logo")).toBeTruthy();
+    expect(queryByTestId("card-launch-button")).toBeNull();
+  });
+
+  it("active-session-logo div contains an SVG element when activeRefineAll is set", () => {
+    const refineAllSession: ActiveSessionInfo = makeSession(
+      "myproject-refine-all-1234567890",
+      "running",
+      { agentName: "test-agent", sessionId: "session-123" },
+    );
+    const ticket = makeTicket({ state: "BACKLOG", number: 5 });
+    const { getByTestId } = render(
+      <TicketCard ticket={ticket} sessions={[]} activeRefineAll={refineAllSession} />,
+    );
+    const logo = getByTestId("active-session-logo");
+    expect(logo.querySelector("svg")).not.toBeNull();
+  });
+
+  it("shows launch button when activeRefineAll is null", () => {
+    const ticket = makeTicket({ state: "BACKLOG", number: 5 });
+    const { getByTestId, queryByTestId } = render(
+      <TicketCard ticket={ticket} sessions={[]} activeRefineAll={null} />,
+    );
+    expect(getByTestId("card-launch-button")).toBeTruthy();
+    expect(queryByTestId("active-session-logo")).toBeNull();
+  });
+
+  it("shows launch button when activeRefineAll is undefined", () => {
+    const ticket = makeTicket({ state: "BACKLOG", number: 5 });
+    const { getByTestId, queryByTestId } = render(
+      <TicketCard ticket={ticket} sessions={[]} />,
+    );
+    expect(getByTestId("card-launch-button")).toBeTruthy();
+    expect(queryByTestId("active-session-logo")).toBeNull();
+  });
+
+  it("shows per-ticket session icon (not activeRefineAll) when both are present", () => {
+    const refineAllSession: ActiveSessionInfo = makeSession(
+      "myproject-refine-all-1234567890",
+      "running",
+      { agentName: "refine-all-agent", sessionId: "session-refine-all" },
+    );
+    const ticket = makeTicket({ state: "BACKLOG", number: 5 });
+    const sessions = [
+      makeSession("refine-5", "running", { agentName: "agent1", sessionId: "sess-per-ticket" }),
+    ];
+    const { getByTestId } = render(
+      <TicketCard ticket={ticket} sessions={sessions} activeRefineAll={refineAllSession} />,
+    );
+    // Per-ticket session takes precedence — kill button should be visible (only shown for per-ticket sessions)
+    expect(getByTestId("active-session-logo")).toBeTruthy();
+    expect(getByTestId("session-kill-button")).toBeTruthy();
+  });
+
+  it("does not show kill button when only activeRefineAll is set", () => {
+    const refineAllSession: ActiveSessionInfo = makeSession(
+      "myproject-refine-all-1234567890",
+      "running",
+      { agentName: "test-agent", sessionId: "session-123" },
+    );
+    const ticket = makeTicket({ state: "BACKLOG", number: 5 });
+    const { queryByTestId } = render(
+      <TicketCard ticket={ticket} sessions={[]} activeRefineAll={refineAllSession} />,
+    );
+    expect(queryByTestId("session-kill-button")).toBeNull();
+  });
+});

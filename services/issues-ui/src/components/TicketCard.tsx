@@ -38,11 +38,13 @@ export function TicketCard({
   repoUrl,
   sessions,
   projectId,
+  activeRefineAll,
 }: {
   ticket: Ticket;
   repoUrl?: string;
   sessions?: ActiveSessionInfo[];
   projectId?: string;
+  activeRefineAll?: ActiveSessionInfo | null;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [anchorRect, setAnchorRect] = useState<DOMRect | undefined>(undefined);
@@ -238,6 +240,20 @@ export function TicketCard({
                   )}
                 </button>
               </>
+            ) : activeRefineAll ? (
+              <div
+                className={styles.activeSessionLogo}
+                data-testid="active-session-logo"
+                aria-label="Refine All in progress"
+              >
+                {activeRefineAll.sessionId && activeRefineAll.agentName ? (
+                  <SessionOutputTooltip session={activeRefineAll}>
+                    <AnimatedCadenceIcon />
+                  </SessionOutputTooltip>
+                ) : (
+                  <AnimatedCadenceIcon />
+                )}
+              </div>
             ) : (
               <button
                 type="button"
