@@ -91,7 +91,7 @@ export function CreateTicketDialog({
   return (
     <dialog
       ref={dialogRef}
-      className={styles.dialog}
+      className={`${styles.dialog} ${styles.createTicketDialog}`}
       onClick={handleDialogClick}
       onCancel={handleClose}
       data-testid="create-ticket-dialog"
@@ -115,7 +115,7 @@ export function CreateTicketDialog({
           <textarea
             id="ticket-prompt-input"
             data-testid="ticket-prompt"
-            rows={4}
+            rows={12}
             className={styles.promptTextarea}
             maxLength={CREATE_TICKET_PROMPT_MAX_LENGTH}
             value={prompt}
