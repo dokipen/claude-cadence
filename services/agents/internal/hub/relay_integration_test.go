@@ -482,7 +482,9 @@ func TestRelayIntegration_StrictModeReconnect_WritersContinuous(t *testing.T) {
 	t.Logf("step 5: shell prompt received (%d bytes) from relay#1", len(promptOutput))
 
 	// Step 6: Simulate React strict mode — wait 16ms then start relay#2 on the
-	// SAME Client. RegisterRelaySession cancels relay#1's context immediately.
+	// SAME Client. With the fix, RegisterRelaySession does NOT cancel relay#1's
+	// context; relay#1 stays alive until relay#2's ServeTerminal atomically
+	// replaces it via the generation-based writer handoff.
 	time.Sleep(16 * time.Millisecond)
 
 	relayCtx2, relayCancel2 := context.WithCancel(testCtx)
