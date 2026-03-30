@@ -57,7 +57,7 @@ When `provider: github` (or no config), use `gh` CLI commands. Refer to the `git
 
 ### Issues API
 
-When `provider: issues-api`, use the `issues` CLI. Refer to the `issues-api` skill for full command reference.
+When `provider: issues-api`, prefer `mcp__issues__*` MCP tools when they are available in your tool list — they require no shell escaping and no CLI install. Fall back to the `issues` CLI when MCP tools are absent. Refer to the `issues-api` skill for the full command reference for both paths.
 
 **N** = ticket number (requires `--project`), **TICKET_ID** = CUID (no `--project` needed). Use `ticket view` to look up a ticket's CUID from its number.
 

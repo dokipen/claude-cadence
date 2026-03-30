@@ -10,54 +10,192 @@ user-invokable: false
 
 ## Overview
 
-This skill documents the `issues` CLI client for the issues microservice. Use these commands when the project's `CLAUDE.md` configures `provider: issues-api` in its `Ticket Provider` section.
+This skill documents two paths for interacting with the issues microservice:
 
-## Prerequisites
+1. **MCP tools** (`mcp__issues__*`) — preferred when available. No shell escaping, no CLI install required, structured input/output.
+2. **`issues` CLI** — fallback when MCP tools are not available.
+
+**Always prefer MCP tools when `mcp__issues__*` tools appear in your available tool list.** Fall back to the CLI only when they are absent.
+
+Provider detection still applies: use this skill only when the project's `CLAUDE.md` configures `provider: issues-api`.
+
+---
+
+## MCP Tools (preferred)
+
+Use these tools when `mcp__issues__*` tools are available. They are faster, require no shell escaping, and work without the CLI installed.
+
+### Ticket Operations
+
+#### Get a ticket
+
+```
+mcp__issues__ticket_get
+  id: "<TICKET_CUID>"           # Use id OR number, not both
+  number: 42                    # Ticket number (integer)
+  projectId: "<PROJECT_CUID>"   # Required with number; falls back to ISSUES_PROJECT_ID env var
+  projectName: "claude-cadence" # Alternative to projectId; ignored when id is used
+```
+
+#### List tickets
+
+```
+mcp__issues__ticket_list
+  projectId: "<PROJECT_CUID>"         # Falls back to ISSUES_PROJECT_ID env var
+  projectName: "claude-cadence"       # Alternative to projectId
+  state: "REFINED"                    # BACKLOG | REFINED | IN_PROGRESS | CLOSED
+  labelNames: ["bug", "enhancement"]  # OR filter: matches either label
+  isBlocked: true                     # Filter to only blocked tickets
+  priority: "HIGH"                    # HIGHEST | HIGH | MEDIUM | LOW | LOWEST
+  limit: 50                           # Default: 20, max: 100
+```
+
+#### Create a ticket
+
+```
+mcp__issues__ticket_create
+  title: "Brief descriptive title"   # Required
+  projectId: "<PROJECT_CUID>"        # Falls back to ISSUES_PROJECT_ID env var
+  projectName: "claude-cadence"      # Alternative to projectId
+  description: "Detailed description"
+  acceptanceCriteria: "- [ ] Criterion 1\n- [ ] Criterion 2"
+  labelIds: ["<LABEL_CUID_1>"]       # Use mcp__issues__label_list to resolve names → IDs
+  priority: "MEDIUM"                 # HIGHEST | HIGH | MEDIUM | LOW | LOWEST
+  storyPoints: 3                     # Fibonacci: 1, 2, 3, 5, 8, 13
+```
+
+#### Update a ticket
+
+```
+mcp__issues__ticket_update
+  id: "<TICKET_CUID>"          # Required
+  title: "New title"
+  description: "New description"
+  acceptanceCriteria: "- [ ] Updated criterion"
+  priority: "HIGH"
+  storyPoints: 5
+```
+
+#### Transition a ticket (state changes)
+
+```
+mcp__issues__ticket_transition
+  id: "<TICKET_CUID>"   # Required
+  to: "IN_PROGRESS"     # BACKLOG | REFINED | IN_PROGRESS | CLOSED
+```
+
+Valid transitions:
+- `BACKLOG` → `REFINED`, `CLOSED`
+- `REFINED` → `IN_PROGRESS`, `BACKLOG`, `CLOSED`
+- `IN_PROGRESS` → `CLOSED`, `REFINED`
+- `CLOSED` → `BACKLOG`
+
+Blocked tickets cannot transition to `IN_PROGRESS`.
+
+> **IMPORTANT:** Always check the ticket's current state before transitioning (use `mcp__issues__ticket_get`). Transitioning to the current state or skipping states is an error.
+
+**Common multi-step transitions:**
+
+```
+# Start work on a BACKLOG ticket (must pass through REFINED):
+mcp__issues__ticket_transition  id: "<ID>"  to: "REFINED"
+mcp__issues__ticket_transition  id: "<ID>"  to: "IN_PROGRESS"
+
+# Reopen a CLOSED ticket and start work:
+mcp__issues__ticket_transition  id: "<ID>"  to: "BACKLOG"
+mcp__issues__ticket_transition  id: "<ID>"  to: "REFINED"
+mcp__issues__ticket_transition  id: "<ID>"  to: "IN_PROGRESS"
+```
+
+### Label Operations
+
+#### List all labels
+
+```
+mcp__issues__label_list
+  (no parameters)
+```
+
+Use this to resolve label names to CUIDs before calling `ticket_create` or `label_add`.
+
+#### Add a label to a ticket
+
+```
+mcp__issues__label_add
+  ticketId: "<TICKET_CUID>"   # Required
+  labelId: "<LABEL_CUID>"     # Required; use mcp__issues__label_list to resolve name → ID
+```
+
+#### Remove a label from a ticket
+
+```
+mcp__issues__label_remove
+  ticketId: "<TICKET_CUID>"   # Required
+  labelId: "<LABEL_CUID>"     # Required
+```
+
+### Comment Operations
+
+#### Add a comment
+
+```
+mcp__issues__comment_add
+  ticketId: "<TICKET_CUID>"   # Required
+  body: "Comment text"         # Required; no shell escaping needed
+```
+
+---
+
+## CLI Fallback
+
+Use the `issues` CLI when `mcp__issues__*` tools are not available in your tool list.
+
+### Prerequisites
 
 - The issues microservice must be running at the configured `api_url`
 - The CLI must be authenticated: `issues auth whoami`
 - If not authenticated: `gh auth token | issues auth login --pat -`
 
-## Project Name Resolution
+### Project Name Resolution
 
 All `--project` flags and project positional arguments accept either a project **name** (e.g., `claude-cadence`) or a **CUID** (e.g., `cmmryin270000ny01dc2msx3t`). The CLI resolves names to IDs automatically.
 
-## Project Management
+### Project Management
 
-### Create a project
+#### Create a project
 
 ```bash
 issues project create --name "My Project" --repository "org/repo" --json
 ```
 
-### List projects
+#### List projects
 
 ```bash
 issues project list --json
 ```
 
-### View a project
+#### View a project
 
 ```bash
 issues project view PROJECT --json
 ```
 
-### Update a project
+#### Update a project
 
 ```bash
 issues project update PROJECT --name "New Name" --json
 issues project update PROJECT --repository "org/new-repo" --json
 ```
 
-## Project Inference
+### Project Inference
 
 The CLI can infer the project from the current directory's git remote origin URL. When `--project` is omitted, the CLI reads `git remote get-url origin`, normalizes it to an `owner/repo` slug, and matches it against known projects. Explicit `--project` always takes precedence.
 
-## Ticket Management
+### Ticket Management
 
 **ID types:** Commands accept either a ticket number or a CUID. When using a ticket number, include `--project PROJECT` to resolve it (project name or ID; inferred from git origin if omitted). When using a CUID, `--project` is not needed.
 
-### Create a ticket
+#### Create a ticket
 
 ```bash
 issues ticket create \
@@ -83,7 +221,7 @@ EOF
 
 Note: `--project` is optional if you're in a git repo whose origin matches a known project.
 
-### View a ticket
+#### View a ticket
 
 ```bash
 issues ticket view 42 --project PROJECT --json
@@ -93,7 +231,7 @@ Note: `--project` is optional when viewing by ticket number if you're in a match
 
 Shows: title, state, priority, story points, assignee, labels, description, acceptance criteria, blockers, comments.
 
-### List tickets
+#### List tickets
 
 ```bash
 issues ticket list --json
@@ -110,7 +248,7 @@ issues ticket list --verbose              # includes description, acceptance cri
 issues ticket list -v --state REFINED     # verbose + filter
 ```
 
-### Update a ticket
+#### Update a ticket
 
 ```bash
 issues ticket update TICKET_ID --title "New title" --json
@@ -126,7 +264,7 @@ issues ticket update TICKET_ID --points 8 --json
 issues ticket update TICKET_ID --priority HIGH --json
 ```
 
-### Transition a ticket (state changes)
+#### Transition a ticket (state changes)
 
 ```bash
 issues ticket transition TICKET_ID --to REFINED --json
@@ -175,35 +313,35 @@ issues ticket transition TICKET_ID --to REFINED --json
 issues ticket transition TICKET_ID --to IN_PROGRESS --json
 ```
 
-## Labels
+### Labels
 
 > **Labels are global** — they are not scoped to a project. `issues label list` takes no `--project` flag. Label IDs are the same across all projects.
 
-### List labels
+#### List labels
 
 ```bash
 issues label list --json
 ```
 
-### Create a label
+#### Create a label
 
 ```bash
 issues label create --name "bug" --color "#d73a4a" --json
 ```
 
-### Add a label to a ticket
+#### Add a label to a ticket
 
 ```bash
 issues label add TICKET_ID --label bug --json
 ```
 
-### Remove a label from a ticket
+#### Remove a label from a ticket
 
 ```bash
 issues label remove TICKET_ID --label bug --json
 ```
 
-### Delete a label
+#### Delete a label
 
 ```bash
 issues label delete LABEL_NAME_OR_ID --json
@@ -211,9 +349,9 @@ issues label delete LABEL_NAME_OR_ID --json
 
 Deletes a label entirely. If the label is attached to any tickets, it is automatically removed from them.
 
-## Comments
+### Comments
 
-### Shell Safety: Heredocs for Body Content, Variables for Titles
+#### Shell Safety: Heredocs for Body Content, Variables for Titles
 
 **IMPORTANT:** Backticks inside double-quoted strings are evaluated as shell command substitution. Two argument types need special handling:
 
@@ -238,7 +376,7 @@ issues ticket create --title "$TICKET_TITLE" ...
 
 When possible, write titles without backticks (e.g., "Fix createSession return type") — titles are plain text labels and backtick formatting rarely adds value there.
 
-### Add a comment
+#### Add a comment
 
 ```bash
 issues comment add TICKET_ID --body "$(cat <<'EOF'
@@ -247,7 +385,7 @@ EOF
 )" --json
 ```
 
-### Edit a comment
+#### Edit a comment
 
 ```bash
 issues comment edit COMMENT_ID --body "$(cat <<'EOF'
@@ -256,15 +394,15 @@ EOF
 )" --json
 ```
 
-### Delete a comment
+#### Delete a comment
 
 ```bash
 issues comment delete COMMENT_ID --json
 ```
 
-## Blocking Relationships
+### Blocking Relationships
 
-### Add a blocker
+#### Add a blocker
 
 ```bash
 issues block add --blocker 10 --blocked 42 --project PROJECT --json
@@ -272,29 +410,29 @@ issues block add --blocker 10 --blocked 42 --project PROJECT --json
 
 Note: `--project` is optional if you're in a git repo whose origin matches a known project.
 
-### Remove a blocker
+#### Remove a blocker
 
 ```bash
 issues block remove --blocker 10 --blocked 42 --project PROJECT --json
 ```
 
-## Assignment
+### Assignment
 
-### Assign a ticket
+#### Assign a ticket
 
 ```bash
 issues assign TICKET_ID --user USER_ID --json
 ```
 
-### Unassign a ticket
+#### Unassign a ticket
 
 ```bash
 issues unassign TICKET_ID --json
 ```
 
-## Authentication
+### Authentication
 
-### Login / re-authentication (secure — token never in shell history)
+#### Login / re-authentication (secure — token never in shell history)
 
 ```bash
 gh auth token | issues auth login --pat -
@@ -302,7 +440,7 @@ gh auth token | issues auth login --pat -
 
 Delegates to the already-authenticated `gh` CLI to supply the PAT via stdin. Works for both initial login and re-authentication when a token expires mid-session. Requires `gh` to be authenticated first — run `gh auth login` if needed.
 
-### Auth check with auto-recovery
+#### Auth check with auto-recovery
 
 ```bash
 issues auth whoami || (gh auth token | issues auth login --pat -)
@@ -310,19 +448,19 @@ issues auth whoami || (gh auth token | issues auth login --pat -)
 
 Use this one-liner at the start of a session to verify auth is valid and automatically re-authenticate if it has expired.
 
-### Check current user
+#### Check current user
 
 ```bash
 issues auth whoami
 ```
 
-### Logout
+#### Logout
 
 ```bash
 issues auth logout
 ```
 
-## JSON Output
+### JSON Output
 
 All commands (except `auth`) support a `--json` flag that outputs raw JSON instead of formatted text. Use `--json` when parsing output programmatically.
 
@@ -346,6 +484,8 @@ When `--json` is used:
 - Errors still go to stderr in plain text
 
 **Best practice for agents:** Always use `--json` when invoking `issues` CLI commands. This avoids parsing chalk-formatted terminal output with ANSI escape codes. Parse with `jq` or read the JSON directly.
+
+---
 
 ## Data Model Notes
 
