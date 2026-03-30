@@ -13,6 +13,10 @@ import type { AgentSession } from "../hooks/useAllSessions";
 import type { Session } from "../types";
 import styles from "../styles/agents.module.css";
 
+function storageKey(base: string, projectId?: string): string {
+  return projectId ? `${base}:${projectId}` : base;
+}
+
 interface AgentManagerProps {
   sessions: AgentSession[];
   sessionsLoaded: boolean;
@@ -31,6 +35,13 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
   // hasRestoredRef guards the persist effects from overwriting stored layout data
   // before the deferred restore has had a chance to run (sessions load asynchronously).
   const hasRestoredRef = useRef(false);
+  // currentProjectIdRef: the project ID to use in persist effects.
+  // Updated BEFORE state changes to avoid writing stale data to the wrong project key.
+  const currentProjectIdRef = useRef<string | undefined>(undefined);
+  // prevProjectIdRef: tracks the last project ID that was restored.
+  // undefined = initial restore hasn't run yet.
+  // null = last restore was done with no project selected.
+  const prevProjectIdRef = useRef<string | null | undefined>(undefined);
   const [openWindows, setOpenWindows] = useState<TiledWindow[]>([]);
   // Ref kept in sync with openWindows state so callbacks can read current value
   // without listing openWindows in their dep arrays (which would invalidate
@@ -53,9 +64,12 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
   useEffect(() => {
     if (hasRestoredRef.current || !sessionsLoaded) return;
     hasRestoredRef.current = true;
+    // Set refs BEFORE state changes so persist effects always target the correct key.
+    currentProjectIdRef.current = selectedProject?.id;
+    prevProjectIdRef.current = selectedProject?.id ?? null;
     const sessionMap = new Map(sessions.map((s) => [sessionKey(s), s]));
     try {
-      const stored = sessionStorage.getItem("cadence_open_windows");
+      const stored = sessionStorage.getItem(storageKey("cadence_open_windows", selectedProject?.id));
       if (stored) {
         const storedKeys: string[] = JSON.parse(stored);
         const toRestore = storedKeys.flatMap((key) => {
@@ -70,7 +84,7 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
       // ignore storage errors
     }
     try {
-      const stored = sessionStorage.getItem("cadence_minimized_windows");
+      const stored = sessionStorage.getItem(storageKey("cadence_minimized_windows", selectedProject?.id));
       if (stored) {
         const storedKeys: string[] = JSON.parse(stored);
         const liveKeys = new Set(sessions.map((s) => sessionKey(s)));
@@ -82,21 +96,65 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
     }
   }, [sessionsLoaded, sessions, selectedProject?.id, isMobile]);
 
-  // Patch projectId on windows that were restored before selectedProject finished loading.
-  // The restore effect sets hasRestoredRef.current = true and blocks re-runs, so windows
-  // created during the race window (sessions loaded, projects not yet) have projectId: undefined.
+  // Project-switch effect: save/restore per-project window state when selectedProject changes.
   useEffect(() => {
-    if (!selectedProject?.id) return;
-    setOpenWindows((prev) => {
-      if (!prev.some((w) => !w.projectId)) return prev;
-      return prev.map((w) => (w.projectId ? w : { ...w, projectId: selectedProject.id }));
-    });
-  }, [selectedProject?.id]);
+    if (!hasRestoredRef.current) return; // wait for initial restore
+    const newProjectId = selectedProject?.id ?? null;
+    if (prevProjectIdRef.current === newProjectId) return; // no change
+
+    // Capture before updating: used below to detect the initial auto-selection.
+    const prevProjectId = prevProjectIdRef.current;
+    prevProjectIdRef.current = newProjectId;
+    currentProjectIdRef.current = selectedProject?.id;
+
+    const sessionMap = new Map(sessions.map((s) => [sessionKey(s), s]));
+
+    // When transitioning from no-project to the first auto-selected project,
+    // preserve any windows opened via the ?session= URL param (hasAutoOpened).
+    // Subsequent manual project switches always restore from storage (or clear).
+    const isInitialAutoSelect = prevProjectId === null && newProjectId !== null;
+
+    try {
+      const stored = sessionStorage.getItem(storageKey("cadence_open_windows", selectedProject?.id));
+      if (stored) {
+        const storedKeys: string[] = JSON.parse(stored);
+        const toRestore = storedKeys.flatMap((k) => {
+          const s = sessionMap.get(k);
+          if (!s) return [];
+          return [{ key: k, session: s.session, agentName: s.agentName, projectId: selectedProject?.id }];
+        });
+        setOpenWindows(toRestore);
+        if (isMobile && toRestore.length > 0) setMobileView("session");
+        else if (isMobile) setMobileView("list");
+      } else if (!isInitialAutoSelect) {
+        // Only clear on explicit project switches; preserve URL-param-opened windows
+        // on the first auto-selection that happens after the initial restore.
+        setOpenWindows([]);
+        if (isMobile) setMobileView("list");
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const stored = sessionStorage.getItem(storageKey("cadence_minimized_windows", selectedProject?.id));
+      if (stored) {
+        const storedKeys: string[] = JSON.parse(stored);
+        const liveKeys = new Set(sessions.map((s) => sessionKey(s)));
+        const valid = storedKeys.filter((k) => liveKeys.has(k));
+        setMinimizedKeys(new Set(valid));
+      } else if (!isInitialAutoSelect) {
+        setMinimizedKeys(new Set());
+      }
+    } catch {
+      // ignore
+    }
+  }, [selectedProject?.id, sessions, isMobile]);
 
   useEffect(() => {
     if (!hasRestoredRef.current) return;
     try {
-      sessionStorage.setItem("cadence_open_windows", JSON.stringify(openWindows.map((w) => w.key)));
+      sessionStorage.setItem(storageKey("cadence_open_windows", currentProjectIdRef.current), JSON.stringify(openWindows.map((w) => w.key)));
     } catch {
       // ignore storage errors
     }
@@ -105,7 +163,7 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
   useEffect(() => {
     if (!hasRestoredRef.current) return;
     try {
-      sessionStorage.setItem("cadence_minimized_windows", JSON.stringify([...minimizedKeys]));
+      sessionStorage.setItem(storageKey("cadence_minimized_windows", currentProjectIdRef.current), JSON.stringify([...minimizedKeys]));
     } catch {
       // ignore storage errors
     }
@@ -286,9 +344,14 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
               <div className={styles.tilingEmpty} data-testid="tiling-area">
                 <p>Loading sessions…</p>
               </div>
+            ) : selectedProject && filteredSessions.length === 0 && openWindows.length === 0 ? (
+              <div className={styles.tilingEmpty} data-testid="tiling-area">
+                <p>No sessions for {selectedProject.name}.</p>
+              </div>
             ) : (
               <TilingLayout
                 windows={openWindows}
+                projectId={selectedProject?.id}
                 onMinimize={handleMinimize}
                 onTerminated={handleTerminated}
                 onReorder={handleReorder}

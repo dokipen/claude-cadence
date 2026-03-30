@@ -418,8 +418,10 @@ describe("projectId race condition — #532", () => {
     cleanup();
   });
 
-  it("restores windows with the correct projectId when selectedProject loads after sessionsLoaded", async () => {
-    // Session whose name matches the /lead-42/ ticket pattern
+  it("loads project-specific window state when selectedProject loads after sessionsLoaded", async () => {
+    // Race condition: sessions finish loading before the selected project is known.
+    // The initial restore runs with no project (reads global key). When the project
+    // then loads, the project-switch effect fires and restores from the project-scoped key.
     const agentName = "test-agent";
     const sessionId = "sess-lead-42";
     const sessionName = "proj-cuid-lead-42";
@@ -444,8 +446,8 @@ describe("projectId race condition — #532", () => {
 
     const key = `${agentName}:${sessionId}`;
 
-    // Pre-seed sessionStorage as if the window was previously open
-    mockSessionStorage.setItem("cadence_open_windows", JSON.stringify([key]));
+    // Pre-seed project-scoped storage (not the global key) as if the window was open for this project
+    mockSessionStorage.setItem(`cadence_open_windows:${projectId}`, JSON.stringify([key]));
 
     let rerender!: ReturnType<typeof render>["rerender"];
 
@@ -460,7 +462,8 @@ describe("projectId race condition — #532", () => {
 
     expect(capturedWindows).toHaveLength(0);
 
-    // Step 2: Sessions finish loading, but selectedProject is still null (race condition)
+    // Step 2: Sessions finish loading, but selectedProject is still null (race condition).
+    // Initial restore runs with no project: reads global key (empty) → no windows restored.
     await act(async () => {
       rerender(
         <MemoryRouter>
@@ -469,10 +472,9 @@ describe("projectId race condition — #532", () => {
       );
     });
 
-    // The window should be restored now (hasRestoredRef.current = true), but with projectId=undefined
-    expect(capturedWindows.map((w) => w.key)).toContain(key);
+    expect(capturedWindows).toHaveLength(0);
 
-    // Step 3: The project finally loads — this should update the window's projectId
+    // Step 3: The project finally loads — project-switch effect fires, restores from project-scoped key.
     await act(async () => {
       rerender(
         <MemoryRouter>
@@ -485,14 +487,12 @@ describe("projectId race condition — #532", () => {
       );
     });
 
-    // Assert that the restored window has the correct projectId.
-    // With the bug, hasRestoredRef blocks the effect from re-running, so projectId stays undefined.
+    // The window should now be restored from the project-scoped key with the correct projectId.
     const restoredWindow = capturedWindows.find((w) => w.key === key) as
       | { key: string; projectId?: string }
       | undefined;
 
     expect(restoredWindow).toBeDefined();
-    // This assertion FAILS with the current buggy code: projectId is undefined instead of "proj-cuid"
     expect(restoredWindow?.projectId).toBe(projectId);
   });
 });
@@ -631,4 +631,253 @@ describe("AgentManager — mobile layout", () => {
     expect(queryByTestId("mobile-session-view")).not.toBeNull();
   });
 
+});
+
+describe("per-project window state — #564", () => {
+  let mockSessionStorage: ReturnType<typeof makeSessionStorageMock>;
+
+  beforeEach(() => {
+    mockSessionStorage = makeSessionStorageMock();
+    vi.stubGlobal("sessionStorage", mockSessionStorage);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    cleanup();
+  });
+
+  // Helper to build a session with a specific repoUrl
+  const makeSessionWithRepo = (id: string, agentName: string, repoUrl: string): import("../hooks/useAllSessions").AgentSession => ({
+    agentName,
+    session: create(SessionSchema, {
+      id,
+      name: `session-${id}`,
+      agentProfile: "default",
+      state: "running",
+      createdAt: "2024-01-01T00:00:00Z",
+      agentPid: 1234,
+      repoUrl,
+      baseRef: "main",
+      waitingForInput: false,
+    }),
+  });
+
+  // AC#1: Only sessions belonging to the currently selected project are visible
+  it("shows only sessions for the selected project (AC#1)", () => {
+    const repoA = "https://github.com/owner/repo-a";
+    const repoB = "https://github.com/owner/repo-b";
+    const sessA = makeSessionWithRepo("sess-a1", "test-agent", repoA);
+    const sessB = makeSessionWithRepo("sess-b1", "test-agent", repoB);
+
+    const { getAllByTestId } = render(
+      <MemoryRouter>
+        <AgentManager
+          sessions={[sessA, sessB]}
+          sessionsLoaded={true}
+          selectedProject={{ id: "proj-a", name: "Project A", repository: repoA }}
+        />
+      </MemoryRouter>,
+    );
+
+    // Only sessA should be rendered; sessB belongs to a different repo
+    const sessionButtons = getAllByTestId("sidebar-session");
+    expect(sessionButtons).toHaveLength(1);
+    // The rendered button should correspond to sessA's session name
+    expect(sessionButtons[0].textContent).toContain("sess-a1");
+  });
+
+  // AC#2: Switching projects filters session list to new project's sessions
+  it("filters session list when switching between projects (AC#2)", async () => {
+    const repoA = "https://github.com/owner/repo-a";
+    const repoB = "https://github.com/owner/repo-b";
+    const sessA1 = makeSessionWithRepo("sess-a1", "test-agent", repoA);
+    const sessA2 = makeSessionWithRepo("sess-a2", "test-agent", repoA);
+    const sessB1 = makeSessionWithRepo("sess-b1", "test-agent", repoB);
+
+    let rerender!: ReturnType<typeof render>["rerender"];
+
+    await act(async () => {
+      ({ rerender } = render(
+        <MemoryRouter>
+          <AgentManager
+            sessions={[sessA1, sessA2, sessB1]}
+            sessionsLoaded={true}
+            selectedProject={{ id: "proj-a", name: "Project A", repository: repoA }}
+          />
+        </MemoryRouter>,
+      ));
+    });
+
+    // With project A selected, both A sessions should be shown
+    expect(document.querySelectorAll('[data-testid="sidebar-session"]')).toHaveLength(2);
+
+    // Switch to project B
+    await act(async () => {
+      rerender(
+        <MemoryRouter>
+          <AgentManager
+            sessions={[sessA1, sessA2, sessB1]}
+            sessionsLoaded={true}
+            selectedProject={{ id: "proj-b", name: "Project B", repository: repoB }}
+          />
+        </MemoryRouter>,
+      );
+    });
+
+    // Now only project B's session should be shown
+    expect(document.querySelectorAll('[data-testid="sidebar-session"]')).toHaveLength(1);
+  });
+
+  // AC#3 + AC#4: Per-project open window state persisted independently; returning restores it
+  it("restores per-project open windows independently and on project return (AC#3, AC#4)", async () => {
+    const repoA = "https://github.com/owner/repo-a";
+    const repoB = "https://github.com/owner/repo-b";
+    const sessA = makeSessionWithRepo("sess-a1", "test-agent", repoA);
+    const sessB = makeSessionWithRepo("sess-b1", "test-agent", repoB);
+    const keyA = `test-agent:sess-a1`;
+    const keyB = `test-agent:sess-b1`;
+
+    // Pre-seed per-project open window state
+    mockSessionStorage.setItem(`cadence_open_windows:proj-a`, JSON.stringify([keyA]));
+    mockSessionStorage.setItem(`cadence_open_windows:proj-b`, JSON.stringify([keyB]));
+
+    let rerender!: ReturnType<typeof render>["rerender"];
+
+    // Mount with project A — initial restore should load keyA
+    await act(async () => {
+      ({ rerender } = render(
+        <MemoryRouter>
+          <AgentManager
+            sessions={[sessA, sessB]}
+            sessionsLoaded={true}
+            selectedProject={{ id: "proj-a", name: "Project A", repository: repoA }}
+          />
+        </MemoryRouter>,
+      ));
+    });
+
+    expect(capturedWindows.map((w) => w.key)).toContain(keyA);
+    expect(capturedWindows.map((w) => w.key)).not.toContain(keyB);
+
+    // Switch to project B — should restore keyB, clear keyA
+    await act(async () => {
+      rerender(
+        <MemoryRouter>
+          <AgentManager
+            sessions={[sessA, sessB]}
+            sessionsLoaded={true}
+            selectedProject={{ id: "proj-b", name: "Project B", repository: repoB }}
+          />
+        </MemoryRouter>,
+      );
+    });
+
+    expect(capturedWindows.map((w) => w.key)).toContain(keyB);
+    expect(capturedWindows.map((w) => w.key)).not.toContain(keyA);
+
+    // Switch back to project A — should restore keyA again (AC#4)
+    await act(async () => {
+      rerender(
+        <MemoryRouter>
+          <AgentManager
+            sessions={[sessA, sessB]}
+            sessionsLoaded={true}
+            selectedProject={{ id: "proj-a", name: "Project A", repository: repoA }}
+          />
+        </MemoryRouter>,
+      );
+    });
+
+    expect(capturedWindows.map((w) => w.key)).toContain(keyA);
+    expect(capturedWindows.map((w) => w.key)).not.toContain(keyB);
+  });
+
+  // AC#3: Per-project minimized state persisted independently
+  it("restores per-project minimized window state independently (AC#3)", async () => {
+    const repoA = "https://github.com/owner/repo-a";
+    const sessA = makeSessionWithRepo("sess-a1", "test-agent", repoA);
+    const keyA = `test-agent:sess-a1`;
+
+    // Pre-seed minimized state for project A
+    mockSessionStorage.setItem(`cadence_minimized_windows:proj-a`, JSON.stringify([keyA]));
+
+    let getAllByTestId!: ReturnType<typeof render>["getAllByTestId"];
+    await act(async () => {
+      ({ getAllByTestId } = render(
+        <MemoryRouter>
+          <AgentManager
+            sessions={[sessA]}
+            sessionsLoaded={true}
+            selectedProject={{ id: "proj-a", name: "Project A", repository: repoA }}
+          />
+        </MemoryRouter>,
+      ));
+    });
+
+    // The session button for sessA should have the minimized CSS class
+    const sessionBtn = getAllByTestId("sidebar-session")[0];
+    expect(sessionBtn.className).toContain("sidebarSessionMinimized");
+  });
+
+  // AC#5: Empty state shown when project has no sessions
+  it("shows empty state message when selected project has no sessions (AC#5)", async () => {
+    const { getByTestId } = render(
+      <MemoryRouter>
+        <AgentManager
+          sessions={[]}
+          sessionsLoaded={true}
+          selectedProject={{ id: "proj-empty", name: "Empty Project", repository: "https://github.com/owner/empty" }}
+        />
+      </MemoryRouter>,
+    );
+
+    const tilingArea = getByTestId("tiling-area");
+    expect(tilingArea.textContent).toContain("No sessions for");
+  });
+
+  // selectedProject → null: switching from a project to no project restores global state
+  it("restores global window state when switching from a project to no project", async () => {
+    const repoA = "https://github.com/owner/repo-a";
+    const sessA = makeSessionWithRepo("sess-a1", "test-agent", repoA);
+    const keyA = "test-agent:sess-a1";
+    const keyGlobal = "test-agent:sess-global";
+    const sessGlobal = makeSessionWithRepo("sess-global", "test-agent", "https://github.com/owner/other");
+
+    // Pre-seed project-scoped key and global key
+    mockSessionStorage.setItem(`cadence_open_windows:proj-a`, JSON.stringify([keyA]));
+    mockSessionStorage.setItem(`cadence_open_windows`, JSON.stringify([keyGlobal]));
+
+    let rerender!: ReturnType<typeof render>["rerender"];
+
+    // Mount with project A — restores keyA
+    await act(async () => {
+      ({ rerender } = render(
+        <MemoryRouter>
+          <AgentManager
+            sessions={[sessA, sessGlobal]}
+            sessionsLoaded={true}
+            selectedProject={{ id: "proj-a", name: "Project A", repository: repoA }}
+          />
+        </MemoryRouter>,
+      ));
+    });
+
+    expect(capturedWindows.map((w) => w.key)).toContain(keyA);
+
+    // Deselect project (null) — project-switch should restore global key
+    await act(async () => {
+      rerender(
+        <MemoryRouter>
+          <AgentManager
+            sessions={[sessA, sessGlobal]}
+            sessionsLoaded={true}
+            selectedProject={null}
+          />
+        </MemoryRouter>,
+      );
+    });
+
+    expect(capturedWindows.map((w) => w.key)).toContain(keyGlobal);
+    expect(capturedWindows.map((w) => w.key)).not.toContain(keyA);
+  });
 });
