@@ -33,8 +33,8 @@ Use these tools when `mcp__issues__*` tools are available. They are faster, requ
 mcp__issues__ticket_get
   id: "<TICKET_CUID>"           # Use id OR number, not both
   number: 42                    # Ticket number (integer)
-  projectId: "<PROJECT_CUID>"   # Required with number; falls back to ISSUES_PROJECT_ID env var
-  projectName: "claude-cadence" # Alternative to projectId; ignored when id is used
+  projectId: "<PROJECT_CUID>"   # Optional with number: falls back to projectName or ISSUES_PROJECT_ID env var; ignored when id is used
+  projectName: "claude-cadence" # Optional with number: resolved to CUID if projectId not provided; ignored when id is used
 ```
 
 #### List tickets
