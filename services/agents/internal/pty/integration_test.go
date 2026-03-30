@@ -444,6 +444,9 @@ func TestServeTerminal_LargeSnapshotReplay(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws/terminal", func(w http.ResponseWriter, r *http.Request) {
 		conn, acceptErr := websocket.Accept(w, r, &websocket.AcceptOptions{
+			// InsecureSkipVerify skips the Origin header check. Safe here because
+			// the listener is bound to 127.0.0.1:0 and dialed within the same
+			// process — not reachable from external hosts, no real TLS bypass.
 			InsecureSkipVerify: true,
 		})
 		if acceptErr != nil {
