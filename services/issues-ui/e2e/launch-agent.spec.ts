@@ -366,7 +366,7 @@ test.describe("ticket detail inline session icons", () => {
               sessions: [
                 {
                   id: "session-inline-test",
-                  name: "lead-2",
+                  name: "e2e-test-project-lead-2",
                   agent_profile: "lead",
                   state: "running",
                   created_at: "2026-03-16T12:00:00Z",
