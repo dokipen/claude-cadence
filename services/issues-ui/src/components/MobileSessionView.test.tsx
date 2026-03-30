@@ -25,24 +25,11 @@ vi.mock("../styles/agents.module.css", () => ({
   },
 }));
 
-// Mock TerminalWindow — it depends on xterm and WebSocket which are unavailable in jsdom
-let capturedOnMinimize: (() => void) | undefined;
-let capturedOnTerminated: (() => void) | undefined;
-vi.mock("./TerminalWindow", () => ({
-  TerminalWindow: ({
-    onMinimize,
-    onTerminated,
-  }: {
-    session: unknown;
-    agentName: string;
-    projectId?: string;
-    onMinimize: () => void;
-    onTerminated: () => void;
-  }) => {
-    capturedOnMinimize = onMinimize;
-    capturedOnTerminated = onTerminated;
-    return <div data-testid="terminal-window" />;
-  },
+// Mock Terminal — it depends on xterm and WebSocket which are unavailable in jsdom
+vi.mock("./Terminal", () => ({
+  Terminal: ({ agentName, sessionId }: { agentName: string; sessionId: string }) => (
+    <div data-testid="terminal" data-agent={agentName} data-session={sessionId} />
+  ),
 }));
 
 import { MobileSessionView } from "./MobileSessionView";
@@ -64,32 +51,36 @@ const makeWindow = (id: string, agentName: string): TiledWindow => ({
 });
 
 afterEach(() => {
-  capturedOnMinimize = undefined;
-  capturedOnTerminated = undefined;
   cleanup();
 });
 
 describe("MobileSessionView", () => {
-  it("renders the back button and terminal window", () => {
+  it("renders the back button and terminal", () => {
     const win = makeWindow("sess-1", "test-agent");
     const { getByRole, getByTestId } = render(
-      <MobileSessionView
-        win={win}
-        onBack={vi.fn()}
-        onMinimize={vi.fn()}
-        onTerminated={vi.fn()}
-      />,
+      <MobileSessionView win={win} onBack={vi.fn()} />,
     );
 
     expect(getByRole("button", { name: /back to agent list/i })).not.toBeNull();
-    expect(getByTestId("terminal-window")).not.toBeNull();
+    expect(getByTestId("terminal")).not.toBeNull();
+  });
+
+  it("passes agentName and sessionId to Terminal", () => {
+    const win = makeWindow("sess-1", "test-agent");
+    const { getByTestId } = render(
+      <MobileSessionView win={win} onBack={vi.fn()} />,
+    );
+
+    const terminal = getByTestId("terminal");
+    expect(terminal.dataset.agent).toBe("test-agent");
+    expect(terminal.dataset.session).toBe("sess-1");
   });
 
   it("calls onBack when the back button is clicked", async () => {
     const win = makeWindow("sess-2", "test-agent");
     const onBack = vi.fn();
     const { getByRole } = render(
-      <MobileSessionView win={win} onBack={onBack} onMinimize={vi.fn()} onTerminated={vi.fn()} />,
+      <MobileSessionView win={win} onBack={onBack} />,
     );
 
     await act(async () => {
@@ -97,34 +88,6 @@ describe("MobileSessionView", () => {
     });
 
     expect(onBack).toHaveBeenCalledOnce();
-  });
-
-  it("calls onMinimize with the window key when TerminalWindow calls onMinimize", async () => {
-    const win = makeWindow("sess-3", "test-agent");
-    const onMinimize = vi.fn();
-    render(
-      <MobileSessionView win={win} onBack={vi.fn()} onMinimize={onMinimize} onTerminated={vi.fn()} />,
-    );
-
-    await act(async () => {
-      capturedOnMinimize!();
-    });
-
-    expect(onMinimize).toHaveBeenCalledWith("test-agent:sess-3");
-  });
-
-  it("calls onTerminated with the window key when TerminalWindow calls onTerminated", async () => {
-    const win = makeWindow("sess-4", "test-agent");
-    const onTerminated = vi.fn();
-    render(
-      <MobileSessionView win={win} onBack={vi.fn()} onMinimize={vi.fn()} onTerminated={onTerminated} />,
-    );
-
-    await act(async () => {
-      capturedOnTerminated!();
-    });
-
-    expect(onTerminated).toHaveBeenCalledWith("test-agent:sess-4");
   });
 
   describe("visualViewport height tracking", () => {
@@ -148,7 +111,7 @@ describe("MobileSessionView", () => {
     });
 
     it("sets initial height from visualViewport", () => {
-      const win = makeWindow("sess-5", "test-agent");
+      const win = makeWindow("sess-3", "test-agent");
       const { getByTestId } = render(
         <MobileSessionView win={win} onBack={vi.fn()} onMinimize={vi.fn()} onTerminated={vi.fn()} />,
       );
@@ -158,7 +121,7 @@ describe("MobileSessionView", () => {
     });
 
     it("registers resize and scroll listeners on visualViewport", () => {
-      const win = makeWindow("sess-6", "test-agent");
+      const win = makeWindow("sess-4", "test-agent");
       render(
         <MobileSessionView win={win} onBack={vi.fn()} onMinimize={vi.fn()} onTerminated={vi.fn()} />,
       );
@@ -169,7 +132,7 @@ describe("MobileSessionView", () => {
     });
 
     it("removes both listeners on unmount", () => {
-      const win = makeWindow("sess-7", "test-agent");
+      const win = makeWindow("sess-5", "test-agent");
       const { unmount } = render(
         <MobileSessionView win={win} onBack={vi.fn()} onMinimize={vi.fn()} onTerminated={vi.fn()} />,
       );
@@ -181,7 +144,7 @@ describe("MobileSessionView", () => {
     });
 
     it("updates height when visualViewport fires a resize event", async () => {
-      const win = makeWindow("sess-8", "test-agent");
+      const win = makeWindow("sess-6", "test-agent");
       const { getByTestId } = render(
         <MobileSessionView win={win} onBack={vi.fn()} onMinimize={vi.fn()} onTerminated={vi.fn()} />,
       );
@@ -198,7 +161,7 @@ describe("MobileSessionView", () => {
     });
 
     it("updates height when visualViewport fires a scroll event (iOS keyboard)", async () => {
-      const win = makeWindow("sess-9", "test-agent");
+      const win = makeWindow("sess-7", "test-agent");
       const { getByTestId } = render(
         <MobileSessionView win={win} onBack={vi.fn()} onMinimize={vi.fn()} onTerminated={vi.fn()} />,
       );

@@ -1,16 +1,14 @@
 import { useEffect, useState } from "react";
-import { TerminalWindow } from "./TerminalWindow";
+import { Terminal } from "./Terminal";
 import type { TiledWindow } from "./TilingLayout";
 import styles from "../styles/agents.module.css";
 
 interface MobileSessionViewProps {
   win: TiledWindow;
   onBack: () => void;
-  onMinimize: (key: string) => void;
-  onTerminated: (key: string) => void;
 }
 
-export function MobileSessionView({ win, onBack, onMinimize, onTerminated }: MobileSessionViewProps) {
+export function MobileSessionView({ win, onBack }: MobileSessionViewProps) {
   const [viewportHeight, setViewportHeight] = useState<number>(
     () => window.visualViewport?.height ?? window.innerHeight,
   );
@@ -46,13 +44,7 @@ export function MobileSessionView({ win, onBack, onMinimize, onTerminated }: Mob
         ← Back
       </button>
       <div className={styles.mobileSessionContent}>
-        <TerminalWindow
-          session={win.session}
-          agentName={win.agentName}
-          projectId={win.projectId}
-          onMinimize={() => onMinimize(win.key)}
-          onTerminated={() => onTerminated(win.key)}
-        />
+        <Terminal agentName={win.agentName} sessionId={win.session.id} />
       </div>
     </div>
   );

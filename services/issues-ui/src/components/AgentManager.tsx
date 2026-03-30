@@ -290,8 +290,6 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
         <MobileSessionView
           win={openWindows[openWindows.length - 1]}
           onBack={handleMobileBack}
-          onMinimize={handleMinimize}
-          onTerminated={handleTerminated}
         />
       )}
     </div>

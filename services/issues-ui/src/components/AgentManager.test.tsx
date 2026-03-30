@@ -91,30 +91,14 @@ vi.mock("./TilingLayout", () => ({
   },
 }));
 
-// Capture callbacks from MobileSessionView so mobile tests can invoke them
-let capturedMobileOnMinimize: ((key: string) => void) | undefined;
-let capturedMobileOnTerminated: ((key: string) => void) | undefined;
 vi.mock("./MobileSessionView", () => ({
-  MobileSessionView: ({
-    onMinimize,
-    onTerminated,
-    onBack,
-  }: {
-    onMinimize: (key: string) => void;
-    onTerminated: (key: string) => void;
-    onBack: () => void;
-    win: unknown;
-  }) => {
-    capturedMobileOnMinimize = onMinimize;
-    capturedMobileOnTerminated = onTerminated;
-    return (
-      <div data-testid="mobile-session-view">
-        <button onClick={onBack} aria-label="Back to agent list">
-          ← Back
-        </button>
-      </div>
-    );
-  },
+  MobileSessionView: ({ onBack }: { onBack: () => void; win: unknown }) => (
+    <div data-testid="mobile-session-view">
+      <button onClick={onBack} aria-label="Back to agent list">
+        ← Back
+      </button>
+    </div>
+  ),
 }));
 
 import { MemoryRouter } from "react-router";
@@ -123,8 +107,6 @@ import { AgentManager } from "./AgentManager";
 afterEach(() => {
   capturedOnMinimize = undefined;
   capturedWindows = [];
-  capturedMobileOnMinimize = undefined;
-  capturedMobileOnTerminated = undefined;
   capturedRepoUrl = undefined;
   mockOptimisticAddSession.mockReset();
   cleanup();
@@ -636,33 +618,6 @@ describe("AgentManager — mobile layout", () => {
     expect(queryByTestId("mobile-session-view")).toBeNull();
   });
 
-  it("returns to list view when a window is minimized on mobile", async () => {
-    const agentName = "test-agent";
-    const sessionId = "sess-m5";
-    const sessions = [makeSession(sessionId, agentName)];
-    const expectedKey = `${agentName}:${sessionId}`;
-
-    const { queryByTestId, getAllByTestId } = render(
-      <MemoryRouter><AgentManager sessions={sessions} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
-    );
-
-    // Open a session → goes to session view
-    await act(async () => {
-      fireEvent.click(getAllByTestId("sidebar-session")[0]);
-    });
-
-    // Verify we're in session view
-    expect(queryByTestId("mobile-session-view")).not.toBeNull();
-
-    // Minimize via the captured MobileSessionView callback
-    await act(async () => {
-      capturedMobileOnMinimize!(expectedKey);
-    });
-
-    // Should be back in list view
-    expect(queryByTestId("mobile-session-view")).toBeNull();
-  });
-
   it("switches to session view when a session is launched on mobile", async () => {
     const { queryByTestId, getByTestId } = render(
       <MemoryRouter><AgentManager sessions={[]} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
@@ -676,29 +631,4 @@ describe("AgentManager — mobile layout", () => {
     expect(queryByTestId("mobile-session-view")).not.toBeNull();
   });
 
-  it("returns to list view when a session is terminated on mobile", async () => {
-    const agentName = "test-agent";
-    const sessionId = "sess-m6";
-    const sessions = [makeSession(sessionId, agentName)];
-    const expectedKey = `${agentName}:${sessionId}`;
-
-    const { queryByTestId, getAllByTestId } = render(
-      <MemoryRouter><AgentManager sessions={sessions} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
-    );
-
-    // Open a session → goes to session view
-    await act(async () => {
-      fireEvent.click(getAllByTestId("sidebar-session")[0]);
-    });
-
-    expect(queryByTestId("mobile-session-view")).not.toBeNull();
-
-    // Terminate via the captured MobileSessionView callback
-    await act(async () => {
-      capturedMobileOnTerminated!(expectedKey);
-    });
-
-    // Should be back in list view
-    expect(queryByTestId("mobile-session-view")).toBeNull();
-  });
 });
