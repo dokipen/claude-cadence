@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import React from "react";
-import { render, cleanup } from "@testing-library/react";
+import { render, cleanup, fireEvent, act } from "@testing-library/react";
 import type { AgentProfileEntry } from "../hooks/useAgents";
 
 vi.mock("../api/agentHubClient", () => ({
@@ -238,6 +238,139 @@ describe("AgentLauncher profile filtering", () => {
 
     const profileSelect = getByTestId("profile-select");
     expect(profileSelect).toHaveAttribute("autocomplete", "off");
+  });
+});
+
+describe("AgentLauncher selection stability (issue #568)", () => {
+  it("preserves user selection when profiles reference changes but content is the same (polling)", async () => {
+    const profiles1 = [
+      makeProfileEntry("host-a", "profile-a", "https://github.com/org/repo-a"),
+      makeProfileEntry("host-a", "profile-b", ""),
+    ];
+    mockUseAgents.mockReturnValue({ agents: [], loading: false, error: null });
+    mockUseAgentProfiles.mockReturnValue(profiles1);
+
+    vi.mocked(createSession).mockResolvedValue({ id: "s1" } as never);
+    const onLaunched = vi.fn();
+    const { getByTestId, rerender } = render(
+      <AgentLauncher
+        ticketNumber={1}
+        repoUrl="https://github.com/org/repo-a"
+        onLaunched={onLaunched}
+      />,
+    );
+
+    // User selects the second profile
+    fireEvent.change(getByTestId("profile-select"), { target: { value: "host-a/profile-b" } });
+
+    // Simulate a polling update: new array reference, identical content
+    mockUseAgentProfiles.mockReturnValue([
+      makeProfileEntry("host-a", "profile-a", "https://github.com/org/repo-a"),
+      makeProfileEntry("host-a", "profile-b", ""),
+    ]);
+    rerender(
+      <AgentLauncher
+        ticketNumber={1}
+        repoUrl="https://github.com/org/repo-a"
+        onLaunched={onLaunched}
+      />,
+    );
+
+    // Selection must survive the polling update
+    expect((getByTestId("profile-select") as HTMLSelectElement).value).toBe("host-a/profile-b");
+
+    // Launching must use the user-selected profile, not the default
+    await act(async () => {
+      fireEvent.click(getByTestId("launch-submit"));
+    });
+    expect(vi.mocked(createSession)).toHaveBeenCalledWith(
+      "host-a",
+      "profile-b",
+      expect.any(String),
+      expect.any(Array),
+    );
+  });
+
+  it("resets to first profile when the selected profile goes offline", async () => {
+    mockUseAgents.mockReturnValue({ agents: [], loading: false, error: null });
+    mockUseAgentProfiles.mockReturnValue([
+      makeProfileEntry("host-a", "profile-a", "https://github.com/org/repo-a"),
+      makeProfileEntry("host-a", "profile-b", ""),
+    ]);
+
+    vi.mocked(createSession).mockResolvedValue({ id: "s1" } as never);
+    const onLaunched = vi.fn();
+    const { getByTestId, rerender } = render(
+      <AgentLauncher
+        ticketNumber={1}
+        repoUrl="https://github.com/org/repo-a"
+        onLaunched={onLaunched}
+      />,
+    );
+
+    // User selects profile-b
+    fireEvent.change(getByTestId("profile-select"), { target: { value: "host-a/profile-b" } });
+
+    // profile-b goes offline — only profile-a remains
+    mockUseAgentProfiles.mockReturnValue([
+      makeProfileEntry("host-a", "profile-a", "https://github.com/org/repo-a"),
+    ]);
+    rerender(
+      <AgentLauncher
+        ticketNumber={1}
+        repoUrl="https://github.com/org/repo-a"
+        onLaunched={onLaunched}
+      />,
+    );
+
+    // Single profile now — shows profile-single display, launch uses profile-a
+    await act(async () => {
+      fireEvent.click(getByTestId("launch-submit"));
+    });
+    expect(vi.mocked(createSession)).toHaveBeenCalledWith(
+      "host-a",
+      "profile-a",
+      expect.any(String),
+      expect.any(Array),
+    );
+  });
+
+  it("preserves user selection when a new profile is added (profiles array grows)", async () => {
+    mockUseAgents.mockReturnValue({ agents: [], loading: false, error: null });
+    mockUseAgentProfiles.mockReturnValue([
+      makeProfileEntry("host-a", "profile-a", "https://github.com/org/repo-a"),
+      makeProfileEntry("host-a", "profile-b", ""),
+    ]);
+
+    vi.mocked(createSession).mockResolvedValue({ id: "s1" } as never);
+    const onLaunched = vi.fn();
+    const { getByTestId, rerender } = render(
+      <AgentLauncher
+        ticketNumber={1}
+        repoUrl="https://github.com/org/repo-a"
+        onLaunched={onLaunched}
+      />,
+    );
+
+    // User selects profile-b
+    fireEvent.change(getByTestId("profile-select"), { target: { value: "host-a/profile-b" } });
+
+    // A new agent comes online — profiles array grows
+    mockUseAgentProfiles.mockReturnValue([
+      makeProfileEntry("host-a", "profile-a", "https://github.com/org/repo-a"),
+      makeProfileEntry("host-a", "profile-b", ""),
+      makeProfileEntry("host-b", "profile-c", ""),
+    ]);
+    rerender(
+      <AgentLauncher
+        ticketNumber={1}
+        repoUrl="https://github.com/org/repo-a"
+        onLaunched={onLaunched}
+      />,
+    );
+
+    // profile-b selection must be preserved
+    expect((getByTestId("profile-select") as HTMLSelectElement).value).toBe("host-a/profile-b");
   });
 });
 

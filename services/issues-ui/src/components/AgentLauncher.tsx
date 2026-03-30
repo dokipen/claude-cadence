@@ -33,17 +33,23 @@ export const AgentLauncher = forwardRef<AgentLauncherHandle, AgentLauncherProps>
   const profiles = useAgentProfiles(repoUrl, agents);
   const singleMatch = profiles.length === 1;
 
-  const [selectedIndex, setSelectedIndex] = useState<number>(0);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [launching, setLaunching] = useState(false);
   const launchingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Reset selection when profiles change (agents go online/offline)
+  // Reset selection only when the selected profile is no longer available (agent went offline).
+  // Using the updater form avoids adding selectedKey to the dependency array, which would
+  // cause the effect to re-run on every user selection change and could reset the key.
   useEffect(() => {
-    setSelectedIndex(0);
+    if (profiles.length === 0) return;
+    setSelectedKey((prev) => {
+      const stillPresent = prev !== null && profiles.some((e) => `${e.agent}/${e.profileName}` === prev);
+      return stillPresent ? prev : `${profiles[0].agent}/${profiles[0].profileName}`;
+    });
   }, [profiles]);
 
-  const selected = profiles[selectedIndex] ?? profiles[0];
+  const selected = profiles.find((e) => `${e.agent}/${e.profileName}` === selectedKey) ?? profiles[0];
 
   const handleLaunch = useCallback(async () => {
     if (!selected) return;
@@ -114,16 +120,19 @@ export const AgentLauncher = forwardRef<AgentLauncherHandle, AgentLauncherProps>
           <select
             id="agent-profile-select"
             className={styles.select}
-            value={selectedIndex}
-            onChange={(e) => setSelectedIndex(Number(e.target.value))}
+            value={selectedKey ?? ""}
+            onChange={(e) => setSelectedKey(e.target.value)}
             autoComplete="off"
             data-testid="profile-select"
           >
-            {profiles.map((entry, i) => (
-              <option key={`${entry.agent}-${entry.profileName}`} value={i}>
-                {entry.agent} / {entry.profile.name || entry.profileName}
-              </option>
-            ))}
+            {profiles.map((entry) => {
+              const key = `${entry.agent}/${entry.profileName}`;
+              return (
+                <option key={key} value={key}>
+                  {entry.agent} / {entry.profile.name || entry.profileName}
+                </option>
+              );
+            })}
           </select>
         </div>
       )}
