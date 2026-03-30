@@ -371,35 +371,41 @@ test.describe("vim nocompatible input regression", () => {
   });
 
   /**
-   * Regression test for the nil-writers window introduced by PR #670.
+   * Core regression test for the nil-writers window introduced by PR #670.
    *
-   * React strict mode mounts every component twice in development. On the
-   * terminal page this produces two rapid WebSocket connections to the same
-   * session:
+   * When a terminal relay is already running for a session (relay#1, established
+   * by WS1) and a second browser WebSocket opens for the same session (WS2),
+   * RegisterRelaySession calls oldCancel() to tear down relay#1. This
+   * immediately cancels relay#1's context:
    *
-   *   mount#1  → WS1 opens → hub creates relay#1 → ServeTerminal#1 registers wf1
-   *   unmount#1 (strict-mode) — WS1 stays open briefly
-   *   mount#2  → WS2 opens → hub creates relay#2 → RegisterRelaySession calls
-   *              oldCancel(), immediately cancelling relay#1's context
-   *              → ServeTerminal#1 exits, setting sess.writers = nil
-   *              → before ServeTerminal#2 registers wf2: nil-writers window
+   *   WS1 open → relay#1 starts → ServeTerminal#1 registers wf1
+   *   vim launched and running on relay#1
+   *   WS2 opens → RegisterRelaySession → oldCancel() → relay#1 ctx cancelled
+   *              → ServeTerminal#1 exits → sess.writers = nil
+   *              → nil-writers window before ServeTerminal#2 registers wf2
    *
-   * During the nil-writers window all PTY output goes to the ring buffer but
-   * never reaches the browser. vim is alive and accepting input, but the
-   * browser sees nothing — appearing completely unresponsive.
+   * During the nil-writers window all PTY output (vim screen updates, cursor
+   * movement) goes only to the ring buffer — never to WS2's browser. The
+   * window lasts until relay#2's loopback server is up and ServeTerminal#2
+   * registers its writer, typically 3-10ms. In practice relay#1 can remain
+   * running for arbitrarily long (e.g. if the first browser WS closed without
+   * cancelling the agentd-side relay), meaning any reconnect fires oldCancel
+   * and reproduces the freeze.
    *
-   * The fix (aa6c83a) removes oldCancel() so relay#1 self-terminates via the
-   * writerGen generation check instead, eliminating the gap.
+   * The fix removes oldCancel(): relay#1 self-terminates via the writerGen
+   * generation check once ServeTerminal#2 atomically replaces the writers
+   * entry, eliminating the nil-writers gap.
    *
-   * This test reproduces the scenario: open WS1, wait for relay#1 to settle,
-   * open WS2 simultaneously (while WS1 is still open), close WS1 a moment
-   * later, then verify vim nocompatible receives input on WS2.
+   * Reproduction: pre-launch vim on WS1, let WS1 close (relay#1 stays alive
+   * on agentd), then open WS2 — triggering oldCancel and the nil-writers
+   * window while vim is actively running. Verify that vim responds to input
+   * on WS2 after the relay settles.
    */
-  test("vim nocompatible receives input after strict-mode double-connect", async ({
+  test("vim nocompatible stays responsive when relay reconnects mid-session", async ({
     page,
   }) => {
     const sessionId = await createBashSession(QA_URL!);
-    console.log(`[vim-reconnect] Created session: ${sessionId}`);
+    console.log(`[vim-relay] Created session: ${sessionId}`);
     await waitForRunning(QA_URL!, sessionId);
     await page.goto(`${QA_URL}/`);
 
@@ -407,93 +413,97 @@ test.describe("vim nocompatible input regression", () => {
     const wsScheme = qaOrigin.protocol === "https:" ? "wss" : "ws";
     const wsUrl = `${wsScheme}://${qaOrigin.host}/ws/terminal/${QA_AGENT}/${sessionId}`;
 
-    // WS1 — first mount (React strict-mode: opens but is replaced immediately).
-    console.log(`[vim-reconnect] Opening WS1 (first/discarded connection)`);
-    const term1 = await connectTerminalWS(page, wsUrl, "ttyd1");
-
-    // Let relay#1 settle: ServeTerminal#1 must have registered its writer before
-    // WS2 opens, otherwise WS2 arrives before the relay is established and the
-    // double-connect scenario doesn't apply.
+    // WS1 (bootstrap): launch vim so the agentd relay#1 is established with
+    // vim actively running. Closing WS1 removes the hub-side channel but does
+    // NOT cancel relay#1 on the agentd side — relay#1 keeps running.
+    console.log(`[vim-relay] Opening WS1 (bootstrap) and launching vim`);
+    const ws1 = await connectTerminalWS(page, wsUrl, "ws1");
+    await page.waitForTimeout(500);
+    await ws1.send(resizeFrame(220, 50));
+    await page.waitForTimeout(200);
+    await ws1.clearOutput();
+    await ws1.send(inputFrame("vim -u NONE --cmd 'set nocompatible'\r"));
+    await ws1.waitForOutput("\x1b[?1049h", 20_000);
+    await page.waitForTimeout(500);
+    console.log(`[vim-relay] Vim started on WS1; closing WS1 (relay#1 stays alive on agentd)`);
+    await ws1.close();
+    // Give relay#1 a moment to notice the hub-side channel is gone but keep running.
     await page.waitForTimeout(300);
 
-    // WS2 — second mount (the real connection, while WS1 is still open).
-    // This is the moment that triggers the nil-writers bug: RegisterRelaySession
-    // sees an existing relay and (before the fix) calls oldCancel(), cancelling
-    // relay#1's context before relay#2 has registered its writer.
-    console.log(`[vim-reconnect] Opening WS2 (second/live connection) while WS1 still open`);
-    const term2 = await connectTerminalWS(page, wsUrl, "ttyd2");
+    // WS2: reconnect to the same session while relay#1 is still alive on agentd.
+    // With the bug (oldCancel present): RegisterRelaySession cancels relay#1 →
+    // ServeTerminal#1 exits → writers=nil → nil-writers window until
+    // ServeTerminal#2 starts. Vim output during the window is lost to the ring
+    // buffer only, and if vim's terminal state is mid-update, the session can
+    // appear permanently frozen.
+    // With the fix (no oldCancel): relay#1 self-terminates cleanly; no window.
+    console.log(`[vim-relay] Opening WS2 (triggers oldCancel on unfixed prod)`);
+    const ws2 = await connectTerminalWS(page, wsUrl, "ws2");
 
-    // Close WS1 shortly after — simulating React's strict-mode first-mount cleanup.
-    await page.waitForTimeout(50);
-    await term1.close();
-    console.log(`[vim-reconnect] WS1 closed`);
-
-    // Let WS2's relay settle and replay the ring buffer.
+    // Wait for relay#2 to fully settle (ServeTerminal#2 registered, ring buffer
+    // replayed). On an unfixed build this is the period where writers=nil.
     await page.waitForTimeout(2000);
-
-    await term2.send(resizeFrame(220, 50));
+    await ws2.send(resizeFrame(220, 50));
     await page.waitForTimeout(500);
 
-    // Clear WS2 output before vim launch — ring buffer may contain stale escape
-    // sequences from prior sessions.
-    await term2.clearOutput();
+    console.log(`[vim-relay] Sending 'i' to enter insert mode on WS2`);
+    await ws2.send(inputFrame("i"));
+    await ws2.waitForOutput("-- INSERT --", 8_000);
+    console.log(`[vim-relay] Vim entered insert mode`);
 
-    console.log(`[vim-reconnect] Launching vim nocompatible on WS2`);
-    await term2.send(inputFrame("vim -u NONE --cmd 'set nocompatible'\r"));
-    await term2.waitForOutput("\x1b[?1049h", 20_000);
-    // Give vim time to finish terminal capability negotiation before sending input.
-    await page.waitForTimeout(2000);
-    console.log(`[vim-reconnect] Vim started on WS2`);
+    const tmpFile = `/tmp/vimtest_relay_${sessionId}`;
+    await ws2.send(inputFrame(`VIMTEST_RELAY_OK\x1b:w ${tmpFile}\r:q!\r`));
 
-    await term2.send(inputFrame(`i`));
-    await term2.waitForOutput("-- INSERT --", 5_000);
-    console.log(`[vim-reconnect] Vim entered insert mode`);
+    await ws2.clearOutput();
+    await ws2.waitForOutput("\x1b[?1049l", 8_000);
+    console.log(`[vim-relay] Vim exited`);
 
-    const tmpFile = `/tmp/vimtest_reconnect_${sessionId}`;
-    await term2.send(
-      inputFrame(`VIMTEST_RECONNECT_OK\x1b:w ${tmpFile}\r:q!\r`),
-    );
-
-    await term2.clearOutput();
-    await term2.waitForOutput("\x1b[?1049l", 8_000);
-    console.log(`[vim-reconnect] Vim exited`);
-
-    await term2.clearOutput();
-    await term2.send(inputFrame(`cat ${tmpFile}\r`));
-    const shellOut = await term2.waitForOutput("VIMTEST_RECONNECT_OK", 5_000);
+    await ws2.clearOutput();
+    await ws2.send(inputFrame(`cat ${tmpFile}\r`));
+    const shellOut = await ws2.waitForOutput("VIMTEST_RELAY_OK", 5_000);
     console.log(
-      `[vim-reconnect] File contents: ${JSON.stringify(shellOut.slice(0, 200))}`,
+      `[vim-relay] File contents: ${JSON.stringify(shellOut.slice(0, 200))}`,
     );
 
-    expect(shellOut).toContain("VIMTEST_RECONNECT_OK");
+    expect(shellOut).toContain("VIMTEST_RELAY_OK");
 
-    await term2.close();
+    await ws2.close();
     await fetch(`${QA_URL}/api/v1/agents/${QA_AGENT}/sessions/${sessionId}`, {
       method: "DELETE",
     });
   });
 
   /**
-   * End-to-end UI test: navigate to the agents page, open a session terminal,
-   * and type vim commands through the real xterm.js terminal component.
+   * End-to-end UI regression test for the nil-writers window introduced by PR #670.
    *
-   * This is the most faithful reproduction of the user-reported bug:
-   * - vim is launched via raw WebSocket BEFORE the UI connects, so the PTY is
-   *   already in vim's alternate-screen mode when the React UI opens the terminal
-   * - React strict mode (dev) then mounts Terminal twice → two rapid WebSocket
-   *   connections (the nil-writers scenario) fire while vim is actively running
-   * - xterm.js sends TTY frames with real terminal control sequences (bracketed
-   *   paste queries, cursor-position requests) that exercise the full relay path
+   * This test FAILS on unfixed code (oldCancel present in RegisterRelaySession) and
+   * PASSES on the fix (oldCancel removed, PR #675).
    *
-   * With the nil-writers bug (oldCancel present):
-   *   relay#1 opens → oldCancel fires → relay#1 torn down → ServeTerminal#1
-   *   exits → writers nil → relay#2 opens → nil-writers window during which
-   *   vim output is lost and keystrokes typed into the window are dropped.
+   * Reproduction mechanism (requires the full browser + xterm.js):
+   *   1. vim is pre-launched via a bootstrap raw WS before the UI connects
+   *   2. The test navigates to the agents page and hovers + clicks the session item:
+   *        hover  → mouseenter  → SessionOutputTooltip mounts    → tooltip WS  → relay#0
+   *        click  → terminal mounts                               → WS1         → relay#1
+   *        strict → React strict-mode unmount/remount             → WS2         → relay#2
+   *   3. On unfixed code, relay#1 calls oldCancel(relay#0) and relay#2 calls
+   *      oldCancel(relay#1). Each cancellation tears down the previous ServeTerminal
+   *      before the new one registers its writer → multiple nil-writers windows.
+   *   4. During each window, PTY output goes to the ring buffer only. Each new relay
+   *      replays the entire ring buffer to xterm.js, which responds to the terminal
+   *      capability queries (t_RV/DA2, t_u7/cursor-position) found in the replay.
+   *      These out-of-sequence responses arrive at vim while it is in normal mode
+   *      (no longer expecting them), causing vim to misinterpret them as user input
+   *      and permanently freeze.
+   *
+   * On the fix (no oldCancel):
+   *   relay#0, relay#1, relay#2 run concurrently. writerGen atomically transfers
+   *   sess.writers without a nil gap. The final relay replays the ring buffer once;
+   *   xterm.js receives one coherent replay and vim remains fully responsive.
    *
    * The test intercepts WebSocket frames via Playwright's page.on("websocket")
    * to read terminal output without depending on xterm.js's canvas rendering.
-   * Keyboard input is sent via the xterm.js hidden textarea exactly as a
-   * real user would type.
+   * Keyboard input is sent via the xterm.js hidden textarea exactly as a real
+   * user would type.
    */
   test("vim nocompatible receives keyboard input via React UI (xterm.js)", async ({
     page,
@@ -590,17 +600,29 @@ test.describe("vim nocompatible input regression", () => {
     });
 
     // Click the session in the sidebar to open the terminal.
-    // Use page.evaluate to fire a direct click() without Playwright's simulated
-    // mouse movement: Playwright's sessionBtn.click() hovers before clicking,
-    // which triggers mouseenter → SessionOutputTooltip opens its own WebSocket
-    // to the same session → extra relay goroutines → writer race condition.
+    //
+    // Use the real Playwright .click() (which simulates mouse movement + hover)
+    // to deliberately trigger the mouseenter → SessionOutputTooltip flow:
+    //   hover  → SessionOutputTooltip mounts  → tooltip WS opens  → relay#0
+    //   click  → terminal mounts               → WS1 opens         → relay#1
+    //   strict → terminal unmounts/remounts    → WS1 closes/WS2    → relay#2
+    //
+    // With the bug (oldCancel present in RegisterRelaySession):
+    //   relay#1 fires oldCancel(relay#0) → nil-writers window
+    //   relay#2 fires oldCancel(relay#1) → another nil-writers window
+    //   Each window causes the ring buffer to accumulate output that was
+    //   never delivered live; xterm.js receives the replay and sends terminal
+    //   capability responses that arrive at vim out-of-sequence, freezing it.
+    //
+    // With the fix (oldCancel removed):
+    //   relay#0, relay#1, relay#2 start concurrently; writerGen atomically
+    //   transfers writers from relay#0→#1→#2 without a nil window.
+    //   The final relay's ServeTerminal replays the ring buffer once; xterm.js
+    //   gets a single coherent replay and vim remains responsive.
     const sessionBtn = page.locator(`[data-session-id="${sessionId}"]`);
     await sessionBtn.waitFor({ timeout: 15_000 });
-    await page.evaluate((sid) => {
-      const el = document.querySelector(`[data-session-id="${sid}"]`) as HTMLElement;
-      if (el) el.click();
-    }, sessionId);
-    console.log(`[vim-ui] Clicked session in sidebar`);
+    await sessionBtn.click();
+    console.log(`[vim-ui] Clicked session in sidebar (hover triggers tooltip WS → relay race)`);
 
     // Wait for the terminal container to appear and the overlay to clear.
     await page.waitForSelector('[data-testid="terminal-container"]', {
