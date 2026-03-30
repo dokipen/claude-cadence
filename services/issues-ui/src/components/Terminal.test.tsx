@@ -493,6 +493,53 @@ describe("Terminal", () => {
     });
   });
 
+  // ---------------------------------------------------------------------------
+  // DA1 Device Attributes query filtering (issue #520)
+  // ---------------------------------------------------------------------------
+  describe("DA1 Device Attributes query filtering", () => {
+    function getOnDataCallback() {
+      // term.onData is called once during ws.onopen; extract the registered callback
+      const term = xtermInstances[0] as unknown as { onData: ReturnType<typeof vi.fn> };
+      return term.onData.mock.calls[0][0] as (data: string) => void;
+    }
+
+    it("does not forward ESC[c (DA1 query) to the WebSocket", () => {
+      render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+      const ws = MockWebSocket.instances[0];
+      act(() => { ws.simulateOpen(); });
+
+      ws.send.mockClear();
+      const onData = getOnDataCallback();
+      act(() => { onData("\x1b[c"); });
+
+      expect(ws.send).not.toHaveBeenCalled();
+    });
+
+    it("does not forward ESC[0c (DA1 query variant) to the WebSocket", () => {
+      render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+      const ws = MockWebSocket.instances[0];
+      act(() => { ws.simulateOpen(); });
+
+      ws.send.mockClear();
+      const onData = getOnDataCallback();
+      act(() => { onData("\x1b[0c"); });
+
+      expect(ws.send).not.toHaveBeenCalled();
+    });
+
+    it("still forwards normal keystrokes after DA1 filtering is in place", () => {
+      render(<Terminal agentName="agent-1" sessionId="sess-1" />);
+      const ws = MockWebSocket.instances[0];
+      act(() => { ws.simulateOpen(); });
+
+      ws.send.mockClear();
+      const onData = getOnDataCallback();
+      act(() => { onData("a"); });
+
+      expect(ws.send).toHaveBeenCalledWith("0a");
+    });
+  });
+
   describe("validation guard", () => {
     it("refuses to connect and emits console.warn when agentName is invalid", () => {
       const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
