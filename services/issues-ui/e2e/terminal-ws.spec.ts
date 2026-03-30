@@ -72,25 +72,32 @@ async function setupSessionMock(page: import("@playwright/test").Page) {
     }
   });
   // Mock aggregate sessions endpoint (used by useAllSessions polling)
+  // Include the running session so AgentManager can auto-open the terminal
+  // window when navigated to with the ?session= query param.
+  // The API returns { agents: [{ agent_name, sessions }] } format.
   await page.route("**/api/v1/sessions", (route) => {
     route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ sessions: [] }),
+      body: JSON.stringify({
+        agents: [
+          {
+            agent_name: "mac-mini-1",
+            sessions: [MOCK_RUNNING_SESSION],
+          },
+        ],
+      }),
     });
   });
 }
 
-/** Navigate to the ticket detail agent tab where the terminal renders. */
+/** Navigate to the /agents view with the test session pre-selected. */
 async function navigateToTerminal(page: import("@playwright/test").Page) {
-  await page.goto("/projects/e2e-test-project");
-  await expect(page.getByTestId("kanban-board")).toBeVisible();
-
-  await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
-  await expect(page.getByTestId("ticket-detail")).toBeVisible();
-
-  await page.getByTestId("tab-agent").click();
-  await expect(page.getByTestId("agent-tab-content")).toBeVisible();
+  // The AgentManager at /agents auto-opens a terminal window when
+  // ?session={agentName}:{sessionId} matches a session in the sessions list.
+  await page.goto("/agents?session=mac-mini-1:session-ws-test");
+  await expect(page.getByTestId("agent-manager")).toBeVisible();
+  await expect(page.getByTestId("terminal-wrapper")).toBeVisible();
 }
 
 test.describe("terminal WebSocket diagnostics", () => {

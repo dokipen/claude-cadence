@@ -347,156 +347,38 @@ test.describe("launch agent dialog", () => {
   });
 });
 
-test.describe("ticket detail agent tab", () => {
-  test.beforeEach(async ({ page }) => {
-    await setupAgentMocks(page);
-    await setupSessionMock(page);
-  });
-
-  test("detail page shows Details and Agent tabs", async ({ page }) => {
-    await page.goto("/projects/e2e-test-project");
-    await expect(page.getByTestId("kanban-board")).toBeVisible();
-
-    await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
-    await expect(page.getByTestId("ticket-detail")).toBeVisible();
-
-    await expect(page.getByTestId("tab-details")).toBeVisible();
-    await expect(page.getByTestId("tab-agent")).toBeVisible();
-  });
-
-  test("Agent tab shows inline launch control", async ({ page }) => {
-    await page.goto("/projects/e2e-test-project");
-    await expect(page.getByTestId("kanban-board")).toBeVisible();
-
-    await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
-    await expect(page.getByTestId("ticket-detail")).toBeVisible();
-
-    await page.getByTestId("tab-agent").click();
-    await expect(page.getByTestId("agent-tab-content")).toBeVisible();
-    await expect(page.getByTestId("agent-launcher")).toBeVisible();
-    await expect(page.getByTestId("launch-submit")).toBeVisible();
-  });
-
-  test("switching tabs preserves content", async ({ page }) => {
-    await page.goto("/projects/e2e-test-project");
-    await expect(page.getByTestId("kanban-board")).toBeVisible();
-
-    await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
-    await expect(page.getByTestId("ticket-detail")).toBeVisible();
-
-    // Start on details tab — sidebar should be visible
-    await expect(page.getByTestId("detail-assignee")).toBeVisible();
-
-    // Switch to agent tab
-    await page.getByTestId("tab-agent").click();
-    await expect(page.getByTestId("agent-tab-content")).toBeVisible();
-    await expect(page.getByTestId("detail-assignee")).not.toBeVisible();
-
-    // Switch back to details tab
-    await page.getByTestId("tab-details").click();
-    await expect(page.getByTestId("detail-assignee")).toBeVisible();
-    await expect(page.getByTestId("agent-tab-content")).not.toBeVisible();
-  });
-
-  test("navigating to detail with ?tab=agent opens agent tab", async ({ page }) => {
-    await page.goto("/projects/e2e-test-project");
-    await expect(page.getByTestId("kanban-board")).toBeVisible();
-
-    // First navigate to detail to get a valid ticket ID
-    await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
-    await expect(page.getByTestId("ticket-detail")).toBeVisible();
-
-    const url = page.url();
-    // Navigate to same URL with ?tab=agent
-    await page.goto(url + "?tab=agent");
-    await expect(page.getByTestId("ticket-detail")).toBeVisible();
-    await expect(page.getByTestId("agent-tab-content")).toBeVisible();
-  });
-});
-
-test.describe("ticket detail terminal", () => {
+test.describe("ticket detail inline session icons", () => {
   test.beforeEach(async ({ page }) => {
     await setupAgentMocks(page);
   });
 
-  test("shows terminal when running session exists", async ({ page }) => {
-    await setupSessionMock(page, [MOCK_RUNNING_SESSION]);
-
-    await page.goto("/projects/e2e-test-project");
-    await expect(page.getByTestId("kanban-board")).toBeVisible();
-
-    await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
-    await expect(page.getByTestId("ticket-detail")).toBeVisible();
-
-    await page.getByTestId("tab-agent").click();
-    await expect(page.getByTestId("agent-tab-content")).toBeVisible();
-
-    // Terminal should be rendered (xterm.js container)
-    await expect(page.getByTestId("terminal-wrapper")).toBeVisible();
-    await expect(page.getByTestId("terminal-header")).toBeVisible();
-    await expect(page.getByTestId("destroy-session")).toBeVisible();
-  });
-
-  test("shows launch control when no session exists", async ({ page }) => {
-    await setupSessionMock(page, []);
-
-    await page.goto("/projects/e2e-test-project");
-    await expect(page.getByTestId("kanban-board")).toBeVisible();
-
-    await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
-    await expect(page.getByTestId("ticket-detail")).toBeVisible();
-
-    await page.getByTestId("tab-agent").click();
-    await expect(page.getByTestId("agent-tab-content")).toBeVisible();
-
-    // Should show launcher, not terminal
-    await expect(page.getByTestId("agent-launcher")).toBeVisible();
-    await expect(page.getByTestId("terminal-wrapper")).not.toBeVisible();
-  });
-
-  test("shows terminal when session is stopped", async ({ page }) => {
-    await setupSessionMock(page, [{ ...MOCK_SESSION, state: "stopped" }]);
-
-    await page.goto("/projects/e2e-test-project");
-    await expect(page.getByTestId("kanban-board")).toBeVisible();
-
-    await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
-    await expect(page.getByTestId("ticket-detail")).toBeVisible();
-
-    await page.getByTestId("tab-agent").click();
-    await expect(page.getByTestId("agent-tab-content")).toBeVisible();
-    // Stopped sessions now show the terminal (not the launcher) so users can
-    // review output and resume the session via the Resume button.
-    await expect(page.getByTestId("terminal-wrapper")).toBeVisible();
-    await expect(page.getByTestId("agent-launcher")).not.toBeVisible();
-  });
-
-  test("terminal header shows session name and agent", async ({ page }) => {
-    await setupSessionMock(page, [MOCK_RUNNING_SESSION]);
-
-    await page.goto("/projects/e2e-test-project");
-    await expect(page.getByTestId("kanban-board")).toBeVisible();
-
-    await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
-    await expect(page.getByTestId("ticket-detail")).toBeVisible();
-
-    await page.getByTestId("tab-agent").click();
-    await expect(page.getByTestId("terminal-header")).toBeVisible();
-    await expect(page.getByTestId("terminal-header")).toContainText("lead-2");
-    await expect(page.getByTestId("terminal-header")).toContainText("mac-mini-1");
-  });
-
-  test("destroy session returns to launch control", async ({ page }) => {
-    // Mock sessions list with a running session
-    await setupSessionMock(page, [MOCK_RUNNING_SESSION]);
-
-    // Also mock DELETE for session destroy
-    await page.route("**/api/v1/agents/*/sessions/*", (route) => {
-      if (route.request().method() === "DELETE") {
-        route.fulfill({ status: 204 });
-      } else {
-        route.continue();
-      }
+  test("shows inline session icon when active session exists", async ({ page }) => {
+    // Mock the aggregate sessions endpoint to return a running session for ticket #2 (REFINED).
+    // The API returns { agents: [{ agent_name, sessions }] } format.
+    await page.route("**/api/v1/sessions", (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          agents: [
+            {
+              agent_name: "mac-mini-1",
+              sessions: [
+                {
+                  id: "session-inline-test",
+                  name: "lead-2",
+                  agent_profile: "lead",
+                  state: "running",
+                  created_at: "2026-03-16T12:00:00Z",
+                  agent_pid: 1234,
+                  repo_url: "test-org/test-repo",
+                  base_ref: "main",
+                },
+              ],
+            },
+          ],
+        }),
+      });
     });
 
     await page.goto("/projects/e2e-test-project");
@@ -505,26 +387,24 @@ test.describe("ticket detail terminal", () => {
     await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
     await expect(page.getByTestId("ticket-detail")).toBeVisible();
 
-    await page.getByTestId("tab-agent").click();
-    await expect(page.getByTestId("terminal-wrapper")).toBeVisible();
+    await expect(page.getByTestId("detail-active-session-icons")).toBeVisible();
+  });
 
-    // Now override session list to return empty (session destroyed)
-    await page.route("**/api/v1/agents/*/sessions", (route) => {
-      if (route.request().method() === "GET") {
-        route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({ sessions: [] }),
-        });
-      } else {
-        route.continue();
-      }
+  test("does not show session icon when no active session exists", async ({ page }) => {
+    await page.route("**/api/v1/sessions", (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ agents: [] }),
+      });
     });
 
-    await page.getByTestId("destroy-session").click();
+    await page.goto("/projects/e2e-test-project");
+    await expect(page.getByTestId("kanban-board")).toBeVisible();
 
-    // Should return to the launch control
-    await expect(page.getByTestId("agent-launcher")).toBeVisible();
-    await expect(page.getByTestId("terminal-wrapper")).not.toBeVisible();
+    await page.getByTestId("column-REFINED").getByTestId("ticket-card").click();
+    await expect(page.getByTestId("ticket-detail")).toBeVisible();
+
+    await expect(page.getByTestId("detail-active-session-icons")).not.toBeVisible();
   });
 });
