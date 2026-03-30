@@ -675,4 +675,30 @@ describe("AgentManager — mobile layout", () => {
     // Should be in session view
     expect(queryByTestId("mobile-session-view")).not.toBeNull();
   });
+
+  it("returns to list view when a session is terminated on mobile", async () => {
+    const agentName = "test-agent";
+    const sessionId = "sess-m6";
+    const sessions = [makeSession(sessionId, agentName)];
+    const expectedKey = `${agentName}:${sessionId}`;
+
+    const { queryByTestId, getAllByTestId } = render(
+      <MemoryRouter><AgentManager sessions={sessions} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
+    );
+
+    // Open a session → goes to session view
+    await act(async () => {
+      fireEvent.click(getAllByTestId("sidebar-session")[0]);
+    });
+
+    expect(queryByTestId("mobile-session-view")).not.toBeNull();
+
+    // Terminate via the captured MobileSessionView callback
+    await act(async () => {
+      capturedMobileOnTerminated!(expectedKey);
+    });
+
+    // Should be back in list view
+    expect(queryByTestId("mobile-session-view")).toBeNull();
+  });
 });

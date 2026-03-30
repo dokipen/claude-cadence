@@ -20,7 +20,16 @@ export function MobileSessionView({ win, onBack, onMinimize, onTerminated }: Mob
     if (!vv) return;
     const handleResize = () => setViewportHeight(vv.height);
     vv.addEventListener("resize", handleResize);
-    return () => vv.removeEventListener("resize", handleResize);
+    // iOS Safari fires "scroll" on visualViewport (not "resize") when the
+    // on-screen keyboard appears or disappears.
+    vv.addEventListener("scroll", handleResize);
+    // Sync once immediately in case the viewport changed between initial render
+    // and this effect running.
+    handleResize();
+    return () => {
+      vv.removeEventListener("resize", handleResize);
+      vv.removeEventListener("scroll", handleResize);
+    };
   }, []);
 
   return (

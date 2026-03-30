@@ -157,16 +157,18 @@ describe("MobileSessionView", () => {
       expect(container.style.height).toBe("800px");
     });
 
-    it("registers a resize listener on visualViewport", () => {
+    it("registers resize and scroll listeners on visualViewport", () => {
       const win = makeWindow("sess-6", "test-agent");
       render(
         <MobileSessionView win={win} onBack={vi.fn()} onMinimize={vi.fn()} onTerminated={vi.fn()} />,
       );
 
       expect(mockVisualViewport.addEventListener).toHaveBeenCalledWith("resize", expect.any(Function));
+      // iOS Safari fires "scroll" (not "resize") when the keyboard appears
+      expect(mockVisualViewport.addEventListener).toHaveBeenCalledWith("scroll", expect.any(Function));
     });
 
-    it("removes the resize listener on unmount", () => {
+    it("removes both listeners on unmount", () => {
       const win = makeWindow("sess-7", "test-agent");
       const { unmount } = render(
         <MobileSessionView win={win} onBack={vi.fn()} onMinimize={vi.fn()} onTerminated={vi.fn()} />,
@@ -175,6 +177,7 @@ describe("MobileSessionView", () => {
       unmount();
 
       expect(mockVisualViewport.removeEventListener).toHaveBeenCalledWith("resize", expect.any(Function));
+      expect(mockVisualViewport.removeEventListener).toHaveBeenCalledWith("scroll", expect.any(Function));
     });
 
     it("updates height when visualViewport fires a resize event", async () => {
@@ -193,5 +196,26 @@ describe("MobileSessionView", () => {
       const container = getByTestId("mobile-session-view");
       expect(container.style.height).toBe("500px");
     });
+
+    it("updates height when visualViewport fires a scroll event (iOS keyboard)", async () => {
+      const win = makeWindow("sess-9", "test-agent");
+      const { getByTestId } = render(
+        <MobileSessionView win={win} onBack={vi.fn()} onMinimize={vi.fn()} onTerminated={vi.fn()} />,
+      );
+
+      // Simulate iOS keyboard appearing via scroll event
+      mockVisualViewport.height = 450;
+      const scrollCall = mockVisualViewport.addEventListener.mock.calls.find(
+        ([event]) => event === "scroll",
+      );
+      const scrollHandler = scrollCall![1] as () => void;
+      await act(async () => {
+        scrollHandler();
+      });
+
+      const container = getByTestId("mobile-session-view");
+      expect(container.style.height).toBe("450px");
+    });
   });
 });
+
