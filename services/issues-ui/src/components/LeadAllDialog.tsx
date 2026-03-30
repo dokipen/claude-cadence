@@ -167,7 +167,7 @@ export function LeadAllDialog({
                         onChange={() => handleToggle(key)}
                         data-testid={`profile-checkbox-${key}`}
                       />
-                      {entry.agent} / {entry.profileName}
+                      {entry.agent} / {entry.profile.name || entry.profileName}
                     </label>
                   );
                 })}

@@ -34,12 +34,28 @@
   margin-bottom: 0.25rem;
 }
 
+.titleRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
 .title {
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--text);
-  margin: 0 0 0.75rem;
+  margin: 0;
   line-height: 1.3;
+  flex: 1;
+}
+
+.titleIcons {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding-top: 0.2rem;
+  flex-shrink: 0;
 }
 
 .meta {

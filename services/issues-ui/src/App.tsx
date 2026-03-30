@@ -193,7 +193,7 @@ export function AppShell() {
               : <KanbanBoard projectId={projectId} filters={filters} repoUrl={repoUrl} sessions={activeSessions} />
             }
           />
-          <Route path="/ticket/:id" element={<TicketDetail />} />
+          <Route path="/ticket/:id" element={<TicketDetail sessions={activeSessions} />} />
           <Route path="/*" element={<ProjectRedirect />} />
         </Routes>
       </main>

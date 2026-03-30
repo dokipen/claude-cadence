@@ -25,6 +25,14 @@ export function hasActiveSession(sessions: ActiveSessionInfo[], ticketNumber: nu
   ) ?? null;
 }
 
+export function getActiveSessions(sessions: ActiveSessionInfo[], ticketNumber: number, projectId?: string): ActiveSessionInfo[] {
+  const prefix = projectId ? `${projectId}-` : "";
+  const prefixes = [`${prefix}lead-${ticketNumber}`, `${prefix}refine-${ticketNumber}`, `${prefix}discuss-${ticketNumber}`];
+  return sessions.filter(
+    (s) => prefixes.includes(s.name) && (s.state === "running" || s.state === "creating" || s.state === "destroying")
+  );
+}
+
 export function TicketCard({
   ticket,
   repoUrl,
@@ -66,7 +74,7 @@ export function TicketCard({
       ) {
         navigate(`/agents?session=${activeSession.agentName}:${activeSession.sessionId}`);
       } else {
-        navigate(`/ticket/${ticket.id}?tab=agent`);
+        navigate(`/ticket/${ticket.id}`);
       }
     },
     [navigate, ticket.id, activeSession],

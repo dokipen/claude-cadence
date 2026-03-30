@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
-import type { TicketDetail as TicketDetailType, Project } from "../types";
+import type { TicketDetail as TicketDetailType, Project, ActiveSessionInfo } from "../types";
 
 const mockDetailNavigate = vi.fn();
 
@@ -18,7 +18,6 @@ vi.mock("../hooks/useTicket", () => ({
 const mockNavigateFn = vi.fn();
 vi.mock("react-router", () => ({
   useParams: vi.fn(),
-  useSearchParams: vi.fn(),
   useNavigate: () => mockDetailNavigate,
   Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
     <a href={to}>{children}</a>
@@ -54,26 +53,30 @@ vi.mock("./Markdown", () => ({
   Markdown: ({ children }: { children: string }) => <div>{children}</div>,
 }));
 
-vi.mock("./AgentTab", () => ({
-  AgentTab: () => <div data-testid="agent-tab" />,
+vi.mock("./SessionOutputTooltip", () => ({
+  SessionOutputTooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
+vi.mock("./AnimatedCadenceIcon", () => ({
+  AnimatedCadenceIcon: () => <svg data-testid="animated-icon" />,
 }));
 
 // Mock CSS modules
 vi.mock("../styles/detail.module.css", () => ({ default: {} }));
-vi.mock("../styles/agents.module.css", () => ({ default: {} }));
 
 import { TicketDetail } from "./TicketDetail";
 import { useProjects } from "../hooks/useProjects";
 import { useTicket } from "../hooks/useTicket";
-import { useParams, useSearchParams } from "react-router";
+import { useParams } from "react-router";
 
 const mockUseProjects = useProjects as ReturnType<typeof vi.fn>;
 const mockUseTicket = useTicket as ReturnType<typeof vi.fn>;
 const mockUseParams = useParams as ReturnType<typeof vi.fn>;
-const mockUseSearchParams = useSearchParams as ReturnType<typeof vi.fn>;
 
 const KNOWN_PROJECT: Project = { id: "proj-known", name: "Known Project" };
 const UNKNOWN_PROJECT_ID = "proj-unknown-xyz";
+const KNOWN_PROJECT_TICKET_ID = "ticket-1";
+const KNOWN_PROJECT_TICKET_NUMBER = 42;
 
 function makeTicket(projectId: string): TicketDetailType {
   return {
@@ -103,8 +106,6 @@ beforeEach(() => {
 
   // Default router setup
   mockUseParams.mockReturnValue({ id: "ticket-1" });
-  const setSearchParams = vi.fn();
-  mockUseSearchParams.mockReturnValue([new URLSearchParams(), setSearchParams]);
 });
 
 afterEach(() => {
@@ -203,5 +204,74 @@ describe("TicketDetail project validation (defense-in-depth)", () => {
 
     expect(queryByTestId("navigate")).toBeNull();
     expect(queryByTestId("ticket-detail")).toBeTruthy();
+  });
+});
+
+describe("TicketDetail inline session icons", () => {
+  function setupKnownTicket() {
+    mockUseTicket.mockReturnValue({
+      ticket: makeTicket(KNOWN_PROJECT.id),
+      loading: false,
+      error: null,
+    });
+    mockUseProjects.mockReturnValue({
+      projects: [KNOWN_PROJECT],
+      loading: false,
+      error: null,
+    });
+  }
+
+  it("renders agent icon when there is an active session", () => {
+    setupKnownTicket();
+    const session: ActiveSessionInfo = {
+      name: `${KNOWN_PROJECT.id}-lead-${KNOWN_PROJECT_TICKET_NUMBER}`,
+      state: "running",
+      sessionId: "sess-123",
+      agentName: "lead",
+    };
+    const { getByTestId } = render(<TicketDetail sessions={[session]} />);
+    expect(getByTestId("detail-active-session-icons")).toBeTruthy();
+    expect(getByTestId("animated-icon")).toBeTruthy();
+  });
+
+  it("does not render agent icon when there are no active sessions", () => {
+    setupKnownTicket();
+    const { queryByTestId } = render(<TicketDetail sessions={[]} />);
+    expect(queryByTestId("detail-active-session-icons")).toBeNull();
+  });
+
+  it("renders multiple icons when multiple active sessions exist", () => {
+    setupKnownTicket();
+    const sessions: ActiveSessionInfo[] = [
+      {
+        name: `${KNOWN_PROJECT.id}-lead-${KNOWN_PROJECT_TICKET_NUMBER}`,
+        state: "running",
+        sessionId: "sess-lead",
+        agentName: "lead",
+      },
+      {
+        name: `${KNOWN_PROJECT.id}-refine-${KNOWN_PROJECT_TICKET_NUMBER}`,
+        state: "running",
+        sessionId: "sess-refine",
+        agentName: "refine",
+      },
+    ];
+    const { getByTestId, getAllByTestId } = render(<TicketDetail sessions={sessions} />);
+    expect(getByTestId("detail-active-session-icons")).toBeTruthy();
+    expect(getAllByTestId("animated-icon")).toHaveLength(2);
+  });
+
+  it("does not render icon container for sessions with missing sessionId or agentName", () => {
+    setupKnownTicket();
+    const sessions: ActiveSessionInfo[] = [
+      {
+        name: `${KNOWN_PROJECT.id}-lead-${KNOWN_PROJECT_TICKET_NUMBER}`,
+        state: "running",
+      },
+    ];
+    const { queryByTestId } = render(<TicketDetail sessions={sessions} />);
+    // Sessions without sessionId/agentName are pre-filtered, so no container rendered
+    expect(queryByTestId("detail-active-session-icons")).toBeNull();
+    expect(queryByTestId("animated-icon")).toBeNull();
   });
 });

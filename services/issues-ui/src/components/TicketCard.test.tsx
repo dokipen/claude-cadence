@@ -149,7 +149,7 @@ vi.mock("react-router", () => ({
   useNavigate: () => mockNavigate,
 }));
 
-import { hasActiveSession, TicketCard } from "./TicketCard";
+import { hasActiveSession, getActiveSessions, TicketCard } from "./TicketCard";
 
 afterEach(() => {
   cleanup();
@@ -254,6 +254,80 @@ describe("hasActiveSession", () => {
 
   it("does not match a session from a different project when projectId is provided", () => {
     expect(hasActiveSession([makeSession("other-lead-5", "running")], 5, "myproject")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getActiveSessions — pure function tests (no DOM needed)
+// ---------------------------------------------------------------------------
+
+describe("getActiveSessions", () => {
+  it("returns empty array when no sessions match", () => {
+    expect(getActiveSessions([], 5)).toEqual([]);
+  });
+
+  it("returns empty array when sessions exist but none match the ticket number", () => {
+    const sessions = [
+      makeSession("lead-99", "running"),
+      makeSession("refine-10", "running"),
+    ];
+    expect(getActiveSessions(sessions, 5)).toEqual([]);
+  });
+
+  it("returns all matching running sessions for a ticket", () => {
+    const sessions = [
+      makeSession("lead-5", "running"),
+      makeSession("refine-5", "running"),
+      makeSession("discuss-5", "running"),
+      makeSession("lead-99", "running"),
+    ];
+    const result = getActiveSessions(sessions, 5);
+    expect(result).toHaveLength(3);
+    expect(result.map((s) => s.name)).toEqual(
+      expect.arrayContaining(["lead-5", "refine-5", "discuss-5"]),
+    );
+  });
+
+  it("filters out sessions in non-active states (stopped, error)", () => {
+    const sessions = [
+      makeSession("lead-5", "stopped"),
+      makeSession("refine-5", "error"),
+      makeSession("discuss-5", "running"),
+    ];
+    const result = getActiveSessions(sessions, 5);
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe("discuss-5");
+  });
+
+  it("returns multiple sessions when there are multiple active sessions", () => {
+    const sessions = [
+      makeSession("lead-5", "running", { agentName: "agent1", sessionId: "sess-1" }),
+      makeSession("refine-5", "creating", { agentName: "agent2", sessionId: "sess-2" }),
+    ];
+    const result = getActiveSessions(sessions, 5);
+    expect(result).toHaveLength(2);
+  });
+
+  it("includes sessions with state creating or destroying", () => {
+    const sessions = [
+      makeSession("lead-5", "creating"),
+      makeSession("refine-5", "destroying"),
+    ];
+    const result = getActiveSessions(sessions, 5);
+    expect(result).toHaveLength(2);
+  });
+
+  it("handles projectId prefix correctly", () => {
+    const sessions = [
+      makeSession("myproject-lead-5", "running"),
+      makeSession("myproject-refine-5", "running"),
+      makeSession("lead-5", "running"),
+    ];
+    const result = getActiveSessions(sessions, 5, "myproject");
+    expect(result).toHaveLength(2);
+    expect(result.map((s) => s.name)).toEqual(
+      expect.arrayContaining(["myproject-lead-5", "myproject-refine-5"]),
+    );
   });
 });
 
@@ -476,36 +550,36 @@ describe("TicketCard active-session-logo click navigation", () => {
     expect(mockNavigate).toHaveBeenCalledWith("/agents?session=agent1:sess-xyz");
   });
 
-  it("clicking active-session-logo on BACKLOG ticket without agentName/sessionId falls back to ticket agent tab", () => {
+  it("clicking active-session-logo on BACKLOG ticket without agentName/sessionId falls back to ticket detail", () => {
     const ticket = makeTicket({ state: "BACKLOG", number: 5 });
     const sessions = [makeSession("refine-5", "running")];
     const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
     fireEvent.click(getByTestId("active-session-logo"));
-    expect(mockNavigate).toHaveBeenCalledWith("/ticket/ticket-1?tab=agent");
+    expect(mockNavigate).toHaveBeenCalledWith("/ticket/ticket-1");
   });
 
-  it("clicking active-session-logo on CLOSED ticket without agentName/sessionId falls back to ticket agent tab", () => {
+  it("clicking active-session-logo on CLOSED ticket without agentName/sessionId falls back to ticket detail", () => {
     const ticket = makeTicket({ state: "CLOSED", number: 5 });
     const sessions = [makeSession("discuss-5", "running")];
     const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
     fireEvent.click(getByTestId("active-session-logo"));
-    expect(mockNavigate).toHaveBeenCalledWith("/ticket/ticket-1?tab=agent");
+    expect(mockNavigate).toHaveBeenCalledWith("/ticket/ticket-1");
   });
 
-  it("clicking active-session-logo on REFINED ticket without agentName/sessionId falls back to ticket agent tab", () => {
+  it("clicking active-session-logo on REFINED ticket without agentName/sessionId falls back to ticket detail", () => {
     const ticket = makeTicket({ state: "REFINED", number: 5 });
     const sessions = [makeSession("lead-5", "running")];
     const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
     fireEvent.click(getByTestId("active-session-logo"));
-    expect(mockNavigate).toHaveBeenCalledWith("/ticket/ticket-1?tab=agent");
+    expect(mockNavigate).toHaveBeenCalledWith("/ticket/ticket-1");
   });
 
-  it("clicking active-session-logo on IN_PROGRESS ticket without agentName/sessionId falls back to ticket agent tab", () => {
+  it("clicking active-session-logo on IN_PROGRESS ticket without agentName/sessionId falls back to ticket detail", () => {
     const ticket = makeTicket({ state: "IN_PROGRESS", number: 5 });
     const sessions = [makeSession("lead-5", "running")];
     const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
     fireEvent.click(getByTestId("active-session-logo"));
-    expect(mockNavigate).toHaveBeenCalledWith("/ticket/ticket-1?tab=agent");
+    expect(mockNavigate).toHaveBeenCalledWith("/ticket/ticket-1");
   });
 });
 
