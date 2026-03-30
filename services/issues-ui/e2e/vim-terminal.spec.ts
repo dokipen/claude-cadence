@@ -145,9 +145,13 @@ async function connectTerminalWS(
       ({ t, k }) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const ws = (window as any)[`__${k}WS`] as WebSocket;
-        // Send as binary ArrayBuffer so the hub relay receives MessageBinary.
-        const encoded = new TextEncoder().encode(t);
-        ws.send(encoded.buffer);
+        // Send as a text string, exactly as Terminal.tsx does:
+        //   ws.send(CMD_INPUT + data)
+        // This reproduces the real browser behaviour and exposes the
+        // MessageText relay bug — the hub relays the text frame directly
+        // to agentd, which (before the fix) received malformed frames
+        // that caused vim nocompatible input to be silently dropped.
+        ws.send(t);
       },
       { t: text, k: key },
     );
@@ -215,7 +219,7 @@ async function connectTerminalWS(
 test.describe("vim nocompatible input regression", () => {
   test.skip(!QA_URL, "QA_URL not set — requires full docker-compose QA stack");
 
-  test.setTimeout(60_000); // session startup + vim launch can be slow
+  test.setTimeout(90_000); // session startup + vim launch + capability negotiation delays
 
   /**
    * Core regression test.
@@ -252,11 +256,11 @@ test.describe("vim nocompatible input regression", () => {
     const term = await connectTerminalWS(page, wsUrl);
 
     // Give the WebSocket time to open and receive any initial output.
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(2000);
 
     // Send an initial resize so the PTY knows the terminal dimensions.
     await term.send(resizeFrame(220, 50));
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(500);
 
     // Clear output before launching vim so the ring buffer replay (which may
     // contain \x1b[?1049h from a previous session) doesn't trigger a false
@@ -271,8 +275,10 @@ test.describe("vim nocompatible input regression", () => {
     // disabled the PTY's echo mode.
     console.log(`[vim-test] Waiting for vim to take over terminal...`);
     await term.waitForOutput("\x1b[?1049h", 20_000);
-    // Give vim a moment to finish drawing its initial screen.
-    await page.waitForTimeout(300);
+    // Give vim time to complete terminal capability negotiation (cursor position
+    // queries, terminfo reads). With nocompatible, vim does more negotiation than
+    // compatible mode, and sending input too early causes it to be dropped.
+    await page.waitForTimeout(2000);
     console.log(`[vim-test] Vim started`);
 
     // Write a file from vim to prove it received our keystrokes end-to-end.
@@ -325,9 +331,9 @@ test.describe("vim nocompatible input regression", () => {
     const wsUrl = `${wsScheme}://${qaOrigin.host}/ws/terminal/${QA_AGENT}/${sessionId}`;
     const term = await connectTerminalWS(page, wsUrl);
 
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(2000);
     await term.send(resizeFrame(220, 50));
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(500);
 
     // Clear before launching so ring buffer replay doesn't fool the detector.
     await term.clearOutput();
@@ -336,7 +342,7 @@ test.describe("vim nocompatible input regression", () => {
     await term.send(inputFrame("vim -u NONE\r"));
 
     await term.waitForOutput("\x1b[?1049h", 20_000);
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(2000);
 
     await term.clearOutput();
 
@@ -423,10 +429,10 @@ test.describe("vim nocompatible input regression", () => {
     console.log(`[vim-reconnect] WS1 closed`);
 
     // Let WS2's relay settle and replay the ring buffer.
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(2000);
 
     await term2.send(resizeFrame(220, 50));
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(500);
 
     // Clear WS2 output before vim launch — ring buffer may contain stale escape
     // sequences from prior sessions.
@@ -435,7 +441,8 @@ test.describe("vim nocompatible input regression", () => {
     console.log(`[vim-reconnect] Launching vim nocompatible on WS2`);
     await term2.send(inputFrame("vim -u NONE --cmd 'set nocompatible'\r"));
     await term2.waitForOutput("\x1b[?1049h", 20_000);
-    await page.waitForTimeout(300);
+    // Give vim time to finish terminal capability negotiation before sending input.
+    await page.waitForTimeout(2000);
     console.log(`[vim-reconnect] Vim started on WS2`);
 
     await term2.send(inputFrame(`i`));
