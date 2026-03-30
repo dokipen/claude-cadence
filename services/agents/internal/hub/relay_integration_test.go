@@ -92,10 +92,7 @@ func TestRunTerminalRelay_LargeSnapshotReplay(t *testing.T) {
 			if decodeErr != nil {
 				continue
 			}
-			select {
-			case frameCh <- payload:
-			default:
-			}
+			frameCh <- payload
 		}
 	})
 
@@ -121,6 +118,12 @@ func TestRunTerminalRelay_LargeSnapshotReplay(t *testing.T) {
 	// (DestroySession when the PTY exits). newTestDispatcher provides a real
 	// in-memory Dispatcher; DestroySession will return notFound for our ephemeral
 	// session, which the relay handles gracefully (logs and continues).
+	//
+	// serverConn read limit coverage: runTerminalRelay also calls
+	// serverConn.SetReadLimit inside the loopback /ws/terminal handler (relay.go).
+	// That limit governs large browser→PTY pastes reaching ServeTerminal. It is
+	// exercised here because the relay's internal loopback server accepts a
+	// connection for every invocation of runTerminalRelay.
 	c := &Client{
 		relayCh:    make(map[string]chan []byte),
 		dispatcher: newTestDispatcher(),
