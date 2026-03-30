@@ -11,7 +11,10 @@
     "longDescription": "Thin Codex packaging that reuses Claude Cadence prompts, scripts, and CLAUDE.md as the source of truth.",
     "developerName": "Bob Corsaro",
     "category": "Productivity",
-    "capabilities": ["Interactive", "Write"],
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
     "websiteURL": "https://github.com/dokipen/claude-cadence",
     "defaultPrompt": [
       "Use $lead to implement a ticket with Cadence.",
@@ -19,5 +22,16 @@
       "Use $create-ticket to create a new Cadence ticket."
     ],
     "brandColor": "#2563EB"
+  },
+  "mcpServers": {
+    "issues-mcp": {
+      "command": "node",
+      "args": [
+        "./services/issues-mcp/dist/index.js"
+      ],
+      "env": {
+        "PATH": "$PATH"
+      }
+    }
   }
 }
