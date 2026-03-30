@@ -71,7 +71,7 @@ func NewClient(cfg config.HubConfig, profiles map[string]config.Profile, ttyd co
 		dispatcher: dispatcher,
 		ptyMgr:     mgr,
 		done:       make(chan struct{}),
-		relayCh:    make(map[string]chan []byte),
+		relayCh: make(map[string]chan []byte),
 	}
 }
 
@@ -332,17 +332,15 @@ func (c *Client) writeResponse(ctx context.Context, conn *websocket.Conn, resp *
 }
 
 // RegisterRelaySession creates a buffered input channel for terminal relay
-// frames destined for sessionID. relayCancel is the CancelFunc for the relay
-// goroutine's derived context; it is stored in the cleanup so that hub
-// reconnects tear down the relay when the channel is unregistered.
-// Returns the channel and a cleanup function that removes the registration.
-// The caller must invoke cleanup when the relay session ends.
+// frames destined for sessionID. Returns the channel and a cleanup function
+// that removes the registration. The caller must invoke cleanup when the relay
+// session ends.
 //
 // When a new relay for the same session registers (e.g. React strict-mode
 // double-connect), the old relay's context is NOT cancelled immediately.
 // The old relay's ServeTerminal keeps its writers entry until relay#2's
 // ServeTerminal atomically replaces it via the generation check, eliminating
-// the nil-writers window that caused the PR #670 regression.
+// the nil-writers window that would otherwise cause dropped PTY output.
 func (c *Client) RegisterRelaySession(sessionID string, relayCancel context.CancelFunc) (<-chan []byte, func()) {
 	// Normalize to canonical lowercase UUID form so the key always matches
 	// dispatchBinaryFrame's lookup, which uses uuid.UUID.String().
@@ -353,12 +351,6 @@ func (c *Client) RegisterRelaySession(sessionID string, relayCancel context.Canc
 	}
 	ch := make(chan []byte, terminalRelayChannelBufSize)
 	c.relayChMu.Lock()
-	// Replace the input channel for the session. The old relay goroutine will
-	// self-terminate: its localConn.Read ends when ServeTerminal#2 replaces the
-	// writers entry, and its inputCh is replaced here (new input goes to relay#2).
-	// We do NOT cancel the old relay's context here — doing so would tear down
-	// ServeTerminal#1 before ServeTerminal#2 has registered its writer, creating
-	// a nil-writers window where PTY output is lost to the ring buffer only.
 	c.relayCh[sessionID] = ch
 	c.relayChMu.Unlock()
 	var once sync.Once

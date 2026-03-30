@@ -472,4 +472,204 @@ test.describe("vim nocompatible input regression", () => {
       method: "DELETE",
     });
   });
+
+  /**
+   * End-to-end UI test: navigate to the agents page, open a session terminal,
+   * and type vim commands through the real xterm.js terminal component.
+   *
+   * This is the most faithful reproduction of the user-reported bug:
+   * - vim is launched via raw WebSocket BEFORE the UI connects, so the PTY is
+   *   already in vim's alternate-screen mode when the React UI opens the terminal
+   * - React strict mode (dev) then mounts Terminal twice → two rapid WebSocket
+   *   connections (the nil-writers scenario) fire while vim is actively running
+   * - xterm.js sends TTY frames with real terminal control sequences (bracketed
+   *   paste queries, cursor-position requests) that exercise the full relay path
+   *
+   * With the nil-writers bug (oldCancel present):
+   *   relay#1 opens → oldCancel fires → relay#1 torn down → ServeTerminal#1
+   *   exits → writers nil → relay#2 opens → nil-writers window during which
+   *   vim output is lost and keystrokes typed into the window are dropped.
+   *
+   * The test intercepts WebSocket frames via Playwright's page.on("websocket")
+   * to read terminal output without depending on xterm.js's canvas rendering.
+   * Keyboard input is sent via the xterm.js hidden textarea exactly as a
+   * real user would type.
+   */
+  test("vim nocompatible receives keyboard input via React UI (xterm.js)", async ({
+    page,
+  }) => {
+    const sessionId = await createBashSession(QA_URL!);
+    console.log(`[vim-ui] Created session: ${sessionId}`);
+    await waitForRunning(QA_URL!, sessionId);
+    console.log(`[vim-ui] Session running`);
+
+    // Pre-launch vim via raw WebSocket so the PTY is in vim's alternate-screen
+    // mode when the React UI connects. This means the React strict-mode
+    // double-connect fires while vim is already running — the exact condition
+    // that triggers the nil-writers window.
+    {
+      await page.goto(`${QA_URL}/`);
+      const qaOrigin = new URL(QA_URL!);
+      const wsScheme = qaOrigin.protocol === "https:" ? "wss" : "ws";
+      const wsUrl = `${wsScheme}://${qaOrigin.host}/ws/terminal/${QA_AGENT}/${sessionId}`;
+      const bootstrap = await connectTerminalWS(page, wsUrl, "bootstrap");
+      await page.waitForTimeout(1000);
+      await bootstrap.send(resizeFrame(220, 50));
+      await page.waitForTimeout(200);
+      await bootstrap.clearOutput();
+      await bootstrap.send(inputFrame("vim -u NONE --cmd 'set nocompatible'\r"));
+      console.log(`[vim-ui] Waiting for vim to start in bootstrap connection...`);
+      await bootstrap.waitForOutput("\x1b[?1049h", 20_000);
+      await page.waitForTimeout(500); // let vim finish initialization
+      console.log(`[vim-ui] Vim started; closing bootstrap connection`);
+      await bootstrap.close();
+      // Give the relay a moment to settle after the bootstrap WS closes.
+      await page.waitForTimeout(500);
+    }
+
+    // Accumulate terminal output from all WebSocket connections for this session.
+    // React strict mode creates two connections — we capture output from both.
+    let termOutput = "";
+    const clearTerm = () => { termOutput = ""; };
+    const waitForTerm = async (
+      matcher: string | RegExp,
+      timeoutMs = 20_000,
+    ): Promise<string> => {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        if (
+          typeof matcher === "string"
+            ? termOutput.includes(matcher)
+            : matcher.test(termOutput)
+        ) {
+          return termOutput;
+        }
+        await page.waitForTimeout(100);
+      }
+      throw new Error(
+        `Timed out waiting for ${String(matcher)}.\n` +
+          `Last output (${termOutput.length} chars): ${JSON.stringify(termOutput.slice(-500))}`,
+      );
+    };
+
+    // Set up WebSocket interception BEFORE navigating.
+    let totalFrames = 0;
+    page.on("websocket", (ws) => {
+      if (!ws.url().includes(`/ws/terminal/${QA_AGENT}/${sessionId}`)) return;
+      console.log(`[vim-ui] WS opened: ${ws.url()}`);
+      ws.on("framereceived", (frame) => {
+        totalFrames++;
+        try {
+          let buf: Buffer;
+          if (typeof frame.payload === "string") {
+            buf = Buffer.from(frame.payload, "binary");
+          } else {
+            buf = Buffer.from(frame.payload as ArrayBuffer);
+          }
+          // TTY server→client frame: byte 0x30 ('0') + terminal data
+          if (buf.length > 1 && buf[0] === FRAME_DATA) {
+            termOutput += buf.slice(1).toString("utf-8");
+          } else if (buf.length > 0) {
+            console.log(`[vim-ui] Non-data frame: len=${buf.length} first=0x${buf[0].toString(16)}`);
+          }
+        } catch {
+          // ignore decode errors
+        }
+      });
+      ws.on("close", () => {
+        console.log(`[vim-ui] WS closed: ${ws.url()}`);
+      });
+    });
+
+    // Navigate to the agents page. React strict mode will mount Terminal twice
+    // in development, creating two rapid WebSocket connections — the scenario
+    // that triggers the nil-writers window when oldCancel() is present.
+    await page.goto(`${QA_URL}/agents`);
+    await page.waitForSelector('[data-testid="agent-manager"]', {
+      timeout: 15_000,
+    });
+
+    // Click the session in the sidebar to open the terminal.
+    // Use page.evaluate to fire a direct click() without Playwright's simulated
+    // mouse movement: Playwright's sessionBtn.click() hovers before clicking,
+    // which triggers mouseenter → SessionOutputTooltip opens its own WebSocket
+    // to the same session → extra relay goroutines → writer race condition.
+    const sessionBtn = page.locator(`[data-session-id="${sessionId}"]`);
+    await sessionBtn.waitFor({ timeout: 15_000 });
+    await page.evaluate((sid) => {
+      const el = document.querySelector(`[data-session-id="${sid}"]`) as HTMLElement;
+      if (el) el.click();
+    }, sessionId);
+    console.log(`[vim-ui] Clicked session in sidebar`);
+
+    // Wait for the terminal container to appear and the overlay to clear.
+    await page.waitForSelector('[data-testid="terminal-container"]', {
+      timeout: 15_000,
+    });
+    // Wait for the "connecting" overlay to disappear — terminal is live.
+    await page.waitForSelector('[data-testid="terminal-connecting"]', {
+      state: "hidden",
+      timeout: 20_000,
+    });
+    console.log(`[vim-ui] Terminal connected`);
+
+    // Give xterm.js a moment to fully initialise and let vim capability
+    // negotiation complete before sending input.
+    await page.waitForTimeout(2000);
+
+    // Focus the xterm.js hidden textarea inside the terminal tile.
+    // Use the terminal-container testid to avoid matching the read-only preview
+    // textarea in the session output tooltip.
+    const xtermTextarea = page.locator(
+      '[data-testid="terminal-container"] .xterm-helper-textarea',
+    );
+    await xtermTextarea.focus();
+
+    console.log(`[vim-ui] Ring buffer frames received so far: ${totalFrames}, output: ${termOutput.length} chars`);
+    const baselineLen = termOutput.length;
+    console.log(`[vim-ui] Vim already running; entering insert mode`);
+
+    // Enter insert mode. Don't clearTerm - check if ANY new output arrives.
+    await page.keyboard.press("i");
+    console.log(`[vim-ui] Pressed i, waiting for any output change...`);
+    // Wait up to 5 seconds to see if output grows at all
+    let attempts = 0;
+    while (termOutput.length === baselineLen && attempts < 50) {
+      await page.waitForTimeout(100);
+      attempts++;
+    }
+    console.log(`[vim-ui] After pressing i: totalLen=${termOutput.length} baseline=${baselineLen} new=${termOutput.length - baselineLen} chars`);
+    // Now wait for INSERT mode indicator
+    await waitForTerm("-- INSERT --", 8_000);
+    console.log(`[vim-ui] Vim entered insert mode`);
+
+    // Write file content, then save and quit.
+    // Clear output BEFORE typing the save/quit sequence so the exit escape
+    // sequence (\x1b[?1049l) is captured in the clean output buffer — not
+    // cleared by a subsequent clearTerm() call before we can wait for it.
+    const tmpFile = `/tmp/vimtest_ui_${sessionId}`;
+    clearTerm();
+    await page.keyboard.type("VIMTEST_UI_OK", { delay: 30 });
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    await page.keyboard.type(`:w ${tmpFile}\r`, { delay: 30 });
+    await page.keyboard.type(`:q!\r`, { delay: 30 });
+
+    // Wait for vim to exit (alternate screen restore).
+    await waitForTerm("\x1b[?1049l", 8_000);
+    console.log(`[vim-ui] Vim exited`);
+
+    // Verify the file was written by reading it back through the terminal.
+    clearTerm();
+    await page.keyboard.type(`cat ${tmpFile}\r`, { delay: 30 });
+    const out = await waitForTerm("VIMTEST_UI_OK", 5_000);
+    console.log(
+      `[vim-ui] File contents: ${JSON.stringify(out.slice(0, 200))}`,
+    );
+    expect(out).toContain("VIMTEST_UI_OK");
+
+    await fetch(`${QA_URL}/api/v1/agents/${QA_AGENT}/sessions/${sessionId}`, {
+      method: "DELETE",
+    });
+  });
 });

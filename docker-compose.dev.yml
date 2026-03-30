@@ -109,10 +109,6 @@ services:
       retries: 3
 
   agentd:
-    # hostname must match ttyd.advertise_address in config.container.yaml ("agentd:4142").
-    # Docker adds the hostname → container-IP mapping to /etc/hosts so Go's net.Listen
-    # resolves it for binding, and agent-hub resolves it via Docker DNS for proxying.
-    hostname: agentd
     build:
       context: services
       dockerfile: agents/Dockerfile
@@ -125,8 +121,9 @@ services:
       - ${HOME}/.claude:/home/agentd/.claude
     env_file: .env.dev
     healthcheck:
-      # agentd binds the HTTP terminal server to agentd:4142 (the container hostname).
-      test: ["CMD-SHELL", "nc -z agentd 4142 || exit 1"]
+      # Check hub connection via the hub's health endpoint (agentd uses relay path,
+      # no local HTTP server on port 4142 when advertise_address is not set).
+      test: ["CMD-SHELL", "nc -z agent-hub 4200 || exit 1"]
       interval: 10s
       timeout: 3s
       start_period: 15s
