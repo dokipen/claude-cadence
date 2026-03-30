@@ -63,6 +63,7 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
           return [{ key, session: s.session, agentName: s.agentName, projectId: selectedProject?.id }];
         });
         if (toRestore.length > 0) setOpenWindows(toRestore);
+        if (isMobile && toRestore.length > 0) setMobileView("session");
       }
     } catch {
       // ignore storage errors
@@ -78,7 +79,7 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
     } catch {
       // ignore storage errors
     }
-  }, [sessionsLoaded, sessions, selectedProject?.id]);
+  }, [sessionsLoaded, sessions, selectedProject?.id, isMobile]);
 
   // Patch projectId on windows that were restored before selectedProject finished loading.
   // The restore effect sets hasRestoredRef.current = true and blocks re-runs, so windows
@@ -148,7 +149,8 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
         },
       ];
     });
-  }, [initialSessionKey, sessions, selectedProject?.id]);
+    if (isMobile) setMobileView("session");
+  }, [initialSessionKey, sessions, selectedProject?.id, isMobile]);
 
   const openKeys = new Set(openWindows.map((w) => w.key));
 
@@ -177,6 +179,7 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
     if (openWindowsRef.current.some((w) => w.key === key)) {
       setMinimizedKeys((prev) => new Set(prev).add(key));
       setOpenWindows((prev) => prev.filter((w) => w.key !== key));
+      if (isMobile) setMobileView("list");
       return;
     }
 
