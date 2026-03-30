@@ -112,6 +112,11 @@ func (c *Client) runTerminalRelay(
 			slog.Error("relay: local WS accept failed", "session_id", ptySessID, "error", acceptErr)
 			return
 		}
+		// Mirror the client-side read limit. Without this, large browser→PTY
+		// pastes (e.g. base64 payloads) would exceed the default 32 KB limit and
+		// silently kill the ServeTerminal read loop. The loopback listener is
+		// process-internal and not reachable from external hosts.
+		conn.SetReadLimit(int64(ptyMgr.BufferSize() + 1))
 		defer conn.CloseNow()
 		_ = ptyMgr.ServeTerminal(r.Context(), ptySessID, conn)
 	})
@@ -131,6 +136,11 @@ func (c *Client) runTerminalRelay(
 		return
 	}
 	defer localConn.CloseNow()
+
+	// ServeTerminal replays the full ring-buffer snapshot on connect, which can
+	// exceed coder/websocket's default 32 KB read limit. Set the read limit to
+	// the configured buffer size + 1 byte (for the ttyd frame prefix).
+	localConn.SetReadLimit(int64(ptyMgr.BufferSize() + 1))
 
 	slog.Debug("relay: terminal relay started", "session_id", ptySessID)
 
