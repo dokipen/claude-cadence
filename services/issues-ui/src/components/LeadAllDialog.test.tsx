@@ -159,6 +159,19 @@ describe("LeadAllDialog profile list", () => {
     ).toBeTruthy();
     expect(screen.getByTestId("profile-checkbox-agent-2/fast")).toBeTruthy();
   });
+  it("uses profile.name as display label when present instead of profileName dict key", () => {
+    const profileWithDisplayName = [
+      {
+        agent: "worker-agent",
+        profileName: "worker",
+        profile: { name: "My Display Name", type: "claude", repo: undefined },
+      },
+    ] as unknown as AgentProfileEntry[];
+    mockUseAgentProfiles.mockReturnValue(profileWithDisplayName);
+    render(<LeadAllDialog {...defaultProps} open={true} />);
+    // Should show profile.name ("My Display Name"), not profileName dict key ("worker")
+    expect(screen.getByText(/My Display Name/)).toBeTruthy();
+  });
 
   it("shows loading message when agents are loading", () => {
     mockUseAgents.mockReturnValue({ agents: [], loading: true, error: null });
