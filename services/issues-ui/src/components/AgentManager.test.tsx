@@ -10,8 +10,9 @@ import { makeSessionStorageMock } from '../test-utils/makeSessionStorageMock';
 // ---------------------------------------------------------------------------
 // Hoisted mutable state
 // ---------------------------------------------------------------------------
-const { mockOptimisticAddSession } = vi.hoisted(() => ({
+const { mockOptimisticAddSession, mockIsMobile } = vi.hoisted(() => ({
   mockOptimisticAddSession: vi.fn(),
+  mockIsMobile: { value: false },
 }));
 
 // Mock CSS modules
@@ -20,7 +21,17 @@ vi.mock("../styles/agents.module.css", () => ({
     sidebarSessionOpen: "open",
     sidebarSession: "session",
     sidebarSessionMinimized: "sidebarSessionMinimized",
+    mobilePane: "mobilePane",
+    mobilePaneHidden: "mobilePaneHidden",
+    mobileBackButton: "mobileBackButton",
+    tilingContainer: "tilingContainer",
+    agentManagerBody: "agentManagerBody",
   },
+}));
+
+// Mock useIsMobile
+vi.mock("../hooks/useIsMobile", () => ({
+  useIsMobile: () => mockIsMobile.value,
 }));
 
 // Mock SessionsContext
@@ -517,5 +528,137 @@ describe("AgentManager — auto-open on launch", () => {
     const expectedKey = `${FAKE_LAUNCHED_AGENT}:${FAKE_LAUNCHED_SESSION.id}`;
     const matches = capturedWindows.filter((w) => w.key === expectedKey);
     expect(matches).toHaveLength(1);
+  });
+});
+
+describe("AgentManager — mobile layout", () => {
+  beforeEach(() => {
+    mockIsMobile.value = true;
+  });
+
+  afterEach(() => {
+    mockIsMobile.value = false;
+    cleanup();
+  });
+
+  it("shows the session list pane and hides the tiling container by default on mobile", () => {
+    const sessions = [makeSession("sess-m1", "test-agent")];
+    const { container } = render(
+      <MemoryRouter><AgentManager sessions={sessions} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
+    );
+
+    // The mobilePane wrapper (around SessionList) should NOT have mobilePaneHidden
+    const mobilePane = container.querySelector(".mobilePane");
+    expect(mobilePane).not.toBeNull();
+    expect(mobilePane!.className).not.toContain("mobilePaneHidden");
+
+    // The tilingContainer should have mobilePaneHidden (list view = tiling hidden)
+    const tilingContainer = container.querySelector(".tilingContainer");
+    expect(tilingContainer).not.toBeNull();
+    expect(tilingContainer!.className).toContain("mobilePaneHidden");
+  });
+
+  it("switches to session view and hides the list when a session is clicked on mobile", async () => {
+    const sessions = [makeSession("sess-m2", "test-agent")];
+    const { container, getAllByTestId } = render(
+      <MemoryRouter><AgentManager sessions={sessions} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
+    );
+
+    const sessionBtn = getAllByTestId("sidebar-session")[0];
+    await act(async () => {
+      fireEvent.click(sessionBtn);
+    });
+
+    // Now the mobilePane (session list) should be hidden
+    const mobilePane = container.querySelector(".mobilePane");
+    expect(mobilePane!.className).toContain("mobilePaneHidden");
+
+    // And the tiling container should be visible
+    const tilingContainer = container.querySelector(".tilingContainer");
+    expect(tilingContainer!.className).not.toContain("mobilePaneHidden");
+  });
+
+  it("shows the Back button in session view on mobile", async () => {
+    const sessions = [makeSession("sess-m3", "test-agent")];
+    const { getAllByTestId, getByRole } = render(
+      <MemoryRouter><AgentManager sessions={sessions} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
+    );
+
+    const sessionBtn = getAllByTestId("sidebar-session")[0];
+    await act(async () => {
+      fireEvent.click(sessionBtn);
+    });
+
+    const backButton = getByRole("button", { name: /back/i });
+    expect(backButton).not.toBeNull();
+  });
+
+  it("clicking the Back button returns to list view on mobile", async () => {
+    const sessions = [makeSession("sess-m4", "test-agent")];
+    const { container, getAllByTestId, getByRole } = render(
+      <MemoryRouter><AgentManager sessions={sessions} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
+    );
+
+    // Open a session
+    await act(async () => {
+      fireEvent.click(getAllByTestId("sidebar-session")[0]);
+    });
+
+    // Click Back
+    await act(async () => {
+      fireEvent.click(getByRole("button", { name: /back/i }));
+    });
+
+    // Should be back to list view: mobilePane visible, tilingContainer hidden
+    const mobilePane = container.querySelector(".mobilePane");
+    expect(mobilePane!.className).not.toContain("mobilePaneHidden");
+    const tilingContainer = container.querySelector(".tilingContainer");
+    expect(tilingContainer!.className).toContain("mobilePaneHidden");
+  });
+
+  it("returns to list view when a window is minimized on mobile", async () => {
+    const agentName = "test-agent";
+    const sessionId = "sess-m5";
+    const sessions = [makeSession(sessionId, agentName)];
+    const expectedKey = `${agentName}:${sessionId}`;
+
+    const { container, getAllByTestId } = render(
+      <MemoryRouter><AgentManager sessions={sessions} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
+    );
+
+    // Open a session → goes to session view
+    await act(async () => {
+      fireEvent.click(getAllByTestId("sidebar-session")[0]);
+    });
+
+    // Verify we're in session view
+    const tilingContainer = container.querySelector(".tilingContainer");
+    expect(tilingContainer!.className).not.toContain("mobilePaneHidden");
+
+    // Minimize via the captured callback
+    await act(async () => {
+      capturedOnMinimize!(expectedKey);
+    });
+
+    // Should be back in list view
+    const mobilePane = container.querySelector(".mobilePane");
+    expect(mobilePane!.className).not.toContain("mobilePaneHidden");
+    expect(tilingContainer!.className).toContain("mobilePaneHidden");
+  });
+
+  it("switches to session view when a session is launched on mobile", async () => {
+    const { container, getByTestId } = render(
+      <MemoryRouter><AgentManager sessions={[]} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
+    );
+
+    await act(async () => {
+      fireEvent.click(getByTestId("launch-trigger"));
+    });
+
+    // Should be in session view
+    const tilingContainer = container.querySelector(".tilingContainer");
+    expect(tilingContainer!.className).not.toContain("mobilePaneHidden");
+    const mobilePane = container.querySelector(".mobilePane");
+    expect(mobilePane!.className).toContain("mobilePaneHidden");
   });
 });

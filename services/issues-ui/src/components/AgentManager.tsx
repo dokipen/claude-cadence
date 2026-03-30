@@ -6,6 +6,7 @@ import { SessionList, sessionKey } from "./SessionList";
 import { TilingLayout } from "./TilingLayout";
 import { AgentLaunchForm } from "./AgentLaunchForm";
 import { useSessionsContext } from "../hooks/SessionsContext";
+import { useIsMobile } from "../hooks/useIsMobile";
 import type { TiledWindow } from "./TilingLayout";
 import type { AgentSession } from "../hooks/useAllSessions";
 import type { Session } from "../types";
@@ -24,6 +25,8 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
       )
     : sessions;
   const { agents, loading: agentsLoading } = useAgents(selectedProject?.repository);
+  const isMobile = useIsMobile();
+  const [mobileView, setMobileView] = useState<"list" | "session">("list");
   // hasRestoredRef guards the persist effects from overwriting stored layout data
   // before the deferred restore has had a chance to run (sessions load asynchronously).
   const hasRestoredRef = useRef(false);
@@ -164,6 +167,7 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
         if (prev.some((w) => w.key === key)) return prev;
         return [...prev, { key, session: as.session, agentName: as.agentName, projectId: selectedProject?.id }];
       });
+      if (isMobile) setMobileView("session");
       return;
     }
 
@@ -181,12 +185,14 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
       ...prev,
       { key, session: as.session, agentName: as.agentName, projectId: selectedProject?.id },
     ]);
-  }, [minimizedKeys, selectedProject]);
+    if (isMobile) setMobileView("session");
+  }, [minimizedKeys, selectedProject, isMobile]);
 
   const handleMinimize = useCallback((key: string) => {
     setMinimizedKeys((prev) => new Set(prev).add(key));
     setOpenWindows((prev) => prev.filter((w) => w.key !== key));
-  }, []);
+    if (isMobile) setMobileView("list");
+  }, [isMobile]);
 
   const handleTerminated = useCallback((key: string) => {
     setOpenWindows((prev) => prev.filter((w) => w.key !== key));
@@ -231,24 +237,38 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
       if (prev.some((w) => w.key === key)) return prev;
       return [...prev, { key, session, agentName, projectId: selectedProject?.id }];
     });
-  }, [optimisticAddSession, selectedProject?.id]);
+    if (isMobile) setMobileView("session");
+  }, [optimisticAddSession, selectedProject?.id, isMobile]);
 
   const loading = agentsLoading;
+
+  const mobileBackButton = isMobile && mobileView === "session" ? (
+    <button
+      className={styles.mobileBackButton}
+      onClick={() => setMobileView("list")}
+      aria-label="Back to agent list"
+    >
+      ← Back
+    </button>
+  ) : null;
 
   return (
     <div className={styles.agentManager} data-testid="agent-manager">
       <AgentLaunchForm agents={agents} onLaunched={handleLaunched} repoUrl={selectedProject?.repository} />
       <div className={styles.agentManagerBody}>
-        <SessionList
-          agents={agents}
-          sessions={filteredSessions}
-          openKeys={openKeys}
-          minimizedKeys={minimizedKeys}
-          onSessionClick={handleSessionClick}
-          isCollapsed={isCollapsed}
-          onToggle={toggleSidebar}
-        />
-        <div className={styles.tilingContainer}>
+        <div className={`${styles.mobilePane} ${isMobile && mobileView === "session" ? styles.mobilePaneHidden : ""}`}>
+          <SessionList
+            agents={agents}
+            sessions={filteredSessions}
+            openKeys={openKeys}
+            minimizedKeys={minimizedKeys}
+            onSessionClick={handleSessionClick}
+            isCollapsed={isCollapsed}
+            onToggle={toggleSidebar}
+          />
+        </div>
+        <div className={`${styles.tilingContainer} ${isMobile && mobileView === "list" ? styles.mobilePaneHidden : ""}`}>
+          {mobileBackButton}
           {loading && filteredSessions.length === 0 ? (
             <div className={styles.tilingEmpty} data-testid="tiling-area">
               <p>Loading sessions…</p>
