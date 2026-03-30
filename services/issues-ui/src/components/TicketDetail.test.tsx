@@ -261,7 +261,7 @@ describe("TicketDetail inline session icons", () => {
     expect(getAllByTestId("animated-icon")).toHaveLength(2);
   });
 
-  it("does not render icon for sessions with missing sessionId or agentName", () => {
+  it("does not render icon container for sessions with missing sessionId or agentName", () => {
     setupKnownTicket();
     const sessions: ActiveSessionInfo[] = [
       {
@@ -269,9 +269,9 @@ describe("TicketDetail inline session icons", () => {
         state: "running",
       },
     ];
-    const { getByTestId, queryByTestId } = render(<TicketDetail sessions={sessions} />);
-    // The container span should still render (session matches), but no icon inside
-    expect(getByTestId("detail-active-session-icons")).toBeTruthy();
+    const { queryByTestId } = render(<TicketDetail sessions={sessions} />);
+    // Sessions without sessionId/agentName are pre-filtered, so no container rendered
+    expect(queryByTestId("detail-active-session-icons")).toBeNull();
     expect(queryByTestId("animated-icon")).toBeNull();
   });
 });

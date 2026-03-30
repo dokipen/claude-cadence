@@ -155,6 +155,7 @@ export function TicketDetail({ sessions = [] }: TicketDetailProps) {
 
   const stateConfig = STATE_LABELS[ticket.state];
   const activeSessions = getActiveSessions(sessions, ticket.number, ticket.project.id);
+  const displaySessions = activeSessions.filter(s => s.sessionId && s.agentName);
 
   return (
     <div className={styles.container} data-testid="ticket-detail">
@@ -166,14 +167,12 @@ export function TicketDetail({ sessions = [] }: TicketDetailProps) {
         <div className={styles.ticketNumber} data-testid="detail-number">#{ticket.number}</div>
         <div className={styles.titleRow}>
           <h1 className={styles.title} data-testid="detail-title">{ticket.title}</h1>
-          {activeSessions.length > 0 && (
+          {displaySessions.length > 0 && (
             <span className={styles.titleIcons} data-testid="detail-active-session-icons">
-              {activeSessions.map((s) => (
-                s.sessionId && s.agentName ? (
-                  <SessionOutputTooltip key={s.sessionId} session={s}>
-                    <AnimatedCadenceIcon width={20} height={20} />
-                  </SessionOutputTooltip>
-                ) : null
+              {displaySessions.map((s) => (
+                <SessionOutputTooltip key={s.sessionId} session={s}>
+                  <AnimatedCadenceIcon width={20} height={20} />
+                </SessionOutputTooltip>
               ))}
             </span>
           )}
