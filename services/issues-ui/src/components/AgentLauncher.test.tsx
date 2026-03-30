@@ -42,10 +42,11 @@ const makeProfileEntry = (
   agent: string,
   profileName: string,
   repo: string,
+  displayName?: string,
 ): AgentProfileEntry => ({
   agent,
   profileName,
-  profile: { repo } as AgentProfileEntry["profile"],
+  profile: { repo, name: displayName } as AgentProfileEntry["profile"],
 });
 
 afterEach(() => {
@@ -156,6 +157,68 @@ describe("AgentLauncher profile filtering", () => {
     // "profile-other" would appear as "host-a / profile-other" if the hook
     // returned it; asserting against the actual rendered content confirms it is absent
     expect(profileSingle.textContent).not.toContain("profile-other");
+  });
+
+  it("shows profile.name instead of profileName when profile.name is set (single profile)", () => {
+    mockUseAgents.mockReturnValue({ agents: [], loading: false, error: null });
+    mockUseAgentProfiles.mockReturnValue([
+      makeProfileEntry("host-a", "default", "https://github.com/org/repo-a", "My Display Name"),
+    ]);
+
+    const { getByTestId } = render(
+      <AgentLauncher
+        ticketNumber={1}
+        repoUrl="https://github.com/org/repo-a"
+        onLaunched={vi.fn()}
+      />,
+    );
+
+    const profileSingle = getByTestId("profile-single");
+    expect(profileSingle.textContent).toContain("My Display Name");
+    expect(profileSingle.textContent).not.toContain("default");
+  });
+
+  it("shows profile.name in dropdown options when profile.name is set (multi profile)", () => {
+    mockUseAgents.mockReturnValue({ agents: [], loading: false, error: null });
+    mockUseAgentProfiles.mockReturnValue([
+      makeProfileEntry("host-a", "default", "https://github.com/org/repo-a", "Fast Worker"),
+      makeProfileEntry("host-a", "slow", "", "Slow Worker"),
+    ]);
+
+    const { getByTestId } = render(
+      <AgentLauncher
+        ticketNumber={1}
+        repoUrl="https://github.com/org/repo-a"
+        onLaunched={vi.fn()}
+      />,
+    );
+
+    const profileSelect = getByTestId("profile-select");
+    const optionTexts = Array.from(profileSelect.querySelectorAll("option")).map(
+      (o) => o.textContent,
+    );
+    expect(optionTexts.some((t) => t?.includes("Fast Worker"))).toBe(true);
+    expect(optionTexts.some((t) => t?.includes("Slow Worker"))).toBe(true);
+    expect(optionTexts.some((t) => t?.includes("default"))).toBe(false);
+    expect(optionTexts.some((t) => t?.includes("slow"))).toBe(false);
+  });
+
+  it("falls back to profileName when profile.name is absent", () => {
+    mockUseAgents.mockReturnValue({ agents: [], loading: false, error: null });
+    mockUseAgentProfiles.mockReturnValue([
+      makeProfileEntry("host-a", "fallback-key", "https://github.com/org/repo-a"),
+    ]);
+
+    const { getByTestId } = render(
+      <AgentLauncher
+        ticketNumber={1}
+        repoUrl="https://github.com/org/repo-a"
+        onLaunched={vi.fn()}
+      />,
+    );
+
+    const profileSingle = getByTestId("profile-single");
+    expect(profileSingle.textContent).toContain("fallback-key");
   });
 
   it("profile-select has autocomplete=off when multiple profiles are available", () => {

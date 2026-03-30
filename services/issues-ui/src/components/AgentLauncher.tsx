@@ -103,7 +103,7 @@ export const AgentLauncher = forwardRef<AgentLauncherHandle, AgentLauncherProps>
         <div className={styles.profileSingle} data-testid="profile-single">
           <span className={styles.profileLabel}>Agent</span>
           <span className={styles.profileValue}>
-            {selected.agent} / {selected.profileName}
+            {selected.agent} / {selected.profile.name || selected.profileName}
           </span>
         </div>
       ) : (
@@ -121,7 +121,7 @@ export const AgentLauncher = forwardRef<AgentLauncherHandle, AgentLauncherProps>
           >
             {profiles.map((entry, i) => (
               <option key={`${entry.agent}-${entry.profileName}`} value={i}>
-                {entry.agent} / {entry.profileName}
+                {entry.agent} / {entry.profile.name || entry.profileName}
               </option>
             ))}
           </select>
