@@ -384,6 +384,98 @@ describe("sessionStorage persistence", () => {
   });
 });
 
+describe("projectId race condition — #532", () => {
+  let mockSessionStorage: ReturnType<typeof makeSessionStorageMock>;
+
+  beforeEach(() => {
+    mockSessionStorage = makeSessionStorageMock();
+    vi.stubGlobal("sessionStorage", mockSessionStorage);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    cleanup();
+  });
+
+  it("restores windows with the correct projectId when selectedProject loads after sessionsLoaded", async () => {
+    // Session whose name matches the /lead-42/ ticket pattern
+    const agentName = "test-agent";
+    const sessionId = "sess-lead-42";
+    const sessionName = "proj-cuid-lead-42";
+    const projectId = "proj-cuid";
+
+    const sessions: AgentSession[] = [
+      {
+        agentName,
+        session: create(SessionSchema, {
+          id: sessionId,
+          name: sessionName,
+          agentProfile: "default",
+          state: "running",
+          createdAt: "2024-01-01T00:00:00Z",
+          agentPid: 1234,
+          repoUrl: "https://github.com/example/repo",
+          baseRef: "main",
+          waitingForInput: false,
+        }),
+      },
+    ];
+
+    const key = `${agentName}:${sessionId}`;
+
+    // Pre-seed sessionStorage as if the window was previously open
+    mockSessionStorage.setItem("cadence_open_windows", JSON.stringify([key]));
+
+    let rerender!: ReturnType<typeof render>["rerender"];
+
+    // Step 1: Mount with sessionsLoaded=false and no project — restore effect is blocked
+    await act(async () => {
+      ({ rerender } = render(
+        <MemoryRouter>
+          <AgentManager sessions={[]} sessionsLoaded={false} selectedProject={null} />
+        </MemoryRouter>,
+      ));
+    });
+
+    expect(capturedWindows).toHaveLength(0);
+
+    // Step 2: Sessions finish loading, but selectedProject is still null (race condition)
+    await act(async () => {
+      rerender(
+        <MemoryRouter>
+          <AgentManager sessions={sessions} sessionsLoaded={true} selectedProject={null} />
+        </MemoryRouter>,
+      );
+    });
+
+    // The window should be restored now (hasRestoredRef.current = true), but with projectId=undefined
+    expect(capturedWindows.map((w) => w.key)).toContain(key);
+
+    // Step 3: The project finally loads — this should update the window's projectId
+    await act(async () => {
+      rerender(
+        <MemoryRouter>
+          <AgentManager
+            sessions={sessions}
+            sessionsLoaded={true}
+            selectedProject={{ id: projectId, name: "My Project" }}
+          />
+        </MemoryRouter>,
+      );
+    });
+
+    // Assert that the restored window has the correct projectId.
+    // With the bug, hasRestoredRef blocks the effect from re-running, so projectId stays undefined.
+    const restoredWindow = capturedWindows.find((w) => w.key === key) as
+      | { key: string; projectId?: string }
+      | undefined;
+
+    expect(restoredWindow).toBeDefined();
+    // This assertion FAILS with the current buggy code: projectId is undefined instead of "proj-cuid"
+    expect(restoredWindow?.projectId).toBe(projectId);
+  });
+});
+
 describe("AgentManager — auto-open on launch", () => {
   it("opens a tiled window for the new session after form submission", async () => {
     const { getByTestId } = render(

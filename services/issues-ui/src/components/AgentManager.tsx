@@ -77,6 +77,17 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
     }
   }, [sessionsLoaded, sessions, selectedProject?.id]);
 
+  // Patch projectId on windows that were restored before selectedProject finished loading.
+  // The restore effect sets hasRestoredRef.current = true and blocks re-runs, so windows
+  // created during the race window (sessions loaded, projects not yet) have projectId: undefined.
+  useEffect(() => {
+    if (!selectedProject?.id) return;
+    setOpenWindows((prev) => {
+      if (!prev.some((w) => !w.projectId)) return prev;
+      return prev.map((w) => (w.projectId ? w : { ...w, projectId: selectedProject.id }));
+    });
+  }, [selectedProject?.id]);
+
   useEffect(() => {
     if (!hasRestoredRef.current) return;
     try {
