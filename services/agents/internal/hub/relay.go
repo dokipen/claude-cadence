@@ -112,6 +112,11 @@ func (c *Client) runTerminalRelay(
 			slog.Error("relay: local WS accept failed", "session_id", ptySessID, "error", acceptErr)
 			return
 		}
+		// Mirror the client-side read limit. Without this, large browser→PTY
+		// pastes (e.g. base64 payloads) would exceed the default 32 KB limit and
+		// silently kill the ServeTerminal read loop. The loopback listener is
+		// process-internal and not reachable from external hosts.
+		conn.SetReadLimit(int64(ptyMgr.BufferSize() + 1))
 		defer conn.CloseNow()
 		_ = ptyMgr.ServeTerminal(r.Context(), ptySessID, conn)
 	})

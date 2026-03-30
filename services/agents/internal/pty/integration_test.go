@@ -486,7 +486,7 @@ func TestServeTerminal_LargeSnapshotReplay(t *testing.T) {
 				maxFrameSize = framePayload
 			}
 		}
-		if totalReceived > 32*1024 {
+		if maxFrameSize > 32*1024 {
 			break
 		}
 	}
