@@ -432,6 +432,13 @@
   margin: 0;
 }
 
+.sidebarSessionWrapper {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  position: relative;
+}
+
 .sidebarSession {
   display: flex;
   align-items: center;
@@ -445,11 +452,37 @@
   cursor: pointer;
   text-align: left;
   font-family: inherit;
+  flex: 1;
 }
 
 .sidebarSession:hover {
   background: rgba(128, 128, 128, 0.08);
   color: var(--text);
+}
+
+.sidebarSessionKillButton {
+  background: none;
+  border: none;
+  color: var(--amber);
+  cursor: pointer;
+  padding: 0 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+  position: absolute;
+  right: 0;
+  height: 100%;
+}
+
+.sidebarSessionWrapper:hover .sidebarSessionKillButton {
+  opacity: 1;
+}
+
+.sidebarSessionKillButton:hover {
+  color: var(--error);
+  background: rgba(128, 128, 128, 0.08);
 }
 
 .sidebarSessionOpen {
