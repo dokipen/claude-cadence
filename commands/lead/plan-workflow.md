@@ -40,7 +40,7 @@ Using the outline from Plan Phase 1, delegate to a `general-purpose` agent to wr
    TIMEOUT_CMD=$(bash "$CADENCE_ROOT/commands/lead/scripts/detect-timeout-cmd.sh")
    "$TIMEOUT_CMD" 600 gh pr checks --watch --fail-fast && gh pr merge --squash --delete-branch
    ```
-   The helper auto-selects `gtimeout` (macOS with GNU coreutils) or `timeout` (Linux).
+   The helper auto-selects `gtimeout` (macOS with GNU coreutils) or `timeout` (Linux). (`--watch` returns immediately if checks are already green.)
 
    - If checks pass: the merge proceeds automatically; continue to Plan Phase 3
    - If checks fail: report the specific failed check(s) to the user and **abort the workflow** — do not create sub-tickets against an unmerged plan doc
