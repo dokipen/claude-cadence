@@ -77,7 +77,7 @@ If the user provided a title as an argument, use it. Ask for anything missing in
 
 ### 2. Show Summary
 
-Present a summary of what will be created. Once the target project is known (configured via `project_id` in `CLAUDE.md`, explicitly specified by the user, or collected in step 1 above), proceed directly to step 3 — do not ask for a general "are you sure?" creation confirmation:
+Present a summary of what will be created. Once the target project is known (configured via `project_id` in `CLAUDE.md`, explicitly specified by the user, or collected in the information-gathering step above), proceed directly to step 3 — do not ask for a general "are you sure?" creation confirmation:
 
 ```
 Creating ticket:
