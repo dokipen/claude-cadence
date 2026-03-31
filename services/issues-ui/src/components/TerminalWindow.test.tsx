@@ -1,19 +1,27 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { forwardRef, useImperativeHandle } from "react";
 import { create } from "@bufbuild/protobuf";
 import { SessionSchema } from "../gen/hub/v1/hub_pb";
+import type { TerminalHandle } from "./Terminal";
 
-// Mock Terminal to avoid xterm dependency — capture props for inspection
-const capturedTerminalProps = vi.hoisted(() => ({
-  onResumeSession: undefined as (() => void) | undefined,
+// Mock Terminal to avoid xterm dependency — capture props for inspection, expose sendInput via ref
+const { capturedTerminalProps, mockSendInput } = vi.hoisted(() => ({
+  capturedTerminalProps: {
+    onResumeSession: undefined as (() => void) | undefined,
+  },
+  mockSendInput: vi.fn(),
 }));
 
 vi.mock("./Terminal", () => ({
-  Terminal: (props: { agentName?: string; sessionId?: string; onResumeSession?: () => void }) => {
-    capturedTerminalProps.onResumeSession = props.onResumeSession;
-    return <div data-testid="terminal" />;
-  },
+  Terminal: forwardRef<TerminalHandle, { agentName?: string; sessionId?: string; onResumeSession?: () => void }>(
+    function MockTerminal(props, ref) {
+      capturedTerminalProps.onResumeSession = props.onResumeSession;
+      useImperativeHandle(ref, () => ({ sendInput: mockSendInput }));
+      return <div data-testid="terminal" />;
+    }
+  ),
 }));
 
 // Mock CSS modules
@@ -60,6 +68,7 @@ const baseSession = create(SessionSchema, {
 describe("TerminalWindow", () => {
   beforeEach(() => {
     mockHubFetch.mockReset();
+    mockSendInput.mockReset();
   });
 
   afterEach(() => {
@@ -777,6 +786,94 @@ describe("handleResumeSession validation guard", () => {
     );
   });
 
+});
+
+// ---------------------------------------------------------------------------
+// Enter and Escape buttons in tile header (#590)
+// ---------------------------------------------------------------------------
+describe("Enter and Escape buttons", () => {
+  beforeEach(() => {
+    mockHubFetch.mockReset();
+    mockSendInput.mockReset();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("renders Enter and Escape buttons in the tile header", () => {
+    render(
+      <TerminalWindow
+        session={baseSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("tile-enter")).toBeDefined();
+    expect(screen.getByTestId("tile-escape")).toBeDefined();
+  });
+
+  it("sends \\r to the terminal when Enter button is clicked", () => {
+    render(
+      <TerminalWindow
+        session={baseSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("tile-enter"));
+    expect(mockSendInput).toHaveBeenCalledWith("\r");
+  });
+
+  it("sends \\x1b to the terminal when Escape button is clicked", () => {
+    render(
+      <TerminalWindow
+        session={baseSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("tile-escape"));
+    expect(mockSendInput).toHaveBeenCalledWith("\x1b");
+  });
+
+  it("stops keyboard event propagation on Enter button to prevent header drag-reorder conflict", () => {
+    const onHeaderKeyDown = vi.fn();
+    render(
+      <TerminalWindow
+        session={baseSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+        onHeaderKeyDown={onHeaderKeyDown}
+      />,
+    );
+
+    fireEvent.keyDown(screen.getByTestId("tile-enter"), { key: "Enter" });
+    expect(onHeaderKeyDown).not.toHaveBeenCalled();
+  });
+
+  it("stops keyboard event propagation on Escape button to prevent header drag-reorder conflict", () => {
+    const onHeaderKeyDown = vi.fn();
+    render(
+      <TerminalWindow
+        session={baseSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+        onHeaderKeyDown={onHeaderKeyDown}
+      />,
+    );
+
+    fireEvent.keyDown(screen.getByTestId("tile-escape"), { key: "Escape" });
+    expect(onHeaderKeyDown).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
