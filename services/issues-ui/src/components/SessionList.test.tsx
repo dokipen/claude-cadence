@@ -416,4 +416,59 @@ describe("SessionList", () => {
     expect(deleteSession).toHaveBeenCalledWith("my-agent", "s1");
     expect(onSessionClick).not.toHaveBeenCalled();
   });
+
+  it("pressing Esc on an open session calls onSessionClick", () => {
+    const onSessionClick = vi.fn();
+    const agents = [makeAgent("my-agent")];
+    const session = makeSession("s1", "my-agent");
+    const key = `my-agent:s1`;
+    const { getByTestId } = render(
+      <SessionList
+        {...defaultProps}
+        agents={agents}
+        sessions={[session]}
+        openKeys={new Set([key])}
+        onSessionClick={onSessionClick}
+        isCollapsed={false}
+      />,
+    );
+    fireEvent.keyDown(getByTestId("sidebar-session"), { key: "Escape" });
+    expect(onSessionClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("pressing Esc on a minimized session calls onSessionClick", () => {
+    const onSessionClick = vi.fn();
+    const agents = [makeAgent("my-agent")];
+    const session = makeSession("s1", "my-agent");
+    const key = `my-agent:s1`;
+    const { getByTestId } = render(
+      <SessionList
+        {...defaultProps}
+        agents={agents}
+        sessions={[session]}
+        minimizedKeys={new Set([key])}
+        onSessionClick={onSessionClick}
+        isCollapsed={false}
+      />,
+    );
+    fireEvent.keyDown(getByTestId("sidebar-session"), { key: "Escape" });
+    expect(onSessionClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("pressing Esc on a session that is neither open nor minimized does not call onSessionClick", () => {
+    const onSessionClick = vi.fn();
+    const agents = [makeAgent("my-agent")];
+    const sessions = [makeSession("s1", "my-agent")];
+    const { getByTestId } = render(
+      <SessionList
+        {...defaultProps}
+        agents={agents}
+        sessions={sessions}
+        onSessionClick={onSessionClick}
+        isCollapsed={false}
+      />,
+    );
+    fireEvent.keyDown(getByTestId("sidebar-session"), { key: "Escape" });
+    expect(onSessionClick).not.toHaveBeenCalled();
+  });
 });
