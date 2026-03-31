@@ -80,13 +80,6 @@ When running benchmarks or profiling:
 - String concatenation in loops
 - Synchronous work that could be async
 
-### Green Flags
-- Lazy initialization for expensive resources
-- Proper use of caching
-- Batched operations
-- Pagination for large datasets
-- Resource pooling
-
 ## Output Constraints
 
 **Length budget:** Keep total review output under 60 lines. Exceed only when multiple High-impact findings require detailed reproduction/fix guidance.
