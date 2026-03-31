@@ -317,8 +317,11 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
   const handleMobileClose = useCallback(() => {
     const win = openWindowsRef.current[openWindowsRef.current.length - 1];
     if (!win) return;
-    deleteSession(win.agentName, win.session.id).catch(() => {
-      // Session may already be gone; the next poll will reconcile UI state.
+    deleteSession(win.agentName, win.session.id).catch((err) => {
+      // Session may already be gone (404 absorbed by deleteSession).
+      // Non-404 failures leave the session running on the backend; the next
+      // poll will reconcile UI state.
+      console.warn("[AgentManager] deleteSession failed on mobile close:", err);
     });
     setOpenWindows((prev) => prev.filter((w) => w.key !== win.key));
     setMinimizedKeys((prev) => {
