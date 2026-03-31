@@ -30,7 +30,28 @@ Do not plan, scaffold, implement, or suggest next steps. The purpose of this com
 Detect the configured ticket provider before any operation. Refer to the `ticket-provider` skill for full details and command reference.
 
 ```bash
-PROVIDER_CONFIG=$(run_shell_command skills/ticket-provider/scripts/detect-provider.sh)
+# Resolve cadence plugin root. Checks (in order):
+# 1. CADENCE_ROOT env var (explicit override, e.g. for --plugin-dir installs)
+# 2. Current directory (running directly from the cadence repo)
+# 3. .claude/plugins/cadence/ (locally installed plugin)
+CADENCE_ROOT="${CADENCE_ROOT:-}"
+if [ -z "$CADENCE_ROOT" ] && [ -f ".claude-plugin/plugin.json" ]; then
+  CADENCE_ROOT="$(pwd)"
+fi
+if [ -z "$CADENCE_ROOT" ] && [ -d ".claude/plugins/cadence" ]; then
+  CADENCE_ROOT="$(pwd)/.claude/plugins/cadence"
+fi
+if [ -z "$CADENCE_ROOT" ]; then
+  echo "ERROR: cadence plugin root not found. Set CADENCE_ROOT env var to the plugin directory." >&2
+  exit 1
+fi
+case "$CADENCE_ROOT" in
+  *..*)
+    echo "ERROR: CADENCE_ROOT must not contain path traversal (..)." >&2
+    exit 1
+    ;;
+esac
+PROVIDER_CONFIG=$(run_shell_command "$CADENCE_ROOT/skills/ticket-provider/scripts/detect-provider.sh")
 PROVIDER=$(echo "$PROVIDER_CONFIG" | jq -r '.provider')
 PROJECT=$(echo "$PROVIDER_CONFIG" | jq -r '.project')
 ```

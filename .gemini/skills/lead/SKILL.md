@@ -25,8 +25,34 @@ You are now acting as the technical lead, coordinating specialist agents on this
 
 Detect the provider from the project's `CLAUDE.md` before performing any ticket operations. Refer to the `ticket-provider` skill for full detection logic and command reference.
 
+First, resolve the cadence plugin root (run this once at the start of the workflow and reuse `$CADENCE_ROOT` for all subsequent script calls):
+
 ```bash
-PROVIDER_CONFIG=$(run_shell_command skills/ticket-provider/scripts/detect-provider.sh)
+# Resolve cadence plugin root. Checks (in order):
+# 1. CADENCE_ROOT env var (explicit override, e.g. for --plugin-dir installs)
+# 2. Current directory (running directly from the cadence repo)
+# 3. .claude/plugins/cadence/ (locally installed plugin)
+CADENCE_ROOT="${CADENCE_ROOT:-}"
+if [ -z "$CADENCE_ROOT" ] && [ -f ".claude-plugin/plugin.json" ]; then
+  CADENCE_ROOT="$(pwd)"
+fi
+if [ -z "$CADENCE_ROOT" ] && [ -d ".claude/plugins/cadence" ]; then
+  CADENCE_ROOT="$(pwd)/.claude/plugins/cadence"
+fi
+if [ -z "$CADENCE_ROOT" ]; then
+  echo "ERROR: cadence plugin root not found. Set CADENCE_ROOT env var to the plugin directory." >&2
+  exit 1
+fi
+case "$CADENCE_ROOT" in
+  *..*)
+    echo "ERROR: CADENCE_ROOT must not contain path traversal (..)." >&2
+    exit 1
+    ;;
+esac
+```
+
+```bash
+PROVIDER_CONFIG=$(run_shell_command "$CADENCE_ROOT/skills/ticket-provider/scripts/detect-provider.sh")
 PROVIDER=$(echo "$PROVIDER_CONFIG" | jq -r '.provider')
 PROJECT=$(echo "$PROVIDER_CONFIG" | jq -r '.project')
 ```
@@ -214,7 +240,7 @@ Delegate to specialist agents using sub-agent delegation (e.g., @agent-name). Av
    ```
    Then run `detect-worktree.sh` to evaluate stop conditions:
    ```bash
-   run_shell_command skills/project-ops/scripts/detect-worktree.sh
+   run_shell_command "$CADENCE_ROOT/skills/project-ops/scripts/detect-worktree.sh"
    ```
    This outputs JSON: `{"in_worktree": true|false, "branch": "<name>", "detached_head": true|false}`
 
@@ -408,7 +434,7 @@ Run **both** applicable sub-sections below. A PR that touches both agent-service
 
 1. **Run the QA environment setup script** from the worktree:
    ```bash
-   bash "$WORKTREE_DIR/commands/lead/scripts/start-qa-env.sh" "$WORKTREE_DIR"
+   bash "$CADENCE_ROOT/commands/lead/scripts/start-qa-env.sh" "$WORKTREE_DIR"
    ```
    The script handles `.env.dev` setup, port discovery, and compose stack startup. It prints the QA URL (`http://HOST_IP:PORT/`) and opens it in the browser. If `.env.dev` is missing, the script copies `.env.dev.example` and continues automatically — no manual secret editing needed for UI-only QA.
 
@@ -446,7 +472,7 @@ These services have hard host dependencies (the `claude` CLI, OS service integra
 
 3. **Start the compose stack.** If the Visual/UI section above already ran the `start-qa-env.sh` script, that stack is already running — skip this step and use the URL it printed. Otherwise, run the script now:
    ```bash
-   bash "$WORKTREE_DIR/commands/lead/scripts/start-qa-env.sh" "$WORKTREE_DIR"
+   bash "$CADENCE_ROOT/commands/lead/scripts/start-qa-env.sh" "$WORKTREE_DIR"
    ```
 
 4. Wait for user feedback (user intervention required)
@@ -484,7 +510,7 @@ docker compose -p <PROJECT_NAME> down
    ```
 5. Clean up worktree using the `project-ops` skill's `cleanup-worktree.sh` script (skip if `WORKTREE_PREEXISTING`):
    ```bash
-   run_shell_command skills/project-ops/scripts/cleanup-worktree.sh "$BRANCH"
+   run_shell_command "$CADENCE_ROOT/skills/project-ops/scripts/cleanup-worktree.sh" "$BRANCH"
    ```
 6. **Post completion to issue**:
 
@@ -624,7 +650,7 @@ gh issue edit [CHILD-NUMBER-2] --add-label "milestone:[N]-[slug]"
 ```bash
 # Create label if it doesn't already exist
 MILESTONE_LABEL_NAME="milestone:[N]-[slug]"
-run_shell_command commands/lead/scripts/ensure-milestone-label.sh "$MILESTONE_LABEL_NAME"
+run_shell_command "$CADENCE_ROOT/commands/lead/scripts/ensure-milestone-label.sh" "$MILESTONE_LABEL_NAME"
 
 # Apply to plan ticket
 issues label add [PLAN-TICKET-ID] --label "$MILESTONE_LABEL_NAME" --json

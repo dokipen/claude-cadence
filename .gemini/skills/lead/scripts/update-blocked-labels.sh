@@ -12,7 +12,9 @@
 set -euo pipefail
 
 # Detect ticket provider from the project's CLAUDE.md
-PROVIDER=$(bash skills/ticket-provider/scripts/detect-provider.sh | jq -r '.provider')
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CADENCE_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+PROVIDER=$(bash "$CADENCE_ROOT/skills/ticket-provider/scripts/detect-provider.sh" | jq -r '.provider')
 
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
   echo "Usage: ./scripts/update-blocked-labels.sh"
