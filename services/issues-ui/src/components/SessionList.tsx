@@ -1,8 +1,9 @@
 import type { Agent, ActiveSessionInfo, SessionState } from "../types";
 import type { AgentSession } from "../hooks/useAllSessions";
 import { useSessionsContext } from "../hooks/SessionsContext";
-import { deleteSession } from "../api/agentHubClient";
-import { StopCircle } from "lucide-react";
+import { deleteSession, sendSessionInput } from "../api/agentHubClient";
+import { validateAgentProfile, validateSessionId } from "../utils/validateSession";
+import { StopCircle, CornerDownLeft } from "lucide-react";
 import styles from "../styles/agents.module.css";
 import { stripProjectPrefix } from "../utils/sessionName";
 import { SessionOutputTooltip } from "./SessionOutputTooltip";
@@ -35,6 +36,16 @@ export function SessionList({ agents, sessions, openKeys, minimizedKeys, onSessi
       await deleteSession(agentName, sessionId);
     } catch (err) {
       optimisticResetState(sessionId, originalState);
+    }
+  };
+
+  const handleSendInput = async (e: React.MouseEvent, agentName: string, sessionId: string, text: string) => {
+    e.stopPropagation();
+    if (!validateAgentProfile(agentName) || !validateSessionId(sessionId)) return;
+    try {
+      await sendSessionInput(agentName, sessionId, text);
+    } catch (err) {
+      console.error("Failed to send input to session:", err);
     }
   };
 
@@ -128,16 +139,38 @@ export function SessionList({ agents, sessions, openKeys, minimizedKeys, onSessi
                         )}
                       </button>
                       {isActive && as.session.id && as.session.state !== "destroying" && (
-                        <button
-                          type="button"
-                          className={styles.sidebarSessionKillButton}
-                          onClick={(e) => handleKill(e, as.agentName, as.session.id!, as.session.state)}
-                          aria-label="Stop session"
-                          title="Stop session"
-                          data-testid="sidebar-session-kill"
-                        >
-                          <StopCircle size={14} />
-                        </button>
+                        <div className={styles.sidebarSessionActions}>
+                          <button
+                            type="button"
+                            className={styles.sidebarSessionInputButton}
+                            onClick={(e) => { void handleSendInput(e, as.agentName, as.session.id!, "\r"); }}
+                            aria-label="Send return"
+                            title="Send return"
+                            data-testid="sidebar-session-return"
+                          >
+                            <CornerDownLeft size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.sidebarSessionInputButton}
+                            onClick={(e) => { void handleSendInput(e, as.agentName, as.session.id!, "\x1b"); }}
+                            aria-label="Send escape"
+                            title="Send escape"
+                            data-testid="sidebar-session-esc"
+                          >
+                            ⎋
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.sidebarSessionKillButton}
+                            onClick={(e) => handleKill(e, as.agentName, as.session.id!, as.session.state)}
+                            aria-label="Stop session"
+                            title="Stop session"
+                            data-testid="sidebar-session-kill"
+                          >
+                            <StopCircle size={14} />
+                          </button>
+                        </div>
                       )}
                     </div>
                   );
