@@ -6,7 +6,7 @@ import React, { useEffect, useRef } from "react";
 vi.mock("lucide-react", () => ({
   Archive: ({ size }: { size?: number }) => <svg data-testid="icon-archive" data-size={size} />,
   StopCircle: ({ size }: { size?: number }) => <svg data-testid="icon-stop-circle" data-size={size} />,
-  LogIn: ({ size }: { size?: number }) => <svg data-testid="icon-log-in" data-size={size} />,
+  CornerDownLeft: ({ size }: { size?: number }) => <svg data-testid="icon-corner-down-left" data-size={size} />,
 }));
 import type { ActiveSessionInfo, SessionState, Ticket } from "../types";
 

@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Archive, StopCircle, LogIn } from "lucide-react";
+import { Archive, StopCircle, CornerDownLeft } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import type { Ticket } from "../types";
 import { PriorityBadge } from "./PriorityBadge";
@@ -268,7 +268,7 @@ export function TicketCard({
                     title="Enter session"
                     onClick={(e) => { void handleSendEnter(e); }}
                   >
-                    <LogIn size={14} />
+                    <CornerDownLeft size={14} />
                   </button>
                 )}
                 <button
