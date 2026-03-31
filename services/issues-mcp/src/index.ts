@@ -20,34 +20,51 @@ import {
 import { labelList, labelAdd, labelRemove } from "./tools/labels.js";
 import { commentAdd } from "./tools/comments.js";
 
-// --- Startup validation ---
+// --- Lazy initialization ---
+//
+// Auth and project-name resolution are deferred to the first tool call so the
+// server connects to the MCP transport immediately. Running these operations
+// before server.connect() caused intermittent startup failures: Claude Code's
+// MCP connection handshake timed out while the server was still waiting on
+// network requests (gh auth token + GraphQL project lookup), causing the
+// mcp__issues__* tools to be absent from ~50% of sessions.
 
-if (!getAuthToken()) {
-  process.stderr.write("ISSUES_AUTH_TOKEN not set, attempting auto-authentication via gh auth token...\n");
-  const ok = await bootstrapAuth();
-  if (!ok) {
-    process.stderr.write("Error: Authentication failed. Set ISSUES_AUTH_TOKEN or ensure `gh auth token` returns a valid token.\n");
-    process.exit(1);
+let initPromise: Promise<void> | null = null;
+
+async function runInit(): Promise<void> {
+  if (!getAuthToken()) {
+    process.stderr.write("ISSUES_AUTH_TOKEN not set, attempting auto-authentication via gh auth token...\n");
+    const ok = await bootstrapAuth();
+    if (!ok) {
+      throw new Error("Authentication failed. Set ISSUES_AUTH_TOKEN or ensure `gh auth token` returns a valid token.");
+    }
+    process.stderr.write("Auto-authentication successful.\n");
   }
-  process.stderr.write("Auto-authentication successful.\n");
+
+  const projectName = getDefaultProjectName();
+  const projectId = getDefaultProjectId();
+
+  if (projectName && !projectId) {
+    process.stderr.write(`Resolving project name "${projectName}" to ID...\n`);
+    try {
+      const resolvedId = await resolveProjectName(projectName);
+      setResolvedProjectId(resolvedId);
+      process.stderr.write(`Resolved project "${projectName}" => ${resolvedId}\n`);
+    } catch (error) {
+      process.stderr.write(
+        `Warning: Could not resolve project name "${projectName}": ${error instanceof Error ? error.message : String(error)}\n` +
+        `Warning: Project-scoped tools will fail until ISSUES_PROJECT_ID or a resolvable ISSUES_PROJECT_NAME is set.\n`
+      );
+      // Non-fatal: tools that don't need a default project will still work.
+    }
+  }
 }
 
-// Resolve ISSUES_PROJECT_NAME to ID at startup if ID is not already set
-const projectName = getDefaultProjectName();
-const projectId = getDefaultProjectId();
-
-if (projectName && !projectId) {
-  process.stderr.write(`Resolving project name "${projectName}" to ID...\n`);
-  try {
-    const resolvedId = await resolveProjectName(projectName);
-    setResolvedProjectId(resolvedId);
-    process.stderr.write(`Resolved project "${projectName}" => ${resolvedId}\n`);
-  } catch (error) {
-    process.stderr.write(
-      `Warning: Could not resolve project name "${projectName}": ${error instanceof Error ? error.message : String(error)}\n` +
-      `Warning: Project-scoped tools will fail until ISSUES_PROJECT_ID or a resolvable ISSUES_PROJECT_NAME is set.\n`
-    );
+function ensureInit(): Promise<void> {
+  if (!initPromise) {
+    initPromise = runInit();
   }
+  return initPromise;
 }
 
 // --- Tool definitions ---
@@ -276,6 +293,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     process.stderr.write(`Tool call: ${name}\n`);
   }
 
+  // Ensure auth and project resolution are complete before handling any tool call.
+  // This is a no-op after the first successful call.
+  try {
+    await ensureInit();
+  } catch (error) {
+    return {
+      content: [{ type: "text", text: `Initialization failed: ${error instanceof Error ? error.message : String(error)}` }],
+      isError: true,
+    } satisfies CallToolResult;
+  }
+
   switch (name) {
     case "ticket_create":
       return ticketCreate({
@@ -365,6 +393,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 // --- Start server ---
+//
+// Connect to the MCP transport immediately so the server is registered before
+// any network operations occur. Auth and project-name resolution happen lazily
+// on the first tool call via ensureInit(). This prevents the connection
+// handshake timeout that caused mcp__issues__* tools to be missing from ~50%
+// of sessions when network latency or gh CLI startup was slow.
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
