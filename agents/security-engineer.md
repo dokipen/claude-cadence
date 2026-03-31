@@ -49,7 +49,12 @@ Before reviewing, read `CLAUDE.md` for:
 - No hardcoded secrets, API keys, or passwords
 
 ### 3. Dependencies
-- Check for known vulnerabilities using project-appropriate tools
+- Check for known vulnerabilities using project-appropriate tools. Check `CLAUDE.md` for the project's specific audit command first. Common fallbacks by ecosystem:
+  - **Node.js:** `npm audit` or `yarn audit`
+  - **Python:** `pip audit`
+  - **Go:** `govulncheck ./...`
+  - **Rust:** `cargo audit`
+  - **Dart/Flutter:** `dart pub audit`
 - Review dependency tree for suspicious packages
 - Flag outdated dependencies with known CVEs
 
