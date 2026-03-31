@@ -76,9 +76,8 @@ cd .worktrees/${BRANCH_NAME} && git branch --show-current
 
 ## After Setup
 
-1. Confirm the worktree was created: `ls .worktrees/<branch-name>`
-2. Confirm branch: `cd .worktrees/<branch-name> && git branch --show-current`
-3. Begin work using the `/lead` workflow or direct implementation
+1. Confirm branch: `cd .worktrees/<branch-name> && git branch --show-current`
+2. Begin work using the `/lead` workflow or direct implementation
 
 ## Cleanup (after PR merged)
 
