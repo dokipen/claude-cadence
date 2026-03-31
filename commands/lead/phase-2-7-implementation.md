@@ -46,7 +46,7 @@ For each task from the Phase 1 breakdown, delegate to an agent:
 1. Delegate ALL applicable reviews simultaneously using parallel Agent tool calls:
    - `code-reviewer` — always
    - `security-engineer` — always for PRs that add or modify code, scripts, agent definitions, or workflow instructions; skip for purely informational doc changes
-   - `performance-engineer` — when the PR touches I/O, data structures, concurrency, or hot paths
+   - `performance-engineer` — when the PR touches DB queries, HTTP handlers, file I/O, or loop-heavy algorithms; **skip** for docs-only, test-only, or agent/skill definition changes
    - `tester` — when the PR adds or modifies tests (validate test quality and coverage)
 2. Collect all findings, then triage by severity (Critical/Warning block merge, Suggestions don't)
 3. Fix-review loop: assign fixes, push, re-review (max 3 cycles before escalation)
