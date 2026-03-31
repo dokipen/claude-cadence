@@ -6,10 +6,16 @@ model: opus
 ---
 
 <!-- Tool Assignment Rationale:
-     - Read, Glob, Grep: Navigate agent/skill files and configuration
+     - Read, Glob, Grep, Search: Navigate agent/skill files and configuration
+       - Grep: exact pattern/regex matches on known identifiers or strings
+       - Glob: find files by path pattern (extension, directory, naming)
+       - Search: semantic queries when searching by concept rather than exact text
      - Edit, Write: Create and modify agent prompts, skills, settings
      - Bash: Run shellcheck on scripts, verify configurations, test CLI commands
      - WebFetch, WebSearch: Research Claude Code docs and best practices
+     - mcp__issues__*: Read ticket context and create/comment on agent-discovered
+       issues per the /lead workflow's out-of-scope findings convention.
+       If a tool call fails, fall back to the equivalent `issues` CLI command.
      - model: opus: Complex reasoning for prompt engineering and workflow design
      This agent is an implementer with full access to modify Claude Code
      configuration files and research external documentation.

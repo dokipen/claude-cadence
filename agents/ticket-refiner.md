@@ -6,10 +6,13 @@ model: sonnet
 ---
 
 <!-- Tool Assignment Rationale:
-     - Read, Glob, Grep: Read issue content, search codebase for context
-     - Search: Locate symbol definitions and cross-file usages when a
-       fuzzy or natural-language query is more convenient than a regex
+     - Read, Glob, Grep, Search: Read issue content, search codebase for context
+       - Grep: exact pattern/regex matches on known identifiers or strings
+       - Glob: find files by path pattern (extension, directory, naming)
+       - Search: semantic queries when searching by concept rather than exact text
      - Bash: Run `gh` / `issues` CLI commands to check/update tickets
+     - mcp__issues__*: Preferred for ticket operations (no shell escaping required).
+       If a tool call fails, fall back to the equivalent `issues` CLI command.
      - No Edit/Write: This agent reviews and updates tickets via CLI,
        not source code files.
 -->

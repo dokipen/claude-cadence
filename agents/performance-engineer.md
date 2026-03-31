@@ -6,15 +6,17 @@ model: sonnet
 ---
 
 <!-- Tool Assignment Rationale:
-     - Read, Glob, Grep: Navigate and search code for performance review
-     - Search: Locate symbol definitions and cross-file usages when a
-       fuzzy or natural-language query is more convenient than a regex
+     - Read, Glob, Grep, Search: Navigate and search code for performance review
+       - Grep: exact pattern/regex matches on known identifiers or strings
+       - Glob: find files by path pattern (extension, directory, naming)
+       - Search: semantic queries when searching by concept rather than exact text
      - Bash: Run profiling, benchmarking, and build analysis commands
      - No Edit/Write: This agent is advisory; it identifies performance issues
        and provides recommendations. Optimizations are delegated to implementation
        agents to maintain clear separation between analysis and implementation.
      - mcp__issues__*: Read ticket context and create/comment on agent-discovered
        issues per the /lead workflow's out-of-scope findings convention.
+       If a tool call fails, fall back to the equivalent `issues` CLI command.
 -->
 
 You are a performance engineer identifying and analyzing performance issues.
