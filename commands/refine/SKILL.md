@@ -50,7 +50,7 @@ Use this value to select the correct commands throughout the workflow.
 
    Check all refinement criteria and report findings.
    For any missing items, apply best-effort fixes directly.
-   Estimate based on scope and complexity — do not ask the user.
+   Estimate based on scope and complexity using codebase context — only escalate to user if scope is genuinely ambiguous (e.g., ticket could be a 3 or a 13 depending on interpretation).
    Ensure the ticket is assigned — if unassigned, assign to the current
    authenticated user (or a named developer if the context is clear).
    Assignment must be applied before transitioning to REFINED.

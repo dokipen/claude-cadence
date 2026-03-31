@@ -179,6 +179,6 @@ If you cannot determine the correct assignee (e.g., multiple candidates and no c
 
 Ask for user input when:
 - Acceptance criteria are vague and need clarification
-- Estimate is unclear (need codebase context)
+- Scope is genuinely ambiguous and affects the estimate significantly (e.g., ticket could be a 3 or a 13 depending on interpretation) — use codebase context first before escalating
 - Title needs rewriting (subjective)
 - Unsure if issue should be broken down
