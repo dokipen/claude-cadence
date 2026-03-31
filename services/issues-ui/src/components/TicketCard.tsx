@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Archive, StopCircle } from "lucide-react";
+import { Archive, StopCircle, CornerDownLeft } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import type { Ticket } from "../types";
 import { PriorityBadge } from "./PriorityBadge";
@@ -15,7 +15,7 @@ import agentStyles from "../styles/agents.module.css";
 import { AnimatedCadenceIcon } from "./AnimatedCadenceIcon";
 import { SessionOutputTooltip } from "./SessionOutputTooltip";
 import { validateAgentProfile, validateSessionId } from "../utils/validateSession";
-import { HubError, deleteSession } from "../api/agentHubClient";
+import { HubError, deleteSession, sendSessionInput } from "../api/agentHubClient";
 
 export function hasActiveSession(sessions: ActiveSessionInfo[], ticketNumber: number, projectId?: string): ActiveSessionInfo | null {
   const prefix = projectId ? `${projectId}-` : "";
@@ -55,6 +55,7 @@ export function TicketCard({
   const [killAnchorRect, setKillAnchorRect] = useState<DOMRect | undefined>(undefined);
   const [killing, setKilling] = useState(false);
   const [killError, setKillError] = useState<string | null>(null);
+  const [sendEnterError, setSendEnterError] = useState<string | null>(null);
   const navigate = useNavigate();
   const { transition, error: transitionError } = useTransitionTicket();
   const { optimisticSetDestroying, optimisticResetState } = useSessionsContext();
@@ -80,6 +81,36 @@ export function TicketCard({
       }
     },
     [navigate, ticket.id, activeSession],
+  );
+
+  const handleSendEnter = useCallback(
+    async (e: React.MouseEvent | React.KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!activeSession?.agentName || !activeSession?.sessionId) return;
+      try {
+        validateAgentProfile(activeSession.agentName);
+        validateSessionId(activeSession.sessionId);
+      } catch {
+        return;
+      }
+      setSendEnterError(null);
+      try {
+        await sendSessionInput(activeSession.agentName, activeSession.sessionId, "\r");
+      } catch (err) {
+        setSendEnterError(err instanceof HubError ? err.message : "Failed to send input");
+      }
+    },
+    [activeSession],
+  );
+
+  const handleCardKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && e.target === e.currentTarget) {
+        void handleSendEnter(e);
+      }
+    },
+    [handleSendEnter],
   );
 
   const handleLaunchClick = useCallback(
@@ -162,7 +193,12 @@ export function TicketCard({
 
   return (
     <>
-      <div className={styles.cardWrapper} data-testid="ticket-card">
+      <div
+        className={styles.cardWrapper}
+        data-testid="ticket-card"
+        tabIndex={activeSession ? 0 : undefined}
+        onKeyDown={activeSession ? handleCardKeyDown : undefined}
+      >
         <Link to={`/ticket/${ticket.id}`} className={styles.cardLink}>
           <div className={styles.cardNumber} data-testid="card-number">#{ticket.number}</div>
           <div className={styles.cardTitle} data-testid="card-title">{ticket.title}</div>
@@ -221,6 +257,18 @@ export function TicketCard({
                     disabled={killing}
                   >
                     <StopCircle size={14} />
+                  </button>
+                )}
+                {activeSession.state !== "destroying" && (
+                  <button
+                    type="button"
+                    className={styles.enterSessionButton}
+                    data-testid="enter-session-button"
+                    aria-label="Enter session"
+                    title="Enter session"
+                    onClick={(e) => { void handleSendEnter(e); }}
+                  >
+                    <CornerDownLeft size={14} />
                   </button>
                 )}
                 <button
@@ -282,6 +330,11 @@ export function TicketCard({
         {killError && (
           <div className={styles.cardError} data-testid="card-kill-error">
             {killError}
+          </div>
+        )}
+        {sendEnterError && (
+          <div className={styles.cardError} data-testid="card-send-enter-error">
+            {sendEnterError}
           </div>
         )}
       </div>
