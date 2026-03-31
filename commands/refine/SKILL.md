@@ -76,7 +76,8 @@ Use this value to select the correct commands throughout the workflow.
    gh issue edit 123 --add-label "refined"
    ```
 
-   **Issues API:**
+   **Issues API (MCP preferred):**
+   Use `mcp__issues__ticket_transition` with `to: "REFINED"`. Fall back to CLI if MCP tools are unavailable:
    ```bash
    issues ticket transition TICKET_ID --to REFINED --json
    ```
@@ -91,7 +92,8 @@ Use this value to select the correct commands throughout the workflow.
      --jq '.[] | select(.labels | map(.name) | contains(["refined"]) | not) | "\(.number): \(.title)"'
    ```
 
-   **Issues API:**
+   **Issues API (MCP preferred):**
+   Use `mcp__issues__ticket_list` with `state: "BACKLOG"` and `project` set to the project name/ID. Fall back to CLI if MCP tools are unavailable:
    ```bash
    issues ticket list --project "$PROJECT" --state BACKLOG --json
    ```

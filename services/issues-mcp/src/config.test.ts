@@ -23,7 +23,7 @@ describe("getAuthToken", () => {
     delete process.env.ISSUES_AUTH_TOKEN;
   });
 
-  it("returns env var when ISSUES_AUTH_TOKEN is set", () => {
+  it("returns env var when ISSUES_AUTH_TOKEN is set and no cached token exists", () => {
     process.env.ISSUES_AUTH_TOKEN = "env-token";
     expect(getAuthToken()).toBe("env-token");
   });
@@ -107,16 +107,16 @@ describe("setResolvedAuthToken / setResolvedRefreshToken", () => {
     expect(getRefreshToken()).toBe("my-refresh");
   });
 
-  it("env var takes precedence over cached auth token", () => {
-    setResolvedAuthToken("cached");
-    process.env.ISSUES_AUTH_TOKEN = "from-env";
-    expect(getAuthToken()).toBe("from-env");
+  it("cached token takes precedence over env var (supports post-reauth token propagation)", () => {
+    setResolvedAuthToken("refreshed-token");
+    process.env.ISSUES_AUTH_TOKEN = "stale-env-token";
+    expect(getAuthToken()).toBe("refreshed-token");
   });
 
-  it("env var takes precedence over cached refresh token", () => {
-    setResolvedRefreshToken("cached-refresh");
-    process.env.ISSUES_REFRESH_TOKEN = "env-refresh";
-    expect(getRefreshToken()).toBe("env-refresh");
+  it("cached refresh token takes precedence over env var (supports post-reauth propagation)", () => {
+    setResolvedRefreshToken("refreshed-refresh");
+    process.env.ISSUES_REFRESH_TOKEN = "stale-env-refresh";
+    expect(getRefreshToken()).toBe("refreshed-refresh");
   });
 });
 

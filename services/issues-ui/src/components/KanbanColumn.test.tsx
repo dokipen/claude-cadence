@@ -3,6 +3,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import type { Ticket, ActiveSessionInfo } from "../types";
 
+const mockNavigate = vi.fn();
+
+vi.mock("react-router", () => ({
+  useNavigate: () => mockNavigate,
+}));
+
 // Mock CSS modules
 vi.mock("../styles/board.module.css", () => ({ default: {} }));
 vi.mock("../styles/animated-icon.module.css", () => ({ default: {} }));
@@ -61,6 +67,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  mockNavigate.mockReset();
 });
 
 // ---------------------------------------------------------------------------
@@ -411,4 +418,80 @@ describe("KanbanColumn Lead All icon button", () => {
     expect(screen.queryByTestId("lead-all-dialog")).toBeNull();
   });
 
+});
+
+// ---------------------------------------------------------------------------
+// Refine All button navigation behavior (issue #588)
+// ---------------------------------------------------------------------------
+
+describe("KanbanColumn Refine All button navigation", () => {
+  const tickets = [makeTicket()];
+
+  it("opens RefineAllDialog when no active session", () => {
+    render(
+      <KanbanColumn
+        {...defaultProps}
+        state="BACKLOG"
+        tickets={tickets}
+        totalCount={1}
+        sessions={[]}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("refine-all-button"));
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it("navigates to agent session when active session has valid agentName and sessionId", () => {
+    const sessions: ActiveSessionInfo[] = [
+      { name: "myproject-refine-all-1234", state: "running", sessionId: "sess-abc", agentName: "ticket-refiner" },
+    ];
+    render(
+      <KanbanColumn
+        {...defaultProps}
+        state="BACKLOG"
+        tickets={tickets}
+        totalCount={1}
+        sessions={sessions}
+        projectId="myproject"
+      />,
+    );
+    fireEvent.click(screen.getByTestId("refine-all-button"));
+    expect(mockNavigate).toHaveBeenCalledWith("/agents?session=ticket-refiner:sess-abc");
+  });
+
+  it("opens RefineAllDialog when active session is missing sessionId", () => {
+    const sessions: ActiveSessionInfo[] = [
+      { name: "myproject-refine-all-1234", state: "running", agentName: "ticket-refiner" },
+    ];
+    render(
+      <KanbanColumn
+        {...defaultProps}
+        state="BACKLOG"
+        tickets={tickets}
+        totalCount={1}
+        sessions={sessions}
+        projectId="myproject"
+      />,
+    );
+    fireEvent.click(screen.getByTestId("refine-all-button"));
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it("opens RefineAllDialog when active session is missing agentName", () => {
+    const sessions: ActiveSessionInfo[] = [
+      { name: "myproject-refine-all-1234", state: "running", sessionId: "sess-abc" },
+    ];
+    render(
+      <KanbanColumn
+        {...defaultProps}
+        state="BACKLOG"
+        tickets={tickets}
+        totalCount={1}
+        sessions={sessions}
+        projectId="myproject"
+      />,
+    );
+    fireEvent.click(screen.getByTestId("refine-all-button"));
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
 });
