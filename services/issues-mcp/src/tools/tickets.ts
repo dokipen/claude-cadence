@@ -267,11 +267,16 @@ export async function ticketCreate(params: TicketCreateParams): Promise<CallTool
     // model serializes arrays as strings. Parse it back to a real array in that case.
     let labelIds = params.labelIds as string[] | string | undefined;
     if (typeof labelIds === "string") {
+      let parsed: unknown;
       try {
-        labelIds = JSON.parse(labelIds) as string[];
+        parsed = JSON.parse(labelIds);
       } catch {
         return err("labelIds must be an array of label ID strings");
       }
+      if (!Array.isArray(parsed) || !parsed.every((x) => typeof x === "string")) {
+        return err("labelIds must be an array of label ID strings");
+      }
+      labelIds = parsed as string[];
     }
 
     const input: Record<string, unknown> = {
@@ -433,7 +438,7 @@ export async function ticketTransition(params: TicketTransitionParams): Promise<
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     // Augment enum-related errors with the list of valid states so callers can self-correct.
-    if (message.includes("does not exist in") || message.includes("enum")) {
+    if (message.includes("does not exist in")) {
       return err(`${message} Valid states: ${VALID_TICKET_STATES.join(", ")}`);
     }
     return err(message);

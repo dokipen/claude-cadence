@@ -80,6 +80,28 @@ describe("ticketCreate", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
+  it("returns error when labelIds parses to a non-array JSON value", async () => {
+    const result = await ticketCreate({
+      title: "Test ticket",
+      labelIds: '"just-a-string"' as unknown as string[],
+    });
+
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as { text: string }).text).toContain("labelIds must be an array");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("returns error when labelIds parses to an array of non-strings", async () => {
+    const result = await ticketCreate({
+      title: "Test ticket",
+      labelIds: "[1, 2, 3]" as unknown as string[],
+    });
+
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as { text: string }).text).toContain("labelIds must be an array");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("omits labelIds from input when not provided", async () => {
     mockRequest.mockResolvedValue({ createTicket: { id: "cuid1", title: "Test" } });
 
