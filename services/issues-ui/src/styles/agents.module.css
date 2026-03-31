@@ -768,6 +768,7 @@
   top: 0;
   left: 0;
   right: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
   background: var(--background);
@@ -778,6 +779,7 @@
 .mobileSessionContent {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
