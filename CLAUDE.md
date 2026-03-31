@@ -14,7 +14,7 @@ An issue-driven, multi-agent development workflow plugin for Claude Code.
 - `create-pr` — Create pull requests with pre-flight verification
 - `create-skill` — Bootstrap new Claude Code skills
 - `ticket-provider` — Ticket provider abstraction (dispatches to GitHub Issues or issues microservice)
-- `issues-api` — CLI commands for the issues microservice backend
+- `issues-api` — MCP tools for the issues microservice backend
 - `agent-service` — Interacting with the agentd service via agent-hub WebSocket API
 - `project-ops` — Shared worktree management scripts
 
