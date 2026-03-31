@@ -8,6 +8,7 @@ import { AgentLaunchForm } from "./AgentLaunchForm";
 import { MobileSessionView } from "./MobileSessionView";
 import { useSessionsContext } from "../hooks/SessionsContext";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { deleteSession } from "../api/agentHubClient";
 import type { TiledWindow } from "./TilingLayout";
 import type { AgentSession } from "../hooks/useAllSessions";
 import type { Session } from "../types";
@@ -316,6 +317,12 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
   const handleMobileClose = useCallback(() => {
     const win = openWindowsRef.current[openWindowsRef.current.length - 1];
     if (!win) return;
+    deleteSession(win.agentName, win.session.id).catch((err) => {
+      // Session may already be gone (404 absorbed by deleteSession).
+      // Non-404 failures leave the session running on the backend; the next
+      // poll will reconcile UI state.
+      console.warn("[AgentManager] deleteSession failed on mobile close:", err);
+    });
     setOpenWindows((prev) => prev.filter((w) => w.key !== win.key));
     setMinimizedKeys((prev) => {
       const next = new Set(prev);
