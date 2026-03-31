@@ -77,6 +77,16 @@ export function TicketCard({
     }
   }, [navigate, ticket.id, activeSession]);
 
+  const handleCardKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && activeSession && e.target === e.currentTarget) {
+        e.preventDefault();
+        handleEnterSession();
+      }
+    },
+    [activeSession, handleEnterSession],
+  );
+
   const handleActiveSessionClick = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
@@ -169,13 +179,8 @@ export function TicketCard({
       <div
         className={styles.cardWrapper}
         data-testid="ticket-card"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && activeSession) {
-            e.preventDefault();
-            handleEnterSession();
-          }
-        }}
+        tabIndex={activeSession ? 0 : undefined}
+        onKeyDown={activeSession ? handleCardKeyDown : undefined}
       >
         <Link to={`/ticket/${ticket.id}`} className={styles.cardLink}>
           <div className={styles.cardNumber} data-testid="card-number">#{ticket.number}</div>

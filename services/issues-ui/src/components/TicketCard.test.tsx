@@ -893,7 +893,7 @@ describe("TicketCard enter-session-button", () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
-  it("pressing Enter on card wrapper with destroying session does not navigate", () => {
+  it("pressing Enter on card wrapper with destroying session navigates to session", () => {
     const ticket = makeTicket({ number: 5 });
     const sessions = [
       makeSession("lead-5", "destroying", { agentName: "agent1", sessionId: "sess-destroying" }),
