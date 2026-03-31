@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Archive, StopCircle } from "lucide-react";
+import { Archive, StopCircle, LogIn } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import type { Ticket } from "../types";
 import { PriorityBadge } from "./PriorityBadge";
@@ -64,22 +64,26 @@ export function TicketCard({
 
   const activeSession = hasActiveSession(sessions ?? [], ticket.number, projectId);
 
+  const handleEnterSession = useCallback(() => {
+    if (
+      activeSession?.agentName &&
+      activeSession?.sessionId &&
+      validateAgentProfile(activeSession.agentName) &&
+      validateSessionId(activeSession.sessionId)
+    ) {
+      navigate(`/agents?session=${activeSession.agentName}:${activeSession.sessionId}`);
+    } else {
+      navigate(`/ticket/${ticket.id}`);
+    }
+  }, [navigate, ticket.id, activeSession]);
+
   const handleActiveSessionClick = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      if (
-        activeSession?.agentName &&
-        activeSession?.sessionId &&
-        validateAgentProfile(activeSession.agentName) &&
-        validateSessionId(activeSession.sessionId)
-      ) {
-        navigate(`/agents?session=${activeSession.agentName}:${activeSession.sessionId}`);
-      } else {
-        navigate(`/ticket/${ticket.id}`);
-      }
+      handleEnterSession();
     },
-    [navigate, ticket.id, activeSession],
+    [handleEnterSession],
   );
 
   const handleLaunchClick = useCallback(
@@ -162,7 +166,17 @@ export function TicketCard({
 
   return (
     <>
-      <div className={styles.cardWrapper} data-testid="ticket-card">
+      <div
+        className={styles.cardWrapper}
+        data-testid="ticket-card"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && activeSession) {
+            e.preventDefault();
+            handleEnterSession();
+          }
+        }}
+      >
         <Link to={`/ticket/${ticket.id}`} className={styles.cardLink}>
           <div className={styles.cardNumber} data-testid="card-number">#{ticket.number}</div>
           <div className={styles.cardTitle} data-testid="card-title">{ticket.title}</div>
@@ -221,6 +235,18 @@ export function TicketCard({
                     disabled={killing}
                   >
                     <StopCircle size={14} />
+                  </button>
+                )}
+                {activeSession.state !== "destroying" && (
+                  <button
+                    type="button"
+                    className={styles.enterSessionButton}
+                    data-testid="enter-session-button"
+                    aria-label="Enter session"
+                    title="Enter session"
+                    onClick={handleActiveSessionClick}
+                  >
+                    <LogIn size={14} />
                   </button>
                 )}
                 <button

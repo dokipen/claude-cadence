@@ -6,6 +6,7 @@ import React, { useEffect, useRef } from "react";
 vi.mock("lucide-react", () => ({
   Archive: ({ size }: { size?: number }) => <svg data-testid="icon-archive" data-size={size} />,
   StopCircle: ({ size }: { size?: number }) => <svg data-testid="icon-stop-circle" data-size={size} />,
+  LogIn: ({ size }: { size?: number }) => <svg data-testid="icon-log-in" data-size={size} />,
 }));
 import type { ActiveSessionInfo, SessionState, Ticket } from "../types";
 
@@ -823,5 +824,95 @@ describe("activeRefineAll prop", () => {
       <TicketCard ticket={ticket} sessions={[]} activeRefineAll={refineAllSession} />,
     );
     expect(queryByTestId("session-kill-button")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TicketCard enter-session-button and Enter key shortcut
+// ---------------------------------------------------------------------------
+
+describe("TicketCard enter-session-button", () => {
+  it("shows enter-session-button when active session is running", () => {
+    const ticket = makeTicket({ number: 5 });
+    const sessions = [
+      makeSession("lead-5", "running", { agentName: "agent1", sessionId: "sess-run" }),
+    ];
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
+    expect(getByTestId("enter-session-button")).toBeTruthy();
+  });
+
+  it("does not show enter-session-button when no active session", () => {
+    const ticket = makeTicket({ number: 5 });
+    const { queryByTestId } = render(<TicketCard ticket={ticket} sessions={[]} />);
+    expect(queryByTestId("enter-session-button")).toBeNull();
+  });
+
+  it("does not show enter-session-button when session is destroying", () => {
+    const ticket = makeTicket({ number: 5 });
+    const sessions = [
+      makeSession("lead-5", "destroying", { agentName: "agent1", sessionId: "sess-destroying" }),
+    ];
+    const { queryByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
+    expect(queryByTestId("enter-session-button")).toBeNull();
+  });
+
+  it("clicking enter-session-button navigates to agents view", () => {
+    const ticket = makeTicket({ number: 5 });
+    const sessions = [
+      makeSession("lead-5", "running", { agentName: "agent1", sessionId: "sess-abc" }),
+    ];
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
+    fireEvent.click(getByTestId("enter-session-button"));
+    expect(mockNavigate).toHaveBeenCalledWith("/agents?session=agent1:sess-abc");
+  });
+
+  it("clicking enter-session-button without session details falls back to ticket detail", () => {
+    const ticket = makeTicket({ number: 5 });
+    const sessions = [makeSession("lead-5", "running")];
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
+    fireEvent.click(getByTestId("enter-session-button"));
+    expect(mockNavigate).toHaveBeenCalledWith("/ticket/ticket-1");
+  });
+
+  it("pressing Enter on card wrapper with active session navigates to agents view", () => {
+    const ticket = makeTicket({ number: 5 });
+    const sessions = [
+      makeSession("lead-5", "running", { agentName: "agent1", sessionId: "sess-abc" }),
+    ];
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
+    const card = getByTestId("ticket-card");
+    fireEvent.keyDown(card, { key: "Enter" });
+    expect(mockNavigate).toHaveBeenCalledWith("/agents?session=agent1:sess-abc");
+  });
+
+  it("pressing Enter on card wrapper without active session does not navigate", () => {
+    const ticket = makeTicket({ number: 5 });
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={[]} />);
+    const card = getByTestId("ticket-card");
+    fireEvent.keyDown(card, { key: "Enter" });
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it("pressing Enter on card wrapper with destroying session does not navigate", () => {
+    const ticket = makeTicket({ number: 5 });
+    const sessions = [
+      makeSession("lead-5", "destroying", { agentName: "agent1", sessionId: "sess-destroying" }),
+    ];
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
+    const card = getByTestId("ticket-card");
+    fireEvent.keyDown(card, { key: "Enter" });
+    // destroying state is still "active" per hasActiveSession, so it should navigate
+    expect(mockNavigate).toHaveBeenCalledWith("/agents?session=agent1:sess-destroying");
+  });
+
+  it("pressing a non-Enter key on card wrapper does not navigate", () => {
+    const ticket = makeTicket({ number: 5 });
+    const sessions = [
+      makeSession("lead-5", "running", { agentName: "agent1", sessionId: "sess-abc" }),
+    ];
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
+    const card = getByTestId("ticket-card");
+    fireEvent.keyDown(card, { key: "Space" });
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 });
