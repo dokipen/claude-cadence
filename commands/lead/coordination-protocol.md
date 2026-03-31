@@ -5,7 +5,7 @@
 When delegating to any agent, include all of the following:
 
 1. **Working directory:** `cd [WORKING_DIR]` where `[WORKING_DIR]` is the actual working directory (`$PWD`) — do not assume `.worktrees/` paths (sub-agents do not inherit the lead's working directory)
-2. **Issue context:** `Read issue #N for full context: gh issue view N`
+2. **Issue context:** Read issue #N for full context using the `ticket-provider` skill (detect the provider from `CLAUDE.md`, then use `mcp__issues__ticket_get` for issues-api or `gh issue view N` for GitHub)
 3. **Scope:** Which files, directories, or areas to focus on
 4. **Constraints:** What NOT to modify (other agents' files, out-of-scope areas)
 5. **Expected output:** What the lead needs back (findings list, code changes, test results)

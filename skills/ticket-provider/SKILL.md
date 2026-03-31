@@ -78,7 +78,9 @@ When `provider: github` (or no config), use `gh` CLI commands.
 
 ### Issues API
 
-When `provider: issues-api`, prefer `mcp__issues__*` MCP tools when they are available in your tool list — they require no shell escaping and no CLI install. Fall back to the `issues` CLI when MCP tools are absent. Refer to the `issues-api` skill for the full command reference for both paths.
+When `provider: issues-api`, prefer `mcp__issues__*` MCP tools — they require no shell escaping and no CLI install. Fall back to the `issues` CLI when MCP tools are absent. Refer to the `issues-api` skill for the full command reference for both paths.
+
+**Important:** MCP tools are deferred and will not appear in your tool list until probed. Before assuming they are absent and falling back to CLI, call `ToolSearch` with query `select:mcp__issues__ticket_get` to load the MCP tool schemas. If `ToolSearch` returns the tool definition, use MCP tools. Only use the CLI fallback if `ToolSearch` returns no results.
 
 The table below shows the CLI fallback commands. When `mcp__issues__*` tools are available, use them instead — see the `issues-api` skill for MCP tool signatures.
 
