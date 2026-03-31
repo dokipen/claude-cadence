@@ -485,6 +485,12 @@
   background: rgba(128, 128, 128, 0.08);
 }
 
+@media (hover: none) {
+  .sidebarSessionInputButton {
+    color: var(--text);
+  }
+}
+
 .sidebarSessionKillButton {
   background: none;
   border: none;

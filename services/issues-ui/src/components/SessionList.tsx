@@ -42,7 +42,11 @@ export function SessionList({ agents, sessions, openKeys, minimizedKeys, onSessi
   const handleSendInput = async (e: React.MouseEvent, agentName: string, sessionId: string, text: string) => {
     e.stopPropagation();
     if (!validateAgentProfile(agentName) || !validateSessionId(sessionId)) return;
-    await sendSessionInput(agentName, sessionId, text);
+    try {
+      await sendSessionInput(agentName, sessionId, text);
+    } catch (err) {
+      console.error("Failed to send input to session:", err);
+    }
   };
 
   // Group sessions by agent
