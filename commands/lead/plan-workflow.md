@@ -35,7 +35,16 @@ Using the outline from Plan Phase 1, delegate to a `general-purpose` agent to wr
    git add docs/plans/<slug>.md
    git commit -m "docs: add plan for <slug> (#[NUMBER])"
    ```
-4. **Create a PR and merge** using `/create-pr`. The plan document must land on the default branch before sub-tickets are created, so implementers can link to it at a stable path. Wait for the PR to merge before proceeding to Plan Phase 3.
+4. **Create a PR and merge** using `/create-pr`. The plan document must land on the default branch before sub-tickets are created, so implementers can link to it at a stable path. Use a 10-minute timeout to avoid hanging indefinitely:
+   ```bash
+   TIMEOUT_CMD=$(bash "$CADENCE_ROOT/commands/lead/scripts/detect-timeout-cmd.sh")
+   "$TIMEOUT_CMD" 600 gh pr checks --watch --fail-fast && gh pr merge --squash --delete-branch
+   ```
+   The helper auto-selects `gtimeout` (macOS with GNU coreutils) or `timeout` (Linux).
+
+   - If checks pass: the merge proceeds automatically; continue to Plan Phase 3
+   - If checks fail: report the specific failed check(s) to the user and **abort the workflow** — do not create sub-tickets against an unmerged plan doc
+   - If timeout is exceeded: report the timeout and the still-pending check(s) to the user and **abort the workflow**
 
 ### Plan Phase 3: Implementation Ticket Creation
 
