@@ -4,6 +4,9 @@
 # Creates the label with color #8B5CF6 if it is not already present.
 # No-op if the label already exists.
 #
+# CLI-only: MCP tools are not available in shell scripts. This script uses the
+# `issues` CLI directly and cannot be replaced with mcp__issues__* tools.
+#
 # Usage: bash commands/lead/scripts/ensure-milestone-label.sh MILESTONE_LABEL_NAME
 #
 # Example:

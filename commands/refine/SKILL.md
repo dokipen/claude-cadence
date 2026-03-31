@@ -21,12 +21,21 @@ Refine tickets to meet quality standards before implementation begins. Supports 
 
 ## Provider Detection
 
-Before any ticket operation, detect the configured provider. Refer to the `ticket-provider` skill for full details.
+Before any ticket operation, resolve the cadence plugin root and detect the configured provider. Refer to the `ticket-provider` skill for full details.
 
 ```bash
-# Extract provider from project's CLAUDE.md (defaults to "github")
-PROVIDER=$(grep -A3 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'provider:' | tail -1 | awk '{print $2}' || echo "github")
-PROJECT=$(grep -A4 '## Ticket Provider' CLAUDE.md 2>/dev/null | grep 'project_id:' | tail -1 | awk '{print $2}')
+# Resolve cadence plugin root
+CADENCE_ROOT="${CADENCE_ROOT:-}"
+if [ -z "$CADENCE_ROOT" ] && [ -f ".claude-plugin/plugin.json" ]; then
+  CADENCE_ROOT="$(pwd)"
+fi
+if [ -z "$CADENCE_ROOT" ] && [ -d ".claude/plugins/cadence" ]; then
+  CADENCE_ROOT="$(pwd)/.claude/plugins/cadence"
+fi
+
+PROVIDER_CONFIG=$(bash "$CADENCE_ROOT/skills/ticket-provider/scripts/detect-provider.sh")
+PROVIDER=$(echo "$PROVIDER_CONFIG" | jq -r '.provider')
+PROJECT=$(echo "$PROVIDER_CONFIG" | jq -r '.project')
 ```
 
 Use this value to select the correct commands throughout the workflow.
@@ -60,7 +69,19 @@ Use this value to select the correct commands throughout the workflow.
    fi
    ```
 
-   **Issues API:**
+   **Issues API (MCP preferred):**
+   ```
+   mcp__issues__ticket_get
+     number: 123
+     projectName: "$PROJECT"
+   ```
+   Check the `assignee` field. If null, use the `issues` CLI to assign (no MCP assign tool yet):
+   ```bash
+   CURRENT_USER_ID=$(issues auth whoami --json | jq -r '.id')
+   issues assign "$TICKET_ID" --user "$CURRENT_USER_ID" --json
+   ```
+
+   **Issues API (CLI fallback):**
    ```bash
    ASSIGNEE=$(issues ticket view 123 --project "$PROJECT" --json | jq -r '.assignee.login // empty')
    if [ -z "$ASSIGNEE" ]; then
@@ -76,7 +97,14 @@ Use this value to select the correct commands throughout the workflow.
    gh issue edit 123 --add-label "refined"
    ```
 
-   **Issues API:**
+   **Issues API (MCP preferred):**
+   ```
+   mcp__issues__ticket_transition
+     id: "<TICKET_CUID>"
+     to: "REFINED"
+   ```
+
+   **Issues API (CLI fallback):**
    ```bash
    issues ticket transition TICKET_ID --to REFINED --json
    ```
@@ -91,7 +119,14 @@ Use this value to select the correct commands throughout the workflow.
      --jq '.[] | select(.labels | map(.name) | contains(["refined"]) | not) | "\(.number): \(.title)"'
    ```
 
-   **Issues API:**
+   **Issues API (MCP preferred):**
+   ```
+   mcp__issues__ticket_list
+     projectName: "$PROJECT"
+     state: "BACKLOG"
+   ```
+
+   **Issues API (CLI fallback):**
    ```bash
    issues ticket list --project "$PROJECT" --state BACKLOG --json
    ```
@@ -110,7 +145,7 @@ An issue is refined when it has ALL of:
 | Acceptance criteria | Checkboxes defining "done" | `--acceptance-criteria` field |
 | Estimate | `estimate:N` label (1-13) | Story points field (`--points N`) |
 | Priority | `priority:high`, `priority:medium`, or `priority:low` label | Priority field (`--priority N`) |
-| Type label | Label by name: bug, enhancement, etc. | Label by ID (use `issues label list --json` to resolve) |
+| Type label | Label by name: bug, enhancement, etc. | Label by ID (use `mcp__issues__label_list` or `issues label list --json` to resolve) |
 | Assigned | Assigned to a developer | `issues assign TICKET_ID --user USER_ID --json` |
 | Blockers linked | Via GitHub dependencies API | `issues block add --blocker X --blocked Y --json` |
 | Blocked label | `blocked` label if open blockers exist | Blocked tickets auto-tracked; cannot transition to `IN_PROGRESS` |
