@@ -14,14 +14,14 @@ Shared utilities for worktree management.
 
 ## Scripts
 
-All scripts live in this skill's `scripts/` directory.
+All scripts live in this skill's `scripts/` directory. Invoke them using the full `$CADENCE_ROOT`-prefixed path:
 
 ### create-worktree.sh
 
 Create a new worktree and branch for feature development.
 
 ```bash
-scripts/create-worktree.sh <branch-name>
+bash "$CADENCE_ROOT/skills/project-ops/scripts/create-worktree.sh" <branch-name>
 ```
 
 - Branch names MUST start with an issue number (e.g., `42-add-feature`)
@@ -35,7 +35,7 @@ scripts/create-worktree.sh <branch-name>
 Automatically clean up worktrees whose associated PRs have been merged.
 
 ```bash
-scripts/cleanup-merged-worktrees.sh
+bash "$CADENCE_ROOT/skills/project-ops/scripts/cleanup-merged-worktrees.sh"
 ```
 
 - Scans `.worktrees/` for branches with merged PRs
@@ -48,7 +48,7 @@ scripts/cleanup-merged-worktrees.sh
 Clean up a worktree and its remote branch after PR merge.
 
 ```bash
-scripts/cleanup-worktree.sh <branch-name>
+bash "$CADENCE_ROOT/skills/project-ops/scripts/cleanup-worktree.sh" <branch-name>
 ```
 
 - Deletes remote branch (if it still exists)
@@ -60,7 +60,7 @@ scripts/cleanup-worktree.sh <branch-name>
 Detect if the current directory is inside a git worktree.
 
 ```bash
-scripts/detect-worktree.sh
+bash "$CADENCE_ROOT/skills/project-ops/scripts/detect-worktree.sh"
 ```
 
 - Outputs JSON: `{"in_worktree": true|false, "branch": "<name>"}`
@@ -72,6 +72,6 @@ scripts/detect-worktree.sh
 Check for orphaned worktree directories not tracked by git.
 
 ```bash
-scripts/check-orphaned-worktrees.sh
+bash "$CADENCE_ROOT/skills/project-ops/scripts/check-orphaned-worktrees.sh"
 ```
 
