@@ -75,10 +75,11 @@ Use this value to select the correct commands throughout the workflow.
      number: 123
      projectName: "$PROJECT"
    ```
-   Check the `assignee` field. If null, look up the current user ID and assign:
+   Check the `assignee` field. If null, look up the current user ID:
    ```bash
    CURRENT_USER_ID=$(issues auth whoami --json | jq -r '.id')
    ```
+   Then assign using the resolved ID:
    ```
    mcp__issues__ticket_assign
      ticketId: "<TICKET_CUID>"
