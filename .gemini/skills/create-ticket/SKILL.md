@@ -115,7 +115,38 @@ EOF
 )"
 ```
 
-**Issues API:**
+**Issues API (MCP — preferred when `mcp__issues__*` tools are available):**
+
+Resolve label IDs first using the MCP tool (labels are global):
+```
+mcp__issues__label_list
+  (no parameters)
+```
+
+Then create the ticket:
+```
+mcp__issues__ticket_create
+  title: "<title>"
+  projectName: "<PROJECT>"
+  description: |
+    ## Description
+    <description>
+  acceptanceCriteria: |
+    - [ ] <criterion 1>
+    - [ ] <criterion 2>
+  labelIds: ["<LABEL_CUID>"]
+  priority: "MEDIUM"
+  storyPoints: 2              # optional, Fibonacci scale: 1, 2, 3, 5, 8, 13
+```
+
+**Issues API (CLI — fallback when MCP tools are absent):**
+
+Resolve label IDs first (labels are global — no `--project` flag needed):
+```bash
+issues label list --json
+```
+
+Then create the ticket:
 ```bash
 issues ticket create \
   --project "$PROJECT" \
@@ -135,11 +166,6 @@ EOF
 ```
 
 > **Important (Issues API):** Always use `--acceptance-criteria` for acceptance criteria — never embed them inside `--description`. The `--description` flag maps to the ticket's description field, and `--acceptance-criteria` maps to its own dedicated field. Mixing them causes criteria to appear in the wrong field in the UI and API response.
-
-For Issues API, resolve label IDs first (labels are global — no `--project` flag needed):
-```bash
-issues label list --json
-```
 
 ### 4. Report and Stop
 
