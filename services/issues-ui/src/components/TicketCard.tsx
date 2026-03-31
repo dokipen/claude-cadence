@@ -15,7 +15,7 @@ import agentStyles from "../styles/agents.module.css";
 import { AnimatedCadenceIcon } from "./AnimatedCadenceIcon";
 import { SessionOutputTooltip } from "./SessionOutputTooltip";
 import { validateAgentProfile, validateSessionId } from "../utils/validateSession";
-import { HubError, deleteSession } from "../api/agentHubClient";
+import { HubError, deleteSession, sendSessionInput } from "../api/agentHubClient";
 
 export function hasActiveSession(sessions: ActiveSessionInfo[], ticketNumber: number, projectId?: string): ActiveSessionInfo | null {
   const prefix = projectId ? `${projectId}-` : "";
@@ -55,6 +55,7 @@ export function TicketCard({
   const [killAnchorRect, setKillAnchorRect] = useState<DOMRect | undefined>(undefined);
   const [killing, setKilling] = useState(false);
   const [killError, setKillError] = useState<string | null>(null);
+  const [sendEnterError, setSendEnterError] = useState<string | null>(null);
   const navigate = useNavigate();
   const { transition, error: transitionError } = useTransitionTicket();
   const { optimisticSetDestroying, optimisticResetState } = useSessionsContext();
@@ -64,36 +65,52 @@ export function TicketCard({
 
   const activeSession = hasActiveSession(sessions ?? [], ticket.number, projectId);
 
-  const handleEnterSession = useCallback(() => {
-    if (
-      activeSession?.agentName &&
-      activeSession?.sessionId &&
-      validateAgentProfile(activeSession.agentName) &&
-      validateSessionId(activeSession.sessionId)
-    ) {
-      navigate(`/agents?session=${activeSession.agentName}:${activeSession.sessionId}`);
-    } else {
-      navigate(`/ticket/${ticket.id}`);
-    }
-  }, [navigate, ticket.id, activeSession]);
-
-  const handleCardKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" && activeSession && e.target === e.currentTarget) {
-        e.preventDefault();
-        handleEnterSession();
-      }
-    },
-    [activeSession, handleEnterSession],
-  );
-
   const handleActiveSessionClick = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      handleEnterSession();
+      if (
+        activeSession?.agentName &&
+        activeSession?.sessionId &&
+        validateAgentProfile(activeSession.agentName) &&
+        validateSessionId(activeSession.sessionId)
+      ) {
+        navigate(`/agents?session=${activeSession.agentName}:${activeSession.sessionId}`);
+      } else {
+        navigate(`/ticket/${ticket.id}`);
+      }
     },
-    [handleEnterSession],
+    [navigate, ticket.id, activeSession],
+  );
+
+  const handleSendEnter = useCallback(
+    async (e: React.MouseEvent | React.KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!activeSession?.agentName || !activeSession?.sessionId) return;
+      try {
+        validateAgentProfile(activeSession.agentName);
+        validateSessionId(activeSession.sessionId);
+      } catch {
+        return;
+      }
+      setSendEnterError(null);
+      try {
+        await sendSessionInput(activeSession.agentName, activeSession.sessionId, "\r");
+      } catch (err) {
+        setSendEnterError(err instanceof HubError ? err.message : "Failed to send input");
+      }
+    },
+    [activeSession],
+  );
+
+  const handleCardKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && e.target === e.currentTarget) {
+        void handleSendEnter(e);
+      }
+    },
+    [handleSendEnter],
   );
 
   const handleLaunchClick = useCallback(
@@ -249,7 +266,7 @@ export function TicketCard({
                     data-testid="enter-session-button"
                     aria-label="Enter session"
                     title="Enter session"
-                    onClick={handleActiveSessionClick}
+                    onClick={(e) => { void handleSendEnter(e); }}
                   >
                     <LogIn size={14} />
                   </button>
@@ -313,6 +330,11 @@ export function TicketCard({
         {killError && (
           <div className={styles.cardError} data-testid="card-kill-error">
             {killError}
+          </div>
+        )}
+        {sendEnterError && (
+          <div className={styles.cardError} data-testid="card-send-enter-error">
+            {sendEnterError}
           </div>
         )}
       </div>

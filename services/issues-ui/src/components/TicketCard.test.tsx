@@ -99,6 +99,12 @@ vi.mock("../api/agentHubClient", () => ({
       throw err;
     }
   },
+  sendSessionInput: async (agentName: string, sessionId: string, text: string) => {
+    await mockHubFetch(`/agents/${agentName}/sessions/${sessionId}/input`, {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    });
+  },
 }));
 
 // ---------------------------------------------------------------------------
@@ -856,63 +862,99 @@ describe("TicketCard enter-session-button", () => {
     expect(queryByTestId("enter-session-button")).toBeNull();
   });
 
-  it("clicking enter-session-button navigates to agents view", () => {
+  it("clicking enter-session-button calls sendSessionInput with \\r", async () => {
+    mockHubFetch.mockResolvedValue(undefined);
     const ticket = makeTicket({ number: 5 });
     const sessions = [
       makeSession("lead-5", "running", { agentName: "agent1", sessionId: "sess-abc" }),
     ];
     const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
-    fireEvent.click(getByTestId("enter-session-button"));
-    expect(mockNavigate).toHaveBeenCalledWith("/agents?session=agent1:sess-abc");
+    await act(async () => {
+      fireEvent.click(getByTestId("enter-session-button"));
+      await Promise.resolve();
+    });
+    expect(mockHubFetch).toHaveBeenCalledWith(
+      expect.stringContaining("sess-abc"),
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ text: "\r" }) }),
+    );
   });
 
-  it("clicking enter-session-button without session details falls back to ticket detail", () => {
+  it("clicking enter-session-button does not navigate", async () => {
+    mockHubFetch.mockResolvedValue(undefined);
+    const ticket = makeTicket({ number: 5 });
+    const sessions = [
+      makeSession("lead-5", "running", { agentName: "agent1", sessionId: "sess-abc" }),
+    ];
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
+    await act(async () => {
+      fireEvent.click(getByTestId("enter-session-button"));
+      await Promise.resolve();
+    });
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it("clicking enter-session-button without valid agentName/sessionId does not call API", async () => {
     const ticket = makeTicket({ number: 5 });
     const sessions = [makeSession("lead-5", "running")];
     const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
-    fireEvent.click(getByTestId("enter-session-button"));
-    expect(mockNavigate).toHaveBeenCalledWith("/ticket/ticket-1");
+    await act(async () => {
+      fireEvent.click(getByTestId("enter-session-button"));
+      await Promise.resolve();
+    });
+    expect(mockHubFetch).not.toHaveBeenCalled();
   });
 
-  it("pressing Enter on card wrapper with active session navigates to agents view", () => {
+  it("shows error when sendSessionInput fails", async () => {
+    mockHubFetch.mockRejectedValue(new MockHubError(500, "server error"));
+    const ticket = makeTicket({ number: 5 });
+    const sessions = [
+      makeSession("lead-5", "running", { agentName: "agent1", sessionId: "sess-err" }),
+    ];
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
+    await act(async () => {
+      fireEvent.click(getByTestId("enter-session-button"));
+      await Promise.resolve();
+    });
+    expect(getByTestId("card-send-enter-error")).toBeTruthy();
+  });
+
+  it("pressing Enter on card wrapper with active session calls sendSessionInput with \\r", async () => {
+    mockHubFetch.mockResolvedValue(undefined);
     const ticket = makeTicket({ number: 5 });
     const sessions = [
       makeSession("lead-5", "running", { agentName: "agent1", sessionId: "sess-abc" }),
     ];
     const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
-    const card = getByTestId("ticket-card");
-    fireEvent.keyDown(card, { key: "Enter" });
-    expect(mockNavigate).toHaveBeenCalledWith("/agents?session=agent1:sess-abc");
+    await act(async () => {
+      fireEvent.keyDown(getByTestId("ticket-card"), { key: "Enter" });
+      await Promise.resolve();
+    });
+    expect(mockHubFetch).toHaveBeenCalledWith(
+      expect.stringContaining("sess-abc"),
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ text: "\r" }) }),
+    );
   });
 
-  it("pressing Enter on card wrapper without active session does not navigate", () => {
+  it("pressing Enter on card wrapper without active session does not call API", async () => {
     const ticket = makeTicket({ number: 5 });
     const { getByTestId } = render(<TicketCard ticket={ticket} sessions={[]} />);
-    const card = getByTestId("ticket-card");
-    fireEvent.keyDown(card, { key: "Enter" });
-    expect(mockNavigate).not.toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.keyDown(getByTestId("ticket-card"), { key: "Enter" });
+      await Promise.resolve();
+    });
+    expect(mockHubFetch).not.toHaveBeenCalled();
   });
 
-  it("pressing Enter on card wrapper with destroying session navigates to session", () => {
-    const ticket = makeTicket({ number: 5 });
-    const sessions = [
-      makeSession("lead-5", "destroying", { agentName: "agent1", sessionId: "sess-destroying" }),
-    ];
-    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
-    const card = getByTestId("ticket-card");
-    fireEvent.keyDown(card, { key: "Enter" });
-    // destroying state is still "active" per hasActiveSession, so it should navigate
-    expect(mockNavigate).toHaveBeenCalledWith("/agents?session=agent1:sess-destroying");
-  });
-
-  it("pressing a non-Enter key on card wrapper does not navigate", () => {
+  it("pressing a non-Enter key on card wrapper does not call API", async () => {
     const ticket = makeTicket({ number: 5 });
     const sessions = [
       makeSession("lead-5", "running", { agentName: "agent1", sessionId: "sess-abc" }),
     ];
     const { getByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
-    const card = getByTestId("ticket-card");
-    fireEvent.keyDown(card, { key: "Space" });
-    expect(mockNavigate).not.toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.keyDown(getByTestId("ticket-card"), { key: "Space" });
+      await Promise.resolve();
+    });
+    expect(mockHubFetch).not.toHaveBeenCalled();
   });
 });
