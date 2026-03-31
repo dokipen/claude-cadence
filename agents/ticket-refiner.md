@@ -126,7 +126,7 @@ During refinement, every ticket **must** be assigned before transitioning to the
    CURRENT_USER=$(gh api user --jq '.login')
    ```
 
-   **Issues API:**
+   **Issues API (MCP preferred and CLI fallback):**
    ```bash
    CURRENT_USER_ID=$(issues auth whoami --json | jq -r '.id')
    ```
@@ -138,13 +138,17 @@ During refinement, every ticket **must** be assigned before transitioning to the
 gh issue edit N --add-assignee "$CURRENT_USER"
 ```
 
-**Issues API:**
-
-Use the `mcp__issues__ticket_assign` tool with `ticketId` and `userId`. Obtain the user ID first:
-```bash
-CURRENT_USER_ID=$(issues auth whoami --json | jq -r '.id')
+**Issues API (MCP preferred):**
 ```
-Then call `mcp__issues__ticket_assign` with `ticketId: TICKET_ID` and `userId: "$CURRENT_USER_ID"`.
+mcp__issues__ticket_assign
+  ticketId: TICKET_ID
+  userId: "$CURRENT_USER_ID"
+```
+
+**Issues API (CLI fallback):**
+```bash
+issues assign "$TICKET_ID" --user "$CURRENT_USER_ID" --json
+```
 
 ### When assignment is unclear
 
