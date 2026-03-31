@@ -21,6 +21,32 @@ Provider detection still applies: use this skill only when the project's `CLAUDE
 
 ---
 
+## State Machine
+
+Valid transitions:
+- `BACKLOG` → `REFINED`, `CLOSED`
+- `REFINED` → `IN_PROGRESS`, `BACKLOG`, `CLOSED`
+- `IN_PROGRESS` → `CLOSED`, `REFINED`
+- `CLOSED` → `BACKLOG`
+
+Blocked tickets cannot transition to `IN_PROGRESS`.
+
+```
+           ┌────────────────────────┐
+           ↓                        │
+BACKLOG ──→ REFINED ──→ IN_PROGRESS │
+  ↑  │       │  ↑           │       │
+  │  │       │  └───────────┘       │
+  │  └───────┴──────────────────→ CLOSED
+  │                                 │
+  └─────────────────────────────────┘
+                (reopen)
+```
+
+> **IMPORTANT:** Always check the ticket's current state before transitioning. Transitioning to the current state or skipping states is an error (e.g., `BACKLOG` → `IN_PROGRESS` is invalid — must go through `REFINED`).
+
+---
+
 ## MCP Tools (preferred)
 
 Use these tools when `mcp__issues__*` tools are available. They are faster, require no shell escaping, and work without the CLI installed.
@@ -84,15 +110,7 @@ mcp__issues__ticket_transition
   to: "IN_PROGRESS"     # BACKLOG | REFINED | IN_PROGRESS | CLOSED
 ```
 
-Valid transitions:
-- `BACKLOG` → `REFINED`, `CLOSED`
-- `REFINED` → `IN_PROGRESS`, `BACKLOG`, `CLOSED`
-- `IN_PROGRESS` → `CLOSED`, `REFINED`
-- `CLOSED` → `BACKLOG`
-
-Blocked tickets cannot transition to `IN_PROGRESS`.
-
-> **IMPORTANT:** Always check the ticket's current state before transitioning (use `mcp__issues__ticket_get`). Transitioning to the current state or skipping states is an error.
+See [State Machine](#state-machine) above for valid transitions, the state diagram, and the blocked-ticket constraint.
 
 **Common multi-step transitions:**
 
@@ -290,32 +308,7 @@ issues ticket transition TICKET_ID --to CLOSED --json
 issues ticket transition TICKET_ID --to BACKLOG --json
 ```
 
-Valid transitions:
-- `BACKLOG` -> `REFINED`, `CLOSED`
-- `REFINED` -> `IN_PROGRESS`, `BACKLOG`, `CLOSED`
-- `IN_PROGRESS` -> `CLOSED`, `REFINED`
-- `CLOSED` -> `BACKLOG`
-
-Blocked tickets cannot transition to `IN_PROGRESS`.
-
-**State machine:**
-
-```
-           ┌────────────────────────┐
-           ↓                        │
-BACKLOG ──→ REFINED ──→ IN_PROGRESS │
-  ↑  │       │  ↑           │       │
-  │  │       │  └───────────┘       │
-  │  └───────┴──────────────────→ CLOSED
-  │                                 │
-  └─────────────────────────────────┘
-                (reopen)
-```
-
-> **IMPORTANT:** Always check the ticket's current state before transitioning.
-> Use `issues ticket view TICKET_ID --project PROJECT --json` and read the `state` field.
-> - Transitioning to the current state is an error
-> - Skipping states is an error (e.g., `BACKLOG` → `IN_PROGRESS` is invalid — must go through `REFINED`)
+See [State Machine](#state-machine) above for valid transitions, the state diagram, and the blocked-ticket constraint. Use `issues ticket view TICKET_ID --project PROJECT --json` to check the current state before transitioning.
 
 **Common multi-step transitions:**
 
