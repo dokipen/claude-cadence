@@ -103,8 +103,19 @@ hub:
 
 Session operations go through the agent-hub REST API, not directly to agentd.
 
+### Authentication
+
+`$HUB_API_TOKEN` is a bearer token used to authenticate requests to the agent-hub REST API. It is configured in the host operator's `.env.dev` file alongside other service secrets.
+
+> **Do not read `.env.dev` programmatically** — it contains secrets and must not be accessed by agents or scripts.
+
+If `$HUB_API_TOKEN` is not set in your environment when you need to make hub API calls:
+- Ask the user to provide the token, or
+- Ask the user to set it in their shell environment (`export HUB_API_TOKEN=...`) before running the command
+
 ```bash
 # Replace <HUB_URL> with the hub URL from your agentd configuration
+# $HUB_API_TOKEN must be set in your environment (see Authentication section above)
 
 # List all agents registered with the hub
 curl -s -H "Authorization: Bearer $HUB_API_TOKEN" \
