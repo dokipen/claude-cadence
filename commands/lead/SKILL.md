@@ -126,9 +126,6 @@ For provider-specific command syntax in the steps below, refer to the ticket-pro
 
 7. **Claim the issue** (see ticket-provider skill — **Claim Ticket** operation).
 
-   **If the ticket has the `plan` label**, proceed to **[Plan Workflow](plan-workflow.md)** instead of the standard phases.
-   **If the ticket has the `human-activity` label**, proceed to **[Human Activity Workflow](human-activity-workflow.md)** instead of the standard phases.
-
 ---
 
 ## Your Team

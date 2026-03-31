@@ -149,7 +149,7 @@ mcp__issues__ticket_list
 
 **Issues API (CLI fallback):**
 ```bash
-issues ticket list --project $PROJECT --label "[relevant label]" --json
+issues ticket list --project "$PROJECT" --label "[relevant label]" --json
 ```
 
 ### View Ticket
@@ -170,7 +170,7 @@ mcp__issues__ticket_get
 
 **Issues API (CLI fallback):**
 ```bash
-TICKET_JSON=$(issues ticket view [NUMBER] --project $PROJECT --json)
+TICKET_JSON=$(issues ticket view [NUMBER] --project "$PROJECT" --json)
 echo "$TICKET_JSON"
 ```
 
@@ -206,7 +206,7 @@ mcp__issues__ticket_create
 **Issues API (CLI fallback):**
 ```bash
 issues ticket create \
-  --project $PROJECT \
+  --project "$PROJECT" \
   --title "Descriptive title" \
   --labels "LABEL_ID" \
   --description "$(cat <<'EOF'
@@ -280,6 +280,7 @@ EOF
 ```bash
 gh issue close [NUMBER]
 ```
+> **Note:** When closing after a PR merge (Phase 7), the PR's `Fixes #N` auto-closes the issue. Also remove the `in-progress` label if present: `gh issue edit [NUMBER] --remove-label "in-progress"`
 
 **Issues API (MCP preferred):**
 ```
@@ -325,5 +326,5 @@ Blocked by: #[BLOCKER-NUMBER]"
 
 **Issues API (CLI only — no MCP tool for block relationships):**
 ```bash
-issues block add --blocker [BLOCKER-NUMBER] --blocked [BLOCKED-NUMBER] --project $PROJECT --json
+issues block add --blocker [BLOCKER-NUMBER] --blocked [BLOCKED-NUMBER] --project "$PROJECT" --json
 ```
