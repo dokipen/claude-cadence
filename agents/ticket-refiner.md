@@ -139,9 +139,12 @@ gh issue edit N --add-assignee "$CURRENT_USER"
 ```
 
 **Issues API:**
+
+Use the `mcp__issues__ticket_assign` tool with `ticketId` and `userId`. Obtain the user ID first:
 ```bash
-issues assign TICKET_ID --user "$CURRENT_USER_ID" --json
+CURRENT_USER_ID=$(issues auth whoami --json | jq -r '.id')
 ```
+Then call `mcp__issues__ticket_assign` with `ticketId: TICKET_ID` and `userId: "$CURRENT_USER_ID"`.
 
 ### When assignment is unclear
 

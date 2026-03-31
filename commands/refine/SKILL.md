@@ -61,13 +61,13 @@ Use this value to select the correct commands throughout the workflow.
    ```
 
    **Issues API:**
+
+   Use `mcp__issues__ticket_get` to check the `assignee` field, then assign via MCP if unset:
    ```bash
-   ASSIGNEE=$(issues ticket view 123 --project "$PROJECT" --json | jq -r '.assignee.login // empty')
-   if [ -z "$ASSIGNEE" ]; then
-     CURRENT_USER_ID=$(issues auth whoami --json | jq -r '.id')
-     issues assign "$TICKET_ID" --user "$CURRENT_USER_ID" --json
-   fi
+   # Get current user ID for assignment
+   CURRENT_USER_ID=$(issues auth whoami --json | jq -r '.id')
    ```
+   Then call `mcp__issues__ticket_assign` with `ticketId` and `userId`.
 
 4. **Mark refined** when all criteria pass (including assignment):
 
@@ -111,7 +111,7 @@ An issue is refined when it has ALL of:
 | Estimate | `estimate:N` label (1-13) | Story points field (`--points N`) |
 | Priority | `priority:high`, `priority:medium`, or `priority:low` label | Priority field (`--priority N`) |
 | Type label | Label by name: bug, enhancement, etc. | Label by ID (use `issues label list --json` to resolve) |
-| Assigned | Assigned to a developer | `issues assign TICKET_ID --user USER_ID --json` |
+| Assigned | Assigned to a developer | `mcp__issues__ticket_assign` with `ticketId` and `userId` |
 | Blockers linked | Via GitHub dependencies API | `issues block add --blocker X --blocked Y --json` |
 | Blocked label | `blocked` label if open blockers exist | Blocked tickets auto-tracked; cannot transition to `IN_PROGRESS` |
 | Refined | `refined` label added after all criteria met | Transition to `REFINED` state |

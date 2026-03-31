@@ -14,6 +14,8 @@ import {
   ticketList,
   ticketUpdate,
   ticketTransition,
+  ticketAssign,
+  ticketUnassign,
 } from "./tools/tickets.js";
 import { labelList, labelAdd, labelRemove } from "./tools/labels.js";
 import { commentAdd } from "./tools/comments.js";
@@ -230,6 +232,29 @@ const TOOLS = [
       required: ["ticketId", "body"],
     },
   },
+  {
+    name: "ticket_assign",
+    description: "Assign a ticket to a user",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ticketId: { type: "string", description: "Ticket CUID (required)" },
+        userId: { type: "string", description: "User CUID to assign the ticket to (required). Obtain via `issues auth whoami --json | jq -r '.id'`." },
+      },
+      required: ["ticketId", "userId"],
+    },
+  },
+  {
+    name: "ticket_unassign",
+    description: "Remove the assignee from a ticket",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ticketId: { type: "string", description: "Ticket CUID (required)" },
+      },
+      required: ["ticketId"],
+    },
+  },
 ] as const;
 
 // --- Server setup ---
@@ -318,6 +343,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return commentAdd({
         ticketId: params.ticketId as string,
         body: params.body as string,
+      });
+
+    case "ticket_assign":
+      return ticketAssign({
+        ticketId: params.ticketId as string,
+        userId: params.userId as string,
+      });
+
+    case "ticket_unassign":
+      return ticketUnassign({
+        ticketId: params.ticketId as string,
       });
 
     default:

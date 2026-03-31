@@ -222,6 +222,38 @@ const TRANSITION_TICKET = gql`
   }
 `;
 
+const ASSIGN_TICKET = gql`
+  mutation AssignTicket($ticketId: ID!, $userId: ID!) {
+    assignTicket(ticketId: $ticketId, userId: $userId) {
+      id
+      number
+      title
+      assignee {
+        id
+        login
+        displayName
+      }
+      updatedAt
+    }
+  }
+`;
+
+const UNASSIGN_TICKET = gql`
+  mutation UnassignTicket($ticketId: ID!) {
+    unassignTicket(ticketId: $ticketId) {
+      id
+      number
+      title
+      assignee {
+        id
+        login
+        displayName
+      }
+      updatedAt
+    }
+  }
+`;
+
 function ok(data: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
 }
@@ -405,6 +437,41 @@ export async function ticketTransition(params: TicketTransitionParams): Promise<
       { id: params.id, to: params.to }
     );
     return ok(data.transitionTicket);
+  } catch (error) {
+    return err(error instanceof Error ? error.message : String(error));
+  }
+}
+
+export interface TicketAssignParams {
+  ticketId: string;
+  userId: string;
+}
+
+export async function ticketAssign(params: TicketAssignParams): Promise<CallToolResult> {
+  try {
+    const client = getClient();
+    const data = await client.request<{ assignTicket: unknown }>(
+      ASSIGN_TICKET,
+      { ticketId: params.ticketId, userId: params.userId }
+    );
+    return ok(data.assignTicket);
+  } catch (error) {
+    return err(error instanceof Error ? error.message : String(error));
+  }
+}
+
+export interface TicketUnassignParams {
+  ticketId: string;
+}
+
+export async function ticketUnassign(params: TicketUnassignParams): Promise<CallToolResult> {
+  try {
+    const client = getClient();
+    const data = await client.request<{ unassignTicket: unknown }>(
+      UNASSIGN_TICKET,
+      { ticketId: params.ticketId }
+    );
+    return ok(data.unassignTicket);
   } catch (error) {
     return err(error instanceof Error ? error.message : String(error));
   }
