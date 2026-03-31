@@ -41,7 +41,9 @@ git push -u origin HEAD
 
 ## Create PR
 
-If `.github/PULL_REQUEST_TEMPLATE.md` exists, read it first to understand the expected PR body structure, then create a PR with the template sections filled in:
+**If `.github/PULL_REQUEST_TEMPLATE.md` exists:** Read it first to understand the expected PR body structure, then create the PR using that template's sections filled in.
+
+**If no project PR template exists (use the following fallback ONLY in this case):**
 
 ```bash
 gh pr create --title "Descriptive PR title" --body "$(cat <<'EOF'
@@ -63,7 +65,6 @@ EOF
 ```
 
 **Notes:**
-- The PR body should follow the structure in `.github/PULL_REQUEST_TEMPLATE.md` if it exists.
 - Apply a type label: `bug`, `enhancement`, `documentation`, `testing`, or `performance`.
 - Copy relevant labels from the linked issue. For GitHub Issues, this includes estimate labels. For issues-api, estimates are native story points on the ticket and do not need to be copied.
 
