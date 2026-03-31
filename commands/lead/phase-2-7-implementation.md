@@ -152,9 +152,10 @@ docker compose -p <PROJECT_NAME> down
 
 1. Wait for PR checks to pass, then merge. Use a 10-minute timeout to avoid blocking on stuck checks (`--watch` returns immediately if checks are already green):
    ```bash
-   timeout 600 gh pr checks --watch --fail-fast && gh pr merge --squash --delete-branch
+   TIMEOUT_CMD=$(bash "$CADENCE_ROOT/commands/lead/scripts/detect-timeout-cmd.sh")
+   "$TIMEOUT_CMD" 600 gh pr checks --watch --fail-fast && gh pr merge --squash --delete-branch
    ```
-   > **Note:** On macOS without GNU coreutils, use `gtimeout` instead of `timeout`.
+   The helper auto-selects `gtimeout` (macOS with GNU coreutils) or `timeout` (Linux).
 
    - If checks pass: the merge proceeds automatically
    - If checks fail: report the specific failed check(s) to the user
