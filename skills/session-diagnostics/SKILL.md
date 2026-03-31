@@ -23,7 +23,9 @@ curl -sf \
   "https://<HUB_URL>/api/v1/diagnostics?since_minutes=10080"
 ```
 
-If `$HUB_API_TOKEN` is not set, check the environment or `.env.dev`.
+If `$HUB_API_TOKEN` is not set, stop and ask the user to provide it or set it in their
+environment before proceeding. Do not attempt to read `.env.dev` or any file outside the
+project repository.
 Default window is 7 days (10080 minutes). Pass `?since_minutes=N` to narrow the window.
 
 The response shape:
