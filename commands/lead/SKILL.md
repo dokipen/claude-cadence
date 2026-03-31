@@ -75,112 +75,17 @@ This overrides the `api_url` configured in `CLAUDE.md`. Has no effect when provi
 
 ### Before Any Work Begins
 
-1. **Search for existing issue**:
+For provider-specific command syntax in the steps below, refer to the ticket-provider skill.
 
-   **GitHub (default):**
-   ```bash
-   gh issue list --search "[relevant keywords]" --state open
-   ```
+1. **Search for existing issue** (see ticket-provider skill — **Search / List Tickets** operation).
 
-   **Issues API (MCP preferred):**
-   ```
-   mcp__issues__ticket_list
-     projectName: "$PROJECT"
-     labelNames: ["[relevant label]"]
-   ```
+2. **If issue exists**: View it to verify acceptance criteria (see ticket-provider skill — **View Ticket** operation). Save the output as `$TICKET_JSON` — reused for label detection in step 5.
 
-   **Issues API (CLI fallback):**
-   ```bash
-   issues ticket list --project $PROJECT --label "[relevant label]" --json
-   ```
+3. **If no issue exists**: Create one with a descriptive title and initial context (see ticket-provider skill — **Create Ticket** operation). **Shell safety:** Avoid backticks in the title.
 
-2. **If issue exists**: Verify it has clear acceptance criteria
-
-   **GitHub (default):**
-   ```bash
-   gh issue view [NUMBER]
-   ```
-
-   **Issues API (MCP preferred):**
-   ```
-   mcp__issues__ticket_get
-     number: [NUMBER]
-     projectName: "$PROJECT"
-   ```
-   Save the output as `$TICKET_JSON` — it is reused for label detection in step 5.
-
-   **Issues API (CLI fallback):**
-   ```bash
-   TICKET_JSON=$(issues ticket view [NUMBER] --project $PROJECT --json)
-   echo "$TICKET_JSON"
-   ```
-   Save the output as `$TICKET_JSON` — it is reused for label detection in step 5.
-
-3. **If no issue exists**: Create one with a descriptive title and initial context. **Shell safety:** The `--title` argument is inline — avoid backticks in the title.
-
-   **GitHub (default):**
-   ```bash
-   gh issue create \
-     --title "Descriptive title" \
-     --label "bug" \
-     --body "$(cat <<'EOF'
-## Description
-[Clear explanation of the work]
-
-## Notes
-[Any additional context]
-EOF
-)"
-   ```
-
-   **Issues API (MCP preferred):**
-   Use `mcp__issues__label_list` to resolve label names to IDs first, then:
-   ```
-   mcp__issues__ticket_create
-     title: "Descriptive title"
-     projectName: "$PROJECT"
-     description: "## Description\n[Clear explanation of the work]\n\n## Notes\n[Any additional context]"
-     labelIds: ["<BUG_LABEL_CUID>"]
-   ```
-
-   **Issues API (CLI fallback):**
-   ```bash
-   issues ticket create \
-     --project $PROJECT \
-     --title "Descriptive title" \
-     --labels "BUG_LABEL_ID" \
-     --description "$(cat <<'EOF'
-## Description
-[Clear explanation of the work]
-
-## Notes
-[Any additional context]
-EOF
-)" \
-     --json
-   ```
-
-4. **Ensure issue is refined**:
-
-   **GitHub (default):**
-   ```bash
-   gh issue view [NUMBER] --json labels --jq '.labels[].name | select(. == "refined")'
-   ```
-   If the `refined` label is missing, run `/refine [NUMBER]` before proceeding.
-
-   **Issues API (MCP preferred):**
-   ```
-   mcp__issues__ticket_get
-     number: [NUMBER]
-     projectName: "$PROJECT"
-   ```
-   If the `state` field is not `REFINED` (or later), run `/refine [NUMBER]` before proceeding.
-
-   **Issues API (CLI fallback):**
-   ```bash
-   issues ticket view [NUMBER] --project $PROJECT --json
-   ```
-   If the `state` field is not `REFINED` (or later), run `/refine [NUMBER]` before proceeding.
+4. **Ensure issue is refined**: View the ticket (see ticket-provider skill — **View Ticket** operation).
+   - **GitHub:** If the `refined` label is missing, run `/refine [NUMBER]` before proceeding.
+   - **Issues API:** If `state` is not `REFINED` (or later), run `/refine [NUMBER]` before proceeding.
 
 5. **Detect ticket type**: Check if the ticket has a special workflow label.
 
@@ -219,50 +124,7 @@ EOF
 6. **Check if work is already complete**:
    Before claiming, delegate to an appropriate specialist to verify the work isn't already done.
 
-7. **Claim the issue**:
-
-   **GitHub (default):**
-   ```bash
-   gh issue edit [NUMBER] --add-label "in-progress"
-   ```
-
-   **Issues API (MCP preferred):**
-   Check the ticket's current state first with `mcp__issues__ticket_get`. Then transition through required intermediate states:
-   - If `BACKLOG`:
-     ```
-     mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "REFINED"
-     mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "IN_PROGRESS"
-     ```
-   - If `REFINED`:
-     ```
-     mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "IN_PROGRESS"
-     ```
-   - If already `IN_PROGRESS` → skip the transition
-   - If `CLOSED`:
-     ```
-     mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "BACKLOG"
-     mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "REFINED"
-     mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "IN_PROGRESS"
-     ```
-
-   **Issues API (CLI fallback):**
-   Check the ticket's current state first with `issues ticket view`. Then transition through required intermediate states:
-   - If `BACKLOG`:
-     ```bash
-     issues ticket transition TICKET_ID --to REFINED --json
-     issues ticket transition TICKET_ID --to IN_PROGRESS --json
-     ```
-   - If `REFINED`:
-     ```bash
-     issues ticket transition TICKET_ID --to IN_PROGRESS --json
-     ```
-   - If already `IN_PROGRESS` → skip the transition
-   - If `CLOSED`:
-     ```bash
-     issues ticket transition TICKET_ID --to BACKLOG --json
-     issues ticket transition TICKET_ID --to REFINED --json
-     issues ticket transition TICKET_ID --to IN_PROGRESS --json
-     ```
+7. **Claim the issue** (see ticket-provider skill — **Claim Ticket** operation).
 
    **If the ticket has the `plan` label**, proceed to **[Plan Workflow](plan-workflow.md)** instead of the standard phases.
    **If the ticket has the `human-activity` label**, proceed to **[Human Activity Workflow](human-activity-workflow.md)** instead of the standard phases.
@@ -277,10 +139,10 @@ Delegate to specialist agents using the Agent tool. Available agents are listed 
 
 ## Communication Channels
 
-| Phase | Channel | Command (GitHub) | Command (Issues API) |
-|-------|---------|------------------|----------------------|
-| Pre-PR (research, planning, implementation) | Ticket | `gh issue comment [N] --body "$(cat <<'EOF'\n...\nEOF\n)"` | `mcp__issues__comment_add` (preferred) or `issues comment add TICKET_ID --body "$(cat <<'EOF'\n...\nEOF\n)" --json` (fallback) |
-| Post-PR (code review, QA feedback) | GitHub PR | `gh pr review [N] --comment --body "..."` | `gh pr review [N] --comment --body "..."` |
+| Phase | Channel | How |
+|-------|---------|-----|
+| Pre-PR (research, planning, implementation) | Ticket | Comment on ticket — see ticket-provider skill (**Comment** operation) |
+| Post-PR (code review, QA feedback) | GitHub PR | `gh pr review [N] --comment --body "..."` |
 
 **Markdown formatting:** All comments (issue and PR) are rendered as markdown. Use markdown links `[text](url)` instead of bare URLs, code fences for file names and code references, and bold/lists for structure.
 

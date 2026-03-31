@@ -47,42 +47,14 @@ After presenting the full walkthrough, guide the human through each step **one a
 
 Once all steps are confirmed complete:
 
-1. Post a completion summary to the ticket:
+1. Post a completion summary to the ticket (see ticket-provider skill — **Comment** operation):
+   ```
+   ## Walkthrough complete: [TITLE]
 
-   **GitHub (default):**
-   ```bash
-   gh issue comment [NUMBER] --body "$(cat <<'EOF'
-## Walkthrough complete: [TITLE]
-
-All manual steps confirmed complete by the human operator.
-EOF
-)"
+   All manual steps confirmed complete by the human operator.
    ```
 
-   **Issues API (MCP preferred):**
-   ```
-   mcp__issues__comment_add
-     ticketId: "<TICKET_CUID>"
-     body: "## Walkthrough complete: [TITLE]\n\nAll manual steps confirmed complete by the human operator."
-   ```
-
-   **Issues API (CLI fallback):**
-   ```bash
-   issues comment add TICKET_ID --body "$(cat <<'EOF'
-## Walkthrough complete: [TITLE]
-
-All manual steps confirmed complete by the human operator.
-EOF
-)" --json
-   ```
-
-2. Close the ticket:
-   - **GitHub (default):** `gh issue close [NUMBER]`
-   - **Issues API (MCP preferred):**
-     ```
-     mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "CLOSED"
-     ```
-     **Issues API (CLI fallback):** `issues ticket transition TICKET_ID --to CLOSED --json`
+2. Close the ticket (see ticket-provider skill — **Close Ticket** operation).
 
 3. Report completion to the user, including the ticket number and title (e.g., "Completed #42: Add user authentication.").
 

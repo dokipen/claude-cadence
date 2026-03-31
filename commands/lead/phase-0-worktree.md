@@ -47,24 +47,5 @@
 3. **If NOT in a worktree**:
    - If on default branch: use `/new-work` to create a worktree. After the worktree is created, set `WORKTREE_DIR="$(git rev-parse --show-toplevel)/.worktrees/${BRANCH}"` and `cd` into it.
    - If on a feature branch: use the current directory and branch as-is. Set `WORKTREE_DIR="$PWD"` and `BRANCH="<current-branch>"`.
-4. Post setup to issue:
-
-   **GitHub (default):**
-   ```bash
-   gh issue comment [N] --body "Starting work on issue #[N]. Branch: \`[BRANCH]\`"
-   ```
-
-   **Issues API (MCP preferred):**
-   ```
-   mcp__issues__comment_add
-     ticketId: "<TICKET_CUID>"
-     body: "Starting work on issue #[N]. Branch: `[BRANCH]`"
-   ```
-
-   **Issues API (CLI fallback):**
-   ```bash
-   issues comment add TICKET_ID --body "$(cat <<'EOF'
-Starting work on issue #[N]. Branch: `[BRANCH]`
-EOF
-)" --json
-   ```
+4. Post setup to issue (see ticket-provider skill — **Comment** operation):
+   > Starting work on issue #[N]. Branch: `[BRANCH]`
