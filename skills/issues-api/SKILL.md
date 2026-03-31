@@ -514,4 +514,4 @@ When `--json` is used:
 
 ### Story Points
 
-Arbitrary positive integers. Convention: Fibonacci scale (1, 2, 3, 5, 8, 13).
+Positive integers. Convention: Fibonacci scale (1, 2, 3, 5, 8, 13).
