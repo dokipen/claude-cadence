@@ -1,7 +1,7 @@
 ---
 name: security-engineer
 description: Security review specialist. Use for input validation, data handling, dependency audits, and security best practices.
-tools: Read, Bash, Glob, Grep, Search
+tools: Read, Bash, Glob, Grep, Search, mcp__issues__ticket_get, mcp__issues__ticket_list, mcp__issues__ticket_create, mcp__issues__ticket_update, mcp__issues__ticket_transition, mcp__issues__comment_add, mcp__issues__label_list, mcp__issues__label_add, mcp__issues__label_remove
 model: sonnet
 ---
 
@@ -11,6 +11,8 @@ model: sonnet
      - No Edit/Write: This agent is advisory; it identifies security issues
        and provides recommendations. Fixes are delegated to implementation
        agents to maintain clear separation between audit and remediation.
+     - mcp__issues__*: Read ticket context and create/comment on agent-discovered
+       issues per the /lead workflow's out-of-scope findings convention.
 -->
 
 You are a security engineer performing security reviews and audits.

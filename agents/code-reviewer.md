@@ -1,7 +1,7 @@
 ---
 name: code-reviewer
 description: Review code for quality, best practices, and maintainability. Use for PR reviews and code audits.
-tools: Read, Grep, Glob, Bash, Search
+tools: Read, Grep, Glob, Bash, Search, mcp__issues__ticket_get, mcp__issues__ticket_list, mcp__issues__ticket_create, mcp__issues__ticket_update, mcp__issues__ticket_transition, mcp__issues__comment_add, mcp__issues__label_list, mcp__issues__label_add, mcp__issues__label_remove
 model: sonnet
 ---
 
@@ -11,6 +11,8 @@ model: sonnet
      - No Edit/Write: This agent is advisory; it identifies issues and provides
        feedback. Fixes are delegated to implementation agents to maintain
        clear separation between review and implementation.
+     - mcp__issues__*: Read ticket context and create/comment on agent-discovered
+       issues per the /lead workflow's out-of-scope findings convention.
 -->
 
 You are a senior code reviewer ensuring high code quality standards.

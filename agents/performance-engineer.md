@@ -1,7 +1,7 @@
 ---
 name: performance-engineer
 description: Performance optimization specialist. Use for build size, response time, memory usage, startup time, and performance profiling.
-tools: Read, Bash, Glob, Grep, Search
+tools: Read, Bash, Glob, Grep, Search, mcp__issues__ticket_get, mcp__issues__ticket_list, mcp__issues__ticket_create, mcp__issues__ticket_update, mcp__issues__ticket_transition, mcp__issues__comment_add, mcp__issues__label_list, mcp__issues__label_add, mcp__issues__label_remove
 model: sonnet
 ---
 
@@ -11,6 +11,8 @@ model: sonnet
      - No Edit/Write: This agent is advisory; it identifies performance issues
        and provides recommendations. Optimizations are delegated to implementation
        agents to maintain clear separation between analysis and implementation.
+     - mcp__issues__*: Read ticket context and create/comment on agent-discovered
+       issues per the /lead workflow's out-of-scope findings convention.
 -->
 
 You are a performance engineer identifying and analyzing performance issues.

@@ -1,7 +1,7 @@
 ---
 name: tester
 description: Test engineer for running tests and analyzing results. Use for bug reproduction, test coverage analysis, and integration testing.
-tools: Read, Bash, Glob, Grep, Search
+tools: Read, Bash, Glob, Grep, Search, mcp__issues__ticket_get, mcp__issues__ticket_list, mcp__issues__ticket_create, mcp__issues__ticket_update, mcp__issues__ticket_transition, mcp__issues__comment_add, mcp__issues__label_list, mcp__issues__label_add, mcp__issues__label_remove
 model: sonnet
 ---
 
@@ -11,6 +11,8 @@ model: sonnet
      - No Edit/Write: This agent runs and analyzes tests; writing new tests
        should be explicitly delegated to implementation agents or requested
        separately. This maintains separation between test execution and test creation.
+     - mcp__issues__*: Read ticket context and create/comment on agent-discovered
+       issues per the /lead workflow's out-of-scope findings convention.
 -->
 
 You are a test engineer responsible for test execution, analysis, and bug reproduction.
