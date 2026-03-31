@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { useNavigate } from "react-router";
 import { Sparkles } from "lucide-react";
 import type { Ticket, TicketState, ActiveSessionInfo } from "../types";
 import { TicketCard } from "./TicketCard";
@@ -7,6 +8,7 @@ import { LeadAllDialog } from "./LeadAllDialog";
 import { CreateTicketDialog } from "./CreateTicketDialog";
 import { AnimatedCadenceIcon } from "./AnimatedCadenceIcon";
 import { SessionOutputTooltip } from "./SessionOutputTooltip";
+import { validateAgentProfile, validateSessionId } from "../utils/validateSession";
 import styles from "../styles/board.module.css";
 
 export function getActiveRefineAllSession(sessions: ActiveSessionInfo[], projectId?: string): ActiveSessionInfo | null {
@@ -39,8 +41,22 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
   const [showRefineAll, setShowRefineAll] = useState(false);
   const [showLeadAll, setShowLeadAll] = useState(false);
   const [showCreateTicket, setShowCreateTicket] = useState(false);
+  const navigate = useNavigate();
 
   const activeRefineAllSession = getActiveRefineAllSession(sessions ?? [], projectId);
+
+  const handleRefineAllClick = useCallback(() => {
+    if (
+      activeRefineAllSession?.agentName &&
+      activeRefineAllSession?.sessionId &&
+      validateAgentProfile(activeRefineAllSession.agentName) &&
+      validateSessionId(activeRefineAllSession.sessionId)
+    ) {
+      navigate(`/agents?session=${activeRefineAllSession.agentName}:${activeRefineAllSession.sessionId}`);
+    } else {
+      setShowRefineAll(true);
+    }
+  }, [navigate, activeRefineAllSession]);
 
   const displayCount = loading
     ? "…"
@@ -66,7 +82,7 @@ export function KanbanColumn({ state, tickets, totalCount, hasNextPage, loading,
         {state === "BACKLOG" && tickets.length > 0 && !loading && !hasNextPage && (
           <button
             className={styles.refineAllButton}
-            onClick={() => setShowRefineAll(true)}
+            onClick={handleRefineAllClick}
             data-testid="refine-all-button"
             aria-label="Refine All"
             title="Refine All"
