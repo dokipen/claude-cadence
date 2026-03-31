@@ -70,14 +70,9 @@ Use this value to select the correct commands throughout the workflow.
 
    **Issues API (MCP preferred):**
    ```
-   mcp__issues__ticket_get
-     number: 123
-     projectName: "$PROJECT"
-   ```
-   Check the `assignee` field. If null, use the `issues` CLI to assign (no MCP assign tool yet):
-   ```bash
-   CURRENT_USER_ID=$(issues auth whoami --json | jq -r '.id')
-   issues assign "$TICKET_ID" --user "$CURRENT_USER_ID" --json
+   mcp__issues__ticket_assign
+     ticketId: TICKET_ID
+     userId: CURRENT_USER_ID
    ```
 
    **Issues API (CLI fallback):**
