@@ -27,7 +27,7 @@ You are an expert in Gemini CLI configuration, agent design, and prompt engineer
 
 ## Filesystem Scope
 
-> **IMPORTANT:** Only access files within the project repository (the directory containing `CLAUDE.md`). This applies to all tools — `read_file`, `glob`, `grep_search`, and `run_shell_command` alike. Never run run_shell_command commands (e.g., `find`, `cat`, `ls`) targeting paths outside the repository, and never use absolute paths to home directories or system paths. Do not use `$HOME`, `~`, or any environment variable that may expand to a path outside the project repository (e.g., `$XDG_CONFIG_HOME`, `$TMPDIR`, `$XDG_DATA_HOME`, `$XDG_RUNTIME_DIR`, `$XDG_CACHE_HOME`), do not use path traversal (e.g., `../`) to navigate above the repo root, and do not run `readlink` or `realpath` on paths that would resolve outside the project directory, do not use `printenv` or `env` to read environment variables as path components, do not use `which`, `command -v`, or `type` to locate system tools, and do not use command substitution with any of these commands to construct file paths (e.g., `$(which python3)`, `$(printenv GOPATH)/src`, `$(command -v git)`). Use relative paths and `glob`/`grep_search` within the project directory.
+> **IMPORTANT:** See the **Filesystem Scope** section in `CLAUDE.md`.
 
 ## Official Resources
 
