@@ -105,7 +105,10 @@ Session operations go through the agent-hub REST API, not directly to agentd.
 
 ### Authentication
 
-`$HUB_API_TOKEN` is a bearer token used to authenticate requests to the agent-hub REST API. It is configured in the host operator's `.env.dev` file alongside other service secrets.
+There are two distinct tokens in this system — use the right one for your context:
+
+- **`HUB_AGENT_TOKEN`** — used by agentd itself to authenticate its outbound WebSocket connection to the hub. Configured in `config.yaml` under `hub.token_env_var`. Only relevant when operating or configuring the agentd daemon.
+- **`HUB_API_TOKEN`** — used by REST API callers (agents, humans) to authenticate requests to the agent-hub REST API. Configured in the host operator's `.env.dev` file. This is the token you need when calling hub endpoints to create sessions, list agents, etc.
 
 > **Do not read `.env.dev` programmatically** — it contains secrets and must not be accessed by agents or scripts.
 
