@@ -11,30 +11,11 @@
    - Bug fix → Phase 1b (Reproduction)
    - Other → Delegate to appropriate specialist
 4. **Task breakdown**: Create 3-6 discrete units with clear owners
-5. **Post plan to issue**:
-
-   **GitHub (default):**
-   ```bash
-   gh issue comment [N] --body "## Plan
-
-   [Task breakdown summary with approach and key decisions]"
+5. **Post plan to issue** (see ticket-provider skill — **Comment** operation):
    ```
+   ## Plan
 
-   **Issues API (MCP preferred):**
-   ```
-   mcp__issues__comment_add
-     ticketId: "<TICKET_CUID>"
-     body: "## Plan\n\n[Task breakdown summary with approach and key decisions]"
-   ```
-
-   **Issues API (CLI fallback):**
-   ```bash
-   issues comment add TICKET_ID --body "$(cat <<'EOF'
-## Plan
-
-[Task breakdown summary with approach and key decisions]
-EOF
-)" --json
+   [Task breakdown summary with approach and key decisions]
    ```
 
 ### Phase 1a: Design Review (for visual changes, if designer agent available)

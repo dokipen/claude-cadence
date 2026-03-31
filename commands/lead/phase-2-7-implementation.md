@@ -14,34 +14,13 @@ For each task from the Phase 1 breakdown, delegate to an agent:
 5. **Use the Delegation Template** (see [Coordination Protocol](coordination-protocol.md)) for every delegation — include worktree path, issue context, scope, constraints, expected output, and completion signal
 6. **Verify incrementally** after each completed task using the project's verification command (from CLAUDE.md). This catches issues early; Phase 3 runs the full verification as the final gate before PR creation.
 7. For bug fixes: the fix should make the reproduction test pass
-8. **Post implementation summary to issue**:
-
-   **GitHub (default):**
-   ```bash
-   gh issue comment [N] --body "## Implementation complete
+8. **Post implementation summary to issue** (see ticket-provider skill — **Comment** operation):
+   ```
+   ## Implementation complete
 
    [Summary of changes made and files modified]
 
-   Moving to verification."
-   ```
-
-   **Issues API (MCP preferred):**
-   ```
-   mcp__issues__comment_add
-     ticketId: "<TICKET_CUID>"
-     body: "## Implementation complete\n\n[Summary of changes made and files modified]\n\nMoving to verification."
-   ```
-
-   **Issues API (CLI fallback):**
-   ```bash
-   issues comment add TICKET_ID --body "$(cat <<'EOF'
-## Implementation complete
-
-[Summary of changes made and files modified]
-
-Moving to verification.
-EOF
-)" --json
+   Moving to verification.
    ```
 
 ### Phase 3: Pre-PR Verification
@@ -53,27 +32,8 @@ EOF
 ### Phase 4: PR Creation
 
 1. Use `/create-pr` to create the pull request. Link to the issue with `Fixes #[NUMBER]`.
-2. **Post PR link to issue**:
-
-   **GitHub (default):**
-   ```bash
-   gh issue comment [N] --body "PR created: #[PR-NUMBER] ([PR-URL])"
-   ```
-
-   **Issues API (MCP preferred):**
-   ```
-   mcp__issues__comment_add
-     ticketId: "<TICKET_CUID>"
-     body: "PR created: #[PR-NUMBER] ([PR-URL])"
-   ```
-
-   **Issues API (CLI fallback):**
-   ```bash
-   issues comment add TICKET_ID --body "$(cat <<'EOF'
-PR created: #[PR-NUMBER] ([PR-URL])
-EOF
-)" --json
-   ```
+2. **Post PR link to issue** (see ticket-provider skill — **Comment** operation):
+   > PR created: #[PR-NUMBER] ([PR-URL])
 
 ### Phase 5: Code Review Gate
 
@@ -188,13 +148,8 @@ docker compose -p <PROJECT_NAME> down
    - If checks pass: the merge proceeds automatically
    - If checks fail: report the specific failed check(s) to the user
    - If timeout is exceeded: report the timeout and the still-pending check(s) to the user
-2. Close the ticket:
-   - **GitHub (default):** `gh issue edit [NUMBER] --remove-label "in-progress"` (the PR's `Fixes #N` auto-closes it)
-   - **Issues API (MCP preferred):**
-     ```
-     mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "CLOSED"
-     ```
-     **Issues API (CLI fallback):** `issues ticket transition TICKET_ID --to CLOSED --json`
+2. Close the ticket (see ticket-provider skill — **Close Ticket** operation):
+   - **GitHub:** The PR's `Fixes #N` auto-closes it; remove the `in-progress` label: `gh issue edit [NUMBER] --remove-label "in-progress"`
 3. Sync blocked labels using the `update-blocked-labels.sh` script in this command's `scripts/` directory
 4. Return to default branch and pull latest (skip if `WORKTREE_PREEXISTING` — the worktree is not ours to clean up):
    ```bash
@@ -207,27 +162,8 @@ docker compose -p <PROJECT_NAME> down
    ```bash
    bash "$CADENCE_ROOT/skills/project-ops/scripts/cleanup-worktree.sh" "$BRANCH"
    ```
-6. **Post completion to issue**:
-
-   **GitHub (default):**
-   ```bash
-   gh issue comment [N] --body "Completed #[NUMBER]: [TITLE]. Merged via PR #[PR-NUMBER]."
-   ```
-
-   **Issues API (MCP preferred):**
-   ```
-   mcp__issues__comment_add
-     ticketId: "<TICKET_CUID>"
-     body: "Completed #[NUMBER]: [TITLE]. Merged via PR #[PR-NUMBER]."
-   ```
-
-   **Issues API (CLI fallback):**
-   ```bash
-   issues comment add TICKET_ID --body "$(cat <<'EOF'
-Completed #[NUMBER]: [TITLE]. Merged via PR #[PR-NUMBER].
-EOF
-)" --json
-   ```
+6. **Post completion to issue** (see ticket-provider skill — **Comment** operation):
+   > Completed #[NUMBER]: [TITLE]. Merged via PR #[PR-NUMBER].
 7. Report completion to the user, including the ticket number, title, and PR link (e.g., "Completed #42: Add user authentication. Merged via PR #[PR-NUMBER].")
 
 > **Note:** If this phase is skipped (e.g., conversation ends early), cleanup happens automatically the next time `/new-work` creates a worktree — the `cleanup-merged-worktrees.sh` pre-flight detects merged PRs and cleans up their worktrees, branches, and labels.

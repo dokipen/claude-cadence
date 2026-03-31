@@ -128,3 +128,203 @@ The two providers use different terminology in some areas:
   ```bash
   ISSUES_API_URL=http://192.168.1.100:5173/graphql /lead 123
   ```
+
+## Operation Reference
+
+Full command examples for each supported operation, organized by type. Workflow files reference these by name rather than repeating the three-variant syntax inline.
+
+### Search / List Tickets
+
+**GitHub (default):**
+```bash
+gh issue list --search "[relevant keywords]" --state open
+```
+
+**Issues API (MCP preferred):**
+```
+mcp__issues__ticket_list
+  projectName: "$PROJECT"
+  labelNames: ["[relevant label]"]
+```
+
+**Issues API (CLI fallback):**
+```bash
+issues ticket list --project "$PROJECT" --label "[relevant label]" --json
+```
+
+### View Ticket
+
+Retrieve full ticket details. Save the output as `$TICKET_JSON` to reuse for label/state inspection without additional API calls.
+
+**GitHub (default):**
+```bash
+gh issue view [NUMBER]
+```
+
+**Issues API (MCP preferred):**
+```
+mcp__issues__ticket_get
+  number: [NUMBER]
+  projectName: "$PROJECT"
+```
+
+**Issues API (CLI fallback):**
+```bash
+TICKET_JSON=$(issues ticket view [NUMBER] --project "$PROJECT" --json)
+echo "$TICKET_JSON"
+```
+
+### Create Ticket
+
+**Shell safety:** The `--title` argument is inline — avoid backticks in the title.
+
+**GitHub (default):**
+```bash
+gh issue create \
+  --title "Descriptive title" \
+  --label "enhancement" \
+  --body "$(cat <<'EOF'
+## Description
+[Clear explanation of the work]
+
+## Notes
+[Any additional context]
+EOF
+)"
+```
+
+**Issues API (MCP preferred):**
+Use `mcp__issues__label_list` to resolve label names to IDs first, then:
+```
+mcp__issues__ticket_create
+  title: "Descriptive title"
+  projectName: "$PROJECT"
+  description: "## Description\n[Clear explanation of the work]\n\n## Notes\n[Any additional context]"
+  labelIds: ["<LABEL_CUID>"]
+```
+
+**Issues API (CLI fallback):**
+```bash
+issues ticket create \
+  --project "$PROJECT" \
+  --title "Descriptive title" \
+  --labels "LABEL_ID" \
+  --description "$(cat <<'EOF'
+## Description
+[Clear explanation of the work]
+
+## Notes
+[Any additional context]
+EOF
+)" \
+  --json
+```
+
+### Claim Ticket (transition to IN_PROGRESS)
+
+Check the ticket's current state first, then transition through required intermediate states:
+
+- If `BACKLOG`: transition BACKLOG → REFINED → IN_PROGRESS
+- If `REFINED`: transition → IN_PROGRESS
+- If already `IN_PROGRESS`: skip
+- If `CLOSED`: transition CLOSED → BACKLOG → REFINED → IN_PROGRESS
+
+**GitHub (default):**
+```bash
+gh issue edit [NUMBER] --add-label "in-progress"
+```
+
+**Issues API (MCP preferred):**
+Chain `mcp__issues__ticket_transition` calls as needed:
+```
+mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "REFINED"      # if currently BACKLOG
+mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "IN_PROGRESS"
+```
+
+**Issues API (CLI fallback):**
+```bash
+issues ticket transition TICKET_ID --to REFINED --json      # if currently BACKLOG
+issues ticket transition TICKET_ID --to IN_PROGRESS --json
+```
+
+### Comment
+
+Add a comment to a ticket.
+
+**GitHub (default):**
+```bash
+gh issue comment [N] --body "$(cat <<'EOF'
+[message body]
+EOF
+)"
+```
+
+**Issues API (MCP preferred):**
+```
+mcp__issues__comment_add
+  ticketId: "<TICKET_CUID>"
+  body: "[message body]"
+```
+
+**Issues API (CLI fallback):**
+```bash
+issues comment add TICKET_ID --body "$(cat <<'EOF'
+[message body]
+EOF
+)" --json
+```
+
+### Close Ticket
+
+**GitHub (default):**
+```bash
+gh issue close [NUMBER]
+```
+> **Note:** When closing after a PR merge (Phase 7), the PR's `Fixes #N` auto-closes the issue. Also remove the `in-progress` label if present: `gh issue edit [NUMBER] --remove-label "in-progress"`
+
+**Issues API (MCP preferred):**
+```
+mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "CLOSED"
+```
+
+**Issues API (CLI fallback):**
+```bash
+issues ticket transition TICKET_ID --to CLOSED --json
+```
+
+### Add Label
+
+**GitHub (default):**
+```bash
+gh issue edit [NUMBER] --add-label "label-name"
+```
+
+**Issues API (MCP preferred):**
+Use `mcp__issues__label_list` to resolve label name to CUID first, then:
+```
+mcp__issues__label_add  ticketId: "<TICKET_CUID>"  labelId: "<LABEL_CUID>"
+```
+
+**Issues API (CLI fallback):**
+```bash
+issues label add TICKET_ID --label LABEL_ID --json
+```
+
+### Wire Blocker
+
+Wire a blocking relationship between two tickets.
+
+**GitHub (default):**
+GitHub has no native blocker API via `gh`. Fetch the existing body first to avoid double-expansion, then add a Dependencies section:
+```bash
+CURRENT_BODY=$(gh issue view [BLOCKED-NUMBER] --json body --jq '.body')
+gh issue edit [BLOCKED-NUMBER] --body "$CURRENT_BODY
+
+## Dependencies
+Blocked by: #[BLOCKER-NUMBER]"
+```
+
+**Issues API (CLI only — no MCP tool for block relationships):**
+```bash
+issues block add --blocker [BLOCKER-NUMBER] --blocked [BLOCKED-NUMBER] --project "$PROJECT" --json
+```
