@@ -842,6 +842,38 @@ describe("Enter and Escape buttons", () => {
     fireEvent.click(screen.getByTestId("tile-escape"));
     expect(mockSendInput).toHaveBeenCalledWith("\x1b");
   });
+
+  it("stops keyboard event propagation on Enter button to prevent header drag-reorder conflict", () => {
+    const onHeaderKeyDown = vi.fn();
+    render(
+      <TerminalWindow
+        session={baseSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+        onHeaderKeyDown={onHeaderKeyDown}
+      />,
+    );
+
+    fireEvent.keyDown(screen.getByTestId("tile-enter"), { key: "Enter" });
+    expect(onHeaderKeyDown).not.toHaveBeenCalled();
+  });
+
+  it("stops keyboard event propagation on Escape button to prevent header drag-reorder conflict", () => {
+    const onHeaderKeyDown = vi.fn();
+    render(
+      <TerminalWindow
+        session={baseSession}
+        agentName="agent-1"
+        onMinimize={vi.fn()}
+        onTerminated={vi.fn()}
+        onHeaderKeyDown={onHeaderKeyDown}
+      />,
+    );
+
+    fireEvent.keyDown(screen.getByTestId("tile-escape"), { key: "Escape" });
+    expect(onHeaderKeyDown).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------

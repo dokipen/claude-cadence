@@ -155,6 +155,7 @@ export function TerminalWindow({
           <button
             className={styles.tileEnter}
             onClick={() => terminalRef.current?.sendInput("\r")}
+            onKeyDown={(e) => e.stopPropagation()}
             data-testid="tile-enter"
             title="Send Enter"
             aria-label="Send Enter"
@@ -164,6 +165,7 @@ export function TerminalWindow({
           <button
             className={styles.tileEscape}
             onClick={() => terminalRef.current?.sendInput("\x1b")}
+            onKeyDown={(e) => e.stopPropagation()}
             data-testid="tile-escape"
             title="Send Escape"
             aria-label="Send Escape"
