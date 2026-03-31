@@ -36,7 +36,7 @@ Before analyzing, read `CLAUDE.md` for:
 
 When running benchmarks or profiling:
 
-- **Baseline**: Always compare against the `main` branch. Check out main in a separate directory or use `git stash` to establish a baseline before measuring the branch under review.
+- **Baseline**: Always compare against the `main` branch. Use `git worktree add` to check out main in a separate directory and measure it alongside the branch under review.
 - **Run count**: Run each benchmark a minimum of 3 times to account for variance.
 - **Reporting**: Report the **median** value across runs. Do not report the best or average — median is more robust to outliers.
 
