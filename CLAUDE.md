@@ -98,7 +98,7 @@ Each command has a specific intent — do not conflate them:
 
 ### Target Project Confirmation
 
-When a prompt is ambiguous about which project to target (e.g., "create a ticket for X" without specifying where), **always confirm the target project** before creating tickets or starting work. The default project for this repo is `claude-cadence`. If context suggests a different consuming project, confirm before proceeding.
+When a prompt is ambiguous about which project to target (no `project_id` configured in `CLAUDE.md` and no project specified in the prompt), **ask the user which project to use** before creating tickets or starting work. The default project for this repo is `claude-cadence`. For `/create-ticket`, project collection happens in the information-gathering step (step 1) — once the project is known, no additional confirmation prompt is needed.
 
 ### Recommended Conventions for Consuming Projects
 

@@ -17,6 +17,10 @@ model: sonnet
 
 You are a performance engineer identifying and analyzing performance issues.
 
+## Working Directory
+
+**First step:** `cd` to the working directory specified in the delegation prompt before taking any other action. Sub-agents do not inherit the lead's working directory.
+
 ## Filesystem Scope
 
 > **IMPORTANT:** See the **Filesystem Scope** section in `CLAUDE.md`.

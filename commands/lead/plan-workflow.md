@@ -43,12 +43,9 @@ For each phase in the plan document, create an implementation ticket:
 
 **Shell safety:** The `--title` argument is inline — avoid backticks in phase titles. Write titles as plain text without backtick code formatting.
 
-**GitHub (default):**
-```bash
-gh issue create \
-  --title "[Phase title from plan]" \
-  --label "enhancement" \
-  --body "$(cat <<'EOF'
+Create a ticket for each phase (see ticket-provider skill — **Create Ticket** operation) using this body template:
+
+```
 ## Description
 [Phase description from plan]
 
@@ -56,43 +53,11 @@ gh issue create \
 Derived from the plan document: `docs/plans/<slug>.md` (plan ticket: #[NUMBER])
 
 ## Acceptance Criteria
-[Tasks and completion criteria from this phase]
-EOF
-)"
-```
-
-**Issues API (MCP preferred):**
-Use `mcp__issues__label_list` to resolve label names to IDs first, then:
-```
-mcp__issues__ticket_create
-  title: "[Phase title from plan]"
-  projectName: "$PROJECT"
-  description: "## Description\n[Phase description from plan]\n\n## Plan Reference\nDerived from the plan document: `docs/plans/<slug>.md` (plan ticket: #[NUMBER])"
-  acceptanceCriteria: "- [ ] [Criterion 1 from this phase]\n- [ ] [Criterion 2 from this phase]"
-  labelIds: ["<ENHANCEMENT_LABEL_CUID>"]
-```
-
-**Issues API (CLI fallback):**
-```bash
-issues ticket create \
-  --project $PROJECT \
-  --title "[Phase title from plan]" \
-  --labels "ENHANCEMENT_LABEL_ID" \
-  --description "$(cat <<'EOF'
-## Description
-[Phase description from plan]
-
-## Plan Reference
-Derived from the plan document: `docs/plans/<slug>.md` (plan ticket: #[NUMBER])
-EOF
-)" \
-  --acceptance-criteria "$(cat <<'EOF'
 - [ ] [Criterion 1 from this phase]
 - [ ] [Criterion 2 from this phase]
-EOF
-)" \
-  --json
 ```
+
+Note for Issues API: supply `acceptanceCriteria` as a separate field rather than embedding it in `description`.
 
 Record the created ticket number/ID for each phase — needed for blocker wiring and milestone labeling.
 
@@ -113,109 +78,39 @@ gh label create "milestone:[N]-[slug]" \
   --color "8B5CF6" \
   --description "Plan milestone #[N]" \
   --force
-
-# Apply to plan ticket
-gh issue edit [NUMBER] --add-label "milestone:[N]-[slug]"
-
-# Apply to each child ticket
-gh issue edit [CHILD-NUMBER-1] --add-label "milestone:[N]-[slug]"
-gh issue edit [CHILD-NUMBER-2] --add-label "milestone:[N]-[slug]"
-# ... repeat for all child tickets
 ```
+Then apply to the plan ticket and all child tickets (see ticket-provider skill — **Add Label** operation).
 
 **Issues API — Label Creation (CLI only — MCP tools cannot create labels):**
 ```bash
 MILESTONE_LABEL_NAME="milestone:[N]-[slug]"
 bash "$CADENCE_ROOT/commands/lead/scripts/ensure-milestone-label.sh" "$MILESTONE_LABEL_NAME"
 ```
-
-Then apply the label using MCP (preferred) or CLI fallback. Use `mcp__issues__label_list` to resolve `$MILESTONE_LABEL_NAME` to a CUID first.
-
-**Issues API (MCP preferred):**
-```
-mcp__issues__label_add  ticketId: "<PLAN-TICKET-CUID>"      labelId: "<MILESTONE_LABEL_CUID>"
-mcp__issues__label_add  ticketId: "<CHILD-TICKET-CUID-1>"   labelId: "<MILESTONE_LABEL_CUID>"
-mcp__issues__label_add  ticketId: "<CHILD-TICKET-CUID-2>"   labelId: "<MILESTONE_LABEL_CUID>"
-# ... repeat for all child tickets
-```
-
-**Issues API (CLI fallback):**
-```bash
-# Apply to plan ticket
-issues label add [PLAN-TICKET-ID] --label "$MILESTONE_LABEL_NAME" --json
-
-# Apply to each child ticket
-issues label add [CHILD-TICKET-ID-1] --label "$MILESTONE_LABEL_NAME" --json
-issues label add [CHILD-TICKET-ID-2] --label "$MILESTONE_LABEL_NAME" --json
-# ... repeat for all child tickets
-```
+Then apply to the plan ticket and all child tickets (see ticket-provider skill — **Add Label** operation). Use `mcp__issues__label_list` to resolve `$MILESTONE_LABEL_NAME` to a CUID first.
 
 ### Plan Phase 4: Blocker Wiring
 
 If the plan document identifies no sequencing dependencies, skip this phase entirely.
 
-Otherwise, wire up blockers between the newly created tickets for each dependency identified in the plan:
-
-**GitHub (default):**
-GitHub does not have a native blocker API via `gh`. Add a **Dependencies** section to each ticket that has prerequisites. Fetch the existing body first to avoid double-expansion:
-```bash
-CURRENT_BODY=$(gh issue view [BLOCKED-NUMBER] --json body --jq '.body')
-gh issue edit [BLOCKED-NUMBER] --body "$CURRENT_BODY
-
-## Dependencies
-Blocked by: #[BLOCKER-NUMBER]"
-```
-
-**Issues API (CLI only — no MCP tool for block relationships):**
-```bash
-issues block add --blocker [BLOCKER-NUMBER] --blocked [BLOCKED-NUMBER] --project $PROJECT --json
-```
+Otherwise, wire up blockers between the newly created tickets for each dependency identified in the plan (see ticket-provider skill — **Wire Blocker** operation).
 
 ### Plan Phase 5: Close the Plan Ticket
 
 After all sub-tickets are created and the plan doc is committed:
 
-**GitHub (default):**
-```bash
-gh issue comment [NUMBER] --body "$(cat <<'EOF'
-## Planning complete: [TITLE]
+1. Post a completion comment (see ticket-provider skill — **Comment** operation):
+   ```
+   ## Planning complete: [TITLE]
 
-Plan document: `docs/plans/<slug>.md`
+   Plan document: `docs/plans/<slug>.md`
 
-Implementation tickets created:
-- #[SUB-NUMBER-1]: [title]
-- #[SUB-NUMBER-2]: [title]
+   Implementation tickets created:
+   - #[SUB-NUMBER-1]: [title]
+   - #[SUB-NUMBER-2]: [title]
 
-Closing plan ticket.
-EOF
-)"
-gh issue close [NUMBER]
-```
-
-**Issues API (MCP preferred):**
-```
-mcp__issues__comment_add
-  ticketId: "<TICKET_CUID>"
-  body: "## Planning complete: [TITLE]\n\nPlan document: `docs/plans/<slug>.md`\n\nImplementation tickets created:\n- #[SUB-NUMBER-1]: [title]\n- #[SUB-NUMBER-2]: [title]\n\nClosing plan ticket."
-mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "CLOSED"
-```
-
-**Issues API (CLI fallback):**
-```bash
-issues comment add TICKET_ID --body "$(cat <<'EOF'
-## Planning complete: [TITLE]
-
-Plan document: `docs/plans/<slug>.md`
-
-Implementation tickets created:
-- #[SUB-NUMBER-1]: [title]
-- #[SUB-NUMBER-2]: [title]
-
-Closing plan ticket.
-EOF
-)" --json
-issues ticket transition TICKET_ID --to CLOSED --json
-```
+   Closing plan ticket.
+   ```
+2. Close the ticket (see ticket-provider skill — **Close Ticket** operation).
 
 ### Plan Phase 6: Cleanup
 

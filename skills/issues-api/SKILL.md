@@ -134,6 +134,23 @@ mcp__issues__label_remove
   labelId: "<LABEL_CUID>"     # Required
 ```
 
+### Assignment Operations
+
+#### Assign a ticket
+
+```
+mcp__issues__ticket_assign
+  ticketId: "<TICKET_CUID>"   # Required
+  userId: "<USER_ID>"          # Required
+```
+
+#### Unassign a ticket
+
+```
+mcp__issues__ticket_unassign
+  ticketId: "<TICKET_CUID>"   # Required
+```
+
 ### Comment Operations
 
 #### Add a comment

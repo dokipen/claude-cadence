@@ -93,7 +93,7 @@ agentd connects to agent-hub via a `hub:` block in `~/.config/agentd/config.yaml
 
 ```yaml
 hub:
-  url: "wss://cadence.whatisbackdoor.com/ws/agent"
+  url: "wss://<HUB_URL>/ws/agent"  # Replace <HUB_URL> with the hub URL from your agentd configuration
   name: "my-machine"               # unique identifier for this agentd instance
   token_env_var: "HUB_AGENT_TOKEN" # env var holding the hub auth token
   reconnect_interval: "5s"
@@ -104,20 +104,22 @@ hub:
 Session operations go through the agent-hub REST API, not directly to agentd.
 
 ```bash
+# Replace <HUB_URL> with the hub URL from your agentd configuration
+
 # List all agents registered with the hub
 curl -s -H "Authorization: Bearer $HUB_API_TOKEN" \
-  https://cadence.whatisbackdoor.com/api/v1/agents | jq '.'
+  https://<HUB_URL>/api/v1/agents | jq '.'
 
 # Dispatch a createSession command to a specific agent
 curl -s -X POST \
   -H "Authorization: Bearer $HUB_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"agent_profile": "code-reviewer", "session_name": "review-pr-42"}' \
-  https://cadence.whatisbackdoor.com/api/v1/agents/<agent-name>/sessions
+  https://<HUB_URL>/api/v1/agents/<agent-name>/sessions
 
 # List sessions on an agent
 curl -s -H "Authorization: Bearer $HUB_API_TOKEN" \
-  https://cadence.whatisbackdoor.com/api/v1/agents/<agent-name>/sessions | jq '.'
+  https://<HUB_URL>/api/v1/agents/<agent-name>/sessions | jq '.'
 ```
 
 ## Error Codes
