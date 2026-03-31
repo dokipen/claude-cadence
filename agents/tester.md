@@ -9,6 +9,7 @@ model: sonnet
      - Read, Glob, Grep: Navigate and search test files and source code
      - Edit, Write: Write failing reproduction tests (required for lead Phase 1b)
      - Bash: Run test commands and coverage tools
+     - Search: Semantic codebase search for finding relevant test patterns
      - mcp__issues__*: Read ticket context and create/comment on agent-discovered
        issues per the /lead workflow's out-of-scope findings convention.
 -->
