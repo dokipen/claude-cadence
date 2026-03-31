@@ -306,6 +306,9 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
 
   const loading = agentsLoading;
 
+  // Back = minimize (keep session alive). Sessions are added to minimizedKeys so
+  // they can be resumed from the list. This is intentionally asymmetric with
+  // handleMobileClose, which terminates the backend session via deleteSession.
   const handleMobileBack = useCallback(() => {
     openWindowsRef.current.forEach((w) => {
       setMinimizedKeys((prev) => new Set(prev).add(w.key));
