@@ -7,6 +7,8 @@ model: sonnet
 
 <!-- Tool Assignment Rationale:
      - Read, Glob, Grep: Navigate and search code for security review
+     - Search: Locate symbol definitions and cross-file usages when a
+       fuzzy or natural-language query is more convenient than a regex
      - Bash: Run dependency audit commands and security scanners
      - No Edit/Write: This agent is advisory; it identifies security issues
        and provides recommendations. Fixes are delegated to implementation

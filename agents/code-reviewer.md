@@ -7,6 +7,9 @@ model: sonnet
 
 <!-- Tool Assignment Rationale:
      - Read, Glob, Grep: Navigate and search code for review
+     - Search: Locate symbol definitions, usages, and cross-file references
+       when a fuzzy or natural-language query is more convenient than a
+       regex (e.g. finding all call sites of a renamed function during review)
      - Bash: Run linters, tests, and `git diff` for review
      - No Edit/Write: This agent is advisory; it identifies issues and provides
        feedback. Fixes are delegated to implementation agents to maintain
