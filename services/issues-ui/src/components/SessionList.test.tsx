@@ -10,6 +10,11 @@ import type { AgentSession } from "../hooks/useAllSessions";
 // Mock CSS modules
 vi.mock("../styles/agents.module.css", () => ({ default: {} }));
 
+// Mock deleteSession so kill button tests don't need a real WebSocket
+vi.mock("../api/agentHubClient", () => ({
+  deleteSession: vi.fn().mockResolvedValue(undefined),
+}));
+
 // Mock SessionOutputTooltip so tests don't need xterm/WebSocket setup
 vi.mock("./SessionOutputTooltip", () => ({
   SessionOutputTooltip: ({ children, session }: { children: React.ReactNode; session: { sessionId: string } }) => (
@@ -19,6 +24,7 @@ vi.mock("./SessionOutputTooltip", () => ({
 
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
 });
 
 const makeAgent = (name: string, status: AgentStatus = "online"): Agent =>
@@ -369,5 +375,45 @@ describe("SessionList", () => {
     const sessionBtn = getByTestId("sidebar-session");
     fireEvent.click(sessionBtn);
     expect(onSessionClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("kill button is present for a running session", () => {
+    const agents = [makeAgent("my-agent")];
+    const session = makeSession("s1", "my-agent");
+    session.session.state = "running";
+    const { getByTestId } = render(
+      <SessionList {...defaultProps} agents={agents} sessions={[session]} isCollapsed={false} />,
+    );
+    expect(getByTestId("sidebar-session-kill")).toBeTruthy();
+  });
+
+  it("kill button is absent for a stopped session", () => {
+    const agents = [makeAgent("my-agent")];
+    const session = makeSession("s1", "my-agent");
+    session.session.state = "stopped";
+    const { queryByTestId } = render(
+      <SessionList {...defaultProps} agents={agents} sessions={[session]} isCollapsed={false} />,
+    );
+    expect(queryByTestId("sidebar-session-kill")).toBeNull();
+  });
+
+  it("clicking kill button calls deleteSession and stops event propagation", async () => {
+    const { deleteSession } = await import("../api/agentHubClient");
+    const onSessionClick = vi.fn();
+    const agents = [makeAgent("my-agent")];
+    const session = makeSession("s1", "my-agent");
+    session.session.state = "running";
+    const { getByTestId } = render(
+      <SessionList
+        {...defaultProps}
+        agents={agents}
+        sessions={[session]}
+        onSessionClick={onSessionClick}
+        isCollapsed={false}
+      />,
+    );
+    fireEvent.click(getByTestId("sidebar-session-kill"));
+    expect(deleteSession).toHaveBeenCalledWith("my-agent", "s1");
+    expect(onSessionClick).not.toHaveBeenCalled();
   });
 });
