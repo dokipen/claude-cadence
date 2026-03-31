@@ -76,7 +76,7 @@ Use this value to select the correct commands throughout the workflow.
 
 ### Batch Refinement (`/refine`)
 
-**Batch limit:** Process at most 10 tickets per batch. If more than 10 unrefined tickets exist, process the first 10 and inform the user how many remain.
+**Batch limit:** Process at most 10 tickets per batch. If more than 10 unrefined tickets exist, process the first 10 (in ascending order by issue number) and inform the user how many remain.
 
 **Processing order:** Process tickets **sequentially**, one at a time. Do not delegate multiple ticket-refiner agents in parallel — concurrent MCP tool calls can hit rate limits.
 
