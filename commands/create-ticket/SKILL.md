@@ -72,8 +72,15 @@ Gather the following — infer from arguments where possible, otherwise ask the 
 | **Title** | Yes | Descriptive, action-oriented (e.g., "Add X", "Fix Y") |
 | **Description** | Yes | What and why — context for the implementer |
 | **Acceptance criteria** | Yes | Bullet list of conditions that define "done" |
-| **Label/type** | Yes | `bug`, `enhancement`, `chore`, etc. |
+| **Label/type** | If unclear | `bug`, `enhancement`, `chore`, etc. — see default logic below |
 | **Target project** | If no `project_id` in `CLAUDE.md` | Ask the user which project to use |
+
+**Default label logic:** Infer the label from context before asking. If the user explicitly states a type, use it as-is without second-guessing. Otherwise apply these rules:
+- `enhancement` — feature requests, new capabilities, or improvements
+- `bug` — defects, errors, or broken behavior
+- `chore` — maintenance, upgrades, refactoring, or housekeeping with no user-visible change
+
+Ask the user only when the type is genuinely ambiguous after applying these rules (e.g., a vague one-liner that could be bug or enhancement). If asking, include the label question in the same single prompt as any other missing fields — do not ask about the label separately.
 
 If the user provided a title as an argument, use it. Ask for anything missing in a single prompt — do not ping-pong with one question at a time.
 
