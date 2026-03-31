@@ -226,17 +226,21 @@ const TRANSITION_TICKET = gql`
  * Normalizes an array parameter that may arrive as a JSON-encoded string.
  * The MCP framework sometimes serializes array arguments as JSON strings
  * (e.g. '["id1","id2"]') instead of passing them as proper arrays.
+ * A bare string (e.g. "abc123") is treated as a single-element array.
  */
-function parseStringArray(value: string[] | undefined): string[] | undefined {
+function parseStringArray(value: string[] | string | undefined): string[] | undefined {
   if (value === undefined) return undefined;
   if (Array.isArray(value)) return value;
-  if (typeof (value as unknown) === "string") {
+  if (typeof value === "string") {
     try {
-      const parsed: unknown = JSON.parse(value as unknown as string);
-      if (Array.isArray(parsed)) return parsed as string[];
+      const parsed: unknown = JSON.parse(value);
+      if (Array.isArray(parsed) && parsed.every((el) => typeof el === "string")) {
+        return parsed as string[];
+      }
     } catch {
-      // not a valid JSON array
+      // not valid JSON — treat as single bare string
     }
+    return [value];
   }
   return undefined;
 }

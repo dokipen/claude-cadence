@@ -61,6 +61,17 @@ describe("ticketCreate", () => {
     expect(input.labelIds).toEqual(["label-a", "label-b"]);
   });
 
+  it("wraps a bare string labelId as a single-element array", async () => {
+    await ticketCreate({
+      title: "Test ticket",
+      projectId: "proj-1",
+      labelIds: "label-a" as unknown as string[],
+    });
+
+    const input = capturedVars().input as Record<string, unknown>;
+    expect(input.labelIds).toEqual(["label-a"]);
+  });
+
   it("omits labelIds from input when not provided", async () => {
     await ticketCreate({
       title: "Test ticket",
@@ -80,6 +91,13 @@ describe("ticketList", () => {
     });
   });
 
+  it("passes labelNames as a proper array when already an array", async () => {
+    await ticketList({ labelNames: ["bug", "enhancement"] });
+
+    const vars = capturedVars();
+    expect(vars.labelNames).toEqual(["bug", "enhancement"]);
+  });
+
   it("normalizes labelNames from a JSON-encoded string to a proper array", async () => {
     await ticketList({
       labelNames: '["bug","enhancement"]' as unknown as string[],
@@ -87,5 +105,12 @@ describe("ticketList", () => {
 
     const vars = capturedVars();
     expect(vars.labelNames).toEqual(["bug", "enhancement"]);
+  });
+
+  it("omits labelNames when not provided", async () => {
+    await ticketList({});
+
+    const vars = capturedVars();
+    expect(vars).not.toHaveProperty("labelNames");
   });
 });
