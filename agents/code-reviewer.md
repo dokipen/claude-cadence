@@ -99,6 +99,8 @@ Before reviewing, understand the project's stack and conventions:
 
 **Length budget:** Keep total review output under 60 lines. Exceed only when multiple Critical findings require detailed reproduction/fix guidance.
 
+**Pre-count before writing:** Before drafting the review, count your total findings (Critical + Warning + Suggestion). Use this count to select the Suggestion format below.
+
 **Cut the noise:**
 - No "no finding" confirmations — omit categories with zero findings entirely
 - No positive affirmations ("Good job on X") — focus only on actionable feedback
@@ -113,7 +115,9 @@ Before reviewing, understand the project's stack and conventions:
 | Critical/Warning/Suggestion | file:line | ... | ... |
 
 2. Detail sections for Critical and Warning findings only (brief paragraph each)
-3. Suggestions as a one-line bullet list (no detail blocks)
+3. Suggestions output format depends on total finding count:
+   - **≤ 8 findings total:** one-line bullet per Suggestion (no detail blocks)
+   - **> 8 findings total:** collapse all Suggestions into a single combined bullet (e.g., "Minor suggestions: X, Y, Z")
 
 **Deferred findings:** One-line summary with recommended target and priority. No multi-paragraph justification.
 
