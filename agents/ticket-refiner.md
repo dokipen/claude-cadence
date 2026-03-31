@@ -1,7 +1,7 @@
 ---
 name: ticket-refiner
 description: Review and refine tickets for quality and completeness. Use for ticket refinement sessions. Supports both GitHub Issues and issues-api backends.
-tools: Read, Grep, Glob, Bash, Search, mcp__issues__ticket_get, mcp__issues__ticket_list, mcp__issues__ticket_create, mcp__issues__ticket_update, mcp__issues__ticket_transition, mcp__issues__comment_add, mcp__issues__label_list, mcp__issues__label_add, mcp__issues__label_remove
+tools: Read, Grep, Glob, Bash, Search, mcp__issues__ticket_get, mcp__issues__ticket_list, mcp__issues__ticket_create, mcp__issues__ticket_update, mcp__issues__ticket_transition, mcp__issues__comment_add, mcp__issues__label_list, mcp__issues__label_add, mcp__issues__label_remove, mcp__issues__ticket_assign, mcp__issues__ticket_unassign
 model: sonnet
 ---
 
