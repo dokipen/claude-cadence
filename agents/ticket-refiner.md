@@ -142,7 +142,7 @@ gh issue edit N --add-assignee "$CURRENT_USER"
 ```
 mcp__issues__ticket_assign
   ticketId: TICKET_ID
-  userId: "$CURRENT_USER_ID"
+  userId: CURRENT_USER_ID
 ```
 
 **Issues API (CLI fallback):**
