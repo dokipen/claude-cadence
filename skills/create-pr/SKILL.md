@@ -46,16 +46,27 @@ This script:
 
 ## Commit and Push
 
+**Commit message format:** Check `CLAUDE.md` for project-specific commit message conventions first. If none are configured, use conventional commits:
+
+```
+type(#issue): brief description
+```
+
+Common types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`.
+
 ```bash
 # Stage all changes
 git add -A
 
 # Commit with descriptive message
-git commit -m "<description>
+git commit -m "$(cat <<'EOF'
+type(#issue): brief description
 
-<optional body>
+Optional longer explanation if needed.
 
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Co-Authored-By: Claude <noreply@anthropic.com>
+EOF
+)"
 
 # Push with upstream tracking
 git push -u origin HEAD
