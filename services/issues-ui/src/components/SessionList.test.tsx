@@ -417,41 +417,6 @@ describe("SessionList", () => {
     expect(onSessionClick).not.toHaveBeenCalled();
   });
 
-  it("pressing Enter on a session button calls onSessionClick", () => {
-    const onSessionClick = vi.fn();
-    const agents = [makeAgent("my-agent")];
-    const sessions = [makeSession("s1", "my-agent")];
-    const { getByTestId } = render(
-      <SessionList
-        {...defaultProps}
-        agents={agents}
-        sessions={sessions}
-        onSessionClick={onSessionClick}
-        isCollapsed={false}
-      />,
-    );
-    fireEvent.keyDown(getByTestId("sidebar-session"), { key: "Enter" });
-    expect(onSessionClick).toHaveBeenCalledTimes(1);
-  });
-
-  it("pressing Enter on a destroying session does not call onSessionClick", () => {
-    const onSessionClick = vi.fn();
-    const agents = [makeAgent("my-agent")];
-    const session = makeSession("s1", "my-agent");
-    session.session.state = "destroying";
-    const { getByTestId } = render(
-      <SessionList
-        {...defaultProps}
-        agents={agents}
-        sessions={[session]}
-        onSessionClick={onSessionClick}
-        isCollapsed={false}
-      />,
-    );
-    fireEvent.keyDown(getByTestId("sidebar-session"), { key: "Enter" });
-    expect(onSessionClick).not.toHaveBeenCalled();
-  });
-
   it("pressing Esc on an open session calls onSessionClick", () => {
     const onSessionClick = vi.fn();
     const agents = [makeAgent("my-agent")];

@@ -112,7 +112,6 @@ export function SessionList({ agents, sessions, openKeys, minimizedKeys, onSessi
                         className={`${styles.sidebarSession} ${isOpen ? styles.sidebarSessionOpen : ""} ${!isRunning && !isDestroying && !isCreating ? styles.sidebarSessionStopped : ""} ${isDestroying && !as.session.waitingForInput ? styles.sidebarSessionDestroying : ""} ${isCreating && !as.session.waitingForInput ? styles.sidebarSessionCreating : ""} ${as.session.waitingForInput ? styles.sidebarSessionWaiting : ""} ${isMinimized ? styles.sidebarSessionMinimized : ""}`}
                         onClick={() => !isDestroying && onSessionClick(as)}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter" && !isDestroying) onSessionClick(as);
                           if (e.key === "Escape" && (isOpen || isMinimized)) onSessionClick(as);
                         }}
                         disabled={isDestroying}
