@@ -241,8 +241,15 @@ gh issue edit [NUMBER] --add-label "in-progress"
 **Issues API (MCP preferred):**
 Chain `mcp__issues__ticket_transition` calls as needed:
 ```
-mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "REFINED"      # if currently BACKLOG
-mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "IN_PROGRESS"
+# Step 1 — only if currently BACKLOG (skip if already REFINED):
+mcp__issues__ticket_transition
+  id: "<TICKET_CUID>"   # Required: CUID from ticket view (e.g. "cmn…")
+  to: "REFINED"         # Required: BACKLOG | REFINED | IN_PROGRESS | CLOSED
+
+# Step 2:
+mcp__issues__ticket_transition
+  id: "<TICKET_CUID>"   # Required: CUID from ticket view (e.g. "cmn…")
+  to: "IN_PROGRESS"     # Required: BACKLOG | REFINED | IN_PROGRESS | CLOSED
 ```
 
 **Issues API (CLI fallback):**
@@ -288,7 +295,9 @@ gh issue close [NUMBER]
 
 **Issues API (MCP preferred):**
 ```
-mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "CLOSED"
+mcp__issues__ticket_transition
+  id: "<TICKET_CUID>"   # Required: CUID from ticket view (e.g. "cmn…")
+  to: "CLOSED"          # Required: BACKLOG | REFINED | IN_PROGRESS | CLOSED
 ```
 
 **Issues API (CLI fallback):**
@@ -306,7 +315,9 @@ gh issue edit [NUMBER] --add-label "label-name"
 **Issues API (MCP preferred):**
 Use `mcp__issues__label_list` to resolve label name to CUID first, then:
 ```
-mcp__issues__label_add  ticketId: "<TICKET_CUID>"  labelId: "<LABEL_CUID>"
+mcp__issues__label_add
+  ticketId: "<TICKET_CUID>"   # Required: CUID from ticket view (e.g. "cmn…")
+  labelId: "<LABEL_CUID>"     # Required: CUID from mcp__issues__label_list
 ```
 
 **Issues API (CLI fallback):**
