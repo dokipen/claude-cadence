@@ -33,12 +33,14 @@ export function useAgents(repo?: string): UseAgentsResult {
       fetchAgents(repo)
         .then((result) => {
           if (!cancelled) {
-            setAgents(result.agents);
+            const sortedAgents = [...result.agents].sort((a, b) =>
+              a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
+            );
+            setAgents(sortedAgents);
             consecutiveFailures = 0;
             setError(null);
           }
-        })
-        .catch(() => {
+        })        .catch(() => {
           if (!cancelled) {
             consecutiveFailures++;
             if (
@@ -119,6 +121,10 @@ export function useAgentProfiles(
         }
       }
     }
-    return entries;
+    return entries.sort((a, b) => {
+      const aLabel = `${a.agent} / ${a.profile.name || a.profileName}`;
+      const bLabel = `${b.agent} / ${b.profile.name || b.profileName}`;
+      return aLabel.toLowerCase().localeCompare(bLabel.toLowerCase());
+    });
   }, [agents, repoUrl]);
 }
