@@ -24,6 +24,7 @@ vi.mock("./SessionOutputTooltip", () => ({
 
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
 });
 
 const makeAgent = (name: string, status: AgentStatus = "online"): Agent =>
