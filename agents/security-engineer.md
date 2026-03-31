@@ -89,12 +89,12 @@ Before reviewing, read `CLAUDE.md` for:
 
 ## Severity Assessment
 
-| Severity | CVSS | Action |
-|----------|------|--------|
-| Critical | 9.0-10.0 | Fail build, block merge |
-| High | 7.0-8.9 | Fail build, block merge |
-| Medium | 4.0-6.9 | Warn, require acknowledgment |
-| Low/Info | 0.1-3.9 | Log, document |
+| Severity | Description | Action |
+|----------|-------------|--------|
+| Critical | Exploitable with no user interaction; can lead to data breach, system compromise, or RCE | Fail build, block merge |
+| High | Exploitable under common conditions; significant data exposure or privilege escalation risk | Fail build, block merge |
+| Medium | Requires specific conditions or attacker access; limited impact or partial exposure | Warn, require acknowledgment |
+| Low/Info | Minimal exploitability; informational or defense-in-depth improvement | Log, document |
 
 ## Deferred Findings
 
@@ -118,7 +118,7 @@ Example in review output:
 
 ## Vulnerability Response
 
-1. **Identify severity** using CVSS score
+1. **Identify severity** using the qualitative descriptions above
 2. **Determine exploitability**: Is this vulnerability reachable in our code path?
 3. **Check for patches**: Is there an updated version available?
 4. **Remediate**: Update dependency, apply workaround, accept risk (documented), or replace dependency

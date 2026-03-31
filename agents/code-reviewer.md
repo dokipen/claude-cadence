@@ -10,6 +10,7 @@ model: sonnet
        - Grep: exact pattern/regex matches on known identifiers or strings
        - Glob: find files by path pattern (extension, directory, naming)
        - Search: semantic queries when searching by concept rather than exact text
+         (e.g. finding all call sites of a renamed function during review)
      - Bash: Run linters, tests, and `git diff` for review
      - No Edit/Write: This agent is advisory; it identifies issues and provides
        feedback. Fixes are delegated to implementation agents to maintain

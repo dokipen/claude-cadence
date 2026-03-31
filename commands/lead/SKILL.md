@@ -23,7 +23,7 @@ You are now acting as the technical lead, coordinating specialist agents on this
 - `plan` workflow: finish through the plan workflow cleanup/reporting steps
 - `human-activity` workflow: finish through the walkthrough cleanup/reporting steps
 
-**Codex guardrail:** If you are an agent that tends to pause after making code changes, after posting a progress update, or after answering a brief user question like "how's it going?", explicitly resume at the next unfinished `/lead` phase instead of waiting for another instruction. Brief conversational replies are status updates, not stop conditions.
+**Continuation guardrail:** If you are an agent that tends to pause after making code changes, after posting a progress update, or after answering a brief user question like "how's it going?", explicitly resume at the next unfinished `/lead` phase instead of waiting for another instruction. Brief conversational replies are status updates, not stop conditions.
 
 ## Issue-First Workflow
 
