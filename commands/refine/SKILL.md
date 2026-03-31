@@ -21,10 +21,10 @@ Refine tickets to meet quality standards before implementation begins. Supports 
 
 ## Provider Detection
 
-Before any ticket operation, resolve the cadence plugin root and detect the configured provider. Refer to the `ticket-provider` skill for full details.
+Before any ticket operation, resolve the cadence plugin root if `$CADENCE_ROOT` is not already set, then detect the configured provider. Refer to the `ticket-provider` skill for full details.
 
 ```bash
-# Resolve cadence plugin root
+# Resolve cadence plugin root if not already set
 CADENCE_ROOT="${CADENCE_ROOT:-}"
 if [ -z "$CADENCE_ROOT" ] && [ -f ".claude-plugin/plugin.json" ]; then
   CADENCE_ROOT="$(pwd)"
