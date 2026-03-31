@@ -14,7 +14,23 @@ Creates a PR for the current branch after verification checks pass.
 
 ## Pre-flight Checks
 
-Run the `pr-preflight.sh` script in this skill's `scripts/` directory.
+Run the `pr-preflight.sh` script. First resolve the cadence plugin root if `$CADENCE_ROOT` is not already set:
+
+```bash
+# Resolve cadence plugin root if not already set
+CADENCE_ROOT="${CADENCE_ROOT:-}"
+if [ -z "$CADENCE_ROOT" ] && [ -f ".claude-plugin/plugin.json" ]; then
+  CADENCE_ROOT="$(pwd)"
+fi
+if [ -z "$CADENCE_ROOT" ] && [ -d ".claude/plugins/cadence" ]; then
+  CADENCE_ROOT="$(pwd)/.claude/plugins/cadence"
+fi
+if [ -z "$CADENCE_ROOT" ]; then
+  echo "ERROR: cadence plugin root not found. Set CADENCE_ROOT env var to the plugin directory." >&2
+  exit 1
+fi
+bash "$CADENCE_ROOT/skills/create-pr/scripts/pr-preflight.sh"
+```
 
 This script:
 1. Verifies you're not on the default branch
