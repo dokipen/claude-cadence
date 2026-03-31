@@ -58,7 +58,7 @@ PROJECT=$(echo "$PROVIDER_CONFIG" | jq -r '.project')
 
 ### GitHub Issues (default)
 
-When `provider: github` (or no config), use `gh` CLI commands. Refer to the `github-issues` skill for full command reference.
+When `provider: github` (or no config), use `gh` CLI commands.
 
 | Operation | Command |
 |-----------|---------|

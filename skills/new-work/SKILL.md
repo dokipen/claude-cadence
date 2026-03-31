@@ -27,7 +27,7 @@ If you don't have an issue number yet, create one first:
 gh issue create --title "Description of the work" --label "enhancement" --body "..."
 ```
 
-**Shell safety:** The `--title` argument is inline — avoid backticks in the title. Use the `github-issues` or `issues-api` skill for guidance on safe patterns.
+**Shell safety:** The `--title` argument is inline — avoid backticks in the title. Use the `issues-api` skill for guidance on safe patterns.
 
 ## What It Does
 
