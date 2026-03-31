@@ -46,6 +46,12 @@ if [ -z "$CADENCE_ROOT" ]; then
   echo "ERROR: cadence plugin root not found. Set CADENCE_ROOT env var to the plugin directory." >&2
   exit 1
 fi
+case "$CADENCE_ROOT" in
+  *..*)
+    echo "ERROR: CADENCE_ROOT must not contain path traversal (..)." >&2
+    exit 1
+    ;;
+esac
 PROVIDER_CONFIG=$(bash "$CADENCE_ROOT/skills/ticket-provider/scripts/detect-provider.sh")
 PROVIDER=$(echo "$PROVIDER_CONFIG" | jq -r '.provider')
 PROJECT=$(echo "$PROVIDER_CONFIG" | jq -r '.project')
