@@ -113,10 +113,10 @@ describe("setResolvedAuthToken / setResolvedRefreshToken", () => {
     expect(getAuthToken()).toBe("refreshed-token");
   });
 
-  it("env var takes precedence over cached refresh token", () => {
-    setResolvedRefreshToken("cached-refresh");
-    process.env.ISSUES_REFRESH_TOKEN = "env-refresh";
-    expect(getRefreshToken()).toBe("env-refresh");
+  it("cached refresh token takes precedence over env var (supports post-reauth propagation)", () => {
+    setResolvedRefreshToken("refreshed-refresh");
+    process.env.ISSUES_REFRESH_TOKEN = "stale-env-refresh";
+    expect(getRefreshToken()).toBe("refreshed-refresh");
   });
 });
 

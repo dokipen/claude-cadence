@@ -46,6 +46,9 @@ export function getAuthToken(): string | undefined {
   // and is always at least as fresh as the env var. This ensures that after a
   // successful re-auth the refreshed token is used for subsequent requests
   // instead of the stale ISSUES_AUTH_TOKEN that triggered the auth failure.
+  //
+  // Note: mid-session rotation of ISSUES_AUTH_TOKEN via env var is not supported —
+  // once _resolvedToken is set, the env var is ignored until the process restarts.
   if (_resolvedToken) return _resolvedToken;
   const envToken = process.env.ISSUES_AUTH_TOKEN;
   if (envToken !== undefined && envToken.trim() !== "") {
@@ -55,7 +58,10 @@ export function getAuthToken(): string | undefined {
 }
 
 export function getRefreshToken(): string | undefined {
-  return process.env.ISSUES_REFRESH_TOKEN || _resolvedRefreshToken;
+  // Prefer _resolvedRefreshToken when set: same rationale as getAuthToken — it was
+  // written by the most recent successful re-auth and is fresher than any static env var.
+  if (_resolvedRefreshToken) return _resolvedRefreshToken;
+  return process.env.ISSUES_REFRESH_TOKEN || undefined;
 }
 
 export function getDefaultProjectId(): string | undefined {
