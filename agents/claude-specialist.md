@@ -105,7 +105,7 @@ model: sonnet  # haiku for simple, sonnet for standard, opus for complex
 
 - **Create a script** for: multi-step sequences, error handling, reusable operations
 - **Inline bash is OK** for: single commands, one-time diagnostics
-- **Store scripts** in `scripts/` at project root (visible to all developers)
+- **Store scripts** in `scripts/` within the skill or command directory that owns them
 
 ## When Updating Agents
 
