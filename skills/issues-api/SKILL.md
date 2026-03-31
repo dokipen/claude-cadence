@@ -134,6 +134,27 @@ mcp__issues__label_remove
   labelId: "<LABEL_CUID>"     # Required
 ```
 
+### Assignment Operations
+
+#### Assign a ticket
+
+```
+mcp__issues__ticket_assign
+  ticketId: "<TICKET_CUID>"   # Required
+  userId: "<USER_ID>"          # Required; GitHub username or user CUID
+```
+
+CLI equivalent: `issues assign TICKET_ID --user USER_ID --json`
+
+#### Unassign a ticket
+
+```
+mcp__issues__ticket_unassign
+  ticketId: "<TICKET_CUID>"   # Required
+```
+
+CLI equivalent: `issues unassign TICKET_ID --json`
+
 ### Comment Operations
 
 #### Add a comment
