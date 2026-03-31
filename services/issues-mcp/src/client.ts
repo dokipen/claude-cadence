@@ -191,11 +191,19 @@ export function getClient(): GraphQLClient {
           throw error;
         }
 
-        if (authRetried) throw error; // don't retry auth more than once
+        if (authRetried) {
+          throw new Error(
+            "Authentication failed: token expired and automatic re-authentication failed. " +
+            "Run `gh auth login` to re-authenticate, or set ISSUES_AUTH_TOKEN to a valid token."
+          );
+        }
         authRetried = true;
         const newToken = await tryAuth(url);
         if (!newToken) {
-          throw error;
+          throw new Error(
+            "Authentication failed: token expired and automatic re-authentication failed. " +
+            "Run `gh auth login` to re-authenticate, or set ISSUES_AUTH_TOKEN to a valid token."
+          );
         }
 
         // Switch to refreshed-token client and retry (stays in the loop for 429 protection)

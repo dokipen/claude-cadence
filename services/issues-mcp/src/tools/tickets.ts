@@ -222,6 +222,61 @@ const TRANSITION_TICKET = gql`
   }
 `;
 
+const ASSIGN_TICKET = gql`
+  mutation AssignTicket($ticketId: ID!, $userId: ID!) {
+    assignTicket(ticketId: $ticketId, userId: $userId) {
+      id
+      number
+      title
+      assignee {
+        id
+        login
+        displayName
+      }
+      updatedAt
+    }
+  }
+`;
+
+const UNASSIGN_TICKET = gql`
+  mutation UnassignTicket($ticketId: ID!) {
+    unassignTicket(ticketId: $ticketId) {
+      id
+      number
+      title
+      assignee {
+        id
+        login
+        displayName
+      }
+      updatedAt
+    }
+  }
+`;
+
+/**
+ * Normalizes an array parameter that may arrive as a JSON-encoded string.
+ * The MCP framework sometimes serializes array arguments as JSON strings
+ * (e.g. '["id1","id2"]') instead of passing them as proper arrays.
+ * A bare string (e.g. "abc123") is treated as a single-element array.
+ */
+function parseStringArray(value: string[] | string | undefined): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (Array.isArray(value)) return value;
+  if (typeof value === "string") {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      if (Array.isArray(parsed) && parsed.every((el) => typeof el === "string")) {
+        return parsed as string[];
+      }
+    } catch {
+      // not valid JSON — treat as single bare string
+    }
+    return [value];
+  }
+  return undefined;
+}
+
 function ok(data: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
 }
@@ -269,7 +324,8 @@ export async function ticketCreate(params: TicketCreateParams): Promise<CallTool
     };
     if (params.description !== undefined) input.description = params.description;
     if (params.acceptanceCriteria !== undefined) input.acceptanceCriteria = params.acceptanceCriteria;
-    if (params.labelIds !== undefined && params.labelIds.length > 0) input.labelIds = params.labelIds;
+    const labelIds = parseStringArray(params.labelIds);
+    if (labelIds !== undefined && labelIds.length > 0) input.labelIds = labelIds;
     if (params.priority !== undefined) input.priority = params.priority;
     if (params.storyPoints !== undefined) input.storyPoints = params.storyPoints;
 
@@ -338,7 +394,8 @@ export async function ticketList(params: TicketListParams): Promise<CallToolResu
 
     const variables: Record<string, unknown> = { first: limit };
     if (params.state !== undefined) variables.state = params.state;
-    if (params.labelNames !== undefined && params.labelNames.length > 0) variables.labelNames = params.labelNames;
+    const labelNames = parseStringArray(params.labelNames);
+    if (labelNames !== undefined && labelNames.length > 0) variables.labelNames = labelNames;
     if (params.priority !== undefined) variables.priority = params.priority;
     if (params.isBlocked !== undefined) variables.isBlocked = params.isBlocked;
     if (pid !== undefined) variables.projectId = pid;
@@ -397,14 +454,68 @@ export interface TicketTransitionParams {
   to: string;
 }
 
+const VALID_TICKET_STATES = ["BACKLOG", "REFINED", "IN_PROGRESS", "CLOSED"] as const;
+
 export async function ticketTransition(params: TicketTransitionParams): Promise<CallToolResult> {
+  if (!params.id) {
+    return err("id is required");
+  }
+  if (!params.to) {
+    return err(`to (target state) is required. Valid states: ${VALID_TICKET_STATES.join(", ")}`);
+  }
+
+  const normalizedTo = params.to.toUpperCase();
+  if (!(VALID_TICKET_STATES as readonly string[]).includes(normalizedTo)) {
+    return err(`Invalid state "${params.to}". Valid states: ${VALID_TICKET_STATES.join(", ")}`);
+  }
+
   try {
     const client = getClient();
     const data = await client.request<{ transitionTicket: unknown }>(
       TRANSITION_TICKET,
-      { id: params.id, to: params.to }
+      { id: params.id, to: normalizedTo }
     );
     return ok(data.transitionTicket);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    // Augment enum-related errors with the list of valid states so callers can self-correct.
+    if (message.includes("does not exist in")) {
+      return err(`${message} Valid states: ${VALID_TICKET_STATES.join(", ")}`);
+    }
+    return err(message);
+  }
+}
+
+export interface TicketAssignParams {
+  ticketId: string;
+  userId: string;
+}
+
+export async function ticketAssign(params: TicketAssignParams): Promise<CallToolResult> {
+  try {
+    const client = getClient();
+    const data = await client.request<{ assignTicket: unknown }>(
+      ASSIGN_TICKET,
+      { ticketId: params.ticketId, userId: params.userId }
+    );
+    return ok(data.assignTicket);
+  } catch (error) {
+    return err(error instanceof Error ? error.message : String(error));
+  }
+}
+
+export interface TicketUnassignParams {
+  ticketId: string;
+}
+
+export async function ticketUnassign(params: TicketUnassignParams): Promise<CallToolResult> {
+  try {
+    const client = getClient();
+    const data = await client.request<{ unassignTicket: unknown }>(
+      UNASSIGN_TICKET,
+      { ticketId: params.ticketId }
+    );
+    return ok(data.unassignTicket);
   } catch (error) {
     return err(error instanceof Error ? error.message : String(error));
   }
