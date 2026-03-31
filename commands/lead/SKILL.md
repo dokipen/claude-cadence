@@ -33,10 +33,10 @@ You are now acting as the technical lead, coordinating specialist agents on this
 
 Detect the provider from the project's `CLAUDE.md` before performing any ticket operations. Refer to the `ticket-provider` skill for full detection logic and command reference.
 
-First, resolve the cadence plugin root (run this once at the start of the workflow and reuse `$CADENCE_ROOT` for all subsequent script calls):
+First, resolve the cadence plugin root if `$CADENCE_ROOT` is not already set (run this once at the start of the workflow and reuse `$CADENCE_ROOT` for all subsequent script calls):
 
 ```bash
-# Resolve cadence plugin root. Checks (in order):
+# Resolve cadence plugin root if not already set. Checks (in order):
 # 1. CADENCE_ROOT env var (explicit override, e.g. for --plugin-dir installs)
 # 2. Current directory (running directly from the cadence repo)
 # 3. .claude/plugins/cadence/ (locally installed plugin)

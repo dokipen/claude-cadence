@@ -30,8 +30,10 @@ Do not plan, scaffold, implement, or suggest next steps. The purpose of this com
 
 Detect the configured ticket provider before any operation. Refer to the `ticket-provider` skill for full details and command reference.
 
+Run the following if `$CADENCE_ROOT` is not already set:
+
 ```bash
-# Resolve cadence plugin root. Checks (in order):
+# Resolve cadence plugin root if not already set. Checks (in order):
 # 1. CADENCE_ROOT env var (explicit override, e.g. for --plugin-dir installs)
 # 2. Current directory (running directly from the cadence repo)
 # 3. .claude/plugins/cadence/ (locally installed plugin)

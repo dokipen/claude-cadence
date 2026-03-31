@@ -33,10 +33,10 @@ If you don't have an issue number yet, use the `/create-ticket` command or the `
 
 ## Command
 
-First resolve the cadence plugin root, then run the `create-worktree.sh` script:
+First resolve the cadence plugin root if `$CADENCE_ROOT` is not already set, then run the `create-worktree.sh` script:
 
 ```bash
-# Resolve cadence plugin root. Checks (in order):
+# Resolve cadence plugin root if not already set. Checks (in order):
 # 1. CADENCE_ROOT env var (explicit override, e.g. for --plugin-dir installs)
 # 2. Current directory (running directly from the cadence repo)
 # 3. .claude/plugins/cadence/ (locally installed plugin)
