@@ -10,7 +10,7 @@ Skills live in `skills/<name>/SKILL.md` (model-invoked) or `commands/<name>/SKIL
 
 ## Filesystem Scope
 
-> **IMPORTANT:** Only access files within the project repository (the directory containing `CLAUDE.md`). This applies to all tools — `Read`, `Glob`, `Grep`, and `Bash` alike. Never run Bash commands (e.g., `find`, `cat`, `ls`) targeting paths outside the repository, and never use absolute paths to home directories or system paths. Do not use `$HOME`, `~`, or any environment variable that may expand to a path outside the project repository (e.g., `$XDG_CONFIG_HOME`, `$TMPDIR`, `$XDG_DATA_HOME`, `$XDG_RUNTIME_DIR`, `$XDG_CACHE_HOME`, `$PATH`, `$SHELL`, `$OLDPWD`), do not use path traversal (e.g., `../`) to navigate above the repo root, do not run `readlink` or `realpath` on paths that would resolve outside the project directory, do not follow symlinks that lead outside the project directory, do not use `printenv` or `env` to read environment variables as path components, do not use `which`, `command -v`, or `type` to locate system tools, and do not use command substitution with any of these commands to construct file paths (e.g., `$(which python3)`, `$(printenv GOPATH)/src`, `$(command -v git)`). Use relative paths and `Glob`/`Grep` within the project directory.
+> **IMPORTANT:** See the **Filesystem Scope** section in `CLAUDE.md`.
 
 ## Frontmatter quick reference
 
@@ -38,9 +38,19 @@ All supported frontmatter fields:
 | Model-invoked background knowledge | `skills/` | Claude auto-invokes based on context |
 | Both user and model | `skills/` | Either can invoke |
 
+## Required sections
+
+New SKILL.md files must include a `## Filesystem Scope` section with the single-line reference:
+
+```markdown
+## Filesystem Scope
+
+> **IMPORTANT:** See the **Filesystem Scope** section in `CLAUDE.md`.
+```
+
 ## Example SKILL.md
 
-A realistic mini-skill showing all frontmatter fields:
+A realistic mini-skill showing all frontmatter fields and required sections:
 
 ```markdown
 ---
@@ -54,6 +64,10 @@ model: sonnet
 # Run Checks
 
 Runs the project's verification suite. Always run before opening a PR.
+
+## Filesystem Scope
+
+> **IMPORTANT:** See the **Filesystem Scope** section in `CLAUDE.md`.
 
 ## Commands
 
