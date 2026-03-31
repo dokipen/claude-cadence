@@ -625,25 +625,6 @@ describe("AgentManager — mobile layout", () => {
     expect(queryByTestId("mobile-session-view")).toBeNull();
   });
 
-  it("clicking the Back button does NOT terminate the backend session (minimize behavior)", async () => {
-    // Back = minimize/keep-alive. deleteSession must NOT be called so the session
-    // continues running and can be resumed from the list.
-    const sessions = [makeSession("sess-m5", "test-agent")];
-    const { getAllByTestId, getByRole } = render(
-      <MemoryRouter><AgentManager sessions={sessions} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
-    );
-
-    await act(async () => {
-      fireEvent.click(getAllByTestId("sidebar-session")[0]);
-    });
-
-    await act(async () => {
-      fireEvent.click(getByRole("button", { name: /back to agent list/i }));
-    });
-
-    expect(mockDeleteSession).not.toHaveBeenCalled();
-  });
-
   it("switches to session view when a session is launched on mobile", async () => {
     const { queryByTestId, getByTestId } = render(
       <MemoryRouter><AgentManager sessions={[]} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
@@ -679,6 +660,26 @@ describe("AgentManager — mobile layout", () => {
 
     // Backend DELETE must have been called to terminate the session
     expect(mockDeleteSession).toHaveBeenCalledWith("test-agent", "sess-close1");
+  });
+
+  it("clicking the Back button does NOT terminate the backend session (minimize behavior)", async () => {
+    // Back = minimize/keep-alive. deleteSession must NOT be called so the session
+    // continues running and can be resumed from the list.
+    const sessions = [makeSession("sess-m5", "test-agent")];
+    const { queryByTestId, getAllByTestId, getByRole } = render(
+      <MemoryRouter><AgentManager sessions={sessions} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
+    );
+
+    await act(async () => {
+      fireEvent.click(getAllByTestId("sidebar-session")[0]);
+    });
+    expect(queryByTestId("mobile-session-view")).not.toBeNull();
+
+    await act(async () => {
+      fireEvent.click(getByRole("button", { name: /back to agent list/i }));
+    });
+
+    expect(mockDeleteSession).not.toHaveBeenCalled();
   });
 
 });
