@@ -50,6 +50,7 @@ Before reviewing, read `CLAUDE.md` for:
   - **Python:** `pip audit`
   - **Go:** `govulncheck ./...`
   - **Rust:** `cargo audit`
+  - **Dart/Flutter:** `dart pub audit`
 - Review dependency tree for suspicious packages
 - Flag outdated dependencies with known CVEs
 
