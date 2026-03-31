@@ -89,11 +89,11 @@ Bump the `version` field in `.claude-plugin/plugin.json` only when preparing a r
 Path patterns (relative to repo root) that require manual QA when touched by a PR. Used by Phase 6 of `/lead`. Consuming projects should define their own patterns matching their stack; omit this section entirely to skip Phase 6 for all PRs.
 
 ### Agent-service changes
-services/agents/
-services/agent-hub/
+- `services/agents/`
+- `services/agent-hub/`
 
 ### Visual/UI changes
-services/issues-ui/
+- `services/issues-ui/`
 
 ## Workflow Rules
 

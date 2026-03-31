@@ -73,10 +73,10 @@ In both cases:
 > **This phase applies only when the project's CLAUDE.md contains a `## QA Triggers` section AND the PR touches paths listed there.** If the section is absent, proceed directly from Phase 5 to Phase 7.
 
 Before running the detection below, read the `## QA Triggers` section from the project's CLAUDE.md and extract:
-- **Agent-service paths**: lines under `### Agent-service changes` (e.g. `services/agents/`, `services/agent-hub/`)
-- **Visual/UI paths**: lines under `### Visual/UI changes` (e.g. `services/issues-ui/`)
+- **Agent-service paths**: lines under `### Agent-service changes` (stop at next `###` or `##` heading). Each line is a single-line ERE path prefix.
+- **Visual/UI paths**: lines under `### Visual/UI changes` (stop at next `###` or `##` heading). Each line is a single-line ERE path prefix.
 
-If the `## QA Triggers` section is absent or empty, skip this phase entirely.
+If the `## QA Triggers` section is absent or empty, skip this phase entirely. If only one subsection is defined, treat the other trigger category as inactive and omit its grep call.
 
 Detect the PR type using the extracted paths:
 ```bash
@@ -85,8 +85,9 @@ Detect the PR type using the extracted paths:
 AGENT_PATTERN='^services/(agents|agent-hub)/'   # from ### Agent-service changes
 VISUAL_PATTERN='^services/issues-ui/'            # from ### Visual/UI changes
 
-git diff origin/main...HEAD --name-only | grep -qE "$AGENT_PATTERN" && echo "agent-service changes detected"
-git diff origin/main...HEAD --name-only | grep -qE "$VISUAL_PATTERN" && echo "visual changes detected"
+# Only run each check if the corresponding subsection is defined
+[ -n "$AGENT_PATTERN" ] && git diff origin/main...HEAD --name-only | grep -qE "$AGENT_PATTERN" && echo "agent-service changes detected"
+[ -n "$VISUAL_PATTERN" ] && git diff origin/main...HEAD --name-only | grep -qE "$VISUAL_PATTERN" && echo "visual changes detected"
 ```
 
 Run **both** applicable sub-sections below. A PR that touches both agent-service and UI code requires both setup paths.
