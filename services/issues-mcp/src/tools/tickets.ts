@@ -222,6 +222,25 @@ const TRANSITION_TICKET = gql`
   }
 `;
 
+/**
+ * Normalizes an array parameter that may arrive as a JSON-encoded string.
+ * The MCP framework sometimes serializes array arguments as JSON strings
+ * (e.g. '["id1","id2"]') instead of passing them as proper arrays.
+ */
+function parseStringArray(value: string[] | undefined): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (Array.isArray(value)) return value;
+  if (typeof (value as unknown) === "string") {
+    try {
+      const parsed: unknown = JSON.parse(value as unknown as string);
+      if (Array.isArray(parsed)) return parsed as string[];
+    } catch {
+      // not a valid JSON array
+    }
+  }
+  return undefined;
+}
+
 function ok(data: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
 }
@@ -269,7 +288,8 @@ export async function ticketCreate(params: TicketCreateParams): Promise<CallTool
     };
     if (params.description !== undefined) input.description = params.description;
     if (params.acceptanceCriteria !== undefined) input.acceptanceCriteria = params.acceptanceCriteria;
-    if (params.labelIds !== undefined && params.labelIds.length > 0) input.labelIds = params.labelIds;
+    const labelIds = parseStringArray(params.labelIds);
+    if (labelIds !== undefined && labelIds.length > 0) input.labelIds = labelIds;
     if (params.priority !== undefined) input.priority = params.priority;
     if (params.storyPoints !== undefined) input.storyPoints = params.storyPoints;
 
@@ -338,7 +358,8 @@ export async function ticketList(params: TicketListParams): Promise<CallToolResu
 
     const variables: Record<string, unknown> = { first: limit };
     if (params.state !== undefined) variables.state = params.state;
-    if (params.labelNames !== undefined && params.labelNames.length > 0) variables.labelNames = params.labelNames;
+    const labelNames = parseStringArray(params.labelNames);
+    if (labelNames !== undefined && labelNames.length > 0) variables.labelNames = labelNames;
     if (params.priority !== undefined) variables.priority = params.priority;
     if (params.isBlocked !== undefined) variables.isBlocked = params.isBlocked;
     if (pid !== undefined) variables.projectId = pid;
