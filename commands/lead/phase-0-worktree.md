@@ -1,5 +1,3 @@
-## Workflow Phases
-
 ### Phase 0: Worktree Setup
 
 **All work happens in worktrees, never on the default branch.**
