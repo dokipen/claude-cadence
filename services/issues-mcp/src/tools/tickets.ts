@@ -263,13 +263,24 @@ export async function ticketCreate(params: TicketCreateParams): Promise<CallTool
       return err("projectId is required (pass it explicitly or set ISSUES_PROJECT_ID)");
     }
 
+    // labelIds may arrive as a JSON-encoded string (e.g. "[\"id1\",\"id2\"]") when the
+    // model serializes arrays as strings. Parse it back to a real array in that case.
+    let labelIds = params.labelIds as string[] | string | undefined;
+    if (typeof labelIds === "string") {
+      try {
+        labelIds = JSON.parse(labelIds) as string[];
+      } catch {
+        return err("labelIds must be an array of label ID strings");
+      }
+    }
+
     const input: Record<string, unknown> = {
       title: params.title,
       projectId: pid,
     };
     if (params.description !== undefined) input.description = params.description;
     if (params.acceptanceCriteria !== undefined) input.acceptanceCriteria = params.acceptanceCriteria;
-    if (params.labelIds !== undefined && params.labelIds.length > 0) input.labelIds = params.labelIds;
+    if (labelIds !== undefined && (labelIds as string[]).length > 0) input.labelIds = labelIds;
     if (params.priority !== undefined) input.priority = params.priority;
     if (params.storyPoints !== undefined) input.storyPoints = params.storyPoints;
 
@@ -397,15 +408,34 @@ export interface TicketTransitionParams {
   to: string;
 }
 
+const VALID_TICKET_STATES = ["BACKLOG", "REFINED", "IN_PROGRESS", "CLOSED"] as const;
+
 export async function ticketTransition(params: TicketTransitionParams): Promise<CallToolResult> {
+  if (!params.id) {
+    return err("id is required");
+  }
+  if (!params.to) {
+    return err(`to (target state) is required. Valid states: ${VALID_TICKET_STATES.join(", ")}`);
+  }
+
+  const normalizedTo = params.to.toUpperCase();
+  if (!(VALID_TICKET_STATES as readonly string[]).includes(normalizedTo)) {
+    return err(`Invalid state "${params.to}". Valid states: ${VALID_TICKET_STATES.join(", ")}`);
+  }
+
   try {
     const client = getClient();
     const data = await client.request<{ transitionTicket: unknown }>(
       TRANSITION_TICKET,
-      { id: params.id, to: params.to }
+      { id: params.id, to: normalizedTo }
     );
     return ok(data.transitionTicket);
   } catch (error) {
-    return err(error instanceof Error ? error.message : String(error));
+    const message = error instanceof Error ? error.message : String(error);
+    // Augment enum-related errors with the list of valid states so callers can self-correct.
+    if (message.includes("does not exist in") || message.includes("enum")) {
+      return err(`${message} Valid states: ${VALID_TICKET_STATES.join(", ")}`);
+    }
+    return err(message);
   }
 }
