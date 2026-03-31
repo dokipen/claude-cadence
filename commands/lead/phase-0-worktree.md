@@ -16,7 +16,26 @@
 
    **Stop condition A — Detached HEAD**: If `detached_head` is `true` (branch is empty string): **STOP immediately**. Report the diagnostic output (`git worktree list`, `git status`, `pwd`) to the user. Instruct them to check out a named branch before continuing (e.g., `git checkout <branch-name>`). Do not proceed to any further steps.
 
-   **Existing worktree — auto-resume**: If `in_worktree` is `false` AND `git worktree list` shows exactly one worktree whose branch name starts with `<N>-` (where N is the issue number): extract its path from the `git worktree list` output, set `WORKTREE_DIR` to that path, set `BRANCH` to that branch name (strip surrounding `[brackets]` from the `git worktree list` output), set `WORKTREE_PREEXISTING=true`, and **skip ahead to step 4** (posting to the issue). Do not run `/new-work`. If more than one worktree matches, **STOP** and report all matching worktree paths to the user for disambiguation.
+   **Existing worktree — auto-resume**: If `in_worktree` is `false` AND `git worktree list` shows exactly one worktree whose branch name starts with `<N>-` (where N is the issue number): extract its path from the `git worktree list` output, set `WORKTREE_DIR` to that path, set `BRANCH` to that branch name (strip surrounding `[brackets]` from the `git worktree list` output), set `WORKTREE_PREEXISTING=true`. Do not run `/new-work`. If more than one worktree matches, **STOP** and report all matching worktree paths to the user for disambiguation. Before skipping ahead to step 4, apply the two checks below.
+
+   **Dirty worktree — warn and continue**: Check for uncommitted changes in the auto-resumed worktree:
+   ```bash
+   git -C "$WORKTREE_DIR" status --porcelain
+   ```
+   If the output is non-empty, print a warning: "Warning: worktree `$BRANCH` has uncommitted changes. Review and commit or stash before proceeding." Then continue — do not abort or stash automatically. Uncommitted changes are normal in interrupted work and should not block resuming.
+
+   **Branch behind origin — pull and continue**: Check whether the remote branch has commits not present locally. First fetch the remote branch (silently ignore errors if the branch is not yet pushed):
+   ```bash
+   git -C "$WORKTREE_DIR" fetch origin "$BRANCH" 2>/dev/null
+   BEHIND=$(git -C "$WORKTREE_DIR" rev-list --count HEAD..origin/"$BRANCH" 2>/dev/null || echo 0)
+   ```
+   If `$BEHIND` is greater than zero, pull the remote changes:
+   ```bash
+   git -C "$WORKTREE_DIR" pull --ff-only
+   ```
+   If the fast-forward succeeds, continue. If it fails (diverged history), print a warning: "Warning: branch `$BRANCH` cannot be fast-forwarded from origin — manual merge may be needed (run `git merge origin/$BRANCH` or `git rebase origin/$BRANCH` to resolve)." Then continue without pulling.
+
+   After both checks, **skip ahead to step 4** (posting to the issue).
 
    Only if stop condition A is not triggered and no existing worktree was found, proceed to step 1.
 
