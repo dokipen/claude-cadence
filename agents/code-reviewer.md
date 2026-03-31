@@ -1,7 +1,7 @@
 ---
 name: code-reviewer
 description: Review code for quality, best practices, and maintainability. Use for PR reviews and code audits.
-tools: Read, Grep, Glob, Bash, Search
+tools: Read, Grep, Glob, Bash, Search, mcp__issues__ticket_get, mcp__issues__ticket_list, mcp__issues__ticket_create, mcp__issues__ticket_update, mcp__issues__ticket_transition, mcp__issues__comment_add, mcp__issues__label_list, mcp__issues__label_add, mcp__issues__label_remove
 model: sonnet
 ---
 

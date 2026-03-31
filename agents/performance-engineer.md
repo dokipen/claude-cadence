@@ -1,7 +1,7 @@
 ---
 name: performance-engineer
 description: Performance optimization specialist. Use for build size, response time, memory usage, startup time, and performance profiling.
-tools: Read, Bash, Glob, Grep, Search
+tools: Read, Bash, Glob, Grep, Search, mcp__issues__ticket_get, mcp__issues__ticket_list, mcp__issues__ticket_create, mcp__issues__ticket_update, mcp__issues__ticket_transition, mcp__issues__comment_add, mcp__issues__label_list, mcp__issues__label_add, mcp__issues__label_remove
 model: sonnet
 ---
 
