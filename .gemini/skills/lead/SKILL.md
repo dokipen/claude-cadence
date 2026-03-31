@@ -74,7 +74,14 @@ This overrides the `api_url` configured in `CLAUDE.md`. Has no effect when provi
    gh issue list --search "[relevant keywords]" --state open
    ```
 
-   **Issues API:**
+   **Issues API (MCP preferred):**
+   ```
+   mcp__issues__ticket_list
+     projectName: "$PROJECT"
+     labelNames: ["[relevant label]"]
+   ```
+
+   **Issues API (CLI fallback):**
    ```bash
    issues ticket list --project $PROJECT --label "[relevant label]" --json
    ```
@@ -86,7 +93,15 @@ This overrides the `api_url` configured in `CLAUDE.md`. Has no effect when provi
    gh issue view [NUMBER]
    ```
 
-   **Issues API:**
+   **Issues API (MCP preferred):**
+   ```
+   mcp__issues__ticket_get
+     number: [NUMBER]
+     projectName: "$PROJECT"
+   ```
+   Save the output as `$TICKET_JSON` — it is reused for label detection in step 5.
+
+   **Issues API (CLI fallback):**
    ```bash
    TICKET_JSON=$(issues ticket view [NUMBER] --project $PROJECT --json)
    echo "$TICKET_JSON"
@@ -110,7 +125,17 @@ EOF
 )"
    ```
 
-   **Issues API:**
+   **Issues API (MCP preferred):**
+   Use `mcp__issues__label_list` to resolve label names to IDs first, then:
+   ```
+   mcp__issues__ticket_create
+     title: "Descriptive title"
+     projectName: "$PROJECT"
+     description: "## Description\n[Clear explanation of the work]\n\n## Notes\n[Any additional context]"
+     labelIds: ["<BUG_LABEL_CUID>"]
+   ```
+
+   **Issues API (CLI fallback):**
    ```bash
    issues ticket create \
      --project $PROJECT \
@@ -135,7 +160,15 @@ EOF
    ```
    If the `refined` label is missing, run `/refine [NUMBER]` before proceeding.
 
-   **Issues API:**
+   **Issues API (MCP preferred):**
+   ```
+   mcp__issues__ticket_get
+     number: [NUMBER]
+     projectName: "$PROJECT"
+   ```
+   If the `state` field is not `REFINED` (or later), run `/refine [NUMBER]` before proceeding.
+
+   **Issues API (CLI fallback):**
    ```bash
    issues ticket view [NUMBER] --project $PROJECT --json
    ```
@@ -151,7 +184,7 @@ EOF
    ```
    Returns `true` if the `plan` label is present.
 
-   **Issues API:** (reuse the JSON already fetched in step 2):
+   **Issues API (jq parse — reuse JSON from step 2, no API call):**
    ```bash
    echo "$TICKET_JSON" | jq '[.labels[].name] | contains(["plan"])'
    ```
@@ -167,7 +200,7 @@ EOF
    ```
    Returns `true` if the `human-activity` label is present.
 
-   **Issues API:** (reuse the JSON already fetched in step 2):
+   **Issues API (jq parse — reuse JSON from step 2, no API call):**
    ```bash
    echo "$TICKET_JSON" | jq '[.labels[].name] | contains(["human-activity"])'
    ```
@@ -185,7 +218,26 @@ EOF
    gh issue edit [NUMBER] --add-label "in-progress"
    ```
 
-   **Issues API:**
+   **Issues API (MCP preferred):**
+   Check the ticket's current state first with `mcp__issues__ticket_get`. Then transition through required intermediate states:
+   - If `BACKLOG`:
+     ```
+     mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "REFINED"
+     mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "IN_PROGRESS"
+     ```
+   - If `REFINED`:
+     ```
+     mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "IN_PROGRESS"
+     ```
+   - If already `IN_PROGRESS` → skip the transition
+   - If `CLOSED`:
+     ```
+     mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "BACKLOG"
+     mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "REFINED"
+     mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "IN_PROGRESS"
+     ```
+
+   **Issues API (CLI fallback):**
    Check the ticket's current state first with `issues ticket view`. Then transition through required intermediate states:
    - If `BACKLOG`:
      ```bash
@@ -219,7 +271,7 @@ Delegate to specialist agents using sub-agent delegation (e.g., @agent-name). Av
 
 | Phase | Channel | Command (GitHub) | Command (Issues API) |
 |-------|---------|------------------|----------------------|
-| Pre-PR (research, planning, implementation) | Ticket | `gh issue comment [N] --body "$(cat <<'EOF'\n...\nEOF\n)"` | `issues comment add TICKET_ID --body "$(cat <<'EOF'\n...\nEOF\n)" --json` |
+| Pre-PR (research, planning, implementation) | Ticket | `gh issue comment [N] --body "$(cat <<'EOF'\n...\nEOF\n)"` | `mcp__issues__comment_add` (preferred) or `issues comment add TICKET_ID --body "$(cat <<'EOF'\n...\nEOF\n)" --json` (fallback) |
 | Post-PR (code review, QA feedback) | GitHub PR | `gh pr review [N] --comment --body "..."` | `gh pr review [N] --comment --body "..."` |
 
 **Markdown formatting:** All comments (issue and PR) are rendered as markdown. Use markdown links `[text](url)` instead of bare URLs, code fences for file names and code references, and bold/lists for structure.
@@ -265,7 +317,14 @@ Delegate to specialist agents using sub-agent delegation (e.g., @agent-name). Av
    gh issue comment [N] --body "Starting work on issue #[N]. Branch: \`[BRANCH]\`"
    ```
 
-   **Issues API:**
+   **Issues API (MCP preferred):**
+   ```
+   mcp__issues__comment_add
+     ticketId: "<TICKET_CUID>"
+     body: "Starting work on issue #[N]. Branch: `[BRANCH]`"
+   ```
+
+   **Issues API (CLI fallback):**
    ```bash
    issues comment add TICKET_ID --body "$(cat <<'EOF'
 Starting work on issue #[N]. Branch: `[BRANCH]`
@@ -295,7 +354,14 @@ EOF
    [Task breakdown summary with approach and key decisions]"
    ```
 
-   **Issues API:**
+   **Issues API (MCP preferred):**
+   ```
+   mcp__issues__comment_add
+     ticketId: "<TICKET_CUID>"
+     body: "## Plan\n\n[Task breakdown summary with approach and key decisions]"
+   ```
+
+   **Issues API (CLI fallback):**
    ```bash
    issues comment add TICKET_ID --body "$(cat <<'EOF'
 ## Plan
@@ -348,7 +414,14 @@ For each task from the Phase 1 breakdown, delegate to an agent:
    Moving to verification."
    ```
 
-   **Issues API:**
+   **Issues API (MCP preferred):**
+   ```
+   mcp__issues__comment_add
+     ticketId: "<TICKET_CUID>"
+     body: "## Implementation complete\n\n[Summary of changes made and files modified]\n\nMoving to verification."
+   ```
+
+   **Issues API (CLI fallback):**
    ```bash
    issues comment add TICKET_ID --body "$(cat <<'EOF'
 ## Implementation complete
@@ -376,7 +449,14 @@ EOF
    gh issue comment [N] --body "PR created: #[PR-NUMBER] ([PR-URL])"
    ```
 
-   **Issues API:**
+   **Issues API (MCP preferred):**
+   ```
+   mcp__issues__comment_add
+     ticketId: "<TICKET_CUID>"
+     body: "PR created: #[PR-NUMBER] ([PR-URL])"
+   ```
+
+   **Issues API (CLI fallback):**
    ```bash
    issues comment add TICKET_ID --body "$(cat <<'EOF'
 PR created: #[PR-NUMBER] ([PR-URL])
@@ -499,7 +579,11 @@ docker compose -p <PROJECT_NAME> down
    - If timeout is exceeded: report the timeout and the still-pending check(s) to the user
 2. Close the ticket:
    - **GitHub (default):** `gh issue edit [NUMBER] --remove-label "in-progress"` (the PR's `Fixes #N` auto-closes it)
-   - **Issues API:** `issues ticket transition TICKET_ID --to CLOSED --json`
+   - **Issues API (MCP preferred):**
+     ```
+     mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "CLOSED"
+     ```
+     **Issues API (CLI fallback):** `issues ticket transition TICKET_ID --to CLOSED --json`
 3. Sync blocked labels using the `update-blocked-labels.sh` script in this command's `scripts/` directory
 4. Return to default branch and pull latest (skip if `WORKTREE_PREEXISTING` — the worktree is not ours to clean up):
    ```bash
@@ -519,7 +603,14 @@ docker compose -p <PROJECT_NAME> down
    gh issue comment [N] --body "Completed #[NUMBER]: [TITLE]. Merged via PR #[PR-NUMBER]."
    ```
 
-   **Issues API:**
+   **Issues API (MCP preferred):**
+   ```
+   mcp__issues__comment_add
+     ticketId: "<TICKET_CUID>"
+     body: "Completed #[NUMBER]: [TITLE]. Merged via PR #[PR-NUMBER]."
+   ```
+
+   **Issues API (CLI fallback):**
    ```bash
    issues comment add TICKET_ID --body "$(cat <<'EOF'
 Completed #[NUMBER]: [TITLE]. Merged via PR #[PR-NUMBER].
@@ -595,7 +686,18 @@ EOF
 )"
 ```
 
-**Issues API:**
+**Issues API (MCP preferred):**
+Use `mcp__issues__label_list` to resolve label names to IDs first, then:
+```
+mcp__issues__ticket_create
+  title: "[Phase title from plan]"
+  projectName: "$PROJECT"
+  description: "## Description\n[Phase description from plan]\n\n## Plan Reference\nDerived from the plan document: `docs/plans/<slug>.md` (plan ticket: #[NUMBER])"
+  acceptanceCriteria: "- [ ] [Criterion 1 from this phase]\n- [ ] [Criterion 2 from this phase]"
+  labelIds: ["<ENHANCEMENT_LABEL_CUID>"]
+```
+
+**Issues API (CLI fallback):**
 ```bash
 issues ticket create \
   --project $PROJECT \
@@ -646,12 +748,24 @@ gh issue edit [CHILD-NUMBER-2] --add-label "milestone:[N]-[slug]"
 # ... repeat for all child tickets
 ```
 
-**Issues API:**
+**Issues API — Label Creation (CLI only — MCP tools cannot create labels):**
 ```bash
-# Create label if it doesn't already exist
 MILESTONE_LABEL_NAME="milestone:[N]-[slug]"
 run_shell_command "$CADENCE_ROOT/commands/lead/scripts/ensure-milestone-label.sh" "$MILESTONE_LABEL_NAME"
+```
 
+Then apply the label using MCP (preferred) or CLI fallback. Use `mcp__issues__label_list` to resolve `$MILESTONE_LABEL_NAME` to a CUID first.
+
+**Issues API (MCP preferred):**
+```
+mcp__issues__label_add  ticketId: "<PLAN-TICKET-CUID>"      labelId: "<MILESTONE_LABEL_CUID>"
+mcp__issues__label_add  ticketId: "<CHILD-TICKET-CUID-1>"   labelId: "<MILESTONE_LABEL_CUID>"
+mcp__issues__label_add  ticketId: "<CHILD-TICKET-CUID-2>"   labelId: "<MILESTONE_LABEL_CUID>"
+# ... repeat for all child tickets
+```
+
+**Issues API (CLI fallback):**
+```bash
 # Apply to plan ticket
 issues label add [PLAN-TICKET-ID] --label "$MILESTONE_LABEL_NAME" --json
 
@@ -677,7 +791,7 @@ gh issue edit [BLOCKED-NUMBER] --body "$CURRENT_BODY
 Blocked by: #[BLOCKER-NUMBER]"
 ```
 
-**Issues API:**
+**Issues API (CLI only — no MCP tool for block relationships):**
 ```bash
 issues block add --blocker [BLOCKER-NUMBER] --blocked [BLOCKED-NUMBER] --project $PROJECT --json
 ```
@@ -703,7 +817,15 @@ EOF
 gh issue close [NUMBER]
 ```
 
-**Issues API:**
+**Issues API (MCP preferred):**
+```
+mcp__issues__comment_add
+  ticketId: "<TICKET_CUID>"
+  body: "## Planning complete: [TITLE]\n\nPlan document: `docs/plans/<slug>.md`\n\nImplementation tickets created:\n- #[SUB-NUMBER-1]: [title]\n- #[SUB-NUMBER-2]: [title]\n\nClosing plan ticket."
+mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "CLOSED"
+```
+
+**Issues API (CLI fallback):**
 ```bash
 issues comment add TICKET_ID --body "$(cat <<'EOF'
 ## Planning complete: [TITLE]
@@ -789,7 +911,14 @@ EOF
 )"
    ```
 
-   **Issues API:**
+   **Issues API (MCP preferred):**
+   ```
+   mcp__issues__comment_add
+     ticketId: "<TICKET_CUID>"
+     body: "## Walkthrough complete: [TITLE]\n\nAll manual steps confirmed complete by the human operator."
+   ```
+
+   **Issues API (CLI fallback):**
    ```bash
    issues comment add TICKET_ID --body "$(cat <<'EOF'
 ## Walkthrough complete: [TITLE]
@@ -801,7 +930,11 @@ EOF
 
 2. Close the ticket:
    - **GitHub (default):** `gh issue close [NUMBER]`
-   - **Issues API:** `issues ticket transition TICKET_ID --to CLOSED --json`
+   - **Issues API (MCP preferred):**
+     ```
+     mcp__issues__ticket_transition  id: "<TICKET_CUID>"  to: "CLOSED"
+     ```
+     **Issues API (CLI fallback):** `issues ticket transition TICKET_ID --to CLOSED --json`
 
 3. Report completion to the user, including the ticket number and title (e.g., "Completed #42: Add user authentication.").
 

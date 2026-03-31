@@ -89,15 +89,18 @@ For error sessions: check `error_message` in the session info for vault/git/conf
 
 Before creating tickets, search for existing ones:
 
+**MCP preferred:**
+```
+mcp__issues__ticket_list  projectName: "claude-cadence"  state: "BACKLOG"
+mcp__issues__ticket_list  projectName: "claude-cadence"  state: "REFINED"
+mcp__issues__ticket_list  projectName: "claude-cadence"  state: "IN_PROGRESS"
+```
+
+**CLI fallback:**
 ```bash
-issues ticket list --project claude-cadence \
-  --state BACKLOG --json
-
-issues ticket list --project claude-cadence \
-  --state REFINED --json
-
-issues ticket list --project claude-cadence \
-  --state IN_PROGRESS --json
+issues ticket list --project claude-cadence --state BACKLOG --json
+issues ticket list --project claude-cadence --state REFINED --json
+issues ticket list --project claude-cadence --state IN_PROGRESS --json
 ```
 
 Search titles for keywords matching the pattern (e.g., "OOM", "session death", "vault").
@@ -109,6 +112,17 @@ For each actionable pattern without an existing ticket:
 
 **Shell safety:** The `--title` argument is inline — avoid backticks in the title. write_file titles as plain text (e.g., "OOM in session restore" not "OOM in `restoreSession`"). The `--description` heredoc below is already backtick-safe via `<<'EOF'`.
 
+**MCP preferred:**
+```
+mcp__issues__ticket_create
+  title: "<concise description without backticks>"
+  projectName: "claude-cadence"
+  description: "## Problem\n\n<what the diagnostic data shows>\n\n## Evidence\n\n<paste relevant event entries or summary counts>\n\n## Hypothesis\n\n<likely root cause based on the pattern>"
+  acceptanceCriteria: "- [ ] Root cause identified and fixed\n- [ ] Recurrence rate drops to zero in next 7-day diagnostic window"
+  priority: "HIGH"
+```
+
+**CLI fallback:**
 ```bash
 issues ticket create \
   --project claude-cadence \
@@ -136,8 +150,16 @@ EOF
   --json
 ```
 
-Then add the `agent-discovered` label:
+Then add the `agent-discovered` label.
 
+**MCP preferred:** Use `mcp__issues__label_list` to resolve `agent-discovered` to a CUID, then:
+```
+mcp__issues__label_add
+  ticketId: "<TICKET_CUID>"
+  labelId: "<AGENT_DISCOVERED_LABEL_CUID>"
+```
+
+**CLI fallback:**
 ```bash
 issues label add <ticket-id> --label agent-discovered --json
 ```
