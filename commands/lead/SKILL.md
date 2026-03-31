@@ -192,7 +192,7 @@ EOF
    ```
    Returns `true` if the `plan` label is present.
 
-   **Issues API:** (reuse the JSON already fetched in step 2):
+   **Issues API (jq parse — reuse JSON from step 2, no API call):**
    ```bash
    echo "$TICKET_JSON" | jq '[.labels[].name] | contains(["plan"])'
    ```
@@ -208,7 +208,7 @@ EOF
    ```
    Returns `true` if the `human-activity` label is present.
 
-   **Issues API:** (reuse the JSON already fetched in step 2):
+   **Issues API (jq parse — reuse JSON from step 2, no API call):**
    ```bash
    echo "$TICKET_JSON" | jq '[.labels[].name] | contains(["human-activity"])'
    ```
@@ -756,9 +756,8 @@ gh issue edit [CHILD-NUMBER-2] --add-label "milestone:[N]-[slug]"
 # ... repeat for all child tickets
 ```
 
-**Issues API:**
+**Issues API — Label Creation (CLI only — MCP tools cannot create labels):**
 ```bash
-# Create label if it doesn't already exist (CLI-only: MCP tools cannot create labels)
 MILESTONE_LABEL_NAME="milestone:[N]-[slug]"
 bash "$CADENCE_ROOT/commands/lead/scripts/ensure-milestone-label.sh" "$MILESTONE_LABEL_NAME"
 ```
@@ -800,7 +799,7 @@ gh issue edit [BLOCKED-NUMBER] --body "$CURRENT_BODY
 Blocked by: #[BLOCKER-NUMBER]"
 ```
 
-**Issues API:**
+**Issues API (CLI only — no MCP tool for block relationships):**
 ```bash
 issues block add --blocker [BLOCKER-NUMBER] --blocked [BLOCKED-NUMBER] --project $PROJECT --json
 ```
