@@ -27,6 +27,16 @@ description: "This skill should be used when..."  # triggers auto-invocation
 | Model-invoked background knowledge | `skills/` | Claude auto-invokes based on context |
 | Both user and model | `skills/` | Either can invoke |
 
+## Required sections
+
+New SKILL.md files must include a `## Filesystem Scope` section with the single-line reference:
+
+```markdown
+## Filesystem Scope
+
+> **IMPORTANT:** See the **Filesystem Scope** section in `CLAUDE.md`.
+```
+
 ## Writing the content
 
 - Use imperative/verb-first language ("Create the file" not "You should create")
