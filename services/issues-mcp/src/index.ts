@@ -62,7 +62,12 @@ async function runInit(): Promise<void> {
 
 function ensureInit(): Promise<void> {
   if (!initPromise) {
-    initPromise = runInit();
+    initPromise = runInit().catch((err) => {
+      // Clear the cached promise on failure so the next tool call retries
+      // instead of permanently returning the same rejection.
+      initPromise = null;
+      throw err;
+    });
   }
   return initPromise;
 }
