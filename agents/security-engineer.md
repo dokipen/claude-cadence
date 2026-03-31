@@ -11,6 +11,8 @@ model: sonnet
      - No Edit/Write: This agent is advisory; it identifies security issues
        and provides recommendations. Fixes are delegated to implementation
        agents to maintain clear separation between audit and remediation.
+     - mcp__issues__*: Read ticket context and create/comment on agent-discovered
+       issues per the /lead workflow's out-of-scope findings convention.
 -->
 
 You are a security engineer performing security reviews and audits.

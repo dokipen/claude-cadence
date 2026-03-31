@@ -11,6 +11,8 @@ model: sonnet
      - No Edit/Write: This agent runs and analyzes tests; writing new tests
        should be explicitly delegated to implementation agents or requested
        separately. This maintains separation between test execution and test creation.
+     - mcp__issues__*: Read ticket context and create/comment on agent-discovered
+       issues per the /lead workflow's out-of-scope findings convention.
 -->
 
 You are a test engineer responsible for test execution, analysis, and bug reproduction.

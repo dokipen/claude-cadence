@@ -11,6 +11,8 @@ model: sonnet
      - No Edit/Write: This agent is advisory; it identifies performance issues
        and provides recommendations. Optimizations are delegated to implementation
        agents to maintain clear separation between analysis and implementation.
+     - mcp__issues__*: Read ticket context and create/comment on agent-discovered
+       issues per the /lead workflow's out-of-scope findings convention.
 -->
 
 You are a performance engineer identifying and analyzing performance issues.
