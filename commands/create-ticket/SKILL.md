@@ -110,10 +110,15 @@ Then create the ticket:
 mcp__issues__ticket_create
   title: "<title>"
   projectName: "<PROJECT>"
-  description: "## Description\n<description>"
-  acceptanceCriteria: "- [ ] <criterion 1>\n- [ ] <criterion 2>"
+  description: |
+    ## Description
+    <description>
+  acceptanceCriteria: |
+    - [ ] <criterion 1>
+    - [ ] <criterion 2>
   labelIds: ["<LABEL_CUID>"]
   priority: "MEDIUM"
+  storyPoints: 2              # optional, Fibonacci scale: 1, 2, 3, 5, 8, 13
 ```
 
 **Issues API (CLI — fallback when MCP tools are absent):**
