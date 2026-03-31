@@ -10,9 +10,14 @@ import { makeSessionStorageMock } from '../test-utils/makeSessionStorageMock';
 // ---------------------------------------------------------------------------
 // Hoisted mutable state
 // ---------------------------------------------------------------------------
-const { mockOptimisticAddSession, mockIsMobile } = vi.hoisted(() => ({
+const { mockOptimisticAddSession, mockIsMobile, mockDeleteSession } = vi.hoisted(() => ({
   mockOptimisticAddSession: vi.fn(),
   mockIsMobile: { value: false },
+  mockDeleteSession: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../api/agentHubClient", () => ({
+  deleteSession: mockDeleteSession,
 }));
 
 // Mock CSS modules
@@ -548,6 +553,8 @@ describe("AgentManager — mobile layout", () => {
 
   afterEach(() => {
     mockIsMobile.value = false;
+    mockDeleteSession.mockReset();
+    mockDeleteSession.mockResolvedValue(undefined);
     cleanup();
   });
 
@@ -629,6 +636,30 @@ describe("AgentManager — mobile layout", () => {
 
     // Should be in session view
     expect(queryByTestId("mobile-session-view")).not.toBeNull();
+  });
+
+  it("clicking the Close button terminates the session on the backend and dismisses the overlay", async () => {
+    const sessions = [makeSession("sess-close1", "test-agent")];
+    const { queryByTestId, getAllByTestId, getByRole } = render(
+      <MemoryRouter><AgentManager sessions={sessions} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
+    );
+
+    // Open a session
+    await act(async () => {
+      fireEvent.click(getAllByTestId("sidebar-session")[0]);
+    });
+    expect(queryByTestId("mobile-session-view")).not.toBeNull();
+
+    // Click the Close button
+    await act(async () => {
+      fireEvent.click(getByRole("button", { name: /close session/i }));
+    });
+
+    // Overlay should be gone
+    expect(queryByTestId("mobile-session-view")).toBeNull();
+
+    // Backend DELETE must have been called to terminate the session
+    expect(mockDeleteSession).toHaveBeenCalledWith("test-agent", "sess-close1");
   });
 
 });
