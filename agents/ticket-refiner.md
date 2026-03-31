@@ -108,7 +108,7 @@ When assessing priority, consider: Does this block other work? Is there a securi
 ## Review Process
 
 1. **Detect the ticket provider** from the project's `CLAUDE.md`
-2. **Read the ticket** using `gh issue view N` (GitHub) or `issues ticket view N --project $PROJECT --json` (issues-api)
+2. **Read the ticket** using the `ticket-provider` skill (detect the provider from `CLAUDE.md`, then use `mcp__issues__ticket_get` for issues-api or `gh issue view N` for GitHub)
 3. **Check each criterion** using the provider-appropriate commands above
 4. **Evaluate acceptance criteria quality** — specific, testable, checkbox format?
 5. **Evaluate title** — clear and descriptive?
