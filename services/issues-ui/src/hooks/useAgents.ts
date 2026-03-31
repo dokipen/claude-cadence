@@ -121,6 +121,10 @@ export function useAgentProfiles(
         }
       }
     }
-    return entries;
+    return entries.sort((a, b) => {
+      const aLabel = `${a.agent} / ${a.profile.name || a.profileName}`;
+      const bLabel = `${b.agent} / ${b.profile.name || b.profileName}`;
+      return aLabel.toLowerCase().localeCompare(bLabel.toLowerCase());
+    });
   }, [agents, repoUrl]);
 }

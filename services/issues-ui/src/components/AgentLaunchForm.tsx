@@ -32,6 +32,7 @@ export function AgentLaunchForm({ agents, onLaunched, repoUrl }: AgentLaunchForm
           !repoUrl || !profile.repo || normalizeRepo(profile.repo) === normalizeRepo(repoUrl)
         )
         .map(([key, profile]) => ({ key, label: profile.name || key }))
+        .sort((a, b) => a.label.toLowerCase().localeCompare(b.label.toLowerCase()))
     : [];
 
   const handleHostChange = useCallback(
