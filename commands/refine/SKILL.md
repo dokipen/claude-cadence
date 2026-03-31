@@ -51,51 +51,11 @@ Use this value to select the correct commands throughout the workflow.
    Check all refinement criteria and report findings.
    For any missing items, apply best-effort fixes directly.
    Estimate based on scope and complexity using codebase context — only escalate to user if scope is genuinely ambiguous (e.g., ticket could be a 3 or a 13 depending on interpretation).
-   Ensure the ticket is assigned — if unassigned, assign to the current
-   authenticated user (or a named developer if the context is clear).
-   Assignment must be applied before transitioning to REFINED.
    ```
 
-2. **Apply all fixes** including estimates, labels, title improvements, and assignment
+2. **Apply all fixes** including estimates, labels, and title improvements
 
-3. **Verify assignment before marking refined** — confirm the ticket has an assignee. If not, the ticket-refiner agent should have assigned one; if it didn't, assign now:
-
-   **GitHub:**
-   ```bash
-   ASSIGNEE=$(gh issue view 123 --json assignees --jq '.assignees[0].login')
-   if [ -z "$ASSIGNEE" ]; then
-     CURRENT_USER=$(gh api user --jq '.login')
-     gh issue edit 123 --add-assignee "$CURRENT_USER"
-   fi
-   ```
-
-   **Issues API (MCP preferred):**
-   ```
-   mcp__issues__ticket_get
-     number: 123
-     projectName: "$PROJECT"
-   ```
-   Check the `assignee` field. If null, look up the current user ID:
-   ```bash
-   CURRENT_USER_ID=$(issues auth whoami --json | jq -r '.id')
-   ```
-   Then assign using the resolved ID:
-   ```
-   mcp__issues__ticket_assign
-     ticketId: "<TICKET_CUID>"
-     userId: "<CURRENT_USER_ID>"
-   ```
-
-   **Issues API (CLI fallback):**
-   ```bash
-   ASSIGNEE=$(issues ticket view 123 --project "$PROJECT" --json | jq -r '.assignee.login // empty')
-   if [ -z "$ASSIGNEE" ]; then
-     CURRENT_USER_ID=$(issues auth whoami --json | jq -r '.id')
-     issues assign "$TICKET_ID" --user "$CURRENT_USER_ID" --json
-   fi
-   ```
-
-4. **Mark refined** when all criteria pass (including assignment):
+3. **Mark refined** when all criteria pass:
 
    **GitHub (default):**
    ```bash
@@ -136,7 +96,7 @@ Use this value to select the correct commands throughout the workflow.
    issues ticket list --project "$PROJECT" --state BACKLOG --json
    ```
 
-2. **For each issue**, delegate to ticket-refiner agent with the same assignment instructions as single-issue mode (ensure each ticket is assigned before marking refined)
+2. **For each issue**, delegate to ticket-refiner agent with the same instructions as single-issue mode
 
 3. **Present summary** of all issues reviewed and changes made
 
@@ -151,7 +111,6 @@ An issue is refined when it has ALL of:
 | Estimate | `estimate:N` label (1-13) | Story points field (`--points N`) |
 | Priority | `priority:high`, `priority:medium`, or `priority:low` label | Priority field (`--priority N`) |
 | Type label | Label by name: bug, enhancement, etc. | Label by ID (use `mcp__issues__label_list` or `issues label list --json` to resolve) |
-| Assigned | Assigned to a developer | `issues assign TICKET_ID --user USER_ID --json` |
 | Blockers linked | Via GitHub dependencies API | `issues block add --blocker X --blocked Y --json` |
 | Blocked label | `blocked` label if open blockers exist | Blocked tickets auto-tracked; cannot transition to `IN_PROGRESS` |
 | Refined | `refined` label added after all criteria met | Transition to `REFINED` state |
