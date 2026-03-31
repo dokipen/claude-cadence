@@ -2,6 +2,8 @@
 
 **The lead orchestrates — it does NOT write implementation code directly.**
 
+> **Direct-edit exception:** Changes touching ≤ 3 lines in a single file (e.g., a one-line config tweak, a small wording fix) may be made by the lead directly using `Edit`. Anything larger — new functions, multi-line refactors, multi-file changes — must be delegated to an agent.
+
 For each task from the Phase 1 breakdown, delegate to an agent:
 
 1. **Choose the right agent for each task:**
