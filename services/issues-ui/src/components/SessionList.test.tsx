@@ -10,9 +10,10 @@ import type { AgentSession } from "../hooks/useAllSessions";
 // Mock CSS modules
 vi.mock("../styles/agents.module.css", () => ({ default: {} }));
 
-// Mock deleteSession so kill button tests don't need a real WebSocket
+// Mock agentHubClient so button tests don't need a real WebSocket
 vi.mock("../api/agentHubClient", () => ({
   deleteSession: vi.fn().mockResolvedValue(undefined),
+  sendSessionInput: vi.fn().mockResolvedValue(undefined),
 }));
 
 // Mock SessionOutputTooltip so tests don't need xterm/WebSocket setup
@@ -469,6 +470,86 @@ describe("SessionList", () => {
       />,
     );
     fireEvent.keyDown(getByTestId("sidebar-session"), { key: "Escape" });
+    expect(onSessionClick).not.toHaveBeenCalled();
+  });
+
+  it("return button is present for a running session", () => {
+    const agents = [makeAgent("my-agent")];
+    const session = makeSession("s1", "my-agent");
+    session.session.state = "running";
+    const { getByTestId } = render(
+      <SessionList {...defaultProps} agents={agents} sessions={[session]} isCollapsed={false} />,
+    );
+    expect(getByTestId("sidebar-session-return")).toBeTruthy();
+  });
+
+  it("esc button is present for a running session", () => {
+    const agents = [makeAgent("my-agent")];
+    const session = makeSession("s1", "my-agent");
+    session.session.state = "running";
+    const { getByTestId } = render(
+      <SessionList {...defaultProps} agents={agents} sessions={[session]} isCollapsed={false} />,
+    );
+    expect(getByTestId("sidebar-session-esc")).toBeTruthy();
+  });
+
+  it("return button is absent for a stopped session", () => {
+    const agents = [makeAgent("my-agent")];
+    const session = makeSession("s1", "my-agent");
+    session.session.state = "stopped";
+    const { queryByTestId } = render(
+      <SessionList {...defaultProps} agents={agents} sessions={[session]} isCollapsed={false} />,
+    );
+    expect(queryByTestId("sidebar-session-return")).toBeNull();
+  });
+
+  it("esc button is absent for a stopped session", () => {
+    const agents = [makeAgent("my-agent")];
+    const session = makeSession("s1", "my-agent");
+    session.session.state = "stopped";
+    const { queryByTestId } = render(
+      <SessionList {...defaultProps} agents={agents} sessions={[session]} isCollapsed={false} />,
+    );
+    expect(queryByTestId("sidebar-session-esc")).toBeNull();
+  });
+
+  it("clicking return button calls sendSessionInput with carriage return and stops propagation", async () => {
+    const { sendSessionInput } = await import("../api/agentHubClient");
+    const onSessionClick = vi.fn();
+    const agents = [makeAgent("my-agent")];
+    const session = makeSession("s1", "my-agent");
+    session.session.state = "running";
+    const { getByTestId } = render(
+      <SessionList
+        {...defaultProps}
+        agents={agents}
+        sessions={[session]}
+        onSessionClick={onSessionClick}
+        isCollapsed={false}
+      />,
+    );
+    fireEvent.click(getByTestId("sidebar-session-return"));
+    expect(sendSessionInput).toHaveBeenCalledWith("my-agent", "s1", "\r");
+    expect(onSessionClick).not.toHaveBeenCalled();
+  });
+
+  it("clicking esc button calls sendSessionInput with escape character and stops propagation", async () => {
+    const { sendSessionInput } = await import("../api/agentHubClient");
+    const onSessionClick = vi.fn();
+    const agents = [makeAgent("my-agent")];
+    const session = makeSession("s1", "my-agent");
+    session.session.state = "running";
+    const { getByTestId } = render(
+      <SessionList
+        {...defaultProps}
+        agents={agents}
+        sessions={[session]}
+        onSessionClick={onSessionClick}
+        isCollapsed={false}
+      />,
+    );
+    fireEvent.click(getByTestId("sidebar-session-esc"));
+    expect(sendSessionInput).toHaveBeenCalledWith("my-agent", "s1", "\x1b");
     expect(onSessionClick).not.toHaveBeenCalled();
   });
 });

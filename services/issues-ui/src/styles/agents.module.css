@@ -461,19 +461,41 @@
   color: var(--text);
 }
 
+.sidebarSessionActions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.sidebarSessionInputButton {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0 0.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  height: 100%;
+}
+
+.sidebarSessionInputButton:hover {
+  color: var(--text);
+  background: rgba(128, 128, 128, 0.08);
+}
+
 .sidebarSessionKillButton {
   background: none;
   border: none;
   color: var(--amber);
   cursor: pointer;
-  padding: 0 0.5rem;
+  padding: 0 0.35rem;
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
   transition: opacity 0.2s;
-  position: absolute;
-  right: 0;
   height: 100%;
 }
 
