@@ -42,11 +42,16 @@ export function getApiUrl(): string {
 }
 
 export function getAuthToken(): string | undefined {
+  // Prefer _resolvedToken when set: it was obtained (or refreshed) at runtime
+  // and is always at least as fresh as the env var. This ensures that after a
+  // successful re-auth the refreshed token is used for subsequent requests
+  // instead of the stale ISSUES_AUTH_TOKEN that triggered the auth failure.
+  if (_resolvedToken) return _resolvedToken;
   const envToken = process.env.ISSUES_AUTH_TOKEN;
   if (envToken !== undefined && envToken.trim() !== "") {
     return envToken;
   }
-  return _resolvedToken;
+  return undefined;
 }
 
 export function getRefreshToken(): string | undefined {
