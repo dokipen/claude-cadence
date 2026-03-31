@@ -49,7 +49,7 @@ For each task from the Phase 1 breakdown, delegate to an agent:
 2. Collect all findings, then triage by severity (Critical/Warning block merge, Suggestions don't)
 3. Fix-review loop: assign fixes, push, re-review (max 3 cycles before escalation)
 4. Handle deferred findings using the convention below
-5. Once all blocking findings are resolved, proceed directly to Phase 7 (skip Phase 6 unless the PR contains visual/UI changes or touches `services/agents/` or `services/agent-hub/`)
+5. Once all blocking findings are resolved, proceed directly to Phase 7 (skip Phase 6 unless the PR touches paths listed in the project's `## QA Triggers` CLAUDE.md section)
 
 #### Deferred Findings Convention
 
@@ -70,13 +70,23 @@ In both cases:
 
 ### Phase 6: Manual QA (visual changes or agent-service changes)
 
-> **This phase applies when the PR contains visual/UI changes OR touches agent-related code (`services/agents/`, `services/agent-hub/`).** For all other PRs, proceed directly from Phase 5 to Phase 7.
+> **This phase applies only when the project's CLAUDE.md contains a `## QA Triggers` section AND the PR touches paths listed there.** If the section is absent, proceed directly from Phase 5 to Phase 7.
 
-Detect the PR type before directing the user:
+Before running the detection below, read the `## QA Triggers` section from the project's CLAUDE.md and extract:
+- **Agent-service paths**: lines under `### Agent-service changes` (e.g. `services/agents/`, `services/agent-hub/`)
+- **Visual/UI paths**: lines under `### Visual/UI changes` (e.g. `services/issues-ui/`)
+
+If the `## QA Triggers` section is absent or empty, skip this phase entirely.
+
+Detect the PR type using the extracted paths:
 ```bash
-# Check independently — a PR can trigger both paths
-git diff origin/main...HEAD --name-only | grep -qE '^services/(agents|agent-hub)/' && echo "agent-service changes detected"
-git diff origin/main...HEAD --name-only | grep -qE '^services/issues-ui/' && echo "visual changes detected"
+# Substitute the extracted path patterns from CLAUDE.md's ## QA Triggers section
+# Example using cadence defaults — replace with actual paths from the project's CLAUDE.md:
+AGENT_PATTERN='^services/(agents|agent-hub)/'   # from ### Agent-service changes
+VISUAL_PATTERN='^services/issues-ui/'            # from ### Visual/UI changes
+
+git diff origin/main...HEAD --name-only | grep -qE "$AGENT_PATTERN" && echo "agent-service changes detected"
+git diff origin/main...HEAD --name-only | grep -qE "$VISUAL_PATTERN" && echo "visual changes detected"
 ```
 
 Run **both** applicable sub-sections below. A PR that touches both agent-service and UI code requires both setup paths.
@@ -98,7 +108,7 @@ Run **both** applicable sub-sections below. A PR that touches both agent-service
 2. Wait for user feedback (user intervention required)
 3. Address issues if reported, return to Phase 5 after fixes
 
-#### Agent-service changes (`services/agents/`, `services/agent-hub/`)
+#### Agent-service changes
 
 These services have hard host dependencies (the `claude` CLI, OS service integration) that make them impractical to containerize. Run them on the host alongside the compose stack.
 
