@@ -33,6 +33,8 @@ Reference these official documentation sources for up-to-date guidance:
 - **Claude Agent SDK Guide**: https://docs.anthropic.com/en/docs/claude-code/claude-code-sdk-guide
 - **Anthropic API Reference**: https://docs.anthropic.com/en/api
 
+**When to consult official docs:** Fetch external docs when adding new plugin capabilities (e.g., new tool types, new hook events, unfamiliar API parameters) or when uncertain whether a Claude Code feature works as expected. For routine edits — updating agent prompts, adjusting skill instructions, modifying tool lists — use local conventions and existing patterns in the repo; do not over-fetch docs for changes that are well-covered by local examples.
+
 ## Core Agent Design Principles
 
 1. **Simplicity**: Start with the simplest solution that works. Add complexity only when it demonstrably improves outcomes.
