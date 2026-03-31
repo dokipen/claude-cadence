@@ -25,7 +25,7 @@ vi.mock("../projects.js", () => ({
   resolveProjectName: vi.fn(),
 }));
 
-const { ticketCreate, ticketList } = await import("./tickets.js");
+const { ticketCreate, ticketList, ticketTransition } = await import("./tickets.js");
 
 // Helper: return the variables passed to the first request call
 function capturedVars() {
@@ -112,5 +112,80 @@ describe("ticketList", () => {
 
     const vars = capturedVars();
     expect(vars).not.toHaveProperty("labelNames");
+  });
+});
+
+describe("ticketTransition", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("passes id and to variables to the GraphQL mutation", async () => {
+    mockRequest.mockResolvedValue({
+      transitionTicket: { id: "cuid1", number: 1, title: "Test", state: "IN_PROGRESS" },
+    });
+
+    const result = await ticketTransition({ id: "cuid1", to: "IN_PROGRESS" });
+
+    expect(result.isError).toBeFalsy();
+    const vars = capturedVars();
+    expect(vars.id).toBe("cuid1");
+    expect(vars.to).toBe("IN_PROGRESS");
+  });
+
+  it("normalizes state to uppercase", async () => {
+    mockRequest.mockResolvedValue({
+      transitionTicket: { id: "cuid1", number: 1, title: "Test", state: "CLOSED" },
+    });
+
+    await ticketTransition({ id: "cuid1", to: "closed" });
+
+    expect(capturedVars().to).toBe("CLOSED");
+  });
+
+  it("returns error when id is missing", async () => {
+    const result = await ticketTransition({ id: "", to: "IN_PROGRESS" });
+
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as { text: string }).text).toContain("id is required");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("returns error with valid states list when to is missing", async () => {
+    const result = await ticketTransition({ id: "cuid1", to: "" });
+
+    expect(result.isError).toBe(true);
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).toContain("required");
+    expect(text).toContain("BACKLOG");
+    expect(text).toContain("IN_PROGRESS");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("returns error with valid states list when state is invalid", async () => {
+    const result = await ticketTransition({ id: "cuid1", to: "INVALID_STATE" });
+
+    expect(result.isError).toBe(true);
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).toContain("INVALID_STATE");
+    expect(text).toContain("BACKLOG");
+    expect(text).toContain("REFINED");
+    expect(text).toContain("IN_PROGRESS");
+    expect(text).toContain("CLOSED");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("augments server enum errors with valid states", async () => {
+    mockRequest.mockRejectedValue(
+      new Error("Value 'WONTFIX' does not exist in 'TicketState' enum.")
+    );
+
+    const result = await ticketTransition({ id: "cuid1", to: "BACKLOG" });
+
+    expect(result.isError).toBe(true);
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).toContain("does not exist in");
+    expect(text).toContain("BACKLOG");
+    expect(text).toContain("IN_PROGRESS");
   });
 });

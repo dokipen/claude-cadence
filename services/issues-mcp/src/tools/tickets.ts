@@ -454,16 +454,35 @@ export interface TicketTransitionParams {
   to: string;
 }
 
+const VALID_TICKET_STATES = ["BACKLOG", "REFINED", "IN_PROGRESS", "CLOSED"] as const;
+
 export async function ticketTransition(params: TicketTransitionParams): Promise<CallToolResult> {
+  if (!params.id) {
+    return err("id is required");
+  }
+  if (!params.to) {
+    return err(`to (target state) is required. Valid states: ${VALID_TICKET_STATES.join(", ")}`);
+  }
+
+  const normalizedTo = params.to.toUpperCase();
+  if (!(VALID_TICKET_STATES as readonly string[]).includes(normalizedTo)) {
+    return err(`Invalid state "${params.to}". Valid states: ${VALID_TICKET_STATES.join(", ")}`);
+  }
+
   try {
     const client = getClient();
     const data = await client.request<{ transitionTicket: unknown }>(
       TRANSITION_TICKET,
-      { id: params.id, to: params.to }
+      { id: params.id, to: normalizedTo }
     );
     return ok(data.transitionTicket);
   } catch (error) {
-    return err(error instanceof Error ? error.message : String(error));
+    const message = error instanceof Error ? error.message : String(error);
+    // Augment enum-related errors with the list of valid states so callers can self-correct.
+    if (message.includes("does not exist in")) {
+      return err(`${message} Valid states: ${VALID_TICKET_STATES.join(", ")}`);
+    }
+    return err(message);
   }
 }
 
