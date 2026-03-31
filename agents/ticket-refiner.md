@@ -7,6 +7,8 @@ model: sonnet
 
 <!-- Tool Assignment Rationale:
      - Read, Glob, Grep: Read issue content, search codebase for context
+     - Search: Locate symbol definitions and cross-file usages when a
+       fuzzy or natural-language query is more convenient than a regex
      - Bash: Run `gh` / `issues` CLI commands to check/update tickets
      - No Edit/Write: This agent reviews and updates tickets via CLI,
        not source code files.
