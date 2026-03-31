@@ -1,5 +1,6 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { Terminal } from "./Terminal";
+import type { TerminalHandle } from "./Terminal";
 import { hubFetch, HubError, createSession } from "../api/agentHubClient";
 import { useTicketByNumber } from "../hooks/useTicketByNumber";
 import { useSessionsContext } from "../hooks/SessionsContext";
@@ -110,6 +111,8 @@ export function TerminalWindow({
     }
   };
 
+  const terminalRef = useRef<TerminalHandle>(null);
+
   const title = stripProjectPrefix(session.name);
 
   return (
@@ -150,6 +153,24 @@ export function TerminalWindow({
         </span>
         <div className={styles.tileControls}>
           <button
+            className={styles.tileEnter}
+            onClick={() => terminalRef.current?.sendInput("\r")}
+            data-testid="tile-enter"
+            title="Send Enter"
+            aria-label="Send Enter"
+          >
+            ↵
+          </button>
+          <button
+            className={styles.tileEscape}
+            onClick={() => terminalRef.current?.sendInput("\x1b")}
+            data-testid="tile-escape"
+            title="Send Escape"
+            aria-label="Send Escape"
+          >
+            Esc
+          </button>
+          <button
             className={styles.tileMinimize}
             onClick={onMinimize}
             data-testid="tile-minimize"
@@ -177,7 +198,7 @@ export function TerminalWindow({
         </div>
       </div>
       <div className={styles.tileBody}>
-        <Terminal agentName={agentName} sessionId={session.id} onResumeSession={handleResumeSession} />
+        <Terminal ref={terminalRef} agentName={agentName} sessionId={session.id} onResumeSession={handleResumeSession} />
       </div>
     </div>
   );

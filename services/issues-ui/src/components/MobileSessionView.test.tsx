@@ -25,6 +25,7 @@ vi.mock("../styles/agents.module.css", () => ({
     mobileHeader: "mobileHeader",
     mobileSessionContent: "mobileSessionContent",
     mobileBackButton: "mobileBackButton",
+    mobileEnterButton: "mobileEnterButton",
     mobileEscButton: "mobileEscButton",
     mobileCloseButton: "mobileCloseButton",
   },
@@ -66,13 +67,14 @@ afterEach(() => {
 });
 
 describe("MobileSessionView", () => {
-  it("renders back button, esc button, close button, and terminal", () => {
+  it("renders back button, enter button, esc button, close button, and terminal", () => {
     const win = makeWindow("sess-1", "test-agent");
     const { getByRole, getByTestId } = render(
       <MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />,
     );
 
     expect(getByRole("button", { name: /back to agent list/i })).not.toBeNull();
+    expect(getByRole("button", { name: /send enter/i })).not.toBeNull();
     expect(getByRole("button", { name: /send escape/i })).not.toBeNull();
     expect(getByRole("button", { name: /close session/i })).not.toBeNull();
     expect(getByTestId("terminal")).not.toBeNull();
@@ -115,6 +117,19 @@ describe("MobileSessionView", () => {
     });
 
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("sends carriage return to terminal when Enter button is clicked", async () => {
+    const win = makeWindow("sess-2d", "test-agent");
+    const { getByRole } = render(
+      <MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />,
+    );
+
+    await act(async () => {
+      fireEvent.click(getByRole("button", { name: /send enter/i }));
+    });
+
+    expect(mockSendInput).toHaveBeenCalledWith("\r");
   });
 
   it("sends escape character to terminal when Esc button is clicked", async () => {

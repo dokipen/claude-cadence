@@ -48,6 +48,13 @@ export function MobileSessionView({ win, onBack, onClose }: MobileSessionViewPro
           ← Back
         </button>
         <button
+          className={styles.mobileEnterButton}
+          onClick={() => terminalRef.current?.sendInput("\r")}
+          aria-label="Send Enter"
+        >
+          ↵
+        </button>
+        <button
           className={styles.mobileEscButton}
           onClick={() => terminalRef.current?.sendInput("\x1b")}
           aria-label="Send Escape"

@@ -637,6 +637,8 @@
   flex-shrink: 0;
 }
 
+.tileEnter,
+.tileEscape,
 .tileMinimize,
 .tileMaximize,
 .tileTerminate {
@@ -655,8 +657,16 @@
   padding: 0;
 }
 
+.tileEnter,
+.tileEscape {
+  width: auto;
+  padding: 0 5px;
+}
+
 .tileMinimize:hover,
-.tileMaximize:hover {
+.tileMaximize:hover,
+.tileEnter:hover,
+.tileEscape:hover {
   background: rgba(128, 128, 128, 0.15);
   color: var(--text);
 }
@@ -796,6 +806,7 @@
 }
 
 .mobileBackButton,
+.mobileEnterButton,
 .mobileEscButton,
 .mobileCloseButton {
   padding: 0.5rem 0.75rem;
@@ -812,6 +823,7 @@
   flex: 1;
 }
 
+.mobileEnterButton,
 .mobileEscButton,
 .mobileCloseButton {
   flex-shrink: 0;
@@ -823,6 +835,7 @@
 
 @media (hover: hover) {
   .mobileBackButton:hover,
+  .mobileEnterButton:hover,
   .mobileEscButton:hover,
   .mobileCloseButton:hover {
     background: rgba(128, 128, 128, 0.08);
