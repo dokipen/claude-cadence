@@ -481,6 +481,12 @@
   opacity: 1;
 }
 
+@media (hover: none) {
+  .sidebarSessionKillButton {
+    opacity: 1;
+  }
+}
+
 .sidebarSessionKillButton:hover {
   color: var(--error);
   background: rgba(128, 128, 128, 0.08);
