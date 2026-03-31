@@ -60,8 +60,8 @@ Use this value to select the correct commands throughout the workflow.
    fi
    ```
 
-   **Issues API (MCP preferred):**
-   Use `mcp__issues__ticket_get` to read the `assignee` field. If missing, assign via `mcp__issues__ticket_update`. Fall back to CLI if MCP tools are unavailable:
+   **Issues API (MCP preferred for read):**
+   Use `mcp__issues__ticket_get` to read the `assignee` field. Assignment write has no MCP equivalent — use the CLI regardless:
    ```bash
    ASSIGNEE=$(issues ticket view 123 --project "$PROJECT" --json | jq -r '.assignee.login // empty')
    if [ -z "$ASSIGNEE" ]; then
