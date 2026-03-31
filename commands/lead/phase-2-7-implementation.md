@@ -2,7 +2,7 @@
 
 **The lead orchestrates — it does NOT write implementation code directly** (with one narrow exception, below).
 
-> **Direct-edit exception:** The lead may use `Edit` directly for purely mechanical changes — value tweaks, wording fixes, config updates — that touch ≤ 3 lines in a single file. Logic changes (new conditions, functions, algorithms) must always be delegated, even if they touch only one line. Multi-file changes must always be delegated regardless of per-file line count.
+> **Direct-edit exception:** The lead may use `Edit` directly for mechanical value changes (config literals, wording, version strings) touching a single file. Any change that introduces or removes logic — regardless of line count — must be delegated to an agent. Multi-file changes always require delegation.
 
 For each task from the Phase 1 breakdown, delegate to an agent:
 
