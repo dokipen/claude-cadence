@@ -60,5 +60,4 @@ Once all steps are confirmed complete:
 
 ### Human Activity Phase 4: Cleanup
 
-1. Return to default branch and pull latest (skip if `WORKTREE_PREEXISTING`)
-2. Clean up worktree using the `project-ops` skill's `cleanup-worktree.sh` script (skip if `WORKTREE_PREEXISTING`)
+Since the human-activity workflow skips Phase 0, no worktree or branch was created. Skip all cleanup steps — there is nothing to remove. Report completion to the user and stop.

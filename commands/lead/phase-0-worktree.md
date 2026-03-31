@@ -1,5 +1,7 @@
 ### Phase 0: Worktree Setup
 
+> **Skip this phase entirely** if the ticket has the `human-activity` label. The human-activity workflow makes no code changes and requires no worktree. After completing step 7 (claim), proceed directly to the [Human Activity Workflow](human-activity-workflow.md). Do not set `WORKTREE_DIR` or `BRANCH` — leave them unset so Phase 4 cleanup is skipped automatically.
+
 **All work happens in worktrees, never on the default branch.**
 
 0. **Environment verification pre-check** — Run diagnostic commands before any file modifications:
