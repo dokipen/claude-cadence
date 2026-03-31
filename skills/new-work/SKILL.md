@@ -22,12 +22,7 @@ Creates an isolated worktree for feature development, keeping the default branch
 
 Example: `/new-work 42-add-sound-effects`
 
-If you don't have an issue number yet, create one first:
-```bash
-gh issue create --title "Description of the work" --label "enhancement" --body "..."
-```
-
-**Shell safety:** The `--title` argument is inline — avoid backticks in the title. Use the `issues-api` skill for guidance on safe patterns.
+If you don't have an issue number yet, use the `/create-ticket` command or the `ticket-provider` skill to create one first — the correct backend (GitHub Issues or Issues API) is selected automatically based on the project's `CLAUDE.md` configuration.
 
 ## What It Does
 
