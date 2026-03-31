@@ -107,7 +107,7 @@ The two providers use different terminology in some areas:
 
 | Concept | GitHub Issues | Issues API |
 |---------|--------------|------------|
-| Ticket identifier | Issue number (`#42`) | Ticket ID (`#42`) |
+| Ticket identifier | Issue number (`#42`) | Display number (`#42`) for lookups; CUID (e.g. `cmn…`) required for mutations |
 | State | `open` / `closed` | `BACKLOG` / `REFINED` / `IN_PROGRESS` / `CLOSED` |
 | Estimate | Label (`estimate:5`) | Story points field (`--points 5`) |
 | Priority | Not native (use labels) | Native field (`--priority HIGH`) |
@@ -122,6 +122,7 @@ The two providers use different terminology in some areas:
 - **Default is `github`** — existing projects work without any configuration changes
 - When using `issues-api`, the API URL from `CLAUDE.md` must be reachable
 - When using `issues-api`, `project_id` is required for `ticket list`, `ticket create`, and `ticket view` (when using ticket numbers). Other commands take a CUID ticket ID and don't need `--project`.
+- **Issues API identifier two-step**: The display number (`#42`) can only be used with lookup operations (`ticket view N --project $PROJECT` or `mcp__issues__ticket_get` with `number`). Mutation operations — update, transition, label add/remove, comment — require the CUID from the response. Always call `ticket view` (or `mcp__issues__ticket_get`) first to obtain the CUID, then pass it to subsequent mutations.
 - The `issues` CLI must be installed and authenticated (`gh auth token | issues auth login --pat -`)
 - **QA/local override** (`issues-api` only): Set `ISSUES_API_URL` to target a local or QA instance without modifying `CLAUDE.md`. This takes precedence over the `api_url` in `CLAUDE.md`. Has no effect when provider is `github`.
   ```bash
