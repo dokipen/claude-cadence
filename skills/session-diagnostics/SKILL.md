@@ -17,9 +17,10 @@ Calls the hub diagnostics API, classifies patterns, and creates tickets for acti
 ## Step 1 — Fetch diagnostics
 
 ```bash
+# Replace <HUB_URL> with the hub URL from your agentd configuration
 curl -sf \
   -H "Authorization: Bearer $HUB_API_TOKEN" \
-  "https://cadence.whatisbackdoor.com/api/v1/diagnostics?since_minutes=10080"
+  "https://<HUB_URL>/api/v1/diagnostics?since_minutes=10080"
 ```
 
 If `$HUB_API_TOKEN` is not set, check the environment or `.env.dev`.
