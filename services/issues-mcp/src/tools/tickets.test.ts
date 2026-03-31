@@ -13,113 +13,105 @@ vi.mock("graphql-request", () => {
   };
 });
 
-// Mock config
 vi.mock("../config.js", () => ({
   getApiUrl: () => "http://localhost:4000/graphql",
   getAuthToken: () => "test-token",
-  getRefreshToken: () => undefined,
-  getGhPat: () => undefined,
-  setResolvedAuthToken: vi.fn(),
-  setResolvedRefreshToken: vi.fn(),
-  getDefaultProjectId: () => "default-project-id",
+  getDefaultProjectId: () => "proj-default",
   getDefaultProjectName: () => undefined,
   setResolvedProjectId: vi.fn(),
-  getCachedProjectIdByName: () => undefined,
-  cacheProjectIdByName: vi.fn(),
 }));
 
-// Mock projects
 vi.mock("../projects.js", () => ({
-  resolveProjectName: vi.fn().mockResolvedValue("resolved-project-id"),
+  resolveProjectName: vi.fn(),
 }));
 
-const { ticketCreate, ticketTransition } = await import("./tickets.js");
+const { ticketCreate, ticketList, ticketTransition } = await import("./tickets.js");
+
+// Helper: return the variables passed to the first request call
+function capturedVars() {
+  return mockRequest.mock.calls[0][1] as Record<string, unknown>;
+}
 
 describe("ticketCreate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockRequest.mockResolvedValue({ createTicket: { id: "t-1", title: "Test" } });
   });
 
-  it("passes labelIds as an array when given a real array", async () => {
-    mockRequest.mockResolvedValue({ createTicket: { id: "cuid1", title: "Test" } });
-
-    const result = await ticketCreate({
+  it("passes labelIds as a proper array when already an array", async () => {
+    await ticketCreate({
       title: "Test ticket",
-      labelIds: ["label-id-1", "label-id-2"],
+      projectId: "proj-1",
+      labelIds: ["label-a", "label-b"],
     });
 
-    expect(result.isError).toBeFalsy();
-    const call = mockRequest.mock.calls[0];
-    const variables = call[1] as { input: Record<string, unknown> };
-    expect(variables.input.labelIds).toEqual(["label-id-1", "label-id-2"]);
+    const input = capturedVars().input as Record<string, unknown>;
+    expect(input.labelIds).toEqual(["label-a", "label-b"]);
   });
 
-  it("parses labelIds from a JSON-encoded string", async () => {
-    mockRequest.mockResolvedValue({ createTicket: { id: "cuid1", title: "Test" } });
-
-    const result = await ticketCreate({
+  it("normalizes labelIds from a JSON-encoded string to a proper array", async () => {
+    // Simulate what the MCP framework sends when it serializes an array as a string
+    await ticketCreate({
       title: "Test ticket",
-      // Simulate Claude serializing the array as a JSON string
-      labelIds: '["label-id-1", "label-id-2"]' as unknown as string[],
+      projectId: "proj-1",
+      labelIds: '["label-a","label-b"]' as unknown as string[],
     });
 
-    expect(result.isError).toBeFalsy();
-    const call = mockRequest.mock.calls[0];
-    const variables = call[1] as { input: Record<string, unknown> };
-    expect(variables.input.labelIds).toEqual(["label-id-1", "label-id-2"]);
+    const input = capturedVars().input as Record<string, unknown>;
+    expect(input.labelIds).toEqual(["label-a", "label-b"]);
   });
 
-  it("returns error when labelIds is an invalid JSON string", async () => {
-    const result = await ticketCreate({
+  it("wraps a bare string labelId as a single-element array", async () => {
+    await ticketCreate({
       title: "Test ticket",
-      labelIds: "not-valid-json" as unknown as string[],
+      projectId: "proj-1",
+      labelIds: "label-a" as unknown as string[],
     });
 
-    expect(result.isError).toBe(true);
-    expect((result.content[0] as { text: string }).text).toContain("labelIds must be an array");
-    expect(mockRequest).not.toHaveBeenCalled();
-  });
-
-  it("returns error when labelIds parses to a non-array JSON value", async () => {
-    const result = await ticketCreate({
-      title: "Test ticket",
-      labelIds: '"just-a-string"' as unknown as string[],
-    });
-
-    expect(result.isError).toBe(true);
-    expect((result.content[0] as { text: string }).text).toContain("labelIds must be an array");
-    expect(mockRequest).not.toHaveBeenCalled();
-  });
-
-  it("returns error when labelIds parses to an array of non-strings", async () => {
-    const result = await ticketCreate({
-      title: "Test ticket",
-      labelIds: "[1, 2, 3]" as unknown as string[],
-    });
-
-    expect(result.isError).toBe(true);
-    expect((result.content[0] as { text: string }).text).toContain("labelIds must be an array");
-    expect(mockRequest).not.toHaveBeenCalled();
+    const input = capturedVars().input as Record<string, unknown>;
+    expect(input.labelIds).toEqual(["label-a"]);
   });
 
   it("omits labelIds from input when not provided", async () => {
-    mockRequest.mockResolvedValue({ createTicket: { id: "cuid1", title: "Test" } });
+    await ticketCreate({
+      title: "Test ticket",
+      projectId: "proj-1",
+    });
 
-    await ticketCreate({ title: "Test ticket" });
+    const input = capturedVars().input as Record<string, unknown>;
+    expect(input).not.toHaveProperty("labelIds");
+  });
+});
 
-    const call = mockRequest.mock.calls[0];
-    const variables = call[1] as { input: Record<string, unknown> };
-    expect(variables.input.labelIds).toBeUndefined();
+describe("ticketList", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRequest.mockResolvedValue({
+      tickets: { edges: [], totalCount: 0, pageInfo: { hasNextPage: false, endCursor: null } },
+    });
   });
 
-  it("omits labelIds from input when given an empty array", async () => {
-    mockRequest.mockResolvedValue({ createTicket: { id: "cuid1", title: "Test" } });
+  it("passes labelNames as a proper array when already an array", async () => {
+    await ticketList({ labelNames: ["bug", "enhancement"] });
 
-    await ticketCreate({ title: "Test ticket", labelIds: [] });
+    const vars = capturedVars();
+    expect(vars.labelNames).toEqual(["bug", "enhancement"]);
+  });
 
-    const call = mockRequest.mock.calls[0];
-    const variables = call[1] as { input: Record<string, unknown> };
-    expect(variables.input.labelIds).toBeUndefined();
+  it("normalizes labelNames from a JSON-encoded string to a proper array", async () => {
+    await ticketList({
+      labelNames: '["bug","enhancement"]' as unknown as string[],
+    });
+
+    const vars = capturedVars();
+    expect(vars.labelNames).toEqual(["bug", "enhancement"]);
+  });
+
+  it("omits labelNames when not provided", async () => {
+    await ticketList({});
+
+    const vars = capturedVars();
+    expect(vars).not.toHaveProperty("labelNames");
   });
 });
 
@@ -136,10 +128,9 @@ describe("ticketTransition", () => {
     const result = await ticketTransition({ id: "cuid1", to: "IN_PROGRESS" });
 
     expect(result.isError).toBeFalsy();
-    const call = mockRequest.mock.calls[0];
-    const variables = call[1] as Record<string, string>;
-    expect(variables.id).toBe("cuid1");
-    expect(variables.to).toBe("IN_PROGRESS");
+    const vars = capturedVars();
+    expect(vars.id).toBe("cuid1");
+    expect(vars.to).toBe("IN_PROGRESS");
   });
 
   it("normalizes state to uppercase", async () => {
@@ -149,12 +140,10 @@ describe("ticketTransition", () => {
 
     await ticketTransition({ id: "cuid1", to: "closed" });
 
-    const call = mockRequest.mock.calls[0];
-    const variables = call[1] as Record<string, string>;
-    expect(variables.to).toBe("CLOSED");
+    expect(capturedVars().to).toBe("CLOSED");
   });
 
-  it("returns error with valid states list when id is missing", async () => {
+  it("returns error when id is missing", async () => {
     const result = await ticketTransition({ id: "", to: "IN_PROGRESS" });
 
     expect(result.isError).toBe(true);

@@ -222,6 +222,29 @@ const TRANSITION_TICKET = gql`
   }
 `;
 
+/**
+ * Normalizes an array parameter that may arrive as a JSON-encoded string.
+ * The MCP framework sometimes serializes array arguments as JSON strings
+ * (e.g. '["id1","id2"]') instead of passing them as proper arrays.
+ * A bare string (e.g. "abc123") is treated as a single-element array.
+ */
+function parseStringArray(value: string[] | string | undefined): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (Array.isArray(value)) return value;
+  if (typeof value === "string") {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      if (Array.isArray(parsed) && parsed.every((el) => typeof el === "string")) {
+        return parsed as string[];
+      }
+    } catch {
+      // not valid JSON — treat as single bare string
+    }
+    return [value];
+  }
+  return undefined;
+}
+
 function ok(data: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
 }
@@ -263,29 +286,14 @@ export async function ticketCreate(params: TicketCreateParams): Promise<CallTool
       return err("projectId is required (pass it explicitly or set ISSUES_PROJECT_ID)");
     }
 
-    // labelIds may arrive as a JSON-encoded string (e.g. "[\"id1\",\"id2\"]") when the
-    // model serializes arrays as strings. Parse it back to a real array in that case.
-    let labelIds = params.labelIds as string[] | string | undefined;
-    if (typeof labelIds === "string") {
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(labelIds);
-      } catch {
-        return err("labelIds must be an array of label ID strings");
-      }
-      if (!Array.isArray(parsed) || !parsed.every((x) => typeof x === "string")) {
-        return err("labelIds must be an array of label ID strings");
-      }
-      labelIds = parsed as string[];
-    }
-
     const input: Record<string, unknown> = {
       title: params.title,
       projectId: pid,
     };
     if (params.description !== undefined) input.description = params.description;
     if (params.acceptanceCriteria !== undefined) input.acceptanceCriteria = params.acceptanceCriteria;
-    if (labelIds !== undefined && (labelIds as string[]).length > 0) input.labelIds = labelIds;
+    const labelIds = parseStringArray(params.labelIds);
+    if (labelIds !== undefined && labelIds.length > 0) input.labelIds = labelIds;
     if (params.priority !== undefined) input.priority = params.priority;
     if (params.storyPoints !== undefined) input.storyPoints = params.storyPoints;
 
@@ -354,7 +362,8 @@ export async function ticketList(params: TicketListParams): Promise<CallToolResu
 
     const variables: Record<string, unknown> = { first: limit };
     if (params.state !== undefined) variables.state = params.state;
-    if (params.labelNames !== undefined && params.labelNames.length > 0) variables.labelNames = params.labelNames;
+    const labelNames = parseStringArray(params.labelNames);
+    if (labelNames !== undefined && labelNames.length > 0) variables.labelNames = labelNames;
     if (params.priority !== undefined) variables.priority = params.priority;
     if (params.isBlocked !== undefined) variables.isBlocked = params.isBlocked;
     if (pid !== undefined) variables.projectId = pid;
