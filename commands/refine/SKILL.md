@@ -76,6 +76,10 @@ Use this value to select the correct commands throughout the workflow.
 
 ### Batch Refinement (`/refine`)
 
+**Batch limit:** Process at most 10 tickets per batch. If more than 10 unrefined tickets exist, process the first 10 (in ascending order by issue number) and inform the user how many remain.
+
+**Processing order:** Process tickets **sequentially**, one at a time. Do not delegate multiple ticket-refiner agents in parallel — concurrent MCP tool calls can hit rate limits.
+
 1. **Get unrefined open issues:**
 
    **GitHub (default):**
@@ -96,9 +100,9 @@ Use this value to select the correct commands throughout the workflow.
    issues ticket list --project "$PROJECT" --state BACKLOG --json
    ```
 
-2. **For each issue**, delegate to ticket-refiner agent with the same instructions as single-issue mode
+2. **For each issue** (sequentially, up to 10), delegate to ticket-refiner agent with the same instructions as single-issue mode. Wait for each agent to complete before starting the next.
 
-3. **Present summary** of all issues reviewed and changes made
+3. **Present summary** of all issues reviewed and changes made. If tickets were skipped due to the batch limit, report the count remaining.
 
 ## Refinement Criteria
 
