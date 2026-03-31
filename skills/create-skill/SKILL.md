@@ -47,7 +47,6 @@ A realistic mini-skill showing all frontmatter fields:
 name: run-checks
 description: Run linting and tests for the project. Use before committing or creating a PR.
 user-invokable: true
-disable-model-invocation: false
 tools: Read, Bash, Glob, Grep
 model: sonnet
 ---
