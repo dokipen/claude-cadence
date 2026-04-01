@@ -474,7 +474,7 @@ func (h *Hub) wsKeepaliveLoop(ctx context.Context, agent *ConnectedAgent) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			pingCtx, cancel := context.WithTimeout(ctx, h.keepaliveInterval)
+			pingCtx, cancel := context.WithTimeout(ctx, h.keepaliveInterval/2)
 			err := agent.Conn().Ping(pingCtx)
 			cancel()
 			if err != nil {
