@@ -159,6 +159,9 @@ func (c *Client) connect(ctx context.Context) error {
 	connCtx, connCancel := context.WithCancel(ctx)
 	defer connCancel()
 
+	// Keepalive loop detects silent TCP disconnections via periodic pings.
+	go c.wsKeepaliveLoop(connCtx, conn, connCancel)
+
 	// Read messages until disconnected.
 	return c.readLoop(connCtx, conn)
 }
@@ -387,6 +390,42 @@ func (c *Client) dispatchSession(id string, params json.RawMessage, fn func(json
 		JSONRPC: "2.0",
 		ID:      id,
 		Result:  result,
+	}
+}
+
+// wsKeepaliveLoop sends periodic protocol-level WebSocket pings (RFC 6455
+// opcode 0x9) to detect silent TCP disconnections. If a ping fails — i.e. no
+// pong is received within the keepalive interval — connCancel is called to
+// abort readLoop and trigger a reconnect. A zero KeepaliveInterval disables
+// the loop.
+//
+// Requires that conn.Read is being called concurrently so pong frames can be
+// received — this is satisfied by readLoop running in the same goroutine
+// scope as connect.
+func (c *Client) wsKeepaliveLoop(ctx context.Context, conn *websocket.Conn, connCancel context.CancelFunc) {
+	if c.cfg.KeepaliveInterval <= 0 {
+		return
+	}
+	ticker := time.NewTicker(c.cfg.KeepaliveInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			pingCtx, pingCancel := context.WithTimeout(ctx, c.cfg.KeepaliveInterval)
+			err := conn.Ping(pingCtx)
+			pingCancel()
+			if err != nil {
+				if ctx.Err() != nil {
+					return
+				}
+				slog.Warn("ws keepalive ping failed, reconnecting", "error", err)
+				connCancel()
+				return
+			}
+		}
 	}
 }
 
