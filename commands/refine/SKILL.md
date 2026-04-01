@@ -42,6 +42,11 @@ fi
 ```
 
 ```bash
+case "$CADENCE_ROOT" in
+  *..*)\n    echo "ERROR: CADENCE_ROOT must not contain path traversal (..)." >&2
+    exit 1
+    ;;
+esac
 PROVIDER_CONFIG=$(bash "$CADENCE_ROOT/skills/ticket-provider/scripts/detect-provider.sh")
 PROVIDER=$(echo "$PROVIDER_CONFIG" | jq -r '.provider')
 PROJECT=$(echo "$PROVIDER_CONFIG" | jq -r '.project')
