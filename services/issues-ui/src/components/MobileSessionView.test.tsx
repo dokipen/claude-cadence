@@ -67,6 +67,28 @@ afterEach(() => {
 });
 
 describe("MobileSessionView", () => {
+  it("locks document overflowX to hidden on mount and restores it on unmount", () => {
+    document.documentElement.style.overflowX = "";
+    const win = makeWindow("sess-lock", "test-agent");
+    const { unmount } = render(
+      <MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />,
+    );
+    expect(document.documentElement.style.overflowX).toBe("hidden");
+    unmount();
+    expect(document.documentElement.style.overflowX).toBe("");
+  });
+
+  it("restores a pre-existing overflowX value on unmount", () => {
+    document.documentElement.style.overflowX = "auto";
+    const win = makeWindow("sess-restore", "test-agent");
+    const { unmount } = render(
+      <MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />,
+    );
+    expect(document.documentElement.style.overflowX).toBe("hidden");
+    unmount();
+    expect(document.documentElement.style.overflowX).toBe("auto");
+  });
+
   it("renders back button, enter button, esc button, close button, and terminal", () => {
     const win = makeWindow("sess-1", "test-agent");
     const { getByRole, getByTestId } = render(

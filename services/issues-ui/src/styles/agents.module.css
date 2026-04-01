@@ -800,6 +800,7 @@
   background: var(--background);
   z-index: 100;
   overflow: hidden;
+  overscroll-behavior: none;
 }
 
 .mobileSessionContent {

@@ -33,6 +33,19 @@ export function MobileSessionView({ win, onBack, onClose }: MobileSessionViewPro
     };
   }, []);
 
+  // Lock horizontal scroll on the document while the overlay is visible.
+  // On iOS Safari, position:fixed overlays don't prevent the body from being
+  // scrolled via touch — locking overflow-x stops any horizontal drift from
+  // showing through the terminal view.
+  useEffect(() => {
+    const html = document.documentElement;
+    const prev = html.style.overflowX;
+    html.style.overflowX = "hidden";
+    return () => {
+      html.style.overflowX = prev;
+    };
+  }, []);
+
   return (
     <div
       className={styles.mobileSessionView}
