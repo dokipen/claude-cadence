@@ -268,9 +268,18 @@ func (p *PTYManager) Reattach(id, slavePath string) error {
 	if !validSlavePath.MatchString(slavePath) {
 		return fmt.Errorf("pty: reattach: invalid slave path %q", slavePath)
 	}
-	master, err := os.OpenFile(slavePath, os.O_RDWR|syscall.O_NOCTTY|syscall.O_NOFOLLOW, 0) //nolint:gosec // Expected Open from a variable.
+	// O_NONBLOCK prevents open(2) from blocking indefinitely when no master
+	// holds the PTY (e.g. after daemon restart with stale persisted sessions).
+	// Without it the open blocks forever, hanging agentd startup. We clear
+	// O_NONBLOCK immediately after a successful open so subsequent reads block
+	// normally (EAGAIN would cause the read goroutine to exit prematurely).
+	master, err := os.OpenFile(slavePath, os.O_RDWR|syscall.O_NOCTTY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0) //nolint:gosec // Expected Open from a variable.
 	if err != nil {
 		return fmt.Errorf("pty: reattach: open slave %q: %w", slavePath, err)
+	}
+	if err := clearNonblock(master); err != nil {
+		_ = master.Close()
+		return fmt.Errorf("pty: reattach: clear O_NONBLOCK %q: %w", slavePath, err)
 	}
 
 	sess := &session{
