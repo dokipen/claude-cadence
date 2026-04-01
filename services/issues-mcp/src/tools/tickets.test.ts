@@ -117,6 +117,30 @@ describe("ticketCreate", () => {
     expect(text).toContain("integer");
     expect(mockRequest).not.toHaveBeenCalled();
   });
+
+  it("rejects scientific notation strings for storyPoints", async () => {
+    for (const bad of ["1e2", "1E0", "2e1"]) {
+      vi.clearAllMocks();
+      const result = await ticketCreate({
+        title: "Test ticket",
+        projectId: "proj-1",
+        storyPoints: bad as unknown as number,
+      });
+      expect(result.isError).toBe(true);
+      expect(mockRequest).not.toHaveBeenCalled();
+    }
+  });
+
+  it("rejects float strings for storyPoints", async () => {
+    const result = await ticketCreate({
+      title: "Test ticket",
+      projectId: "proj-1",
+      storyPoints: "1.0" as unknown as number,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
 });
 
 describe("ticketList", () => {

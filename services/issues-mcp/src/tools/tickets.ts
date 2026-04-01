@@ -271,12 +271,10 @@ function coerceToInt(
   }
   if (typeof value === "string") {
     const trimmed = value.trim();
-    if (trimmed === "") return { error: `${fieldName} must be an integer, got empty string` };
-    const parsed = Number(trimmed);
-    if (!Number.isInteger(parsed) || !isFinite(parsed)) {
+    if (!/^-?\d+$/.test(trimmed)) {
       return { error: `${fieldName} must be an integer, got "${value}"` };
     }
-    return { value: parsed };
+    return { value: parseInt(trimmed, 10) };
   }
   return { error: `${fieldName} must be an integer` };
 }
@@ -379,8 +377,7 @@ export async function ticketGet(params: TicketGetParams): Promise<CallToolResult
     const client = getClient();
 
     if (params.number !== undefined) {
-      const n = coerceToInt(params.number, "number");
-      if (!n) return err("number is required");
+      const n = coerceToInt(params.number, "number") as { value: number } | { error: string };
       if ("error" in n) return err(n.error);
       const pid = await resolveProjectId(params.projectId, params.projectName);
       if (!pid) {
