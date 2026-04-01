@@ -132,6 +132,8 @@ For provider-specific command syntax in the steps below, refer to the ticket-pro
 
 Delegate to specialist agents using the Agent tool. Available agents are listed in its description. Match each task to the most appropriate specialist based on their described capabilities.
 
+> **Note:** `cadence:issues-api` is a **model-invoked skill** (an MCP tool reference), not a specialist agent. It is never a valid `subagent_type` for the Agent tool. Only use it directly via its MCP tools (`mcp__issues__*`), not via the Agent tool.
+
 ---
 
 ## Communication Channels
