@@ -132,6 +132,41 @@ describe("createTicket", () => {
       createTicket(undefined, { input: { title: "t", projectId: "proj-1" } }, ctx)
     ).rejects.toMatchObject({ extensions: { code: "INTERNAL_SERVER_ERROR" } });
   });
+
+  it("retries on P2034 write conflict and succeeds on second attempt", async () => {
+    const { ctx, txMock } = makeMockContext(mockUser);
+    txMock.project.findUnique.mockResolvedValue({ id: "proj-1", name: "Test" });
+    txMock.ticket.findFirst.mockResolvedValue(null);
+    const createdTicket = { id: "ticket-1", number: 1, title: "New ticket", projectId: "proj-1", state: "BACKLOG" };
+    const writeConflict = Object.assign(new Error("write conflict"), { code: "P2034" });
+    txMock.ticket.create
+      .mockRejectedValueOnce(writeConflict)
+      .mockResolvedValueOnce(createdTicket);
+
+    const result = await createTicket(
+      undefined,
+      { input: { title: "New ticket", projectId: "proj-1" } },
+      ctx
+    );
+
+    expect(result).toEqual(createdTicket);
+    expect(txMock.ticket.create).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws INTERNAL_SERVER_ERROR after exhausting P2034 retries", async () => {
+    const { ctx, txMock } = makeMockContext(mockUser);
+    txMock.project.findUnique.mockResolvedValue({ id: "proj-1", name: "Test" });
+    txMock.ticket.findFirst.mockResolvedValue(null);
+    const writeConflict = Object.assign(new Error("write conflict"), { code: "P2034" });
+    txMock.ticket.create.mockRejectedValue(writeConflict);
+
+    await expect(
+      createTicket(undefined, { input: { title: "t", projectId: "proj-1" } }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "INTERNAL_SERVER_ERROR" } });
+
+    // All 3 attempts exhausted
+    expect(txMock.ticket.create).toHaveBeenCalledTimes(3);
+  });
 });
 
 describe("updateTicket", () => {
