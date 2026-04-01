@@ -1,11 +1,214 @@
 package hub
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/coder/websocket"
 	"github.com/google/uuid"
+
+	"github.com/dokipen/claude-cadence/services/agents/internal/config"
 )
+
+// stubDispatcher is a minimal SessionDispatcher that returns empty success
+// results for all methods. It is used in tests that exercise the Client
+// connection lifecycle without needing real session logic.
+type stubDispatcher struct{}
+
+func (s *stubDispatcher) CreateSession(_ json.RawMessage) (json.RawMessage, *rpcError) {
+	return json.RawMessage(`{}`), nil
+}
+func (s *stubDispatcher) GetSession(_ json.RawMessage) (json.RawMessage, *rpcError) {
+	return json.RawMessage(`{}`), nil
+}
+func (s *stubDispatcher) ListSessions(_ json.RawMessage) (json.RawMessage, *rpcError) {
+	return json.RawMessage(`{"sessions":[]}`), nil
+}
+func (s *stubDispatcher) DestroySession(_ json.RawMessage) (json.RawMessage, *rpcError) {
+	return json.RawMessage(`{}`), nil
+}
+func (s *stubDispatcher) GetTerminalEndpoint(_ json.RawMessage) (json.RawMessage, *rpcError) {
+	return json.RawMessage(`{}`), nil
+}
+func (s *stubDispatcher) GetDiagnostics(_ context.Context, _ json.RawMessage) (json.RawMessage, *rpcError) {
+	return json.RawMessage(`{}`), nil
+}
+func (s *stubDispatcher) SendInput(_ json.RawMessage) (json.RawMessage, *rpcError) {
+	return json.RawMessage(`{}`), nil
+}
+
+// TestClientReconnectsAfterSilentDisconnect verifies that the Client
+// reconnects when the TCP connection goes silent (no data, no close frame).
+// This simulates a NAT timeout or firewall drop where the TCP connection is
+// alive at the socket level but delivers no data.
+//
+// The keepalive loop sends a periodic ping; because the "frozen" server
+// handler is not calling conn.Read(), no pong is returned. After the
+// keepalive interval the ping times out, connCancel fires, readLoop returns,
+// and connectLoop schedules a reconnect.
+func TestClientReconnectsAfterSilentDisconnect(t *testing.T) {
+	var connectionCount atomic.Int64
+
+	// connHold is closed when the test ends so that server handlers can release
+	// their connections cleanly rather than leaking goroutines.
+	connHold := make(chan struct{})
+	t.Cleanup(func() { close(connHold) })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+			InsecureSkipVerify: true,
+		})
+		if err != nil {
+			return
+		}
+		defer conn.CloseNow()
+
+		connectionCount.Add(1)
+
+		// Read the register message sent by the client.
+		_, data, err := conn.Read(r.Context())
+		if err != nil {
+			return
+		}
+
+		// Parse the request to extract the ID for the ack.
+		var req struct {
+			ID string `json:"id"`
+		}
+		if jsonErr := json.Unmarshal(data, &req); jsonErr != nil {
+			return
+		}
+
+		// Send the registration acknowledgement.
+		ack, _ := json.Marshal(map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      req.ID,
+			"result":  map[string]interface{}{},
+		})
+		if writeErr := conn.Write(r.Context(), websocket.MessageText, ack); writeErr != nil {
+			return
+		}
+
+		// Go "silent": stop calling conn.Read() to simulate a dead TCP connection
+		// (NAT timeout, firewall drop). Hold the connection open so no TCP close
+		// frame is sent — this is the scenario that requires a keepalive to detect.
+		select {
+		case <-connHold:
+		case <-r.Context().Done():
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	hubURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+
+	cfg := config.HubConfig{
+		URL:               hubURL,
+		Name:              "test-agent",
+		Token:             "test-token",
+		ReconnectInterval: 50 * time.Millisecond,  // very short for test speed
+		KeepaliveInterval: 200 * time.Millisecond, // short enough to fire within the 2s deadline
+	}
+
+	client := NewClient(cfg, map[string]config.Profile{}, config.TtydConfig{}, &stubDispatcher{})
+	client.Start()
+	t.Cleanup(func() {
+		client.Stop()
+	})
+
+	// Poll until the client makes a second connection (i.e. it detected the
+	// silent connection and reconnected) or the deadline expires.
+	//
+	// With the current code (no keepalive), readLoop blocks indefinitely on
+	// conn.Read(ctx), so connectionCount never reaches 2 and this test fails.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if connectionCount.Load() >= 2 {
+			return // test passes: client reconnected after silent disconnect
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	t.Fatalf(
+		"expected client to reconnect after silent disconnect within 2s, "+
+			"but only saw %d connection(s)",
+		connectionCount.Load(),
+	)
+}
+
+// TestClientNoKeepaliveWhenDisabled verifies that a Client configured with
+// KeepaliveInterval == 0 does not send pings and does not reconnect when the
+// server goes silent — i.e. the keepalive path is truly inert.
+func TestClientNoKeepaliveWhenDisabled(t *testing.T) {
+	var connectionCount atomic.Int64
+
+	connHold := make(chan struct{})
+	t.Cleanup(func() { close(connHold) })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+			InsecureSkipVerify: true,
+		})
+		if err != nil {
+			return
+		}
+		defer conn.CloseNow()
+
+		connectionCount.Add(1)
+
+		_, data, err := conn.Read(r.Context())
+		if err != nil {
+			return
+		}
+		var req struct {
+			ID string `json:"id"`
+		}
+		if jsonErr := json.Unmarshal(data, &req); jsonErr != nil {
+			return
+		}
+		ack, _ := json.Marshal(map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      req.ID,
+			"result":  map[string]interface{}{},
+		})
+		if writeErr := conn.Write(r.Context(), websocket.MessageText, ack); writeErr != nil {
+			return
+		}
+
+		// Hold the connection open — same as the reconnect test, but keepalive is off.
+		select {
+		case <-connHold:
+		case <-r.Context().Done():
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	hubURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+
+	cfg := config.HubConfig{
+		URL:               hubURL,
+		Name:              "test-agent",
+		Token:             "test-token",
+		ReconnectInterval: 50 * time.Millisecond,
+		KeepaliveInterval: 0, // explicitly disabled
+	}
+
+	client := NewClient(cfg, map[string]config.Profile{}, config.TtydConfig{}, &stubDispatcher{})
+	client.Start()
+	t.Cleanup(func() { client.Stop() })
+
+	// Wait long enough that a 200ms keepalive would have fired multiple times.
+	time.Sleep(500 * time.Millisecond)
+
+	if got := connectionCount.Load(); got != 1 {
+		t.Fatalf("expected exactly 1 connection with keepalive disabled, got %d", got)
+	}
+}
 
 func TestBackoff(t *testing.T) {
 	tests := []struct {

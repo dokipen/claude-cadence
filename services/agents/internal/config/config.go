@@ -72,6 +72,8 @@ type HubConfig struct {
 	TokenEnvVar       string        `yaml:"token_env_var"`
 	ReconnectInterval time.Duration `yaml:"-"`
 	RawReconnect      string        `yaml:"reconnect_interval"`
+	KeepaliveInterval time.Duration `yaml:"-"`
+	RawKeepalive      string        `yaml:"keepalive_interval"`
 }
 
 // ResolveToken returns the hub token, preferring the env var if set.
@@ -197,6 +199,9 @@ func applyDefaults(cfg *Config) {
 		if cfg.Hub.RawReconnect == "" {
 			cfg.Hub.RawReconnect = "5s"
 		}
+		if cfg.Hub.RawKeepalive == "" {
+			cfg.Hub.RawKeepalive = "30s"
+		}
 	}
 	if cfg.PTY.BufferSize == 0 {
 		cfg.PTY.BufferSize = 1<<20 - 1 // leave 1 byte for ttyd frame prefix
@@ -231,6 +236,12 @@ func parseDurations(cfg *Config) error {
 			return fmt.Errorf("hub.reconnect_interval: %w", err)
 		}
 		cfg.Hub.ReconnectInterval = reconnect
+
+		keepalive, err := time.ParseDuration(cfg.Hub.RawKeepalive)
+		if err != nil {
+			return fmt.Errorf("hub.keepalive_interval: %w", err)
+		}
+		cfg.Hub.KeepaliveInterval = keepalive
 	}
 
 	if cfg.Cleanup.RawCreatingSessionTTL != "" {
@@ -344,6 +355,9 @@ func validate(cfg *Config) error {
 		}
 		if cfg.Hub.Token == "" && cfg.Hub.TokenEnvVar == "" {
 			return fmt.Errorf("hub.token or hub.token_env_var required when hub is configured")
+		}
+		if cfg.Hub.KeepaliveInterval != 0 && cfg.Hub.KeepaliveInterval < time.Second {
+			return fmt.Errorf("hub.keepalive_interval must be >= 1s or 0 (disabled), got %v", cfg.Hub.KeepaliveInterval)
 		}
 	}
 
