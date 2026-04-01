@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/creack/pty"
 )
@@ -58,4 +59,67 @@ func TestMasterSlavePath_InvalidFd(t *testing.T) {
 	if got != "" {
 		t.Errorf("masterSlavePath on regular file returned %q, want empty string", got)
 	}
+}
+
+// TestReattach_StalePTY verifies that Reattach does not block when the PTY
+// master is already closed (the core bug: open(2) on a slave with no master
+// blocks indefinitely without O_NONBLOCK).
+func TestReattach_StalePTY(t *testing.T) {
+	master, slave, err := pty.Open()
+	if err != nil {
+		t.Fatalf("pty.Open: %v", err)
+	}
+	slavePath := masterSlavePath(master)
+	if slavePath == "" {
+		master.Close()
+		slave.Close()
+		t.Skip("could not determine slave path")
+	}
+	slave.Close()
+	master.Close() // close master so the slave device has no master — Reattach must not block
+
+	m := NewPTYManager(PTYConfig{})
+	done := make(chan error, 1)
+	go func() {
+		done <- m.Reattach("stale-pty", slavePath)
+	}()
+
+	select {
+	case reattachErr := <-done:
+		// Expected: Reattach returns an error quickly (slave open fails with no master).
+		if reattachErr == nil {
+			t.Error("expected Reattach to fail on a stale PTY, got nil error")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Reattach blocked for >5s on a stale PTY slave — O_NONBLOCK fix not applied")
+	}
+}
+
+// TestReattach_LivePTY verifies that Reattach succeeds and can read output
+// when the PTY master is still open.
+func TestReattach_LivePTY(t *testing.T) {
+	master, slave, err := pty.Open()
+	if err != nil {
+		t.Fatalf("pty.Open: %v", err)
+	}
+	defer master.Close()
+	defer slave.Close()
+
+	slavePath := masterSlavePath(master)
+	if slavePath == "" {
+		t.Skip("could not determine slave path")
+	}
+
+	m := NewPTYManager(PTYConfig{})
+	if err := m.Reattach("live-pty", slavePath); err != nil {
+		t.Fatalf("Reattach failed on live PTY: %v", err)
+	}
+	t.Cleanup(func() { m.Destroy("live-pty") })
+
+	// Write to master; the reattached session's read goroutine should buffer it.
+	if _, err := master.Write([]byte("hello\n")); err != nil {
+		t.Fatalf("master.Write: %v", err)
+	}
+
+	pollBuffer(t, m, "live-pty", "hello")
 }
