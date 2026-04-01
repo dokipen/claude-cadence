@@ -141,6 +141,75 @@ func TestClientReconnectsAfterSilentDisconnect(t *testing.T) {
 	)
 }
 
+// TestClientNoKeepaliveWhenDisabled verifies that a Client configured with
+// KeepaliveInterval == 0 does not send pings and does not reconnect when the
+// server goes silent — i.e. the keepalive path is truly inert.
+func TestClientNoKeepaliveWhenDisabled(t *testing.T) {
+	var connectionCount atomic.Int64
+
+	connHold := make(chan struct{})
+	t.Cleanup(func() { close(connHold) })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+			InsecureSkipVerify: true,
+		})
+		if err != nil {
+			return
+		}
+		defer conn.CloseNow()
+
+		connectionCount.Add(1)
+
+		_, data, err := conn.Read(r.Context())
+		if err != nil {
+			return
+		}
+		var req struct {
+			ID string `json:"id"`
+		}
+		if jsonErr := json.Unmarshal(data, &req); jsonErr != nil {
+			return
+		}
+		ack, _ := json.Marshal(map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      req.ID,
+			"result":  map[string]interface{}{},
+		})
+		if writeErr := conn.Write(r.Context(), websocket.MessageText, ack); writeErr != nil {
+			return
+		}
+
+		// Hold the connection open — same as the reconnect test, but keepalive is off.
+		select {
+		case <-connHold:
+		case <-r.Context().Done():
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	hubURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+
+	cfg := config.HubConfig{
+		URL:               hubURL,
+		Name:              "test-agent",
+		Token:             "test-token",
+		ReconnectInterval: 50 * time.Millisecond,
+		KeepaliveInterval: 0, // explicitly disabled
+	}
+
+	client := NewClient(cfg, map[string]config.Profile{}, config.TtydConfig{}, &stubDispatcher{})
+	client.Start()
+	t.Cleanup(func() { client.Stop() })
+
+	// Wait long enough that a 200ms keepalive would have fired multiple times.
+	time.Sleep(500 * time.Millisecond)
+
+	if got := connectionCount.Load(); got != 1 {
+		t.Fatalf("expected exactly 1 connection with keepalive disabled, got %d", got)
+	}
+}
+
 func TestBackoff(t *testing.T) {
 	tests := []struct {
 		name    string

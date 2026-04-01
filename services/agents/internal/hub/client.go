@@ -414,7 +414,7 @@ func (c *Client) wsKeepaliveLoop(ctx context.Context, conn *websocket.Conn, conn
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			pingCtx, pingCancel := context.WithTimeout(ctx, c.cfg.KeepaliveInterval)
+			pingCtx, pingCancel := context.WithTimeout(ctx, c.cfg.KeepaliveInterval/2)
 			err := conn.Ping(pingCtx)
 			pingCancel()
 			if err != nil {

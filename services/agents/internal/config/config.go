@@ -356,6 +356,9 @@ func validate(cfg *Config) error {
 		if cfg.Hub.Token == "" && cfg.Hub.TokenEnvVar == "" {
 			return fmt.Errorf("hub.token or hub.token_env_var required when hub is configured")
 		}
+		if cfg.Hub.KeepaliveInterval != 0 && cfg.Hub.KeepaliveInterval < time.Second {
+			return fmt.Errorf("hub.keepalive_interval must be >= 1s or 0 (disabled), got %v", cfg.Hub.KeepaliveInterval)
+		}
 	}
 
 	return nil
