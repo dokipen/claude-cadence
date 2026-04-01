@@ -277,29 +277,9 @@ func (p *PTYManager) Reattach(id, slavePath string) error {
 	if err != nil {
 		return fmt.Errorf("pty: reattach: open slave %q: %w", slavePath, err)
 	}
-	rawConn, err := master.SyscallConn()
-	if err != nil {
+	if err := clearNonblock(master); err != nil {
 		_ = master.Close()
-		return fmt.Errorf("pty: reattach: SyscallConn %q: %w", slavePath, err)
-	}
-	var fcntlErr error
-	if controlErr := rawConn.Control(func(fd uintptr) {
-		flags, _, errno := syscall.Syscall(syscall.SYS_FCNTL, fd, syscall.F_GETFL, 0)
-		if errno != 0 {
-			fcntlErr = fmt.Errorf("F_GETFL: %w", errno)
-			return
-		}
-		_, _, errno = syscall.Syscall(syscall.SYS_FCNTL, fd, syscall.F_SETFL, flags&^uintptr(syscall.O_NONBLOCK))
-		if errno != 0 {
-			fcntlErr = fmt.Errorf("F_SETFL: %w", errno)
-		}
-	}); controlErr != nil {
-		_ = master.Close()
-		return fmt.Errorf("pty: reattach: rawConn.Control %q: %w", slavePath, controlErr)
-	}
-	if fcntlErr != nil {
-		_ = master.Close()
-		return fmt.Errorf("pty: reattach: clear O_NONBLOCK %q: %w", slavePath, fcntlErr)
+		return fmt.Errorf("pty: reattach: clear O_NONBLOCK %q: %w", slavePath, err)
 	}
 
 	sess := &session{
