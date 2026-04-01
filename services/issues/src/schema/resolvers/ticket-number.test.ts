@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { GraphQLError } from "graphql";
 import type { User } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 process.env.JWT_SECRET = "test-secret-for-unit-tests";
 
@@ -147,7 +148,10 @@ describe("createTicket — number assignment", () => {
     txMock.ticket.findFirst.mockResolvedValue({ number: 5 });
 
     // First attempt: unique constraint violation
-    const p2002Error = Object.assign(new Error("Unique constraint"), { code: "P2002" });
+    const p2002Error = new Prisma.PrismaClientKnownRequestError("Unique constraint", {
+      code: "P2002",
+      clientVersion: "0.0.0",
+    });
     txMock.ticket.create
       .mockRejectedValueOnce(p2002Error)
       .mockResolvedValueOnce({ id: "t-1", number: 6, title: "Retry success" });
@@ -168,7 +172,10 @@ describe("createTicket — number assignment", () => {
     txMock.project.findUnique.mockResolvedValue({ id: "proj-1", name: "Test" });
     txMock.ticket.findFirst.mockResolvedValue({ number: 5 });
 
-    const p2002Error = Object.assign(new Error("Unique constraint"), { code: "P2002" });
+    const p2002Error = new Prisma.PrismaClientKnownRequestError("Unique constraint", {
+      code: "P2002",
+      clientVersion: "0.0.0",
+    });
     txMock.ticket.create.mockRejectedValue(p2002Error);
 
     await expect(

@@ -21,9 +21,17 @@ export function formatError(
   }
 
   if (isProduction) {
+    // Strip stacktrace from extensions — it contains internal file paths and
+    // throw locations that must not be sent to clients in production.
+    const extensions = formattedError.extensions
+      ? (Object.fromEntries(
+          Object.entries(formattedError.extensions).filter(([key]) => key !== "stacktrace")
+        ) as typeof formattedError.extensions)
+      : formattedError.extensions;
     return {
       ...formattedError,
       message: "Internal server error",
+      extensions,
     };
   }
 
