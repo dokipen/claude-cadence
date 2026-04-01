@@ -13,6 +13,8 @@ import type { TerminalHandle } from "./Terminal";
 const { mockVisualViewport } = vi.hoisted(() => ({
   mockVisualViewport: {
     height: 800,
+    width: 390,
+    offsetLeft: 0,
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
   },
@@ -67,28 +69,6 @@ afterEach(() => {
 });
 
 describe("MobileSessionView", () => {
-  it("locks document overflowX to hidden on mount and restores it on unmount", () => {
-    document.documentElement.style.overflowX = "";
-    const win = makeWindow("sess-lock", "test-agent");
-    const { unmount } = render(
-      <MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />,
-    );
-    expect(document.documentElement.style.overflowX).toBe("hidden");
-    unmount();
-    expect(document.documentElement.style.overflowX).toBe("");
-  });
-
-  it("restores a pre-existing overflowX value on unmount", () => {
-    document.documentElement.style.overflowX = "auto";
-    const win = makeWindow("sess-restore", "test-agent");
-    const { unmount } = render(
-      <MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />,
-    );
-    expect(document.documentElement.style.overflowX).toBe("hidden");
-    unmount();
-    expect(document.documentElement.style.overflowX).toBe("auto");
-  });
-
   it("renders back button, enter button, esc button, close button, and terminal", () => {
     const win = makeWindow("sess-1", "test-agent");
     const { getByRole, getByTestId } = render(
@@ -175,6 +155,8 @@ describe("MobileSessionView", () => {
         configurable: true,
       });
       mockVisualViewport.height = 800;
+      mockVisualViewport.width = 390;
+      mockVisualViewport.offsetLeft = 0;
       mockVisualViewport.addEventListener.mockReset();
       mockVisualViewport.removeEventListener.mockReset();
     });
@@ -187,7 +169,7 @@ describe("MobileSessionView", () => {
       });
     });
 
-    it("sets initial height from visualViewport", () => {
+    it("sets initial height, width, and left from visualViewport", () => {
       const win = makeWindow("sess-3", "test-agent");
       const { getByTestId } = render(
         <MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />,
@@ -195,6 +177,8 @@ describe("MobileSessionView", () => {
 
       const container = getByTestId("mobile-session-view");
       expect(container.style.height).toBe("800px");
+      expect(container.style.width).toBe("390px");
+      expect(container.style.left).toBe("0px");
     });
 
     it("registers resize and scroll listeners on visualViewport", () => {
@@ -235,6 +219,24 @@ describe("MobileSessionView", () => {
 
       const container = getByTestId("mobile-session-view");
       expect(container.style.height).toBe("500px");
+    });
+
+    it("updates width and left when visualViewport changes (e.g. page pan)", async () => {
+      const win = makeWindow("sess-8", "test-agent");
+      const { getByTestId } = render(
+        <MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />,
+      );
+
+      mockVisualViewport.width = 320;
+      mockVisualViewport.offsetLeft = 70;
+      const resizeHandler = mockVisualViewport.addEventListener.mock.calls[0][1] as () => void;
+      await act(async () => {
+        resizeHandler();
+      });
+
+      const container = getByTestId("mobile-session-view");
+      expect(container.style.width).toBe("320px");
+      expect(container.style.left).toBe("70px");
     });
 
     it("updates height when visualViewport fires a scroll event (iOS keyboard)", async () => {

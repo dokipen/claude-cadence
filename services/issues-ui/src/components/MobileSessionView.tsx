@@ -15,14 +15,24 @@ export function MobileSessionView({ win, onBack, onClose }: MobileSessionViewPro
   const [viewportHeight, setViewportHeight] = useState<number>(
     () => window.visualViewport?.height ?? window.innerHeight,
   );
+  const [viewportWidth, setViewportWidth] = useState<number>(
+    () => window.visualViewport?.width ?? window.innerWidth,
+  );
+  const [viewportOffsetLeft, setViewportOffsetLeft] = useState<number>(
+    () => window.visualViewport?.offsetLeft ?? 0,
+  );
 
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
-    const handleResize = () => setViewportHeight(vv.height);
+    const handleResize = () => {
+      setViewportHeight(vv.height);
+      setViewportWidth(vv.width);
+      setViewportOffsetLeft(vv.offsetLeft);
+    };
     vv.addEventListener("resize", handleResize);
     // iOS Safari fires "scroll" on visualViewport (not "resize") when the
-    // on-screen keyboard appears or disappears.
+    // on-screen keyboard appears or disappears or the page is panned.
     vv.addEventListener("scroll", handleResize);
     // Sync once immediately in case the viewport changed between initial render
     // and this effect running.
@@ -33,23 +43,10 @@ export function MobileSessionView({ win, onBack, onClose }: MobileSessionViewPro
     };
   }, []);
 
-  // Lock horizontal scroll on the document while the overlay is visible.
-  // On iOS Safari, position:fixed overlays don't prevent the body from being
-  // scrolled via touch — locking overflow-x stops any horizontal drift from
-  // showing through the terminal view.
-  useEffect(() => {
-    const html = document.documentElement;
-    const prev = html.style.overflowX;
-    html.style.overflowX = "hidden";
-    return () => {
-      html.style.overflowX = prev;
-    };
-  }, []);
-
   return (
     <div
       className={styles.mobileSessionView}
-      style={{ height: viewportHeight }}
+      style={{ height: viewportHeight, width: viewportWidth, left: viewportOffsetLeft }}
       data-testid="mobile-session-view"
     >
       <div className={styles.mobileHeader}>
