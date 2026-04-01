@@ -36,18 +36,18 @@ If you don't have an issue number yet, use the `/create-ticket` command or the `
 First resolve the cadence plugin root if `$CADENCE_ROOT` is not already set, then run the `create-worktree.sh` script:
 
 ```bash
-# Resolve cadence plugin root if not already set. Checks (in order):
-# 1. CADENCE_ROOT env var (explicit override, e.g. for --plugin-dir installs)
-# 2. Current directory (running directly from the cadence repo)
-# 3. .claude/plugins/cadence/ (locally installed plugin)
-CADENCE_ROOT="${CADENCE_ROOT:-}"
-if [ -z "$CADENCE_ROOT" ] && [ -f ".claude-plugin/plugin.json" ]; then
+# Check if $CADENCE_ROOT is already set
+echo "${CADENCE_ROOT:-}"
+```
+
+If empty, resolve it:
+
+```bash
+if [ -f ".claude-plugin/plugin.json" ]; then
   CADENCE_ROOT="$(pwd)"
-fi
-if [ -z "$CADENCE_ROOT" ] && [ -d ".claude/plugins/cadence" ]; then
+elif [ -d ".claude/plugins/cadence" ]; then
   CADENCE_ROOT="$(pwd)/.claude/plugins/cadence"
-fi
-if [ -z "$CADENCE_ROOT" ]; then
+else
   echo "ERROR: cadence plugin root not found. Set CADENCE_ROOT env var to the plugin directory." >&2
   exit 1
 fi
@@ -57,6 +57,9 @@ case "$CADENCE_ROOT" in
     exit 1
     ;;
 esac
+```
+
+```bash
 bash "$CADENCE_ROOT/skills/project-ops/scripts/create-worktree.sh" "${BRANCH_NAME}"
 ```
 

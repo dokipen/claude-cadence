@@ -28,18 +28,18 @@ Detect the provider from the project's `CLAUDE.md` before performing any ticket 
 First, resolve the cadence plugin root (run this once at the start of the workflow and reuse `$CADENCE_ROOT` for all subsequent script calls):
 
 ```bash
-# Resolve cadence plugin root. Checks (in order):
-# 1. CADENCE_ROOT env var (explicit override, e.g. for --plugin-dir installs)
-# 2. Current directory (running directly from the cadence repo)
-# 3. .claude/plugins/cadence/ (locally installed plugin)
-CADENCE_ROOT="${CADENCE_ROOT:-}"
-if [ -z "$CADENCE_ROOT" ] && [ -f ".claude-plugin/plugin.json" ]; then
+# Check if $CADENCE_ROOT is already set
+echo "${CADENCE_ROOT:-}"
+```
+
+If empty, resolve it:
+
+```bash
+if [ -f ".claude-plugin/plugin.json" ]; then
   CADENCE_ROOT="$(pwd)"
-fi
-if [ -z "$CADENCE_ROOT" ] && [ -d ".claude/plugins/cadence" ]; then
+elif [ -d ".claude/plugins/cadence" ]; then
   CADENCE_ROOT="$(pwd)/.claude/plugins/cadence"
-fi
-if [ -z "$CADENCE_ROOT" ]; then
+else
   echo "ERROR: cadence plugin root not found. Set CADENCE_ROOT env var to the plugin directory." >&2
   exit 1
 fi

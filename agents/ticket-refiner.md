@@ -38,18 +38,21 @@ api_url: http://localhost:4000
 project_id: <project-name-or-id>
 ```
 
-Resolve the cadence plugin root if `$CADENCE_ROOT` is not already set, then run `detect-provider.sh`:
+First, check if `$CADENCE_ROOT` is already set, then run `detect-provider.sh`:
 
 ```bash
-# Resolve cadence plugin root if not already set
-CADENCE_ROOT="${CADENCE_ROOT:-}"
-if [ -z "$CADENCE_ROOT" ] && [ -f ".claude-plugin/plugin.json" ]; then
+# Check if $CADENCE_ROOT is already set
+echo "${CADENCE_ROOT:-}"
+```
+
+If empty, resolve it:
+
+```bash
+if [ -f ".claude-plugin/plugin.json" ]; then
   CADENCE_ROOT="$(pwd)"
-fi
-if [ -z "$CADENCE_ROOT" ] && [ -d ".claude/plugins/cadence" ]; then
+elif [ -d ".claude/plugins/cadence" ]; then
   CADENCE_ROOT="$(pwd)/.claude/plugins/cadence"
-fi
-if [ -z "$CADENCE_ROOT" ]; then
+else
   echo "ERROR: cadence plugin root not found. Set CADENCE_ROOT env var to the plugin directory." >&2
   exit 1
 fi
@@ -59,6 +62,9 @@ case "$CADENCE_ROOT" in
     exit 1
     ;;
 esac
+```
+
+```bash
 
 PROVIDER_CONFIG=$(bash "$CADENCE_ROOT/skills/ticket-provider/scripts/detect-provider.sh")
 PROVIDER=$(echo "$PROVIDER_CONFIG" | jq -r '.provider')
