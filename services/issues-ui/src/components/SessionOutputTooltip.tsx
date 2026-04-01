@@ -19,6 +19,13 @@ function buildWsUrl(agentName: string, sessionId: string): string {
 }
 
 export function SessionOutputTooltip({ session, children }: SessionOutputTooltipProps) {
+  const [hasPointer] = useState(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return true;
+    }
+    return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  });
+
   const [visible, setVisible] = useState(false);
   const [coords, setCoords] = useState({ top: 0, left: 0, width: 0, height: 0 });
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -131,6 +138,10 @@ export function SessionOutputTooltip({ session, children }: SessionOutputTooltip
       term.dispose();
     };
   }, [visible, session.agentName, session.sessionId]);
+
+  if (!hasPointer) {
+    return <>{children}</>;
+  }
 
   return (
     <div

@@ -89,16 +89,58 @@ const makeSession = (overrides: Partial<ActiveSessionInfo> = {}): ActiveSessionI
 });
 
 describe("SessionOutputTooltip", () => {
+  const makeMatchMedia = (matches: boolean) => (query: string) => ({
+    matches,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  });
+
   beforeEach(() => {
     MockWebSocket.instances = [];
     xtermInstances.length = 0;
     fitAddonInstances.length = 0;
     vi.stubGlobal("WebSocket", MockWebSocket);
+    // Default: pointer device present — existing tests unaffected
+    vi.stubGlobal("matchMedia", makeMatchMedia(true));
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
     cleanup();
+  });
+
+  it("renders only children on touch-only devices (no pointer)", () => {
+    vi.stubGlobal("matchMedia", makeMatchMedia(false));
+    const session = makeSession();
+    const { getByTestId, queryByTestId, container } = render(
+      <SessionOutputTooltip session={session}>
+        <span data-testid="icon">icon</span>
+      </SessionOutputTooltip>,
+    );
+    // No wrapper div — children rendered directly inside the fragment
+    expect(getByTestId("icon")).toBeTruthy();
+    expect((container.firstChild as Element).tagName).toBe("SPAN");
+    expect(queryByTestId("session-output-tooltip")).toBeNull();
+  });
+
+  it("renders wrapper and tooltip on pointer devices", async () => {
+    vi.stubGlobal("matchMedia", makeMatchMedia(true));
+    const session = makeSession();
+    const { getByTestId, container } = render(
+      <SessionOutputTooltip session={session}>
+        <span data-testid="icon">icon</span>
+      </SessionOutputTooltip>,
+    );
+    expect(getByTestId("icon")).toBeTruthy();
+    await act(async () => {
+      fireEvent.mouseEnter(container.firstChild as Element);
+    });
+    expect(getByTestId("session-output-tooltip")).toBeTruthy();
   });
 
   it("does not show tooltip before hover", () => {
