@@ -138,7 +138,10 @@ describe("createTicket", () => {
     txMock.project.findUnique.mockResolvedValue({ id: "proj-1", name: "Test" });
     txMock.ticket.findFirst.mockResolvedValue(null);
     const createdTicket = { id: "ticket-1", number: 1, title: "New ticket", projectId: "proj-1", state: "BACKLOG" };
-    const writeConflict = Object.assign(new Error("write conflict"), { code: "P2034" });
+    const writeConflict = new Prisma.PrismaClientKnownRequestError("write conflict", {
+      code: "P2034",
+      clientVersion: "0.0.0",
+    });
     txMock.ticket.create
       .mockRejectedValueOnce(writeConflict)
       .mockResolvedValueOnce(createdTicket);
@@ -157,7 +160,10 @@ describe("createTicket", () => {
     const { ctx, txMock } = makeMockContext(mockUser);
     txMock.project.findUnique.mockResolvedValue({ id: "proj-1", name: "Test" });
     txMock.ticket.findFirst.mockResolvedValue(null);
-    const writeConflict = Object.assign(new Error("write conflict"), { code: "P2034" });
+    const writeConflict = new Prisma.PrismaClientKnownRequestError("write conflict", {
+      code: "P2034",
+      clientVersion: "0.0.0",
+    });
     txMock.ticket.create.mockRejectedValue(writeConflict);
 
     await expect(
@@ -166,6 +172,22 @@ describe("createTicket", () => {
 
     // All 3 attempts exhausted
     expect(txMock.ticket.create).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not retry non-Prisma errors that happen to have a code property", async () => {
+    const { ctx, txMock } = makeMockContext(mockUser);
+    txMock.project.findUnique.mockResolvedValue({ id: "proj-1", name: "Test" });
+    txMock.ticket.findFirst.mockResolvedValue(null);
+    // A Node.js SystemError has a .code property but is not a PrismaClientKnownRequestError
+    const sysError = Object.assign(new Error("ENOENT"), { code: "P2034" });
+    txMock.ticket.create.mockRejectedValue(sysError);
+
+    await expect(
+      createTicket(undefined, { input: { title: "t", projectId: "proj-1" } }, ctx)
+    ).rejects.toMatchObject({ extensions: { code: "INTERNAL_SERVER_ERROR" } });
+
+    // Only 1 attempt — no retry for non-Prisma errors
+    expect(txMock.ticket.create).toHaveBeenCalledTimes(1);
   });
 });
 

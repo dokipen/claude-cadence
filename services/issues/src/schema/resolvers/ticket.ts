@@ -291,21 +291,31 @@ export const ticketResolvers = {
           if (error instanceof GraphQLError) throw error;
           // Retry on unique constraint violation (concurrent number assignment)
           // or write conflict / deadlock (P2034 — SQLite serialization failure).
-          const prismaError = error as { code?: string; meta?: unknown };
-          if (
-            (prismaError.code === "P2002" || prismaError.code === "P2034") &&
-            attempt < MAX_RETRIES - 1
-          ) {
-            continue;
+          // Guard with instanceof to avoid retrying non-Prisma errors that happen
+          // to have a .code property (e.g. Node.js SystemError).
+          if (error instanceof Prisma.PrismaClientKnownRequestError) {
+            if (
+              (error.code === "P2002" || error.code === "P2034") &&
+              attempt < MAX_RETRIES - 1
+            ) {
+              continue;
+            }
+            console.error("createTicket failed", {
+              projectId,
+              attempt,
+              code: error.code,
+              meta: error.meta,
+              error: error.message,
+              stack: error.stack,
+            });
+          } else {
+            console.error("createTicket failed", {
+              projectId,
+              attempt,
+              error: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined,
+            });
           }
-          console.error("createTicket failed", {
-            projectId,
-            attempt,
-            code: prismaError.code,
-            meta: prismaError.meta,
-            error: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined,
-          });
           throw new GraphQLError("Failed to create ticket", {
             extensions: { code: "INTERNAL_SERVER_ERROR" },
           });
