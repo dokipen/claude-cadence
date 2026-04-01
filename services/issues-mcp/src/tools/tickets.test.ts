@@ -25,7 +25,7 @@ vi.mock("../projects.js", () => ({
   resolveProjectName: vi.fn(),
 }));
 
-const { ticketCreate, ticketList, ticketTransition } = await import("./tickets.js");
+const { ticketCreate, ticketUpdate, ticketGet, ticketList, ticketTransition } = await import("./tickets.js");
 
 // Helper: return the variables passed to the first request call
 function capturedVars() {
@@ -80,6 +80,42 @@ describe("ticketCreate", () => {
 
     const input = capturedVars().input as Record<string, unknown>;
     expect(input).not.toHaveProperty("labelIds");
+  });
+
+  it("coerces storyPoints from string to integer", async () => {
+    await ticketCreate({
+      title: "Test ticket",
+      projectId: "proj-1",
+      storyPoints: "3" as unknown as number,
+    });
+
+    const input = capturedVars().input as Record<string, unknown>;
+    expect(input.storyPoints).toBe(3);
+  });
+
+  it("passes storyPoints unchanged when already a number", async () => {
+    await ticketCreate({
+      title: "Test ticket",
+      projectId: "proj-1",
+      storyPoints: 5,
+    });
+
+    const input = capturedVars().input as Record<string, unknown>;
+    expect(input.storyPoints).toBe(5);
+  });
+
+  it("returns error for non-numeric storyPoints string", async () => {
+    const result = await ticketCreate({
+      title: "Test ticket",
+      projectId: "proj-1",
+      storyPoints: "large" as unknown as number,
+    });
+
+    expect(result.isError).toBe(true);
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).toContain("storyPoints");
+    expect(text).toContain("integer");
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 });
 
@@ -187,5 +223,61 @@ describe("ticketTransition", () => {
     expect(text).toContain("does not exist in");
     expect(text).toContain("BACKLOG");
     expect(text).toContain("IN_PROGRESS");
+  });
+});
+
+describe("ticketUpdate storyPoints coercion", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRequest.mockResolvedValue({
+      updateTicket: { id: "t-1", number: 1, title: "Test", storyPoints: 3 },
+    });
+  });
+
+  it("coerces storyPoints from string to integer", async () => {
+    await ticketUpdate({ id: "t-1", storyPoints: "3" as unknown as number });
+
+    const vars = capturedVars();
+    expect((vars.input as Record<string, unknown>).storyPoints).toBe(3);
+  });
+
+  it("passes storyPoints unchanged when already a number", async () => {
+    await ticketUpdate({ id: "t-1", storyPoints: 8 });
+
+    const vars = capturedVars();
+    expect((vars.input as Record<string, unknown>).storyPoints).toBe(8);
+  });
+
+  it("returns error for non-numeric storyPoints string", async () => {
+    const result = await ticketUpdate({ id: "t-1", storyPoints: "big" as unknown as number });
+
+    expect(result.isError).toBe(true);
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).toContain("storyPoints");
+    expect(text).toContain("integer");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("ticketGet number coercion", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRequest.mockResolvedValue({ ticketByNumber: { id: "t-1", number: 42, title: "Test" } });
+  });
+
+  it("coerces number from string to integer", async () => {
+    await ticketGet({ number: "42" as unknown as number, projectId: "proj-1" });
+
+    const vars = capturedVars();
+    expect(vars.number).toBe(42);
+  });
+
+  it("returns error for non-numeric number string", async () => {
+    const result = await ticketGet({ number: "abc" as unknown as number, projectId: "proj-1" });
+
+    expect(result.isError).toBe(true);
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).toContain("integer");
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 });

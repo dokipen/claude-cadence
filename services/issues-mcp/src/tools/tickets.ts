@@ -255,6 +255,33 @@ const UNASSIGN_TICKET = gql`
 `;
 
 /**
+ * Coerces a value that may arrive as a numeric string to an integer.
+ * LLMs frequently pass integer fields as strings (e.g. "1" instead of 1).
+ * Returns { value: number } on success or { error: string } on failure.
+ * Returns undefined when the input is undefined.
+ */
+function coerceToInt(
+  value: number | string | undefined,
+  fieldName: string
+): { value: number } | { error: string } | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === "number") {
+    if (!Number.isInteger(value)) return { error: `${fieldName} must be an integer, got ${value}` };
+    return { value };
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed === "") return { error: `${fieldName} must be an integer, got empty string` };
+    const parsed = Number(trimmed);
+    if (!Number.isInteger(parsed) || !isFinite(parsed)) {
+      return { error: `${fieldName} must be an integer, got "${value}"` };
+    }
+    return { value: parsed };
+  }
+  return { error: `${fieldName} must be an integer` };
+}
+
+/**
  * Normalizes an array parameter that may arrive as a JSON-encoded string.
  * The MCP framework sometimes serializes array arguments as JSON strings
  * (e.g. '["id1","id2"]') instead of passing them as proper arrays.
@@ -305,7 +332,7 @@ export interface TicketCreateParams {
   acceptanceCriteria?: string;
   labelIds?: string[];
   priority?: string;
-  storyPoints?: number;
+  storyPoints?: number | string;
   projectId?: string;
   projectName?: string;
 }
@@ -327,7 +354,11 @@ export async function ticketCreate(params: TicketCreateParams): Promise<CallTool
     const labelIds = parseStringArray(params.labelIds);
     if (labelIds !== undefined && labelIds.length > 0) input.labelIds = labelIds;
     if (params.priority !== undefined) input.priority = params.priority;
-    if (params.storyPoints !== undefined) input.storyPoints = params.storyPoints;
+    if (params.storyPoints !== undefined) {
+      const sp = coerceToInt(params.storyPoints, "storyPoints");
+      if (sp && "error" in sp) return err(sp.error);
+      if (sp) input.storyPoints = sp.value;
+    }
 
     const data = await client.request<{ createTicket: unknown }>(CREATE_TICKET, { input });
     return ok(data.createTicket);
@@ -338,7 +369,7 @@ export async function ticketCreate(params: TicketCreateParams): Promise<CallTool
 
 export interface TicketGetParams {
   id?: string;
-  number?: number;
+  number?: number | string;
   projectId?: string;
   projectName?: string;
 }
@@ -348,13 +379,16 @@ export async function ticketGet(params: TicketGetParams): Promise<CallToolResult
     const client = getClient();
 
     if (params.number !== undefined) {
+      const n = coerceToInt(params.number, "number");
+      if (!n) return err("number is required");
+      if ("error" in n) return err(n.error);
       const pid = await resolveProjectId(params.projectId, params.projectName);
       if (!pid) {
         return err("projectId is required when fetching by ticket number");
       }
       const data = await client.request<{ ticketByNumber: unknown }>(
         GET_TICKET_BY_NUMBER,
-        { projectId: pid, number: params.number }
+        { projectId: pid, number: n.value }
       );
       if (!data.ticketByNumber) {
         return err(`Ticket #${params.number} not found`);
@@ -425,7 +459,7 @@ export interface TicketUpdateParams {
   description?: string;
   acceptanceCriteria?: string;
   priority?: string;
-  storyPoints?: number;
+  storyPoints?: number | string;
 }
 
 export async function ticketUpdate(params: TicketUpdateParams): Promise<CallToolResult> {
@@ -436,7 +470,11 @@ export async function ticketUpdate(params: TicketUpdateParams): Promise<CallTool
     if (params.description !== undefined) input.description = params.description;
     if (params.acceptanceCriteria !== undefined) input.acceptanceCriteria = params.acceptanceCriteria;
     if (params.priority !== undefined) input.priority = params.priority;
-    if (params.storyPoints !== undefined) input.storyPoints = params.storyPoints;
+    if (params.storyPoints !== undefined) {
+      const sp = coerceToInt(params.storyPoints, "storyPoints");
+      if (sp && "error" in sp) return err(sp.error);
+      if (sp) input.storyPoints = sp.value;
+    }
 
     if (Object.keys(input).length === 0) {
       return err("At least one field to update must be specified");
