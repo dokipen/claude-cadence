@@ -326,6 +326,10 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 		envSlice = append(envSlice, "TERM=xterm-256color")
 	}
 
+	// Inject AGENTD_SESSION_ID so agents running inside the session can reference
+	// their own session ID for traceability and resumption via `claude --resume`.
+	envSlice = append(envSlice, fmt.Sprintf("AGENTD_SESSION_ID=%s", sessionID))
+
 	// Build PTY command: wrap the shell command string via bash -c so that
 	// the rendered cmdStr (which may include shell operators) is interpreted
 	// correctly. Prepend `trap '' HUP` so the child process and any exec'd

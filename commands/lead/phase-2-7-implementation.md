@@ -177,7 +177,14 @@ docker compose -p <PROJECT_NAME> down
    bash "$CADENCE_ROOT/skills/project-ops/scripts/cleanup-worktree.sh" "$BRANCH"
    ```
 6. **Post completion to issue** (see ticket-provider skill — **Comment** operation):
-   > Completed #[NUMBER]: [TITLE]. Merged via PR #[PR-NUMBER].
+
+   Include the session ID if `$AGENTD_SESSION_ID` is set:
+
+   ```
+   Completed #[NUMBER]: [TITLE]. Merged via PR #[PR-NUMBER].
+
+   **Session ID:** `[AGENTD_SESSION_ID]` — resume with `/resume [AGENTD_SESSION_ID]`
+   ```
 7. Report completion to the user, including the ticket number, title, and PR link (e.g., "Completed #42: Add user authentication. Merged via PR #[PR-NUMBER].")
 
 > **Note:** If this phase is skipped (e.g., conversation ends early), cleanup happens automatically the next time `/new-work` creates a worktree — the `cleanup-merged-worktrees.sh` pre-flight detects merged PRs and cleans up their worktrees, branches, and labels.
