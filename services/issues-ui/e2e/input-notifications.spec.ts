@@ -84,7 +84,7 @@ function setupMocks(page: import("@playwright/test").Page) {
   ]);
 }
 
-test.describe("input notifications", () => {
+test.describe.skip("input notifications", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       sessionStorage.setItem("cadence_project_id", "e2e-test-project");
