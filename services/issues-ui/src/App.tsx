@@ -13,7 +13,6 @@ import type { TicketFilters } from "./hooks/useTickets";
 import { useAllSessions } from "./hooks/useAllSessions";
 import { SessionsContext } from "./hooks/SessionsContext";
 import type { ActiveSessionInfo, SessionState } from "./types";
-import { NotificationDropdown } from "./components/NotificationDropdown";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { useVersionPolling } from "./hooks/useVersionPolling";
 import type { ReactNode } from "react";
@@ -94,7 +93,7 @@ function ProjectRedirect() {
 export function AppShell() {
   const { user, logout } = useAuth();
   const { projects } = useProjects();
-  const { sessions, waitingSessions, loading: sessionsLoading, optimisticSetDestroying, optimisticResetState, optimisticAddSession } = useAllSessions();
+  const { sessions, loading: sessionsLoading, optimisticSetDestroying, optimisticResetState, optimisticAddSession } = useAllSessions();
   const { updateAvailable } = useVersionPolling();
   const [dismissed, setDismissed] = useState(false);
   const location = useLocation();
@@ -158,11 +157,6 @@ export function AppShell() {
           <Link to="/agents" className={layoutStyles.navLink} data-testid="agents-nav-link">
             Agents
           </Link>
-          <NotificationDropdown
-            waitingSessions={waitingSessions}
-            projectId={effectiveProjectId ?? undefined}
-            projectName={selectedProject?.name ?? null}
-          />
         </div>
         <div className={layoutStyles.headerRight}>
           {user && (
