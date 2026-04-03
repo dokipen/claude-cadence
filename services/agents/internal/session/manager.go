@@ -276,6 +276,17 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 
 	// Request env vars (validate keys before creating session).
 	for k, v := range req.Env {
+		if k == "AGENTD_SESSION_ID" {
+			errMsg := "env var key \"AGENTD_SESSION_ID\" is reserved and cannot be set via request env"
+			_ = m.store.Transition(sessionID, StateError, func(s *Session) {
+				s.ErrorMessage = errMsg
+			})
+			retSess, getErr := m.mustGet(sessionID)
+			if getErr != nil {
+				return nil, fmt.Errorf("%s; %w", errMsg, getErr)
+			}
+			return retSess, &Error{Code: ErrInvalidArgument, Message: errMsg}
+		}
 		if !envKeyRe.MatchString(k) {
 			errMsg := fmt.Sprintf("invalid env var key: %q", k)
 			_ = m.store.Transition(sessionID, StateError, func(s *Session) {
@@ -325,6 +336,10 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	if !hasTERM {
 		envSlice = append(envSlice, "TERM=xterm-256color")
 	}
+
+	// Inject AGENTD_SESSION_ID so agents running inside the session can reference
+	// their own session ID for traceability and resumption via `claude --resume`.
+	envSlice = append(envSlice, fmt.Sprintf("AGENTD_SESSION_ID=%s", sessionID))
 
 	// Build PTY command: wrap the shell command string via bash -c so that
 	// the rendered cmdStr (which may include shell operators) is interpreted

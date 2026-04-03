@@ -85,6 +85,18 @@ Returns either:
 - `{"relay": true}` — terminal traffic is relayed through the hub WebSocket (default when no `advertise_address` is configured)
 - `{"url": "wss://host/ws/terminal/<session-id>"}` — direct URL (when `advertise_address` is set in config)
 
+## Session ID Traceability
+
+agentd injects `AGENTD_SESSION_ID` (the session UUID) into every agent's environment automatically. Combined with `--session-id {{.SessionID}}` in the profile command template (see `config.example.yaml`), this makes the Claude Code session ID and the agentd session ID identical — so `claude --resume $AGENTD_SESSION_ID` reliably resumes the session.
+
+**Agents running inside agentd sessions should record `$AGENTD_SESSION_ID` in ticket comments** when transitioning ticket state (IN_PROGRESS and CLOSED). The `/lead` workflow does this automatically. The expected comment format is:
+
+```
+**Session ID:** `<uuid>` — resume with `/resume <uuid>`
+```
+
+This enables humans and other agents to resume interrupted work. If `$AGENTD_SESSION_ID` is not set (e.g., running interactively outside agentd), omit the session ID line.
+
 ## Configuration
 
 agentd connects to agent-hub via a `hub:` block in `~/.config/agentd/config.yaml`:

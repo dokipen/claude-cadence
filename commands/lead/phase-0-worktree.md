@@ -50,4 +50,12 @@
    - If on default branch: use `/new-work` to create a worktree. After the worktree is created, set `WORKTREE_DIR="$(git rev-parse --show-toplevel)/.worktrees/${BRANCH}"` and `cd` into it.
    - If on a feature branch: use the current directory and branch as-is. Set `WORKTREE_DIR="$PWD"` and `BRANCH="<current-branch>"`.
 4. Post setup to issue (see ticket-provider skill — **Comment** operation):
-   > Starting work on issue #[N]. Branch: `[BRANCH]`
+
+   Include the branch, session ID (for resumption), and the initial prompt. If `$AGENTD_SESSION_ID` is not set (e.g., running outside agentd), omit the session line.
+
+   ```
+   Starting work on issue #[N]. Branch: `[BRANCH]`
+
+   **Session ID:** `[AGENTD_SESSION_ID]` — resume with `/resume [AGENTD_SESSION_ID]`
+   **Initial prompt:** `/lead [N]`
+   ```

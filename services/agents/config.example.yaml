@@ -23,13 +23,13 @@ cleanup:
 profiles:
   claude-reviewer:
     repo: "https://github.com/org/project.git"
-    command: "claude --model sonnet --permission-mode accept{{if .PluginDir}} --plugin-dir {{.PluginDir}}{{end}} --cwd {{.WorktreePath}} {{.ExtraArgs}}"
+    command: "claude --session-id {{.SessionID}} --model sonnet --permission-mode accept{{if .PluginDir}} --plugin-dir {{.PluginDir}}{{end}} --cwd {{.WorktreePath}} {{.ExtraArgs}}"
     plugin_dir: "/opt/cadence/plugin"  # Plugin directory (available as {{.PluginDir}} in command template)
     description: "Claude Code reviewer"
 
   claude-opus:
     repo: "https://github.com/org/project.git"
-    command: "claude --model opus --permission-mode accept{{if .PluginDir}} --plugin-dir {{.PluginDir}}{{end}} --cwd {{.WorktreePath}} {{.ExtraArgs}}"
+    command: "claude --session-id {{.SessionID}} --model opus --permission-mode accept{{if .PluginDir}} --plugin-dir {{.PluginDir}}{{end}} --cwd {{.WorktreePath}} {{.ExtraArgs}}"
     plugin_dir: "/opt/cadence/plugin"
     description: "Claude Opus agent"
 
@@ -41,5 +41,5 @@ profiles:
 #
 #  sandboxed-example:
 #    repo: "https://github.com/org/project.git"
-#    command: "bwrap --bind {{.WorktreePath}} {{.WorktreePath}} --ro-bind /usr /usr --ro-bind /etc /etc --ro-bind /home/agentd/.claude /home/agentd/.claude --proc /proc --dev /dev --tmpfs /tmp --die-with-parent -- claude --permission-mode accept --model claude-sonnet-4-6 --cwd {{.WorktreePath}} {{.ExtraArgs}}"
+#    command: "bwrap --bind {{.WorktreePath}} {{.WorktreePath}} --ro-bind /usr /usr --ro-bind /etc /etc --ro-bind /home/agentd/.claude /home/agentd/.claude --proc /proc --dev /dev --tmpfs /tmp --die-with-parent -- claude --session-id {{.SessionID}} --permission-mode accept --model claude-sonnet-4-6 --cwd {{.WorktreePath}} {{.ExtraArgs}}"
 #    description: "Claude agent with bubblewrap filesystem sandbox (Linux bare-metal)"
