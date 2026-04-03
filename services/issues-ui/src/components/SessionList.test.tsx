@@ -462,6 +462,23 @@ describe("SessionList", () => {
       );
       expect(getByTestId("sidebar-session").getAttribute("data-status")).toBe("closing");
     });
+
+    it("destroying session with open panel has data-status='closing' (closing beats open)", () => {
+      const agents = [makeAgent("my-agent")];
+      const session = makeSession("s1", "my-agent");
+      session.session.state = "destroying";
+      const key = "my-agent:s1";
+      const { getByTestId } = render(
+        <SessionList
+          {...defaultProps}
+          agents={agents}
+          sessions={[session]}
+          openKeys={new Set([key])}
+          isCollapsed={false}
+        />,
+      );
+      expect(getByTestId("sidebar-session").getAttribute("data-status")).toBe("closing");
+    });
   });
 
   it("kill button is present for a running session", () => {
