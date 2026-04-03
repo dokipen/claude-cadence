@@ -183,7 +183,7 @@ docker compose -p <PROJECT_NAME> down
    ```
    Completed #[NUMBER]: [TITLE]. Merged via PR #[PR-NUMBER].
 
-   **Session ID:** `[AGENTD_SESSION_ID]` — resume with `/resume [AGENTD_SESSION_ID]`
+   **Session ID:** `[AGENTD_SESSION_ID]`
    ```
 7. Report completion to the user, including the ticket number, title, and PR link (e.g., "Completed #42: Add user authentication. Merged via PR #[PR-NUMBER].")
 
