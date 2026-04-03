@@ -117,10 +117,26 @@ export function SessionList({ agents, sessions, openKeys, minimizedKeys, onSessi
                       </span>
                     </>
                   );
+                  // Compute a single, mutually exclusive display state.
+                  // Priority: closing > open (panel visible) > waiting > creating > stopped > closed
+                  const displayState =
+                    isDestroying ? "closing" :
+                    isOpen ? "open" :
+                    as.session.waitingForInput ? "waiting" :
+                    isCreating ? "creating" :
+                    !isRunning ? "stopped" :
+                    "closed";
+                  const statusClass =
+                    displayState === "closing" ? styles.sidebarSessionDestroying :
+                    displayState === "open" ? styles.sidebarSessionOpen :
+                    displayState === "waiting" ? styles.sidebarSessionWaiting :
+                    displayState === "creating" ? styles.sidebarSessionCreating :
+                    displayState === "stopped" ? styles.sidebarSessionStopped :
+                    ""; // "closed" = running, panel not open, not waiting
                   return (
                     <div key={as.session.id} className={styles.sidebarSessionWrapper}>
                       <button
-                        className={`${styles.sidebarSession} ${isOpen ? styles.sidebarSessionOpen : ""} ${!isRunning && !isDestroying && !isCreating ? styles.sidebarSessionStopped : ""} ${isDestroying && !as.session.waitingForInput ? styles.sidebarSessionDestroying : ""} ${isCreating && !as.session.waitingForInput ? styles.sidebarSessionCreating : ""} ${as.session.waitingForInput ? styles.sidebarSessionWaiting : ""} ${isMinimized ? styles.sidebarSessionMinimized : ""}`}
+                        className={`${styles.sidebarSession} ${statusClass} ${isMinimized ? styles.sidebarSessionMinimized : ""}`}
                         onClick={() => !isDestroying && onSessionClick(as)}
                         onKeyDown={(e) => {
                           if (e.key === "Escape" && (isOpen || isMinimized)) onSessionClick(as);
@@ -128,6 +144,7 @@ export function SessionList({ agents, sessions, openKeys, minimizedKeys, onSessi
                         disabled={isDestroying}
                         data-testid="sidebar-session"
                         data-session-id={as.session.id}
+                        data-status={displayState}
                         title={`${as.session.name} (${as.session.state})`}
                       >
                         {sessionInfo ? (

@@ -378,6 +378,92 @@ describe("SessionList", () => {
     expect(onSessionClick).toHaveBeenCalledTimes(1);
   });
 
+  describe("status display states (data-status)", () => {
+    it("destroying session has data-status='closing' regardless of waitingForInput", () => {
+      const agents = [makeAgent("my-agent")];
+      const session = makeSession("s1", "my-agent");
+      session.session.state = "destroying";
+      session.session.waitingForInput = true;
+      const { getByTestId } = render(
+        <SessionList {...defaultProps} agents={agents} sessions={[session]} isCollapsed={false} />,
+      );
+      expect(getByTestId("sidebar-session").getAttribute("data-status")).toBe("closing");
+    });
+
+    it("open panel session has data-status='open' even when waitingForInput=true", () => {
+      const agents = [makeAgent("my-agent")];
+      const session = makeSession("s1", "my-agent");
+      session.session.state = "running";
+      session.session.waitingForInput = true;
+      const key = "my-agent:s1";
+      const { getByTestId } = render(
+        <SessionList
+          {...defaultProps}
+          agents={agents}
+          sessions={[session]}
+          openKeys={new Set([key])}
+          isCollapsed={false}
+        />,
+      );
+      expect(getByTestId("sidebar-session").getAttribute("data-status")).toBe("open");
+    });
+
+    it("running session with closed panel and waitingForInput=true has data-status='waiting'", () => {
+      const agents = [makeAgent("my-agent")];
+      const session = makeSession("s1", "my-agent");
+      session.session.state = "running";
+      session.session.waitingForInput = true;
+      const { getByTestId } = render(
+        <SessionList {...defaultProps} agents={agents} sessions={[session]} isCollapsed={false} />,
+      );
+      expect(getByTestId("sidebar-session").getAttribute("data-status")).toBe("waiting");
+    });
+
+    it("running session with closed panel and waitingForInput=false has data-status='closed'", () => {
+      const agents = [makeAgent("my-agent")];
+      const session = makeSession("s1", "my-agent");
+      session.session.state = "running";
+      session.session.waitingForInput = false;
+      const { getByTestId } = render(
+        <SessionList {...defaultProps} agents={agents} sessions={[session]} isCollapsed={false} />,
+      );
+      expect(getByTestId("sidebar-session").getAttribute("data-status")).toBe("closed");
+    });
+
+    it("stopped session has data-status='stopped'", () => {
+      const agents = [makeAgent("my-agent")];
+      const session = makeSession("s1", "my-agent");
+      session.session.state = "stopped";
+      session.session.waitingForInput = false;
+      const { getByTestId } = render(
+        <SessionList {...defaultProps} agents={agents} sessions={[session]} isCollapsed={false} />,
+      );
+      expect(getByTestId("sidebar-session").getAttribute("data-status")).toBe("stopped");
+    });
+
+    it("creating session has data-status='creating'", () => {
+      const agents = [makeAgent("my-agent")];
+      const session = makeSession("s1", "my-agent");
+      session.session.state = "creating";
+      session.session.waitingForInput = false;
+      const { getByTestId } = render(
+        <SessionList {...defaultProps} agents={agents} sessions={[session]} isCollapsed={false} />,
+      );
+      expect(getByTestId("sidebar-session").getAttribute("data-status")).toBe("creating");
+    });
+
+    it("destroying session with waitingForInput=false has data-status='closing'", () => {
+      const agents = [makeAgent("my-agent")];
+      const session = makeSession("s1", "my-agent");
+      session.session.state = "destroying";
+      session.session.waitingForInput = false;
+      const { getByTestId } = render(
+        <SessionList {...defaultProps} agents={agents} sessions={[session]} isCollapsed={false} />,
+      );
+      expect(getByTestId("sidebar-session").getAttribute("data-status")).toBe("closing");
+    });
+  });
+
   it("kill button is present for a running session", () => {
     const agents = [makeAgent("my-agent")];
     const session = makeSession("s1", "my-agent");
