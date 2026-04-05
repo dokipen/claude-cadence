@@ -40,6 +40,12 @@
   line-height: 1;
 }
 
+@media (max-width: 768px) {
+  .logoText {
+    display: none;
+  }
+}
+
 .navLink {
   margin-left: 0.75rem;
   margin-top: 3px;
