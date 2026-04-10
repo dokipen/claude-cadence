@@ -115,6 +115,19 @@ model: sonnet  # haiku for simple, sonnet for standard, opus for complex
 - **Inline bash is OK** for: single commands, one-time diagnostics
 - **Store scripts** in `scripts/` within the skill or command directory that owns them
 
+## Skill Workflow: Bootstrap vs Iterate
+
+Two separate skills handle different phases of skill development:
+
+| Task | Skill to use |
+|------|-------------|
+| Create a new skill from scratch | `create-skill` |
+| Evaluate, benchmark, or optimize an existing skill | `skill-iterate` |
+
+**Never conflate these.** `create-skill` handles cadence conventions (directory layout, frontmatter, required `## Filesystem Scope` section). `skill-iterate` handles the eval/iterate/optimize loop using Anthropic's upstream skill-creator tooling — it assumes a first draft already exists.
+
+When the user asks to "evaluate", "benchmark", "improve trigger accuracy", or "optimize" a skill, invoke `skill-iterate`. When the user asks to "create", "add", or "bootstrap" a new skill, invoke `create-skill`.
+
 ## When Updating Agents
 
 1. Read current agent — understand existing behavior

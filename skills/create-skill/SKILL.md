@@ -1,6 +1,6 @@
 ---
 name: create-skill
-description: Create a new Claude Code skill or command for the project. Use when bootstrapping new skills, commands, or plugin components.
+description: Bootstrap a new Claude Code skill or command for the project. Use when creating a new skill from scratch — setting up the directory, frontmatter, required sections, and initial SKILL.md content. For evaluating, benchmarking, or iteratively improving an existing skill, use the skill-iterate skill instead.
 user-invokable: false
 ---
 
@@ -98,3 +98,12 @@ Helper scripts live in `skills/run-checks/scripts/`:
 ## After creating
 
 Commit the new skill and push to its open PR.
+
+## Next step: evaluate and iterate
+
+Once the first draft is committed, hand off to the `skill-iterate` skill if the user wants to:
+- Measure how reliably the skill triggers (description accuracy)
+- Run quantitative evals on skill output quality
+- Iteratively improve the skill through a test/evaluate/rewrite loop
+
+Cadence's `create-skill` handles bootstrap conventions (directory layout, frontmatter, required sections). The `skill-iterate` skill handles the eval/iterate/optimize loop using Anthropic's upstream skill-creator tooling.
