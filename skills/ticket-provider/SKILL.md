@@ -131,6 +131,7 @@ The two providers use different terminology in some areas:
 - When using `issues-api`, `project_id` is required for `ticket list`, `ticket create`, and `ticket view` (when using ticket numbers). Other commands take a CUID ticket ID and don't need `--project`.
 - **Issues API identifier two-step**: The display number (`#42`) can only be used with lookup operations (`ticket view N --project $PROJECT` or `mcp__issues__ticket_get` with `number`). Mutation operations — update, transition, label add/remove, comment — require the CUID from the response. Always call `ticket view` (or `mcp__issues__ticket_get`) first to obtain the CUID, then pass it to subsequent mutations.
 - The `issues` CLI must be installed and authenticated (`gh auth token | issues auth login --pat -`)
+- **Per-repo machine-local overrides**: Set `provider` and/or `project_id` for a specific repo in `~/.claude/cadence.json` (keyed by `owner/repo`). Values there take precedence over `CLAUDE.md` and apply across all clones and worktrees of that repo on the machine. See `README.md` for the file format.
 - **QA/local override** (`issues-api` only): Set `ISSUES_API_URL` to target a local or QA instance without modifying `CLAUDE.md`. This takes precedence over the `api_url` in `CLAUDE.md`. Has no effect when provider is `github`.
   ```bash
   ISSUES_API_URL=http://192.168.1.100:5173/graphql /lead 123

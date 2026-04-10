@@ -105,6 +105,23 @@ go vet ./... && go test ./...
 
 The agents and scripts will use this command automatically.
 
+### Per-Repo Ticket Provider Overrides
+
+To override `provider` or `project_id` for a specific repo on your machine — without modifying tracked files — add an entry to `~/.claude/cadence.json`:
+
+```json
+{
+  "repos": {
+    "owner/repo": {
+      "provider": "issues-api",
+      "project_id": "my-project"
+    }
+  }
+}
+```
+
+The key is the `owner/repo` slug (e.g. `dokipen/claude-cadence`), derived from `git remote get-url origin`. Values here take precedence over `CLAUDE.md` and apply across all clones and worktrees of that repo on the machine. `api_url` is not overridable this way — it belongs in `CLAUDE.md`. Use `ISSUES_API_URL` for QA/local `api_url` overrides.
+
 ## Adding Project-Specific Agents
 
 Add domain-specific agents to your project's `.claude/agents/` directory. They layer on top of the plugin's core agents:
