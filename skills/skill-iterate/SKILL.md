@@ -50,7 +50,7 @@ The upstream skill-creator drives the loop. Point it at the skill under developm
 **Entry point:** `$SKILL_CREATOR_DIR/SKILL.md`
 
 The loop covers:
-1. Write or review test prompts for the skill
+1. Create or review test prompts for the skill
 2. Run Claude-with-skill on the test prompts (`scripts/run_eval.py`)
 3. Review results qualitatively with `eval-viewer/generate_review.py`
 4. Review quantitative metrics (variance analysis via `scripts/aggregate_benchmark.py`)
