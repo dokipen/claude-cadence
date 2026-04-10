@@ -13,6 +13,7 @@ An issue-driven, multi-agent development workflow plugin for Claude Code.
 - `new-work` — Create git worktrees for isolated feature development
 - `create-pr` — Create pull requests with pre-flight verification
 - `create-skill` — Bootstrap new Claude Code skills
+- `skill-iterate` — Evaluate, benchmark, and iteratively improve an existing skill (uses Anthropic's skill-creator; see [anthropics/skills](https://github.com/anthropics/skills/tree/main/skills/skill-creator))
 - `ticket-provider` — Ticket provider abstraction (dispatches to GitHub Issues or issues microservice)
 - `issues-api` — MCP tools for the issues microservice backend
 - `agent-service` — Interacting with the agentd service via agent-hub WebSocket API
