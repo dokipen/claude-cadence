@@ -39,8 +39,11 @@ PROVIDER=$(printf '%s' "$_parsed" | cut -f1)
 PROJECT=$(printf '%s' "$_parsed"  | cut -f2)
 API_URL=$(printf '%s' "$_parsed"  | cut -f3)
 PROVIDER="${PROVIDER:-github}"
-# Env var takes precedence over CLAUDE.md value
-API_URL="${ISSUES_API_URL:-$API_URL}"
+# CADENCE_* env vars take precedence over CLAUDE.md values
+PROVIDER="${CADENCE_PROVIDER:-$PROVIDER}"
+PROJECT="${CADENCE_PROJECT_ID:-$PROJECT}"
+# CADENCE_API_URL takes precedence over ISSUES_API_URL, which takes precedence over CLAUDE.md
+API_URL="${CADENCE_API_URL:-${ISSUES_API_URL:-$API_URL}}"
 
 jq -n \
   --arg provider "$PROVIDER" \
