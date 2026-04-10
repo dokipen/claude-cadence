@@ -4,10 +4,28 @@
 # Reads the ## Ticket Provider section from CLAUDE.md and outputs the
 # configuration as JSON for programmatic consumption.
 #
-# Per-repo overrides can be set in ~/.claude/cadence.json (keyed by
-# owner/repo derived from git remote origin). Only provider and project_id
-# are overridable this way — api_url belongs in CLAUDE.md.
+# Configuration precedence (highest to lowest):
+#   1. Per-repo overrides in ~/.claude/cadence.json (.repos["owner/repo"])
+#   2. CLAUDE.md ## Ticket Provider section
+#   3. Global defaults in ~/.claude/cadence.json (top-level provider/project_id/api_url)
+#   4. Built-in default: provider=github
+#
+# Global defaults apply when CLAUDE.md has no ## Ticket Provider section.
+# Per-repo overrides always take precedence, even over CLAUDE.md.
 # ISSUES_API_URL env var overrides api_url for QA/local testing.
+#
+# ~/.claude/cadence.json format:
+#   {
+#     "provider": "issues-api",       # global default provider
+#     "project_id": "my-project",     # global default project
+#     "api_url": "https://...",        # global default api_url
+#     "repos": {
+#       "owner/repo": {               # per-repo override (takes precedence over CLAUDE.md)
+#         "provider": "github",
+#         "project_id": "other-project"
+#       }
+#     }
+#   }
 #
 # Usage:
 #   PROVIDER_CONFIG=$(bash skills/ticket-provider/scripts/detect-provider.sh)
@@ -43,11 +61,24 @@ fi
 PROVIDER=$(printf '%s' "$_parsed" | cut -f1)
 PROJECT=$(printf '%s' "$_parsed"  | cut -f2)
 API_URL=$(printf '%s' "$_parsed"  | cut -f3)
+
+_cadence_cfg="${HOME}/.claude/cadence.json"
+
+# Global fallback from ~/.claude/cadence.json top-level fields.
+# Only applies when CLAUDE.md has no ## Ticket Provider section (PROVIDER is empty).
+if [ -z "$PROVIDER" ] && [ -f "$_cadence_cfg" ]; then
+  _global_provider=$(jq -r '.provider // empty' "$_cadence_cfg" 2>/dev/null || true)
+  _global_project=$(jq -r '.project_id // empty' "$_cadence_cfg" 2>/dev/null || true)
+  _global_api_url=$(jq -r '.api_url // empty' "$_cadence_cfg" 2>/dev/null || true)
+  [ -n "$_global_provider" ] && PROVIDER="$_global_provider"
+  [ -n "$_global_project" ] && PROJECT="$_global_project"
+  [ -n "$_global_api_url" ] && API_URL="$_global_api_url"
+fi
+
 PROVIDER="${PROVIDER:-github}"
 
 # Per-repo overrides from ~/.claude/cadence.json.
 # Derive owner/repo slug from git remote origin (handles HTTPS and SSH formats).
-_cadence_cfg="${HOME}/.claude/cadence.json"
 if [ -f "$_cadence_cfg" ]; then
   _remote=$(git remote get-url origin 2>/dev/null || true)
   # Normalize: strip scheme/host prefix and .git suffix to get owner/repo

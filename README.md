@@ -105,9 +105,26 @@ go vet ./... && go test ./...
 
 The agents and scripts will use this command automatically.
 
-### Per-Repo Ticket Provider Overrides
+### Machine-Local Ticket Provider Config (`~/.claude/cadence.json`)
 
-To override `provider` or `project_id` for a specific repo on your machine — without modifying tracked files — add an entry to `~/.claude/cadence.json`:
+You can set provider configuration in `~/.claude/cadence.json` to avoid repeating it in every project's `CLAUDE.md`. Configuration precedence (highest to lowest):
+
+1. **Per-repo overrides** (`.repos["owner/repo"]`) — overrides `CLAUDE.md`
+2. **`CLAUDE.md`** — project-level config checked into the repo
+3. **Global defaults** (top-level fields) — fallback when `CLAUDE.md` has no provider config
+4. **Built-in default** — `provider: github`
+
+**Global default** — applies to any repo that has no `## Ticket Provider` section in `CLAUDE.md`:
+
+```json
+{
+  "provider": "issues-api",
+  "project_id": "my-default-project",
+  "api_url": "https://issues.example.com"
+}
+```
+
+**Per-repo override** — overrides `CLAUDE.md` for a specific repo, identified by `owner/repo` slug derived from `git remote get-url origin`:
 
 ```json
 {
@@ -120,7 +137,7 @@ To override `provider` or `project_id` for a specific repo on your machine — w
 }
 ```
 
-The key is the `owner/repo` slug (e.g. `dokipen/claude-cadence`), derived from `git remote get-url origin`. Values here take precedence over `CLAUDE.md` and apply across all clones and worktrees of that repo on the machine. `api_url` is not overridable this way — it belongs in `CLAUDE.md`. Use `ISSUES_API_URL` for QA/local `api_url` overrides.
+Both can be combined in one file. Per-repo entries take precedence over `CLAUDE.md`; global defaults only apply when `CLAUDE.md` has no provider config. `api_url` is not overridable per-repo — it belongs in `CLAUDE.md` or the global default. Use `ISSUES_API_URL` for QA/local `api_url` overrides.
 
 ## Adding Project-Specific Agents
 
