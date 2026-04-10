@@ -105,22 +105,6 @@ go vet ./... && go test ./...
 
 The agents and scripts will use this command automatically.
 
-### Per-Machine Ticket Provider Overrides
-
-To override ticket provider settings on a specific machine without modifying tracked files, set `CADENCE_*` env vars in `~/.claude/settings.json`:
-
-```json
-{
-  "env": {
-    "CADENCE_PROVIDER": "issues-api",
-    "CADENCE_API_URL": "https://cadence.example.com",
-    "CADENCE_PROJECT_ID": "my-project"
-  }
-}
-```
-
-These take precedence over `CLAUDE.md` and apply across all worktrees and clones on the machine. Any combination of the three vars can be set — only the fields you specify are overridden. `CADENCE_API_URL` is also the canonical replacement for the legacy `ISSUES_API_URL` env var (both are supported for backwards compatibility).
-
 ## Adding Project-Specific Agents
 
 Add domain-specific agents to your project's `.claude/agents/` directory. They layer on top of the plugin's core agents:
