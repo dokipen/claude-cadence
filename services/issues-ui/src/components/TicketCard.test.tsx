@@ -430,10 +430,20 @@ describe("TicketCard close button", () => {
     expect(getByTestId("card-close-button")).toBeTruthy();
   });
 
-  it("does not show close button for IN_PROGRESS tickets", () => {
+  it("shows close button for IN_PROGRESS tickets", () => {
     const ticket = makeTicket({ state: "IN_PROGRESS" });
-    const { queryByTestId } = render(<TicketCard ticket={ticket} sessions={[]} />);
-    expect(queryByTestId("card-close-button")).toBeNull();
+    const { getByTestId } = render(<TicketCard ticket={ticket} sessions={[]} />);
+    expect(getByTestId("card-close-button")).toBeTruthy();
+  });
+
+  it("clicking close button on IN_PROGRESS ticket opens confirm dialog", () => {
+    const ticket = makeTicket({ state: "IN_PROGRESS" });
+    const { getByTestId, queryByTestId } = render(
+      <TicketCard ticket={ticket} sessions={[]} />,
+    );
+    expect(queryByTestId("confirm-dialog")).toBeNull();
+    fireEvent.click(getByTestId("card-close-button"));
+    expect(getByTestId("confirm-dialog")).toBeTruthy();
   });
 
   it("does not show close button for CLOSED tickets", () => {

@@ -61,7 +61,7 @@ export function TicketCard({
   const { optimisticSetDestroying, optimisticResetState } = useSessionsContext();
 
   const launchButtonLabel = getLaunchConfig(ticket.state).buttonLabel;
-  const canClose = ticket.state === "BACKLOG" || ticket.state === "REFINED";
+  const canClose = ticket.state === "BACKLOG" || ticket.state === "REFINED" || ticket.state === "IN_PROGRESS";
 
   const activeSession = hasActiveSession(sessions ?? [], ticket.number, projectId);
 
