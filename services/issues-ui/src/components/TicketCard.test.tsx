@@ -446,6 +446,13 @@ describe("TicketCard close button", () => {
     expect(getByTestId("confirm-dialog")).toBeTruthy();
   });
 
+  it("does not show close button for IN_PROGRESS tickets with an active session", () => {
+    const ticket = makeTicket({ state: "IN_PROGRESS", number: 5 });
+    const sessions = [makeSession("lead-5", "running")];
+    const { queryByTestId } = render(<TicketCard ticket={ticket} sessions={sessions} />);
+    expect(queryByTestId("card-close-button")).toBeNull();
+  });
+
   it("does not show close button for CLOSED tickets", () => {
     const ticket = makeTicket({ state: "CLOSED" });
     const { queryByTestId } = render(<TicketCard ticket={ticket} sessions={[]} />);
