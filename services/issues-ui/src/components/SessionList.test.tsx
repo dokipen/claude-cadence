@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, fireEvent, cleanup } from "@testing-library/react";
+import { render, fireEvent, cleanup, act } from "@testing-library/react";
 import { create } from "@bufbuild/protobuf";
 import { AgentSchema, SessionSchema } from "../gen/hub/v1/hub_pb";
 import { SessionList } from "./SessionList";
@@ -654,5 +654,49 @@ describe("SessionList", () => {
     fireEvent.click(getByTestId("sidebar-session-esc"));
     expect(sendSessionInput).toHaveBeenCalledWith("my-agent", "s1", "\x1b");
     expect(onSessionClick).not.toHaveBeenCalled();
+  });
+
+  it("clicking kill button calls onKill with session key after successful deletion", async () => {
+    const { deleteSession } = await import("../api/agentHubClient");
+    (deleteSession as ReturnType<typeof vi.fn>).mockResolvedValueOnce(undefined);
+    const onKill = vi.fn();
+    const agents = [makeAgent("my-agent")];
+    const session = makeSession("s1", "my-agent");
+    session.session.state = "running";
+    const { getByTestId } = render(
+      <SessionList
+        {...defaultProps}
+        agents={agents}
+        sessions={[session]}
+        onKill={onKill}
+        isCollapsed={false}
+      />,
+    );
+    await act(async () => {
+      fireEvent.click(getByTestId("sidebar-session-kill"));
+    });
+    expect(onKill).toHaveBeenCalledWith("my-agent:s1");
+  });
+
+  it("does not call onKill when deleteSession fails", async () => {
+    const { deleteSession } = await import("../api/agentHubClient");
+    (deleteSession as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("network error"));
+    const onKill = vi.fn();
+    const agents = [makeAgent("my-agent")];
+    const session = makeSession("s1", "my-agent");
+    session.session.state = "running";
+    const { getByTestId } = render(
+      <SessionList
+        {...defaultProps}
+        agents={agents}
+        sessions={[session]}
+        onKill={onKill}
+        isCollapsed={false}
+      />,
+    );
+    await act(async () => {
+      fireEvent.click(getByTestId("sidebar-session-kill"));
+    });
+    expect(onKill).not.toHaveBeenCalled();
   });
 });

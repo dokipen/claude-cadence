@@ -886,6 +886,33 @@ describe("per-project window state — #564", () => {
     expect(tilingArea.textContent).toContain("No sessions for");
   });
 
+  it("killing a session from the sidebar closes its open window panel", async () => {
+    const agentName = "test-agent";
+    const sessionId = "sess-kill-1";
+    const sessions = [makeSession(sessionId, agentName)];
+    const key = `${agentName}:${sessionId}`;
+
+    const { getAllByTestId, queryByTestId } = render(
+      <MemoryRouter><AgentManager sessions={sessions} sessionsLoaded={true} selectedProject={null} /></MemoryRouter>,
+    );
+
+    // Open the window by clicking the session in the sidebar
+    await act(async () => {
+      fireEvent.click(getAllByTestId("sidebar-session")[0]);
+    });
+    expect(capturedWindows.map((w) => w.key)).toContain(key);
+    expect(queryByTestId("tiling-layout")).toBeTruthy();
+
+    // Kill the session from the sidebar
+    mockDeleteSession.mockResolvedValueOnce(undefined);
+    await act(async () => {
+      fireEvent.click(getAllByTestId("sidebar-session-kill")[0]);
+    });
+
+    // Window should be removed from the tiling layout
+    expect(capturedWindows.map((w) => w.key)).not.toContain(key);
+  });
+
   // selectedProject → null: switching from a project to no project restores global state
   it("restores global window state when switching from a project to no project", async () => {
     const repoA = "https://github.com/owner/repo-a";

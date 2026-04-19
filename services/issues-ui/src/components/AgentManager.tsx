@@ -345,6 +345,7 @@ export function AgentManager({ sessions, sessionsLoaded, selectedProject }: Agen
           openKeys={openKeys}
           minimizedKeys={minimizedKeys}
           onSessionClick={handleSessionClick}
+          onKill={handleTerminated}
           isCollapsed={isCollapsed}
           onToggle={toggleSidebar}
         />

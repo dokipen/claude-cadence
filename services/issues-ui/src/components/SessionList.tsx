@@ -14,6 +14,7 @@ interface SessionListProps {
   openKeys: Set<string>;
   minimizedKeys: Set<string>;
   onSessionClick: (session: AgentSession) => void;
+  onKill?: (key: string) => void;
   isCollapsed: boolean;
   onToggle: () => void;
 }
@@ -26,7 +27,7 @@ function sessionKey(s: AgentSession): string {
 const DEBUG_SESSION_STATE = false;
 
 
-export function SessionList({ agents, sessions, openKeys, minimizedKeys, onSessionClick, isCollapsed, onToggle }: SessionListProps) {
+export function SessionList({ agents, sessions, openKeys, minimizedKeys, onSessionClick, onKill, isCollapsed, onToggle }: SessionListProps) {
   const { optimisticSetDestroying, optimisticResetState } = useSessionsContext();
 
   const handleKill = async (e: React.MouseEvent, agentName: string, sessionId: string, originalState: string) => {
@@ -34,6 +35,7 @@ export function SessionList({ agents, sessions, openKeys, minimizedKeys, onSessi
     optimisticSetDestroying(sessionId);
     try {
       await deleteSession(agentName, sessionId);
+      onKill?.(`${agentName}:${sessionId}`);
     } catch (err) {
       optimisticResetState(sessionId, originalState);
     }
