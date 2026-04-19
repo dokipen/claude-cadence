@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, fireEvent, act, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, act, cleanup } from "@testing-library/react";
 import { forwardRef, useImperativeHandle } from "react";
 import { create } from "@bufbuild/protobuf";
 import { SessionSchema } from "../gen/hub/v1/hub_pb";
@@ -27,9 +27,16 @@ vi.mock("../styles/agents.module.css", () => ({
     mobileHeader: "mobileHeader",
     mobileSessionContent: "mobileSessionContent",
     mobileBackButton: "mobileBackButton",
+    mobileTypeButton: "mobileTypeButton",
     mobileEnterButton: "mobileEnterButton",
     mobileEscButton: "mobileEscButton",
     mobileCloseButton: "mobileCloseButton",
+    mobileInputDialog: "mobileInputDialog",
+    mobileInputDialogContent: "mobileInputDialogContent",
+    mobileInputTextarea: "mobileInputTextarea",
+    mobileInputDialogActions: "mobileInputDialogActions",
+    mobileInputCancelButton: "mobileInputCancelButton",
+    mobileInputSubmitButton: "mobileInputSubmitButton",
   },
 }));
 
@@ -63,19 +70,31 @@ const makeWindow = (id: string, agentName: string): TiledWindow => ({
   }),
 });
 
+beforeEach(() => {
+  // jsdom does not implement showModal/close on HTMLDialogElement
+  HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
+    this.setAttribute("open", "");
+  });
+  HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) {
+    this.removeAttribute("open");
+  });
+});
+
 afterEach(() => {
   mockSendInput.mockReset();
   cleanup();
+  vi.restoreAllMocks();
 });
 
 describe("MobileSessionView", () => {
-  it("renders back button, enter button, esc button, close button, and terminal", () => {
+  it("renders back button, type button, enter button, esc button, close button, and terminal", () => {
     const win = makeWindow("sess-1", "test-agent");
     const { getByRole, getByTestId } = render(
       <MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />,
     );
 
     expect(getByRole("button", { name: /back to agent list/i })).not.toBeNull();
+    expect(getByRole("button", { name: /open text input dialog/i })).not.toBeNull();
     expect(getByRole("button", { name: /send enter/i })).not.toBeNull();
     expect(getByRole("button", { name: /send escape/i })).not.toBeNull();
     expect(getByRole("button", { name: /close session/i })).not.toBeNull();
@@ -145,6 +164,137 @@ describe("MobileSessionView", () => {
     });
 
     expect(mockSendInput).toHaveBeenCalledWith("\x1b");
+  });
+
+  describe("text input dialog", () => {
+    it("opens the dialog when the Type button is clicked", async () => {
+      const win = makeWindow("sess-d1", "test-agent");
+      render(<MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />);
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: /open text input dialog/i }));
+      });
+
+      expect(screen.getByTestId("mobile-input-textarea")).not.toBeNull();
+    });
+
+    it("sends text + carriage return to terminal on submit", async () => {
+      const win = makeWindow("sess-d2", "test-agent");
+      render(<MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />);
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: /open text input dialog/i }));
+      });
+
+      await act(async () => {
+        fireEvent.change(screen.getByTestId("mobile-input-textarea"), {
+          target: { value: "hello world" },
+        });
+      });
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("mobile-input-submit"));
+      });
+
+      expect(mockSendInput).toHaveBeenCalledWith("hello world\r");
+    });
+
+    it("dismisses the dialog after submit", async () => {
+      const win = makeWindow("sess-d3", "test-agent");
+      render(<MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />);
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: /open text input dialog/i }));
+      });
+
+      await act(async () => {
+        fireEvent.change(screen.getByTestId("mobile-input-textarea"), {
+          target: { value: "hello" },
+        });
+        fireEvent.click(screen.getByTestId("mobile-input-submit"));
+      });
+
+      expect(screen.queryByTestId("mobile-input-textarea")).toBeNull();
+    });
+
+    it("dismisses the dialog on cancel without sending input", async () => {
+      const win = makeWindow("sess-d4", "test-agent");
+      render(<MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />);
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: /open text input dialog/i }));
+      });
+
+      await act(async () => {
+        fireEvent.change(screen.getByTestId("mobile-input-textarea"), {
+          target: { value: "draft text" },
+        });
+        fireEvent.click(screen.getByTestId("mobile-input-cancel"));
+      });
+
+      expect(mockSendInput).not.toHaveBeenCalled();
+      expect(screen.queryByTestId("mobile-input-textarea")).toBeNull();
+    });
+
+    it("sends text on Enter keydown (without Shift)", async () => {
+      const win = makeWindow("sess-d5", "test-agent");
+      render(<MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />);
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: /open text input dialog/i }));
+      });
+
+      await act(async () => {
+        fireEvent.change(screen.getByTestId("mobile-input-textarea"), {
+          target: { value: "hello" },
+        });
+        fireEvent.keyDown(screen.getByTestId("mobile-input-textarea"), {
+          key: "Enter",
+          shiftKey: false,
+        });
+      });
+
+      expect(mockSendInput).toHaveBeenCalledWith("hello\r");
+    });
+
+    it("does not submit on Shift+Enter (allows newline insertion)", async () => {
+      const win = makeWindow("sess-d6", "test-agent");
+      render(<MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />);
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: /open text input dialog/i }));
+      });
+
+      await act(async () => {
+        fireEvent.change(screen.getByTestId("mobile-input-textarea"), {
+          target: { value: "line1" },
+        });
+        fireEvent.keyDown(screen.getByTestId("mobile-input-textarea"), {
+          key: "Enter",
+          shiftKey: true,
+        });
+      });
+
+      expect(mockSendInput).not.toHaveBeenCalled();
+      expect(screen.getByTestId("mobile-input-textarea")).not.toBeNull();
+    });
+
+    it("dismisses the dialog on backdrop click", async () => {
+      const win = makeWindow("sess-d7", "test-agent");
+      render(<MobileSessionView win={win} onBack={vi.fn()} onClose={vi.fn()} />);
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: /open text input dialog/i }));
+      });
+
+      const dialog = screen.getByTestId("mobile-input-dialog");
+      await act(async () => {
+        fireEvent.click(dialog);
+      });
+
+      expect(mockSendInput).not.toHaveBeenCalled();
+      expect(screen.queryByTestId("mobile-input-textarea")).toBeNull();
+    });
   });
 
   describe("visualViewport height tracking", () => {

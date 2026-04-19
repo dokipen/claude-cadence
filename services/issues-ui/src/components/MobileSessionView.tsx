@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Terminal } from "./Terminal";
 import type { TerminalHandle } from "./Terminal";
 import type { TiledWindow } from "./TilingLayout";
@@ -10,8 +10,109 @@ interface MobileSessionViewProps {
   onClose: () => void;
 }
 
+interface MobileInputDialogProps {
+  open: boolean;
+  onSubmit: (text: string) => void;
+  onClose: () => void;
+}
+
+function MobileInputDialog({ open, onSubmit, onClose }: MobileInputDialogProps) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [text, setText] = useState("");
+
+  useEffect(() => {
+    const el = dialogRef.current;
+    if (!el) return;
+    if (open && !el.open) {
+      el.showModal();
+      textareaRef.current?.focus();
+    } else if (!open && el.open) {
+      el.close();
+    }
+    return () => {
+      if (el.open) el.close();
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) setText("");
+  }, [open]);
+
+  const handleSubmit = useCallback(() => {
+    onSubmit(text);
+    setText("");
+  }, [text, onSubmit]);
+
+  const handleCancel = useCallback(() => {
+    setText("");
+    onClose();
+  }, [onClose]);
+
+  const handleDialogClick = useCallback(
+    (e: React.MouseEvent<HTMLDialogElement>) => {
+      if (e.target === dialogRef.current) {
+        handleCancel();
+      }
+    },
+    [handleCancel],
+  );
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSubmit();
+      }
+    },
+    [handleSubmit],
+  );
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className={styles.mobileInputDialog}
+      onClick={handleDialogClick}
+      onCancel={handleCancel}
+      data-testid="mobile-input-dialog"
+    >
+      {open && (
+        <div className={styles.mobileInputDialogContent}>
+          <textarea
+            ref={textareaRef}
+            className={styles.mobileInputTextarea}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Type a message..."
+            rows={3}
+            data-testid="mobile-input-textarea"
+          />
+          <div className={styles.mobileInputDialogActions}>
+            <button
+              className={styles.mobileInputCancelButton}
+              onClick={handleCancel}
+              data-testid="mobile-input-cancel"
+            >
+              Cancel
+            </button>
+            <button
+              className={styles.mobileInputSubmitButton}
+              onClick={handleSubmit}
+              data-testid="mobile-input-submit"
+            >
+              Send
+            </button>
+          </div>
+        </div>
+      )}
+    </dialog>
+  );
+}
+
 export function MobileSessionView({ win, onBack, onClose }: MobileSessionViewProps) {
   const terminalRef = useRef<TerminalHandle>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [viewportHeight, setViewportHeight] = useState<number>(
     () => window.visualViewport?.height ?? window.innerHeight,
   );
@@ -43,6 +144,13 @@ export function MobileSessionView({ win, onBack, onClose }: MobileSessionViewPro
     };
   }, []);
 
+  const handleDialogSubmit = useCallback((text: string) => {
+    terminalRef.current?.sendInput(text + "\r");
+    setDialogOpen(false);
+  }, []);
+
+  const handleDialogClose = useCallback(() => setDialogOpen(false), []);
+
   return (
     <div
       className={styles.mobileSessionView}
@@ -56,6 +164,13 @@ export function MobileSessionView({ win, onBack, onClose }: MobileSessionViewPro
           aria-label="Back to agent list"
         >
           ← Back
+        </button>
+        <button
+          className={styles.mobileTypeButton}
+          onClick={() => setDialogOpen(true)}
+          aria-label="Open text input dialog"
+        >
+          Type…
         </button>
         <button
           className={styles.mobileEnterButton}
@@ -82,6 +197,11 @@ export function MobileSessionView({ win, onBack, onClose }: MobileSessionViewPro
       <div className={styles.mobileSessionContent}>
         <Terminal ref={terminalRef} agentName={win.agentName} sessionId={win.session.id} />
       </div>
+      <MobileInputDialog
+        open={dialogOpen}
+        onSubmit={handleDialogSubmit}
+        onClose={handleDialogClose}
+      />
     </div>
   );
 }
