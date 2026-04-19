@@ -825,6 +825,7 @@
 }
 
 .mobileBackButton,
+.mobileTypeButton,
 .mobileEnterButton,
 .mobileEscButton,
 .mobileCloseButton {
@@ -842,6 +843,7 @@
   flex: 1;
 }
 
+.mobileTypeButton,
 .mobileEnterButton,
 .mobileEscButton,
 .mobileCloseButton {
@@ -854,11 +856,92 @@
 
 @media (hover: hover) {
   .mobileBackButton:hover,
+  .mobileTypeButton:hover,
   .mobileEnterButton:hover,
   .mobileEscButton:hover,
   .mobileCloseButton:hover {
     background: rgba(128, 128, 128, 0.08);
   }
+}
+
+/* Mobile text input dialog */
+.mobileInputDialog {
+  border: none;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 0;
+  width: 90vw;
+  max-width: 480px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  margin: auto;
+}
+
+.mobileInputDialog::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.mobileInputDialogContent {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.mobileInputTextarea {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1rem;
+  font-family: inherit;
+  resize: none;
+  width: 100%;
+  box-sizing: border-box;
+  line-height: 1.4;
+}
+
+.mobileInputTextarea:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.mobileInputDialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.mobileInputCancelButton {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.9rem;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.mobileInputCancelButton:hover {
+  background: rgba(128, 128, 128, 0.08);
+}
+
+.mobileInputSubmitButton {
+  background: var(--primary);
+  border: 1px solid var(--primary);
+  color: var(--on-primary);
+  font-size: 0.9rem;
+  padding: 0.5rem 1.25rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.mobileInputSubmitButton:hover {
+  background: var(--primary-light);
+  border-color: var(--primary-light);
 }
 
 @media (max-width: 768px) {
