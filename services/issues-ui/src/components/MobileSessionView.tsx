@@ -35,6 +35,10 @@ function MobileInputDialog({ open, onSubmit, onClose }: MobileInputDialogProps) 
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open) setText("");
+  }, [open]);
+
   const handleSubmit = useCallback(() => {
     onSubmit(text);
     setText("");
@@ -140,6 +144,13 @@ export function MobileSessionView({ win, onBack, onClose }: MobileSessionViewPro
     };
   }, []);
 
+  const handleDialogSubmit = useCallback((text: string) => {
+    terminalRef.current?.sendInput(text + "\r");
+    setDialogOpen(false);
+  }, []);
+
+  const handleDialogClose = useCallback(() => setDialogOpen(false), []);
+
   return (
     <div
       className={styles.mobileSessionView}
@@ -188,11 +199,8 @@ export function MobileSessionView({ win, onBack, onClose }: MobileSessionViewPro
       </div>
       <MobileInputDialog
         open={dialogOpen}
-        onSubmit={(text) => {
-          terminalRef.current?.sendInput(text + "\r");
-          setDialogOpen(false);
-        }}
-        onClose={() => setDialogOpen(false)}
+        onSubmit={handleDialogSubmit}
+        onClose={handleDialogClose}
       />
     </div>
   );
