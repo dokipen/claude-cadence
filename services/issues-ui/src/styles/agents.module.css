@@ -831,7 +831,8 @@
 .mobileCloseButton {
   padding: 0.5rem 0.75rem;
   background: transparent;
-  border: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
   color: var(--primary);
   font-size: 0.85rem;
   font-weight: 600;
