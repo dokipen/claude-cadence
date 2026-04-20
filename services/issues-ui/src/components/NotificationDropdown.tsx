@@ -174,7 +174,7 @@ function NotificationItem({ ws, projectId, projectName, onClose }: NotificationI
             onChange={(e) => { setTextInput(e.target.value); setError(null); }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
-                void handleSend(textInput + "\n");
+                void handleSend(textInput + "\r");
                 setTextInput("");
               }
             }}
@@ -184,7 +184,7 @@ function NotificationItem({ ws, projectId, projectName, onClose }: NotificationI
             className={layoutStyles.notificationControlBtn}
             disabled={sent}
             onClick={() => {
-              void handleSend(textInput + "\n");
+              void handleSend(textInput + "\r");
               setTextInput("");
             }}
             data-testid="btn-send"
