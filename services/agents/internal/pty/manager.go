@@ -360,8 +360,15 @@ func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
 //   - Client->Server text frame: byte '0' + input bytes (write to PTY)
 //   - Client->Server text frame: byte '1' + JSON resize {"columns":C,"rows":R}
 //
+// When skipReplay is false (shell sessions), the ring buffer snapshot is sent to
+// the client on connect to restore recent context. When skipReplay is true (TUI/agent
+// sessions), the snapshot is not replayed because TUI escape sequences are
+// state-dependent and produce garbled output when replayed out of context. Instead,
+// SIGWINCH is sent by re-applying the current PTY dimensions, prompting the TUI to
+// perform a full repaint.
+//
 // A new connection displaces any prior active connection on the same session.
-func (m *PTYManager) ServeTerminal(ctx context.Context, id string, conn *websocket.Conn) error {
+func (m *PTYManager) ServeTerminal(ctx context.Context, id string, conn *websocket.Conn, skipReplay bool) error {
 	sess, err := m.Get(id)
 	if err != nil {
 		return err
@@ -405,8 +412,17 @@ func (m *PTYManager) ServeTerminal(ctx context.Context, id string, conn *websock
 		sess.mu.Unlock()
 	}()
 
-	// Replay buffered output to give the client recent context.
-	if len(snapshot) > 0 {
+	if skipReplay {
+		// TUI sessions: skip ring buffer replay and trigger a full repaint by
+		// re-applying the current PTY dimensions. pty.Setsize sends SIGWINCH to
+		// the terminal's foreground process group, prompting TUI programs (Claude,
+		// Gemini) to redraw. Replaying the buffer would produce garbled output
+		// because TUI escape sequences are state-dependent.
+		if size, sizeErr := pty.GetsizeFull(sess.master); sizeErr == nil {
+			_ = pty.Setsize(sess.master, size)
+		}
+	} else if len(snapshot) > 0 {
+		// Shell sessions: replay buffered output to give the client recent context.
 		_ = writeFrame(snapshot) // best-effort
 	}
 

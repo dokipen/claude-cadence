@@ -39,6 +39,7 @@ type sessionRecord struct {
 	RepoURL      string       `json:"repo_url,omitempty"`
 	BaseRef      string       `json:"base_ref,omitempty"`
 	PTYSlavePath string       `json:"pty_slave_path,omitempty"`
+	ProfileType  string       `json:"profile_type,omitempty"`
 }
 
 func sessionToRecord(s Session) sessionRecord {
@@ -56,6 +57,7 @@ func sessionToRecord(s Session) sessionRecord {
 		RepoURL:      s.RepoURL,
 		BaseRef:      s.BaseRef,
 		PTYSlavePath: s.PTYSlavePath,
+		ProfileType:  s.ProfileType,
 	}
 }
 
@@ -74,6 +76,7 @@ func recordToSession(r sessionRecord) *Session {
 		RepoURL:      r.RepoURL,
 		BaseRef:      r.BaseRef,
 		PTYSlavePath: r.PTYSlavePath,
+		ProfileType:  r.ProfileType,
 	}
 }
 

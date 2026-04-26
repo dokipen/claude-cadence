@@ -75,6 +75,7 @@ func (c *Client) runTerminalRelay(
 	hubConn *websocket.Conn,
 	ptySessID string,
 	ptyMgr *pty.PTYManager,
+	skipReplay bool,
 ) {
 	parsed, err := uuid.Parse(ptySessID)
 	if err != nil {
@@ -118,7 +119,7 @@ func (c *Client) runTerminalRelay(
 		// process-internal and not reachable from external hosts.
 		conn.SetReadLimit(int64(ptyMgr.BufferSize() + 1))
 		defer conn.CloseNow()
-		_ = ptyMgr.ServeTerminal(r.Context(), ptySessID, conn)
+		_ = ptyMgr.ServeTerminal(r.Context(), ptySessID, conn, skipReplay)
 	})
 
 	localSrv := &http.Server{Handler: mux}

@@ -126,7 +126,7 @@ func TestRunTerminalRelay_LargeSnapshotReplay(t *testing.T) {
 		dispatcher: newTestDispatcher(),
 	}
 
-	go c.runTerminalRelay(relayCtx, relayCancel, hubConn, sessID, m)
+	go c.runTerminalRelay(relayCtx, relayCancel, hubConn, sessID, m, false)
 
 	// Collect relay frames and track the largest payload. The snapshot replay
 	// arrives as a single ttyd frame prefixed with byte '0' (ttyd server→client
@@ -230,7 +230,7 @@ func TestRelayIntegration_VimNocompatible_OutputDelivery(t *testing.T) {
 	relayDone := make(chan struct{})
 	go func() {
 		defer close(relayDone)
-		c.runTerminalRelay(relayCtx, relayCancel, hubClientConn, ptySessID, ptyMgr)
+		c.runTerminalRelay(relayCtx, relayCancel, hubClientConn, ptySessID, ptyMgr, false)
 	}()
 
 	// Step 5: Start a goroutine to read output frames from hubServerConn.
@@ -471,7 +471,7 @@ func TestRelayIntegration_StrictModeReconnect_WritersContinuous(t *testing.T) {
 	relay1Done := make(chan struct{})
 	go func() {
 		defer close(relay1Done)
-		c.runTerminalRelay(relayCtx1, relayCancel1, hubClientConn, ptySessID, ptyMgr)
+		c.runTerminalRelay(relayCtx1, relayCancel1, hubClientConn, ptySessID, ptyMgr, false)
 	}()
 
 	// Wait for shell prompt to confirm relay#1 is delivering output.
@@ -491,7 +491,7 @@ func TestRelayIntegration_StrictModeReconnect_WritersContinuous(t *testing.T) {
 	relay2Done := make(chan struct{})
 	go func() {
 		defer close(relay2Done)
-		c.runTerminalRelay(relayCtx2, relayCancel2, hubClientConn, ptySessID, ptyMgr)
+		c.runTerminalRelay(relayCtx2, relayCancel2, hubClientConn, ptySessID, ptyMgr, false)
 	}()
 
 	// Step 7: Wait for relay#2 to fully set up (loopback WS + ServeTerminal).

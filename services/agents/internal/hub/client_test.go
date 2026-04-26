@@ -42,6 +42,7 @@ func (s *stubDispatcher) GetDiagnostics(_ context.Context, _ json.RawMessage) (j
 func (s *stubDispatcher) SendInput(_ json.RawMessage) (json.RawMessage, *rpcError) {
 	return json.RawMessage(`{}`), nil
 }
+func (s *stubDispatcher) IsShellSession(_ string) bool { return false }
 
 // TestClientReconnectsAfterSilentDisconnect verifies that the Client
 // reconnects when the TCP connection goes silent (no data, no close frame).
