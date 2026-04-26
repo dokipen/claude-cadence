@@ -62,6 +62,10 @@ func sessionToRecord(s Session) sessionRecord {
 }
 
 func recordToSession(r sessionRecord) *Session {
+	profileType := r.ProfileType
+	if profileType != "agent" && profileType != "shell" {
+		profileType = "agent" // default for unknown/empty values
+	}
 	return &Session{
 		ID:           r.ID,
 		Name:         r.Name,
@@ -76,7 +80,7 @@ func recordToSession(r sessionRecord) *Session {
 		RepoURL:      r.RepoURL,
 		BaseRef:      r.BaseRef,
 		PTYSlavePath: r.PTYSlavePath,
-		ProfileType:  r.ProfileType,
+		ProfileType:  profileType,
 	}
 }
 
