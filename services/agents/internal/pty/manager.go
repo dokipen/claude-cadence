@@ -413,12 +413,16 @@ func (m *PTYManager) ServeTerminal(ctx context.Context, id string, conn *websock
 	}()
 
 	if skipReplay {
-		// TUI sessions: skip ring buffer replay and trigger a full repaint by
-		// re-applying the current PTY dimensions. pty.Setsize sends SIGWINCH to
-		// the terminal's foreground process group, prompting TUI programs (Claude,
-		// Gemini) to redraw. Replaying the buffer would produce garbled output
-		// because TUI escape sequences are state-dependent.
+		// TUI sessions: skip ring buffer replay and trigger a full repaint via
+		// SIGWINCH. The kernel sends SIGWINCH only when terminal dimensions change,
+		// so we momentarily bump the row count by 1 then restore it. This sends
+		// two SIGWINCHs: the first clears any stale render state, the second causes
+		// the TUI to repaint at the correct size. Replaying the ring buffer would
+		// produce garbled output because TUI escape sequences are state-dependent.
 		if size, sizeErr := pty.GetsizeFull(sess.master); sizeErr == nil {
+			bump := *size
+			bump.Rows++
+			_ = pty.Setsize(sess.master, &bump)
 			_ = pty.Setsize(sess.master, size)
 		}
 	} else if len(snapshot) > 0 {
