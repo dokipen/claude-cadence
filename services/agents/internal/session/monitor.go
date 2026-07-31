@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
 )
@@ -26,6 +27,12 @@ var (
 // idleThreshold is how long content must be unchanged with a prompt before
 // marking the session as waiting for input.
 const idleThreshold = 10 * time.Second
+
+// maxPromptContextBytes caps PromptContext. TUI agents redraw via cursor
+// movement rather than newlines, so "15 lines" of scrollback can span nearly
+// the whole PTY ring buffer (~1 MiB) — far past the hub's per-frame RPC limit,
+// which gets the agent disconnected. The prompt is at the tail, so keep that.
+const maxPromptContextBytes = 8 * 1024
 
 // sessionSnapshot tracks the last observed pane content for change detection.
 type sessionSnapshot struct {
@@ -147,7 +154,7 @@ func (m *Monitor) check() {
 		idleDuration := now.Sub(snap.firstSeen)
 		if idleDuration >= idleThreshold && !sess.WaitingForInput {
 			idleSince := snap.firstSeen
-			ctx := lastNLines(stripANSI(content), 15)
+			ctx := truncateTail(lastNLines(stripANSI(content), 15), maxPromptContextBytes)
 			promptType := classifyPromptType(ctx)
 			_, _ = m.manager.store.Update(sess.ID, func(s *Session) {
 				s.WaitingForInput = true
@@ -186,6 +193,25 @@ func lastNLines(s string, n int) string {
 		nonEmpty = nonEmpty[len(nonEmpty)-n:]
 	}
 	return strings.Join(nonEmpty, "\n")
+}
+
+// truncateTail keeps the last max bytes of s, trimming a partial rune and,
+// when possible, a partial leading line.
+func truncateTail(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	if len(s) <= max {
+		return s
+	}
+	s = s[len(s)-max:]
+	for len(s) > 0 && !utf8.RuneStart(s[0]) {
+		s = s[1:]
+	}
+	if i := strings.IndexByte(s, '\n'); i >= 0 && i < len(s)-1 {
+		s = s[i+1:]
+	}
+	return s
 }
 
 func classifyPromptType(context string) string {

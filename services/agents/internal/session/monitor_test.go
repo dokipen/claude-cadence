@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
 )
@@ -476,6 +477,81 @@ func TestLastNLines(t *testing.T) {
 			got := lastNLines(tt.input, tt.n)
 			if got != tt.want {
 				t.Errorf("lastNLines(%q, %d) = %q, want %q", tt.input, tt.n, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestTruncateTail verifies that truncateTail keeps the last max bytes,
+// never splits a multibyte rune, trims a partial leading line when possible,
+// and returns "" for non-positive max.
+func TestTruncateTail(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		max   int
+		want  string
+	}{
+		{
+			name:  "shorter than max is a no-op",
+			input: "hello",
+			max:   10,
+			want:  "hello",
+		},
+		{
+			name:  "length exactly max is a no-op",
+			input: "hello",
+			max:   5,
+			want:  "hello",
+		},
+		{
+			name:  "max zero returns empty",
+			input: "hello",
+			max:   0,
+			want:  "",
+		},
+		{
+			name:  "max negative returns empty",
+			input: "hello",
+			max:   -1,
+			want:  "",
+		},
+		{
+			name:  "cut mid-rune trims to rune boundary",
+			input: "aa€bb", // '€' is 3 bytes; max 4 lands inside it
+			max:   4,
+			want:  "bb",
+		},
+		{
+			name:  "no newlines keeps raw tail (TUI case)",
+			input: "abcdefghij",
+			max:   5,
+			want:  "fghij",
+		},
+		{
+			name:  "newline as final byte keeps mid-line string",
+			input: "abcdef\n",
+			max:   4,
+			want:  "def\n",
+		},
+		{
+			name:  "trims partial leading line to clean following line",
+			input: "line1\nline2\nline3",
+			max:   8,
+			want:  "line3",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := truncateTail(tt.input, tt.max)
+			if got != tt.want {
+				t.Errorf("truncateTail(%q, %d) = %q, want %q", tt.input, tt.max, got, tt.want)
+			}
+			if !utf8.ValidString(got) {
+				t.Errorf("truncateTail(%q, %d) = %q is not valid UTF-8", tt.input, tt.max, got)
+			}
+			if got != "" && !utf8.RuneStart(got[0]) {
+				t.Errorf("truncateTail(%q, %d) = %q does not start at a rune boundary", tt.input, tt.max, got)
 			}
 		})
 	}

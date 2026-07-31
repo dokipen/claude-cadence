@@ -30,11 +30,13 @@ const maxConsecutiveRPCFailures = 3
 const MaxMessageSize = 1 << 20
 
 // RPCMaxMessageSize is the maximum allowed size for a single JSON-RPC
-// (text) frame from an agent (64 KiB). RPC payloads (register, ping/pong,
-// listSessions, createSession responses) are structurally small — a 1 MiB
-// text frame would never occur in normal operation and likely indicates a
-// misconfigured or malicious client. Enforced post-read in HandleAgentConnection.
-const RPCMaxMessageSize = 64 * 1024
+// (text) frame from an agent (512 KiB). listSessions responses carry
+// prompt_context, which is derived from PTY scrollback: TUI agents redraw
+// with cursor movement rather than newlines, so "15 lines" of context can
+// span hundreds of KiB and a 64 KiB cap disconnected agents in a reconnect
+// loop. Must stay below MaxMessageSize so oversized text frames reach the
+// post-read check in HandleAgentConnection instead of dying at SetReadLimit.
+const RPCMaxMessageSize = 512 * 1024
 
 // Hub manages registered agentd connections.
 type Hub struct {
