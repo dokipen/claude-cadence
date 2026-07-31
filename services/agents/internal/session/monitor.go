@@ -195,9 +195,12 @@ func lastNLines(s string, n int) string {
 	return strings.Join(nonEmpty, "\n")
 }
 
-// truncateTail keeps the last max bytes of s, trimming a partial rune and a
-// partial leading line so the result starts on a line boundary.
+// truncateTail keeps the last max bytes of s, trimming a partial rune and,
+// when possible, a partial leading line.
 func truncateTail(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
 	if len(s) <= max {
 		return s
 	}
