@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	sharedrelay "github.com/dokipen/claude-cadence/services/shared/relay"
 )
 
 // AuthConfig holds authentication settings.
@@ -107,14 +109,14 @@ type Config struct {
 
 // CleanupConfig holds stale session cleanup settings.
 type CleanupConfig struct {
-	StaleSessionTTL        time.Duration `yaml:"-"`
-	ReapInterval           time.Duration `yaml:"-"`
-	CreatingSessionTTL     time.Duration `yaml:"-"`
-	ErrorSessionTTL        time.Duration `yaml:"-"`
-	RawTTL                 string        `yaml:"stale_session_ttl"`
-	RawReapInterval        string        `yaml:"session_reap_interval"`
-	RawCreatingSessionTTL  string        `yaml:"creating_session_ttl"`
-	RawErrorSessionTTL     string        `yaml:"error_session_ttl"`
+	StaleSessionTTL       time.Duration `yaml:"-"`
+	ReapInterval          time.Duration `yaml:"-"`
+	CreatingSessionTTL    time.Duration `yaml:"-"`
+	ErrorSessionTTL       time.Duration `yaml:"-"`
+	RawTTL                string        `yaml:"stale_session_ttl"`
+	RawReapInterval       string        `yaml:"session_reap_interval"`
+	RawCreatingSessionTTL string        `yaml:"creating_session_ttl"`
+	RawErrorSessionTTL    string        `yaml:"error_session_ttl"`
 }
 
 // TtydConfig holds ttyd websocket terminal settings.
@@ -324,10 +326,14 @@ func validate(cfg *Config) error {
 		}
 	}
 
-	// Validate PTY config.
-	const maxBufferSize = 1<<20 - 1 // ttyd frame prefix + buffer must fit in hub's MaxMessageSize
+	// Validate PTY config. A full-buffer snapshot replay is relayed to the hub
+	// as ttyd prefix (1) + buffer + relay header (17) =
+	// sharedrelay.MaxSnapshotFrameSize, which the hub's agent-connection read
+	// limit (sharedrelay.AgentMaxMessageSize) is sized to exceed. Capping the
+	// buffer here keeps that frame bound valid regardless of config.
+	const maxBufferSize = sharedrelay.MaxPTYBufferSize
 	if cfg.PTY.BufferSize > maxBufferSize {
-		return fmt.Errorf("pty.buffer_size (%d) must be <= %d to fit within hub proxy message limit", cfg.PTY.BufferSize, maxBufferSize)
+		return fmt.Errorf("pty.buffer_size (%d) must be <= %d so a full snapshot relay frame stays within the hub message limit", cfg.PTY.BufferSize, maxBufferSize)
 	}
 	if cfg.PTY.MaxSessions < 0 {
 		return fmt.Errorf("pty.max_sessions must be >= 0 (0 means unlimited)")

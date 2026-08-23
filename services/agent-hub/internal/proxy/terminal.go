@@ -121,7 +121,10 @@ func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.
 				return
 			}
 
-			browserConn.SetReadLimit(hub.MaxMessageSize)
+			// Browser→hub input frames (keystrokes, resize) are small; this
+			// bounds reads only. Relay payloads flowing hub→browser are writes
+			// and are not subject to this limit.
+			browserConn.SetReadLimit(hub.BrowserMaxMessageSize)
 
 			// Set up idle timeout if configured.
 			var idleTimer *time.Timer
@@ -301,9 +304,10 @@ func handleTerminalProxy(h *hub.Hub, allowedOrigins []string, pingInterval time.
 			return
 		}
 
-		// Apply read limits to prevent memory exhaustion.
-		browserConn.SetReadLimit(hub.MaxMessageSize)
-		ttydConn.SetReadLimit(hub.MaxMessageSize)
+		// Apply read limits to prevent memory exhaustion. These are the
+		// browser and legacy-ttyd links, not the agent connection.
+		browserConn.SetReadLimit(hub.BrowserMaxMessageSize)
+		ttydConn.SetReadLimit(hub.BrowserMaxMessageSize)
 
 		// Set up idle timeout if configured.
 		var idleTimer *time.Timer

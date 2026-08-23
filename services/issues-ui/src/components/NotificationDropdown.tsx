@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Link } from "react-router";
 import type { AgentSession } from "../hooks/useAllSessions";
 import { useTicketByNumber } from "../hooks/useTicketByNumber";
+import { useSessionPromptContext } from "../hooks/useSessionPromptContext";
 import { sendSessionInput } from "../api/agentHubClient";
 import layoutStyles from "../styles/layout.module.css";
 import { stripProjectPrefix } from "../utils/sessionName";
@@ -59,8 +60,17 @@ function NotificationItem({ ws, projectId, projectName, onClose }: NotificationI
 
   const linkTo = `/agents?session=${encodeURIComponent(ws.agentName)}:${encodeURIComponent(ws.session.id)}`;
 
-  const promptContext = ws.session.promptContext ?? "";
-  const promptType = ws.session.promptType ?? "";
+  // The bulk session list is metadata-only (#685): fetch the prompt payload
+  // per waiting session. idleSince changes whenever a new prompt appears, which
+  // triggers a refetch.
+  const prompt = useSessionPromptContext(
+    ws.agentName,
+    ws.session.id,
+    ws.session.waitingForInput,
+    ws.session.idleSince,
+  );
+  const promptContext = prompt.promptContext ?? "";
+  const promptType = prompt.promptType ?? "";
 
   useEffect(() => {
     return () => {
@@ -124,12 +134,17 @@ function NotificationItem({ ws, projectId, projectName, onClose }: NotificationI
           )}
         </div>
       </Link>
+      {prompt.loading && (
+        <div className={layoutStyles.notificationPromptLoading} data-testid="prompt-loading">
+          Loading prompt…
+        </div>
+      )}
       {promptContext && (
         <pre className={layoutStyles.notificationPromptText}>
           {promptContext}
         </pre>
       )}
-      {promptType === "yesno" && (
+      {!prompt.loading && promptType === "yesno" && (
         <div className={layoutStyles.notificationControlsRow}>
           <button
             className={`${layoutStyles.notificationControlBtn} ${layoutStyles.notificationControlBtnPrimary}`}
@@ -149,7 +164,7 @@ function NotificationItem({ ws, projectId, projectName, onClose }: NotificationI
           </button>
         </div>
       )}
-      {promptType === "select" && (
+      {!prompt.loading && promptType === "select" && (
         <div className={layoutStyles.notificationControlsRow}>
           {parseSelectPrompt(promptContext).options.map((option, idx) => (
             <button
@@ -164,7 +179,7 @@ function NotificationItem({ ws, projectId, projectName, onClose }: NotificationI
           ))}
         </div>
       )}
-      {(promptType === "text" || promptType === "shell" || promptType === "") && (
+      {!prompt.loading && (promptType === "text" || promptType === "shell" || promptType === "") && (
         <div className={layoutStyles.notificationInputRow}>
           <input
             className={layoutStyles.notificationTextInput}

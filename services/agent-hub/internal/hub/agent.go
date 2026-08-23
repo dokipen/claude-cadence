@@ -30,15 +30,29 @@ type ConnectedAgent struct {
 	Profiles   map[string]ProfileInfo `json:"profiles"`
 	TtydConfig TtydInfo               `json:"ttyd"`
 
-	mu                    sync.Mutex
-	status                AgentStatus
-	lastSeen              time.Time
-	conn                  *websocket.Conn
-	pending               map[string]chan *Response
+	mu                     sync.Mutex
+	status                 AgentStatus
+	lastSeen               time.Time
+	conn                   *websocket.Conn
+	pending                map[string]chan *Response
 	consecutiveRPCFailures int
 
 	terminalMu       sync.Mutex
-	terminalChannels map[uuid.UUID]chan []byte
+	terminalChannels map[uuid.UUID]*terminalRelay
+}
+
+// terminalRelay is one registered relay channel. The close-once guard makes
+// closing idempotent across all closers (the registration's cleanup func,
+// CloseTerminalChannel, and CloseTerminalChannels), so a relay that the hub
+// tore down on disconnect can still be cleaned up by its owner without a
+// double-close panic.
+type terminalRelay struct {
+	ch        chan []byte
+	closeOnce sync.Once
+}
+
+func (r *terminalRelay) close() {
+	r.closeOnce.Do(func() { close(r.ch) })
 }
 
 // NewConnectedAgent creates a new agent entry.
@@ -51,7 +65,7 @@ func NewConnectedAgent(name string, conn *websocket.Conn, params *RegisterParams
 		lastSeen:         time.Now(),
 		conn:             conn,
 		pending:          make(map[string]chan *Response),
-		terminalChannels: make(map[uuid.UUID]chan []byte),
+		terminalChannels: make(map[uuid.UUID]*terminalRelay),
 	}
 }
 
@@ -110,37 +124,36 @@ func (a *ConnectedAgent) Touch() {
 // removes the registration and closes the channel. Calling the cleanup
 // function more than once is safe.
 func (a *ConnectedAgent) RegisterTerminalRelay(sessionID uuid.UUID) (<-chan []byte, func()) {
-	ch := make(chan []byte, terminalChannelBufSize)
+	relay := &terminalRelay{ch: make(chan []byte, terminalChannelBufSize)}
 
 	a.terminalMu.Lock()
-	a.terminalChannels[sessionID] = ch
+	a.terminalChannels[sessionID] = relay
 	a.terminalMu.Unlock()
 
-	var once sync.Once
 	cleanup := func() {
-		once.Do(func() {
-			a.terminalMu.Lock()
-			// Only delete if the map still points to OUR channel.
-			if a.terminalChannels[sessionID] == ch {
-				delete(a.terminalChannels, sessionID)
-			}
-			a.terminalMu.Unlock()
-			close(ch)
-		})
+		a.terminalMu.Lock()
+		// Only delete if the map still points to OUR relay.
+		if a.terminalChannels[sessionID] == relay {
+			delete(a.terminalChannels, sessionID)
+		}
+		a.terminalMu.Unlock()
+		// Idempotent: safe even if CloseTerminalChannel(s) already closed it.
+		relay.close()
 	}
-	return ch, cleanup
+	return relay.ch, cleanup
 }
 
 // DeliverTerminalFrame routes a decoded frame payload to the channel registered
 // for sessionID. Returns false if no relay is registered for that session.
 func (a *ConnectedAgent) DeliverTerminalFrame(sessionID uuid.UUID, payload []byte) bool {
 	a.terminalMu.Lock()
-	ch, ok := a.terminalChannels[sessionID]
+	relay, ok := a.terminalChannels[sessionID]
 	a.terminalMu.Unlock()
 
 	if !ok {
 		return false
 	}
+	ch := relay.ch
 
 	// Copy payload so the caller's buffer can be reused.
 	buf := make([]byte, len(payload))
@@ -164,8 +177,8 @@ func (a *ConnectedAgent) DeliverTerminalFrame(sessionID uuid.UUID, payload []byt
 func (a *ConnectedAgent) CloseTerminalChannel(sessionID uuid.UUID) {
 	a.terminalMu.Lock()
 	defer a.terminalMu.Unlock()
-	if ch, ok := a.terminalChannels[sessionID]; ok {
-		close(ch)
+	if relay, ok := a.terminalChannels[sessionID]; ok {
+		relay.close()
 		delete(a.terminalChannels, sessionID)
 	}
 }
@@ -177,8 +190,8 @@ func (a *ConnectedAgent) CloseTerminalChannels() {
 	a.terminalMu.Lock()
 	defer a.terminalMu.Unlock()
 
-	for id, ch := range a.terminalChannels {
-		close(ch)
+	for id, relay := range a.terminalChannels {
+		relay.close()
 		delete(a.terminalChannels, id)
 	}
 }

@@ -16,12 +16,12 @@ import (
 
 // JSON-RPC error codes matching the hub protocol.
 const (
-	rpcErrNotFound            = -32001
-	rpcErrAlreadyExists       = -32002
-	rpcErrInvalidArgument     = -32003
-	rpcErrFailedPrecondition  = -32004
-	rpcErrResourceExhausted   = -32005
-	rpcErrInternal            = -32000
+	rpcErrNotFound           = -32001
+	rpcErrAlreadyExists      = -32002
+	rpcErrInvalidArgument    = -32003
+	rpcErrFailedPrecondition = -32004
+	rpcErrResourceExhausted  = -32005
+	rpcErrInternal           = -32000
 )
 
 // Dispatcher implements SessionDispatcher by calling the session manager directly.
@@ -59,10 +59,11 @@ func (d *Dispatcher) CreateSession(params json.RawMessage) (json.RawMessage, *rp
 		return nil, mapSessionError(err)
 	}
 
-	return marshalResult(sessionJSON{Session: toSessionInfo(sess)})
+	return marshalResult(sessionJSON{Session: toSessionInfo(sess, true)})
 }
 
-// GetSession handles the getSession JSON-RPC method.
+// GetSession handles the getSession JSON-RPC method. This is the per-session
+// path that carries prompt_context/prompt_type; listSessions omits them.
 func (d *Dispatcher) GetSession(params json.RawMessage) (json.RawMessage, *rpcError) {
 	var p getSessionParams
 	if err := json.Unmarshal(params, &p); err != nil {
@@ -74,10 +75,19 @@ func (d *Dispatcher) GetSession(params json.RawMessage) (json.RawMessage, *rpcEr
 		return nil, mapSessionError(err)
 	}
 
-	return marshalResult(sessionJSON{Session: toSessionInfo(sess)})
+	return marshalResult(sessionJSON{Session: toSessionInfo(sess, true)})
 }
 
 // ListSessions handles the listSessions JSON-RPC method.
+//
+// The response is metadata-only and bounded by construction: each session
+// contributes a fixed set of small fields (IDs, names, paths, URLs, state,
+// timestamps, the waiting_for_input flag and idle_since), each with a small
+// worst-case length, so the frame size is O(N) in the number of sessions with
+// a small constant. prompt_context/prompt_type are derived from the PTY ring
+// buffer and are the only unbounded per-session payload; they are omitted here
+// and served per-session via getSession. Callers use waiting_for_input and
+// idle_since from this list to decide which sessions to fetch (issue #685).
 func (d *Dispatcher) ListSessions(params json.RawMessage) (json.RawMessage, *rpcError) {
 	var p listSessionsParams
 	if err := json.Unmarshal(params, &p); err != nil {
@@ -113,7 +123,7 @@ func (d *Dispatcher) ListSessions(params json.RawMessage) (json.RawMessage, *rpc
 
 	infos := make([]sessionInfo, len(sessions))
 	for i, s := range sessions {
-		infos[i] = toSessionInfo(s)
+		infos[i] = toSessionInfo(s, false)
 	}
 
 	return marshalResult(sessionsJSON{Sessions: infos})
@@ -232,7 +242,47 @@ type sessionsJSON struct {
 	Sessions []sessionInfo `json:"sessions"`
 }
 
-func toSessionInfo(s *session.Session) sessionInfo {
+// shrink drops the optional prompt payload from info, reporting whether
+// anything was removed. prompt_context is derived from the PTY ring buffer
+// and is the only unbounded field on a session; everything else is small
+// metadata.
+func (info *sessionInfo) shrink() bool {
+	if info.PromptContext == "" && info.PromptType == "" {
+		return false
+	}
+	info.PromptContext = ""
+	info.PromptType = ""
+	return true
+}
+
+// Shrink implements shrinkable: when a getSession/createSession response
+// exceeds the hub message limit, the prompt payload is dropped rather than
+// failing the call.
+func (r *sessionJSON) Shrink() bool {
+	return r.Session.shrink()
+}
+
+// Shrink implements shrinkable: when a listSessions response exceeds the hub
+// message limit, every session's prompt payload is dropped so the metadata
+// still reaches the hub. In practice listSessions no longer carries
+// prompt_context/prompt_type at all (see ListSessions), so this is
+// defense-in-depth and normally reports false.
+func (r *sessionsJSON) Shrink() bool {
+	removed := false
+	for i := range r.Sessions {
+		if r.Sessions[i].shrink() {
+			removed = true
+		}
+	}
+	return removed
+}
+
+// toSessionInfo converts a session to its wire representation. When
+// includePrompt is false, prompt_context/prompt_type are left empty so the
+// omitempty tags drop them from the JSON entirely; list-shaped responses
+// (listSessions, getDiagnostics) use this to stay bounded, while per-session
+// responses (getSession, createSession) include the prompt payload.
+func toSessionInfo(s *session.Session, includePrompt bool) sessionInfo {
 	if s == nil {
 		return sessionInfo{}
 	}
@@ -249,8 +299,10 @@ func toSessionInfo(s *session.Session) sessionInfo {
 		AgentPID:        s.AgentPID,
 		WebsocketURL:    s.WebsocketURL,
 		WaitingForInput: s.WaitingForInput,
-		PromptContext:   s.PromptContext,
-		PromptType:      s.PromptType,
+	}
+	if includePrompt {
+		info.PromptContext = s.PromptContext
+		info.PromptType = s.PromptType
 	}
 	if s.IdleSince != nil {
 		t := s.IdleSince.Format(time.RFC3339)
@@ -342,7 +394,9 @@ func (d *Dispatcher) GetDiagnostics(ctx context.Context, params json.RawMessage)
 	byState.Creating = []sessionInfo{}
 
 	for _, s := range sessions {
-		info := toSessionInfo(s)
+		// Metadata-only for the same reason as ListSessions: this is a
+		// list-shaped response and must stay bounded.
+		info := toSessionInfo(s, false)
 		switch s.State {
 		case session.StateRunning:
 			byState.Running = append(byState.Running, info)
@@ -449,7 +503,7 @@ func marshalResult(v any) (json.RawMessage, *rpcError) {
 	b, err := json.Marshal(v)
 	if err != nil {
 		slog.Error("marshal result failed", "error", err)
-	return nil, &rpcError{Code: rpcErrInternal, Message: "internal error"}
+		return nil, &rpcError{Code: rpcErrInternal, Message: "internal error"}
 	}
 	return b, nil
 }

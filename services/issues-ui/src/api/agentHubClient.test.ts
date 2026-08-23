@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { create } from "@bufbuild/protobuf";
-import { hubFetch, fetchAgents, createSession, HubError } from "./agentHubClient";
+import { hubFetch, fetchAgents, createSession, fetchSession, HubError } from "./agentHubClient";
 import { AgentSchema, SessionSchema } from "../gen/hub/v1/hub_pb";
 
 function mockFetch(response: {
@@ -443,5 +443,61 @@ describe("createSession", () => {
     );
     expect(err).toBeInstanceOf(HubError);
     expect(err).toMatchObject({ status: 502 });
+  });
+});
+
+describe("fetchSession", () => {
+  // Per-session endpoint: unlike the bulk list, this carries the prompt payload (#685).
+  const sessionJson = {
+    id: "sess-1",
+    name: "lead-42",
+    agent_profile: "default",
+    state: "running",
+    created_at: "2026-03-22T00:00:00Z",
+    waiting_for_input: true,
+    idle_since: "2026-03-22T00:05:00Z",
+    prompt_context: "? Continue\n❯ Yes\n  No",
+    prompt_type: "select",
+  };
+
+  it("GETs the per-session URL and returns a typed Session with prompt fields", async () => {
+    const fn = mockFetch({ json: () => Promise.resolve({ session: sessionJson }) });
+    const result = await fetchSession("my agent/v2", "id:with/slash");
+    expect(fn).toHaveBeenCalledWith(
+      "/api/v1/agents/my%20agent%2Fv2/sessions/id%3Awith%2Fslash",
+      expect.objectContaining({ headers: {} }),
+    );
+    expect(result).toEqual(
+      create(SessionSchema, {
+        id: "sess-1",
+        name: "lead-42",
+        agentProfile: "default",
+        state: "running",
+        createdAt: "2026-03-22T00:00:00Z",
+        waitingForInput: true,
+        idleSince: "2026-03-22T00:05:00Z",
+        promptContext: "? Continue\n❯ Yes\n  No",
+        promptType: "select",
+      }),
+    );
+  });
+
+  it("throws HubError when the session envelope is missing", async () => {
+    mockFetch({ json: () => Promise.resolve(sessionJson) });
+    const err = await fetchSession("a", "s").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HubError);
+    expect(err).toMatchObject({ status: 502 });
+  });
+
+  it("throws HubError on non-OK response", async () => {
+    mockFetch({
+      ok: false,
+      status: 404,
+      statusText: "Not Found",
+      json: () => Promise.resolve({ error: "session not found" }),
+    });
+    const err = await fetchSession("a", "missing").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HubError);
+    expect(err).toMatchObject({ status: 404, message: "session not found" });
   });
 });

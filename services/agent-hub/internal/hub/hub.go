@@ -24,19 +24,27 @@ var ErrAdvertiseAddressChanged = errors.New("advertise address changed on re-reg
 // count; business-logic errors (e.g. rpcErrNotFound) do not.
 const maxConsecutiveRPCFailures = 3
 
-// MaxMessageSize is the maximum allowed WebSocket message size for relay
-// (binary) frames (1 MiB). Sized for PTY burst output from terminal relay.
-// This is the connection-level read limit applied via SetReadLimit.
-const MaxMessageSize = 1 << 20
+// AgentMaxMessageSize is the hub's read limit for a single WebSocket message
+// on the agent connection (both JSON-RPC text frames and binary relay
+// frames). It re-exports sharedrelay.AgentMaxMessageSize so both sides of the
+// link are compiled against the same number.
+//
+// This is a bug backstop against runaway allocation, not a protocol
+// constraint: every legitimate message is bounded by construction far below
+// this value (sharedrelay.MaxSnapshotFrameSize for relay frames, a
+// metadata-only listSessions for RPC). Never tune it downward to "catch"
+// oversized payloads — exceeding it closes the agent connection, which is the
+// worst possible response to a payload bug. Message size must never be a
+// reason to mark an agent offline (issue #685).
+const AgentMaxMessageSize = sharedrelay.AgentMaxMessageSize
 
-// RPCMaxMessageSize is the maximum allowed size for a single JSON-RPC
-// (text) frame from an agent (512 KiB). listSessions responses carry
-// prompt_context, which is derived from PTY scrollback: TUI agents redraw
-// with cursor movement rather than newlines, so "15 lines" of context can
-// span hundreds of KiB and a 64 KiB cap disconnected agents in a reconnect
-// loop. Must stay below MaxMessageSize so oversized text frames reach the
-// post-read check in HandleAgentConnection instead of dying at SetReadLimit.
-const RPCMaxMessageSize = 512 * 1024
+// BrowserMaxMessageSize bounds a single WebSocket message read from a browser
+// (or legacy ttyd) terminal connection: keystrokes, resize messages and small
+// control frames. It is a separate link from the agent connection and is
+// deliberately much smaller than AgentMaxMessageSize. It only governs reads;
+// hub→browser writes (relay payloads up to sharedrelay.MaxSnapshotFrameSize)
+// are not subject to SetReadLimit.
+const BrowserMaxMessageSize = 1 << 20
 
 // Hub manages registered agentd connections.
 type Hub struct {
@@ -317,7 +325,7 @@ func (h *Hub) Call(ctx context.Context, agent *ConnectedAgent, method string, pa
 // Text frames are dispatched as JSON-RPC responses; binary frames are decoded
 // as terminal relay frames and delivered to the registered session channel.
 func (h *Hub) HandleAgentConnection(ctx context.Context, agent *ConnectedAgent) {
-	agent.Conn().SetReadLimit(MaxMessageSize)
+	agent.Conn().SetReadLimit(AgentMaxMessageSize)
 
 	go h.heartbeatLoop(ctx, agent)
 	go h.wsKeepaliveLoop(ctx, agent)
@@ -362,17 +370,9 @@ func (h *Hub) HandleAgentConnection(ctx context.Context, agent *ConnectedAgent) 
 			}
 
 		case websocket.MessageText:
-			if len(data) > RPCMaxMessageSize {
-				slog.Warn("oversized RPC frame from agent, closing connection",
-					"agent", agent.Name,
-					"size", len(data),
-					"limit", RPCMaxMessageSize,
-				)
-				agent.Conn().Close(websocket.StatusMessageTooBig, "RPC frame exceeds limit")
-				agent.CloseTerminalChannels()
-				h.markOfflineIfCurrent(agent.Name, agent)
-				return
-			}
+			// Message size is never a reason to close the connection or mark
+			// the agent offline (issue #685); the only size bound is the
+			// AgentMaxMessageSize read backstop applied above.
 			var msg Response
 			if err := json.Unmarshal(data, &msg); err != nil {
 				slog.Warn("invalid message from agent", "agent", agent.Name, "error", err)

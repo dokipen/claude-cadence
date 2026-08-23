@@ -264,6 +264,14 @@
   padding: 0.3rem 0.5rem;
 }
 
+.notificationPromptLoading {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  opacity: 0.7;
+  margin: 0 0.75rem;
+  padding: 0.3rem 0.5rem;
+}
+
 .notificationControlsRow {
   display: flex;
   gap: 0.4rem;

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/react";
+import { render, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
 import React from "react";
 
 // Mock CSS modules
@@ -20,6 +20,7 @@ vi.mock("react-router", () => ({
 // Mock agentHubClient
 vi.mock("../api/agentHubClient", () => ({
   sendSessionInput: vi.fn().mockResolvedValue(undefined),
+  fetchSession: vi.fn(),
   fetchAgents: vi.fn(),
   fetchAllSessions: vi.fn(),
   createSession: vi.fn(),
@@ -39,15 +40,26 @@ vi.mock("../hooks/useTicketByNumber", () => ({
 import { NotificationDropdown } from "./NotificationDropdown";
 import type { AgentSession } from "../hooks/useAllSessions";
 import type { Session } from "../types";
-import { sendSessionInput } from "../api/agentHubClient";
+import { sendSessionInput, fetchSession } from "../api/agentHubClient";
 import { useTicketByNumber } from "../hooks/useTicketByNumber";
 
 afterEach(() => {
   cleanup();
 });
 
+// The bulk list no longer carries promptContext/promptType (#685); the
+// component fetches them per waiting session via fetchSession. Fixtures built
+// with makeAgentSession are registered here so the mock can serve them back.
+const sessionRegistry = new Map<string, Session>();
+
 beforeEach(() => {
   vi.resetAllMocks();
+  sessionRegistry.clear();
+  vi.mocked(fetchSession).mockImplementation(async (agentName, sessionId) => {
+    const session = sessionRegistry.get(`${agentName}:${sessionId}`);
+    if (!session) throw new Error(`no fixture for ${agentName}:${sessionId}`);
+    return session;
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -70,10 +82,19 @@ function makeAgentSession(
   agentName = "lead",
   sessionOverrides: Partial<Session> = {},
 ): AgentSession {
-  return {
-    agentName,
-    session: makeSession(sessionOverrides),
-  };
+  const session = makeSession(sessionOverrides);
+  sessionRegistry.set(`${agentName}:${session.id}`, session);
+  return { agentName, session };
+}
+
+/** Open the dropdown and wait for the per-session prompt fetch to settle. */
+async function openAndLoad(
+  utils: ReturnType<typeof render>,
+): Promise<void> {
+  fireEvent.click(utils.getByTestId("notification-trigger"));
+  await waitFor(() => {
+    expect(utils.queryByTestId("prompt-loading")).toBeNull();
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -293,10 +314,11 @@ describe("NotificationDropdown — yesno prompt", () => {
         promptContext: "Do you want to continue? (y/N)",
       }),
     ];
-    const { getByTestId } = render(
+    const utils = render(
       <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
     );
-    fireEvent.click(getByTestId("notification-trigger"));
+    const { getByTestId } = utils;
+    await openAndLoad(utils);
     fireEvent.click(getByTestId("btn-yes"));
 
     // sendSessionInput is async; wait for it to be called
@@ -315,10 +337,11 @@ describe("NotificationDropdown — yesno prompt", () => {
         promptContext: "Do you want to continue? (y/N)",
       }),
     ];
-    const { getByTestId } = render(
+    const utils = render(
       <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
     );
-    fireEvent.click(getByTestId("notification-trigger"));
+    const { getByTestId } = utils;
+    await openAndLoad(utils);
     fireEvent.click(getByTestId("btn-no"));
 
     await vi.waitFor(() => {
@@ -340,10 +363,11 @@ describe("NotificationDropdown — parseSelectPrompt no ❯ marker", () => {
         promptContext: contextNoMarker,
       }),
     ];
-    const { getByTestId } = render(
+    const utils = render(
       <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
     );
-    fireEvent.click(getByTestId("notification-trigger"));
+    const { getByTestId } = utils;
+    await openAndLoad(utils);
 
     // Click Option B (index 1) — currentIndex defaults to 0, delta = 1, one down arrow
     fireEvent.click(getByTestId("btn-option-1"));
@@ -357,7 +381,7 @@ describe("NotificationDropdown — parseSelectPrompt no ❯ marker", () => {
 describe("NotificationDropdown — select prompt", () => {
   const selectContext = "? Pick one\n  Option A\n❯ Option B\n  Option C";
 
-  it("renders a button for each parsed option", () => {
+  it("renders a button for each parsed option", async () => {
     const sessions = [
       makeAgentSession("lead", {
         id: "sess-select",
@@ -365,10 +389,11 @@ describe("NotificationDropdown — select prompt", () => {
         promptContext: selectContext,
       }),
     ];
-    const { getByTestId, getByText } = render(
+    const utils = render(
       <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
     );
-    fireEvent.click(getByTestId("notification-trigger"));
+    const { getByTestId, getByText } = utils;
+    await openAndLoad(utils);
 
     // Options: "Option A", "Option B", "Option C"
     expect(getByText("Option A")).toBeTruthy();
@@ -387,10 +412,11 @@ describe("NotificationDropdown — select prompt", () => {
         promptContext: selectContext,
       }),
     ];
-    const { getByTestId } = render(
+    const utils = render(
       <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
     );
-    fireEvent.click(getByTestId("notification-trigger"));
+    const { getByTestId } = utils;
+    await openAndLoad(utils);
 
     // Click Option C (index 2) — delta = 2 - 1 = 1, down arrow once + \r
     fireEvent.click(getByTestId("btn-option-2"));
@@ -402,17 +428,18 @@ describe("NotificationDropdown — select prompt", () => {
 });
 
 describe("NotificationDropdown — text input prompt", () => {
-  it("renders a text input and Send button", () => {
+  it("renders a text input and Send button", async () => {
     const sessions = [
       makeAgentSession("lead", {
         id: "sess-text",
         promptType: "text",
       }),
     ];
-    const { getByTestId } = render(
+    const utils = render(
       <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
     );
-    fireEvent.click(getByTestId("notification-trigger"));
+    const { getByTestId } = utils;
+    await openAndLoad(utils);
 
     expect(getByTestId("text-input")).toBeTruthy();
     expect(getByTestId("btn-send")).toBeTruthy();
@@ -427,10 +454,11 @@ describe("NotificationDropdown — text input prompt", () => {
         promptType: "text",
       }),
     ];
-    const { getByTestId } = render(
+    const utils = render(
       <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
     );
-    fireEvent.click(getByTestId("notification-trigger"));
+    const { getByTestId } = utils;
+    await openAndLoad(utils);
 
     const input = getByTestId("text-input") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "typed text" } });
@@ -451,10 +479,11 @@ describe("NotificationDropdown — controls do not navigate", () => {
         promptContext: "Continue? (y/N)",
       }),
     ];
-    const { getByTestId, queryByTestId } = render(
+    const utils = render(
       <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
     );
-    fireEvent.click(getByTestId("notification-trigger"));
+    const { getByTestId, queryByTestId } = utils;
+    await openAndLoad(utils);
 
     // Controls are siblings of <Link>, not nested inside it.
     // Clicking a control button does not trigger the link's onClick (onClose).
@@ -463,7 +492,7 @@ describe("NotificationDropdown — controls do not navigate", () => {
     expect(queryByTestId("notification-dropdown")).toBeTruthy();
   });
 
-  it("clicking a select option keeps the dropdown open", () => {
+  it("clicking a select option keeps the dropdown open", async () => {
     const sessions = [
       makeAgentSession("lead", {
         id: "sess-select-open",
@@ -471,32 +500,34 @@ describe("NotificationDropdown — controls do not navigate", () => {
         promptContext: "? Pick one\n  Option A\n❯ Option B",
       }),
     ];
-    const { getByTestId, queryByTestId } = render(
+    const utils = render(
       <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
     );
-    fireEvent.click(getByTestId("notification-trigger"));
+    const { getByTestId, queryByTestId } = utils;
+    await openAndLoad(utils);
     fireEvent.click(getByTestId("btn-option-0"));
     expect(queryByTestId("notification-dropdown")).toBeTruthy();
   });
 
-  it("clicking the Send button keeps the dropdown open", () => {
+  it("clicking the Send button keeps the dropdown open", async () => {
     const sessions = [
       makeAgentSession("lead", {
         id: "sess-text-open",
         promptType: "text",
       }),
     ];
-    const { getByTestId, queryByTestId } = render(
+    const utils = render(
       <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
     );
-    fireEvent.click(getByTestId("notification-trigger"));
+    const { getByTestId, queryByTestId } = utils;
+    await openAndLoad(utils);
     fireEvent.click(getByTestId("btn-send"));
     expect(queryByTestId("notification-dropdown")).toBeTruthy();
   });
 });
 
 describe("NotificationDropdown — ticket title", () => {
-  it("shows ticket title when useTicketByNumber returns a ticket", () => {
+  it("shows ticket title when useTicketByNumber returns a ticket", async () => {
     vi.mocked(useTicketByNumber).mockReturnValue({
       ticket: { id: "t1", number: 42, title: "Add sound effects" },
       loading: false,
@@ -506,10 +537,11 @@ describe("NotificationDropdown — ticket title", () => {
     const sessions = [
       makeAgentSession("lead", { id: "s1", name: "lead-42" }),
     ];
-    const { getByTestId } = render(
+    const utils = render(
       <NotificationDropdown waitingSessions={sessions} projectId="proj-1" projectName={null} />,
     );
-    fireEvent.click(getByTestId("notification-trigger"));
+    const { getByTestId } = utils;
+    await openAndLoad(utils);
 
     expect(getByTestId("notification-item").textContent).toContain("Add sound effects");
   });
@@ -519,7 +551,7 @@ describe("NotificationDropdown — ticket title", () => {
     ["discuss", "discuss-42"],
     ["tester", "tester-42"],
     ["security-engineer", "security-engineer-42"],
-  ])("shows ticket title for %s sessions", (agentName, sessionName) => {
+  ])("shows ticket title for %s sessions", async (agentName, sessionName) => {
     vi.mocked(useTicketByNumber).mockReturnValue({
       ticket: { id: "t1", number: 42, title: "Add sound effects" },
       loading: false,
@@ -527,16 +559,17 @@ describe("NotificationDropdown — ticket title", () => {
     });
 
     const sessions = [makeAgentSession(agentName, { id: "s1", name: sessionName })];
-    const { getByTestId } = render(
+    const utils = render(
       <NotificationDropdown waitingSessions={sessions} projectId="proj-1" projectName={null} />,
     );
-    fireEvent.click(getByTestId("notification-trigger"));
+    const { getByTestId } = utils;
+    await openAndLoad(utils);
 
     expect(vi.mocked(useTicketByNumber)).toHaveBeenCalledWith("proj-1", 42);
     expect(getByTestId("notification-item").textContent).toContain("Add sound effects");
   });
 
-  it("shows session name as fallback when no ticket is found", () => {
+  it("shows session name as fallback when no ticket is found", async () => {
     vi.mocked(useTicketByNumber).mockReturnValue({
       ticket: null,
       loading: false,
@@ -546,10 +579,11 @@ describe("NotificationDropdown — ticket title", () => {
     const sessions = [
       makeAgentSession("lead", { id: "s1", name: "general-work" }),
     ];
-    const { getByTestId } = render(
+    const utils = render(
       <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
     );
-    fireEvent.click(getByTestId("notification-trigger"));
+    const { getByTestId } = utils;
+    await openAndLoad(utils);
 
     expect(getByTestId("notification-item").textContent).toContain("general-work");
   });
@@ -566,10 +600,11 @@ describe("NotificationDropdown — error state on sendSessionInput rejection", (
         promptContext: "Continue? (y/N)",
       }),
     ];
-    const { getByTestId } = render(
+    const utils = render(
       <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
     );
-    fireEvent.click(getByTestId("notification-trigger"));
+    const { getByTestId } = utils;
+    await openAndLoad(utils);
     fireEvent.click(getByTestId("btn-yes"));
 
     await vi.waitFor(() => {
@@ -586,10 +621,11 @@ describe("NotificationDropdown — error state on sendSessionInput rejection", (
         promptType: "text",
       }),
     ];
-    const { getByTestId, queryByTestId } = render(
+    const utils = render(
       <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
     );
-    fireEvent.click(getByTestId("notification-trigger"));
+    const { getByTestId, queryByTestId } = utils;
+    await openAndLoad(utils);
 
     // Trigger the error
     fireEvent.click(getByTestId("btn-send"));
@@ -605,21 +641,23 @@ describe("NotificationDropdown — error state on sendSessionInput rejection", (
 
 describe("NotificationDropdown — Sent state", () => {
   it("Yes button becomes disabled after click", async () => {
+    const sessions = [
+      makeAgentSession("lead", {
+        id: "sess-sent",
+        promptType: "yesno",
+        promptContext: "Continue? (y/N)",
+      }),
+    ];
+    const utils = render(
+      <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
+    );
+    const { getByTestId } = utils;
+    // Let the prompt fetch settle on real timers before faking them.
+    await openAndLoad(utils);
+
     vi.useFakeTimers();
 
     try {
-      const sessions = [
-        makeAgentSession("lead", {
-          id: "sess-sent",
-          promptType: "yesno",
-          promptContext: "Continue? (y/N)",
-        }),
-      ];
-      const { getByTestId } = render(
-        <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
-      );
-      fireEvent.click(getByTestId("notification-trigger"));
-
       const yesBtn = getByTestId("btn-yes") as HTMLButtonElement;
       expect(yesBtn.disabled).toBe(false);
 
@@ -655,10 +693,11 @@ describe("NotificationDropdown — select prompt delta variants", () => {
         promptContext: selectContext,
       }),
     ];
-    const { getByTestId } = render(
+    const utils = render(
       <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
     );
-    fireEvent.click(getByTestId("notification-trigger"));
+    const { getByTestId } = utils;
+    await openAndLoad(utils);
 
     // Click Option B (index 1) — delta = 0, just \r
     fireEvent.click(getByTestId("btn-option-1"));
@@ -678,10 +717,11 @@ describe("NotificationDropdown — select prompt delta variants", () => {
         promptContext: selectContext,
       }),
     ];
-    const { getByTestId } = render(
+    const utils = render(
       <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
     );
-    fireEvent.click(getByTestId("notification-trigger"));
+    const { getByTestId } = utils;
+    await openAndLoad(utils);
 
     // Click Option A (index 0) — delta = 0 - 1 = -1, one up arrow + \r
     fireEvent.click(getByTestId("btn-option-0"));
@@ -703,10 +743,11 @@ describe("NotificationDropdown — select prompt delta variants", () => {
         promptContext: multiStepContext,
       }),
     ];
-    const { getByTestId } = render(
+    const utils = render(
       <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
     );
-    fireEvent.click(getByTestId("notification-trigger"));
+    const { getByTestId } = utils;
+    await openAndLoad(utils);
 
     // Click Option C (index 2) — delta = 2, two down arrows + \r
     fireEvent.click(getByTestId("btn-option-2"));
@@ -728,10 +769,11 @@ describe("NotificationDropdown — text input Enter key submission", () => {
         promptType: "text",
       }),
     ];
-    const { getByTestId } = render(
+    const utils = render(
       <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
     );
-    fireEvent.click(getByTestId("notification-trigger"));
+    const { getByTestId } = utils;
+    await openAndLoad(utils);
 
     const input = getByTestId("text-input") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "hello" } });
@@ -744,17 +786,18 @@ describe("NotificationDropdown — text input Enter key submission", () => {
 });
 
 describe("NotificationDropdown — unknown promptType fallback", () => {
-  it("renders no controls when promptType is unrecognized", () => {
+  it("renders no controls when promptType is unrecognized", async () => {
     const sessions = [
       makeAgentSession("lead", {
         id: "sess-unknown",
         promptType: "unknown-type" as never,
       }),
     ];
-    const { getByTestId, queryByTestId } = render(
+    const utils = render(
       <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
     );
-    fireEvent.click(getByTestId("notification-trigger"));
+    const { getByTestId, queryByTestId } = utils;
+    await openAndLoad(utils);
 
     expect(queryByTestId("btn-yes")).toBeNull();
     expect(queryByTestId("btn-no")).toBeNull();
@@ -765,7 +808,7 @@ describe("NotificationDropdown — unknown promptType fallback", () => {
 });
 
 describe("NotificationDropdown — yesno with empty promptContext", () => {
-  it("renders Yes/No buttons but no promptContext pre-block when promptContext is empty", () => {
+  it("renders Yes/No buttons but no promptContext pre-block when promptContext is empty", async () => {
     const sessions = [
       makeAgentSession("lead", {
         id: "sess-yesno-empty",
@@ -773,10 +816,11 @@ describe("NotificationDropdown — yesno with empty promptContext", () => {
         promptContext: "",
       }),
     ];
-    const { getByTestId } = render(
+    const utils = render(
       <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
     );
-    fireEvent.click(getByTestId("notification-trigger"));
+    const { getByTestId } = utils;
+    await openAndLoad(utils);
 
     expect(getByTestId("btn-yes")).toBeTruthy();
     expect(getByTestId("btn-no")).toBeTruthy();
@@ -789,21 +833,23 @@ describe("NotificationDropdown — yesno with empty promptContext", () => {
 
 describe("NotificationDropdown — timer leak on unmount (#496)", () => {
   it("does not leave a pending setSent timer after the component unmounts", async () => {
+    const sessions = [
+      makeAgentSession("lead", {
+        id: "sess-timer-leak",
+        promptType: "yesno",
+        promptContext: "Continue? (y/N)",
+      }),
+    ];
+    const utils = render(
+      <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
+    );
+    const { getByTestId, unmount } = utils;
+    // Let the prompt fetch settle on real timers before faking them.
+    await openAndLoad(utils);
+
     vi.useFakeTimers();
 
     try {
-      const sessions = [
-        makeAgentSession("lead", {
-          id: "sess-timer-leak",
-          promptType: "yesno",
-          promptContext: "Continue? (y/N)",
-        }),
-      ];
-      const { getByTestId, unmount } = render(
-        <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
-      );
-      fireEvent.click(getByTestId("notification-trigger"));
-
       const yesBtn = getByTestId("btn-yes") as HTMLButtonElement;
       fireEvent.click(yesBtn);
 
@@ -823,5 +869,161 @@ describe("NotificationDropdown — timer leak on unmount (#496)", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Per-session prompt fetch (#685): the bulk list is metadata-only
+// ---------------------------------------------------------------------------
+
+describe("NotificationDropdown — per-session prompt fetch (#685)", () => {
+  it("does not fetch any session while the dropdown is closed", () => {
+    const sessions = [makeAgentSession("lead", { id: "s1" })];
+    render(
+      <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
+    );
+    expect(fetchSession).not.toHaveBeenCalled();
+  });
+
+  it("fetches each waiting session once when the dropdown opens", async () => {
+    const sessions = [
+      makeAgentSession("lead", { id: "s1", promptType: "yesno", promptContext: "A?" }),
+      makeAgentSession("mac", { id: "s2", promptType: "text" }),
+    ];
+    const utils = render(
+      <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
+    );
+    await openAndLoad(utils);
+
+    expect(fetchSession).toHaveBeenCalledTimes(2);
+    expect(fetchSession).toHaveBeenCalledWith("lead", "s1");
+    expect(fetchSession).toHaveBeenCalledWith("mac", "s2");
+  });
+
+  it("shows a loading line first, then the fetched prompt text and controls", async () => {
+    let resolveFetch: (s: Session) => void = () => {};
+    const session = makeSession({ id: "s1", promptType: "yesno", promptContext: "Proceed? (y/N)" });
+    vi.mocked(fetchSession).mockImplementation(
+      () => new Promise<Session>((resolve) => { resolveFetch = resolve; }),
+    );
+    // The list item itself carries no prompt fields.
+    const sessions: AgentSession[] = [
+      { agentName: "lead", session: makeSession({ id: "s1", promptType: undefined, promptContext: undefined }) },
+    ];
+    const { getByTestId, queryByTestId, findByText, queryByText } = render(
+      <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
+    );
+    fireEvent.click(getByTestId("notification-trigger"));
+
+    // Loading state: dimmed placeholder, no prompt text, no controls yet.
+    expect(getByTestId("prompt-loading").textContent).toBe("Loading prompt…");
+    expect(queryByText("Proceed? (y/N)")).toBeNull();
+    expect(queryByTestId("btn-yes")).toBeNull();
+    expect(queryByTestId("text-input")).toBeNull();
+
+    await act(async () => {
+      resolveFetch(session);
+    });
+
+    expect(await findByText("Proceed? (y/N)")).toBeTruthy();
+    expect(queryByTestId("prompt-loading")).toBeNull();
+    expect(getByTestId("btn-yes")).toBeTruthy();
+    expect(getByTestId("btn-no")).toBeTruthy();
+  });
+
+  it("renders select options from the fetched promptContext", async () => {
+    const sessions = [
+      makeAgentSession("lead", {
+        id: "s-sel",
+        promptType: "select",
+        promptContext: "? Pick one\n  Alpha\n❯ Beta",
+      }),
+    ];
+    const { getByTestId, findByText } = render(
+      <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
+    );
+    fireEvent.click(getByTestId("notification-trigger"));
+
+    expect(await findByText("Alpha")).toBeTruthy();
+    expect(await findByText("Beta")).toBeTruthy();
+  });
+
+  it("degrades gracefully on fetch error: item renders without prompt text, text input fallback", async () => {
+    vi.mocked(fetchSession).mockRejectedValue(new Error("hub unavailable"));
+    const sessions = [makeAgentSession("lead", { id: "s-err", name: "lead-7" })];
+    const utils = render(
+      <NotificationDropdown waitingSessions={sessions} projectId={undefined} projectName={null} />,
+    );
+    const { getByTestId, queryByTestId } = utils;
+    await openAndLoad(utils);
+
+    const item = getByTestId("notification-item");
+    expect(item.textContent).toContain("lead-7");
+    expect(item.querySelector("pre")).toBeNull();
+    expect(queryByTestId("prompt-loading")).toBeNull();
+    expect(queryByTestId("btn-yes")).toBeNull();
+    // No send error is shown for a prompt fetch failure.
+    expect(queryByTestId("send-error")).toBeNull();
+    // The generic text input remains so the user can still answer.
+    expect(getByTestId("text-input")).toBeTruthy();
+    expect(getByTestId("btn-send")).toBeTruthy();
+  });
+
+  it("refetches when idleSince changes for the same session (new prompt)", async () => {
+    const first = makeAgentSession("lead", {
+      id: "s-idle",
+      idleSince: "2026-08-23T10:00:00Z",
+      promptType: "yesno",
+      promptContext: "First? (y/N)",
+    });
+    const utils = render(
+      <NotificationDropdown waitingSessions={[first]} projectId={undefined} projectName={null} />,
+    );
+    const { findByText, rerender, queryByText } = utils;
+    await openAndLoad(utils);
+    expect(await findByText("First? (y/N)")).toBeTruthy();
+    expect(fetchSession).toHaveBeenCalledTimes(1);
+
+    // Same session id, new idleSince (bulk poll saw a new prompt); registry now
+    // serves the new prompt payload.
+    const second = makeAgentSession("lead", {
+      id: "s-idle",
+      idleSince: "2026-08-23T10:05:00Z",
+      promptType: "select",
+      promptContext: "? Next\n❯ One\n  Two",
+    });
+    rerender(
+      <NotificationDropdown waitingSessions={[second]} projectId={undefined} projectName={null} />,
+    );
+
+    expect(await findByText("One")).toBeTruthy();
+    expect(queryByText("First? (y/N)")).toBeNull();
+    expect(fetchSession).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not refetch on rerender when idleSince is unchanged", async () => {
+    const ws = makeAgentSession("lead", {
+      id: "s-same",
+      idleSince: "2026-08-23T10:00:00Z",
+      promptType: "yesno",
+      promptContext: "Same? (y/N)",
+    });
+    const utils = render(
+      <NotificationDropdown waitingSessions={[ws]} projectId={undefined} projectName={null} />,
+    );
+    const { rerender } = utils;
+    await openAndLoad(utils);
+    expect(fetchSession).toHaveBeenCalledTimes(1);
+
+    // A fresh object with identical data (as a bulk poll would produce).
+    rerender(
+      <NotificationDropdown
+        waitingSessions={[{ ...ws, session: { ...ws.session } }]}
+        projectId={undefined}
+        projectName={null}
+      />,
+    );
+    await waitFor(() => expect(utils.queryByTestId("prompt-loading")).toBeNull());
+    expect(fetchSession).toHaveBeenCalledTimes(1);
   });
 });

@@ -11,7 +11,7 @@ func TestRegisterTerminalRelay_StaleCleanupDoesNotClobberLiveRegistration(t *tes
 	sessionUUID := uuid.MustParse("12345678-1234-1234-1234-123456789abc")
 
 	a := &ConnectedAgent{
-		terminalChannels: make(map[uuid.UUID]chan []byte),
+		terminalChannels: make(map[uuid.UUID]*terminalRelay),
 	}
 
 	// First registration (stale).
@@ -46,5 +46,42 @@ func TestRegisterTerminalRelay_StaleCleanupDoesNotClobberLiveRegistration(t *tes
 
 	if ok := a.DeliverTerminalFrame(sessionUUID, payload); ok {
 		t.Fatal("DeliverTerminalFrame returned true after cleanup2(): channel should be gone")
+	}
+}
+
+// TestTerminalRelayCloseIsIdempotent verifies that a relay torn down by the
+// hub (CloseTerminalChannels on disconnect, or CloseTerminalChannel on a
+// relay-end frame) can still be cleaned up by its owner without a
+// double-close panic, and vice versa.
+func TestTerminalRelayCloseIsIdempotent(t *testing.T) {
+	a := &ConnectedAgent{
+		Name:             "test",
+		terminalChannels: make(map[uuid.UUID]*terminalRelay),
+	}
+
+	sessA := uuid.New()
+	chA, cleanupA := a.RegisterTerminalRelay(sessA)
+	a.CloseTerminalChannels()
+	if _, open := <-chA; open {
+		t.Fatal("expected chA closed after CloseTerminalChannels")
+	}
+	cleanupA() // must not panic
+	cleanupA() // still must not panic
+
+	sessB := uuid.New()
+	chB, cleanupB := a.RegisterTerminalRelay(sessB)
+	cleanupB()
+	a.CloseTerminalChannel(sessB) // already removed; no-op
+	a.CloseTerminalChannels()     // must not panic
+	if _, open := <-chB; open {
+		t.Fatal("expected chB closed after cleanupB")
+	}
+
+	sessC := uuid.New()
+	chC, cleanupC := a.RegisterTerminalRelay(sessC)
+	a.CloseTerminalChannel(sessC)
+	cleanupC() // must not panic
+	if _, open := <-chC; open {
+		t.Fatal("expected chC closed after CloseTerminalChannel")
 	}
 }

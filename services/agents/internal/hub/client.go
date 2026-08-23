@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -23,6 +24,14 @@ import (
 // 256 entries absorbs larger PTY output bursts (e.g. cat of a large file) without
 // dropping frames or blocking the hub read loop.
 const terminalRelayChannelBufSize = 256
+
+// defaultMaxMessageBytes is the RPC message limit assumed when the hub's
+// register acknowledgement does not carry max_message_bytes. Hubs predating
+// issue #685 enforced a 512 KiB RPCMaxMessageSize on text frames and closed
+// the agent connection when it was exceeded, so this is the largest response
+// an un-negotiated hub is known to accept. Newer hubs advertise their real
+// (much larger) backstop in the register result, which takes precedence.
+const defaultMaxMessageBytes = 512 * 1024
 
 // SessionDispatcher handles session CRUD and terminal operations dispatched from the hub.
 type SessionDispatcher interface {
@@ -53,6 +62,13 @@ type Client struct {
 	// frames from the hub (browser input forwarded to the PTY session).
 	relayCh   map[string]chan []byte
 	relayChMu sync.Mutex
+
+	// maxMessageBytes is the largest JSON-RPC text frame the connected hub
+	// accepts, negotiated from the register acknowledgement (see
+	// registerResult). It is written by register() on every (re)connect and
+	// read by the dispatch goroutines, hence atomic. Zero means "not yet
+	// negotiated" and MaxMessageBytes() reports defaultMaxMessageBytes.
+	maxMessageBytes atomic.Int64
 }
 
 // NewClient creates a new hub client.
@@ -71,7 +87,7 @@ func NewClient(cfg config.HubConfig, profiles map[string]config.Profile, ttyd co
 		dispatcher: dispatcher,
 		ptyMgr:     mgr,
 		done:       make(chan struct{}),
-		relayCh: make(map[string]chan []byte),
+		relayCh:    make(map[string]chan []byte),
 	}
 }
 
@@ -211,7 +227,32 @@ func (c *Client) register(ctx context.Context, conn *websocket.Conn) error {
 		return fmt.Errorf("register rejected: %s", resp.Error.Message)
 	}
 
+	// Negotiate the RPC message limit. An older hub returns {accepted} only
+	// (or an empty object); fall back to defaultMaxMessageBytes in that case.
+	var result registerResult
+	if len(resp.Result) > 0 {
+		if err := json.Unmarshal(resp.Result, &result); err != nil {
+			return fmt.Errorf("parse register result: %w", err)
+		}
+	}
+	limit := result.MaxMessageBytes
+	negotiated := limit > 0
+	if !negotiated {
+		limit = defaultMaxMessageBytes
+	}
+	c.maxMessageBytes.Store(limit)
+	slog.Info("hub message limit", "max_message_bytes", limit, "negotiated", negotiated)
+
 	return nil
+}
+
+// MaxMessageBytes returns the largest JSON-RPC response frame the hub accepts.
+// Before the first successful register it reports defaultMaxMessageBytes.
+func (c *Client) MaxMessageBytes() int64 {
+	if v := c.maxMessageBytes.Load(); v > 0 {
+		return v
+	}
+	return defaultMaxMessageBytes
 }
 
 func (c *Client) readLoop(ctx context.Context, conn *websocket.Conn) error {
@@ -300,7 +341,7 @@ func (c *Client) dispatchSessionAsync(ctx context.Context, conn *websocket.Conn,
 	}
 
 	resp := c.dispatchSession(req.ID, req.Params, fn)
-	if err := c.writeResponse(ctx, conn, resp); err != nil {
+	if err := c.writeResponseFor(ctx, conn, req.Method, resp); err != nil {
 		slog.Warn("failed to write dispatch response", "method", req.Method, "error", err)
 		return
 	}
@@ -323,15 +364,107 @@ func (c *Client) dispatchSessionAsync(ctx context.Context, conn *websocket.Conn,
 	}
 }
 
+// shrinkable is implemented by result types that can drop optional bulk
+// (today: per-session prompt_context) when a response would exceed the hub's
+// message limit. Shrink reports whether anything was actually removed, so the
+// caller can skip a pointless re-marshal.
+type shrinkable interface {
+	Shrink() bool
+}
+
+// shrinkableFor returns an empty result value of the type produced by method
+// that can be shrunk when oversized, or nil when the method's result carries
+// no droppable payload. The dispatcher hands results over as json.RawMessage,
+// so the degrade path re-decodes into the typed result to shrink it.
+func shrinkableFor(method string) shrinkable {
+	switch method {
+	case "listSessions":
+		return &sessionsJSON{}
+	case "getSession", "createSession":
+		return &sessionJSON{}
+	default:
+		return nil
+	}
+}
+
 // writeResponse serializes and writes a response, protected by the write mutex.
+// Responses whose result has no droppable payload (ping, ack-style methods)
+// use this directly; session dispatch goes through writeResponseFor so the
+// degrade path knows the result type.
 func (c *Client) writeResponse(ctx context.Context, conn *websocket.Conn, resp *response) error {
-	respData, _ := json.Marshal(resp)
+	return c.writeResponseFor(ctx, conn, "", resp)
+}
+
+// writeResponseFor serializes resp, bounds it to the hub's negotiated message
+// limit (degrading via shrinkableFor(method) or a JSON-RPC error, never
+// sending a frame the hub is known to reject), and writes it under writeMu.
+// All marshal/size work happens before the mutex is taken: writeMu is
+// non-reentrant and shared with the relay goroutines' binary-frame writes.
+func (c *Client) writeResponseFor(ctx context.Context, conn *websocket.Conn, method string, resp *response) error {
+	respData := prepareResponseFrame(method, resp, c.MaxMessageBytes(), shrinkableFor(method))
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
 	if err := conn.Write(ctx, websocket.MessageText, respData); err != nil {
 		return fmt.Errorf("write response: %w", err)
 	}
 	return nil
+}
+
+// prepareResponseFrame returns the text frame to send for resp, guaranteed to
+// be at most limit bytes:
+//
+//  1. resp is marshaled as-is. A marshal failure becomes a JSON-RPC internal
+//     error for the same id (previously it was silently swallowed).
+//  2. If the frame exceeds limit and shrink is non-nil, the result is decoded
+//     into shrink, Shrink() drops its optional payload, and the response is
+//     re-marshaled.
+//  3. If the frame is still over limit (or nothing could be shrunk), a
+//     JSON-RPC internal error (-32000) for the same id replaces it.
+//
+// The error frame itself is tiny, so the returned bytes never exceed a limit
+// large enough to carry any JSON-RPC error envelope.
+func prepareResponseFrame(method string, resp *response, limit int64, shrink shrinkable) []byte {
+	respData, err := json.Marshal(resp)
+	if err != nil {
+		slog.Error("marshal response failed", "method", method, "id", resp.ID, "error", err)
+		return marshalErrorResponse(resp.ID, "internal error: failed to encode response")
+	}
+	if int64(len(respData)) <= limit {
+		return respData
+	}
+	originalSize := len(respData)
+
+	if shrink != nil && resp.Error == nil && len(resp.Result) > 0 {
+		if err := json.Unmarshal(resp.Result, shrink); err != nil {
+			slog.Warn("degrade: cannot decode result for shrinking", "method", method, "id", resp.ID, "error", err)
+		} else if shrink.Shrink() {
+			shrunk, err := json.Marshal(shrink)
+			if err == nil {
+				shrunkResp := &response{JSONRPC: resp.JSONRPC, ID: resp.ID, Result: shrunk}
+				if respData, err = json.Marshal(shrunkResp); err == nil && int64(len(respData)) <= limit {
+					slog.Warn("response exceeded hub message limit; sent without prompt_context",
+						"method", method, "id", resp.ID, "size", originalSize, "shrunk_size", len(respData), "limit", limit)
+					return respData
+				}
+			}
+		}
+	}
+
+	slog.Warn("response exceeds hub message limit; replaced with error",
+		"method", method, "id", resp.ID, "size", originalSize, "limit", limit)
+	return marshalErrorResponse(resp.ID,
+		fmt.Sprintf("response size %d exceeds hub message limit %d", originalSize, limit))
+}
+
+// marshalErrorResponse builds a JSON-RPC internal error (-32000) frame for id.
+// The envelope is built from fixed, well-formed fields so encoding cannot fail.
+func marshalErrorResponse(id, message string) []byte {
+	b, _ := json.Marshal(&response{
+		JSONRPC: "2.0",
+		ID:      id,
+		Error:   &rpcError{Code: rpcErrInternal, Message: message},
+	})
+	return b
 }
 
 // RegisterRelaySession creates a buffered input channel for terminal relay
@@ -479,9 +612,9 @@ type rpcError struct {
 }
 
 type registerParams struct {
-	Name     string                  `json:"name"`
-	Profiles map[string]profileInfo  `json:"profiles"`
-	Ttyd     ttydInfo                `json:"ttyd"`
+	Name     string                 `json:"name"`
+	Profiles map[string]profileInfo `json:"profiles"`
+	Ttyd     ttydInfo               `json:"ttyd"`
 }
 
 type profileInfo struct {
@@ -497,6 +630,14 @@ type ttydInfo struct {
 	AdvertiseAddress string `json:"advertise_address"`
 	BasePort         int    `json:"base_port"`
 	MaxPorts         int    `json:"max_ports"`
+}
+
+// registerResult is the hub's acknowledgement of a register request.
+// MaxMessageBytes is the largest JSON-RPC text frame the hub will accept on
+// this connection; it is absent (zero) on hubs that predate issue #685.
+type registerResult struct {
+	Accepted        bool  `json:"accepted"`
+	MaxMessageBytes int64 `json:"max_message_bytes,omitempty"`
 }
 
 type pongResult struct {
