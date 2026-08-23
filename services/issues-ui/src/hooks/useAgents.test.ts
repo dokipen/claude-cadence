@@ -53,6 +53,42 @@ describe("normalizeRepo", () => {
       "git@gitlab.com:owner/repo",
     );
   });
+
+  it("treats case-mismatched repo slugs as equal", () => {
+    expect(normalizeRepo("Owner/Repo")).toBe(normalizeRepo("owner/repo"));
+  });
+
+  it("lowercases a mixed-case repo slug", () => {
+    expect(normalizeRepo("Owner/Repo")).toBe("owner/repo");
+  });
+
+  it("strips a trailing slash from a repo slug", () => {
+    expect(normalizeRepo("owner/repo/")).toBe("owner/repo");
+  });
+
+  it("trims a whitespace-padded repo slug", () => {
+    expect(normalizeRepo("  owner/repo  ")).toBe("owner/repo");
+  });
+
+  it("handles combined case, whitespace, trailing slash, and .git suffix", () => {
+    expect(normalizeRepo("  Owner/Repo.GIT/  ")).toBe("owner/repo");
+  });
+
+  it("strips a trailing slash after a .git suffix", () => {
+    expect(normalizeRepo("https://github.com/owner/repo.git/")).toBe(
+      "owner/repo",
+    );
+  });
+
+  it("lowercases an uppercase SSH prefix", () => {
+    expect(normalizeRepo("GIT@GITHUB.COM:owner/repo")).toBe("owner/repo");
+  });
+
+  it("lowercases an uppercase HTTPS prefix", () => {
+    expect(normalizeRepo("HTTPS://GITHUB.COM/owner/repo")).toBe(
+      "owner/repo",
+    );
+  });
 });
 
 describe("normalizeRepo - nullish inputs from recovered sessions", () => {
