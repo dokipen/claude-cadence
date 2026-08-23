@@ -147,10 +147,15 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 	}
 
 	sessionID := uuid.New().String()
+	profileType := profile.Type
+	if profileType == "" {
+		profileType = "agent"
+	}
 	sess := &Session{
 		ID:           sessionID,
 		Name:         sessionName,
 		AgentProfile: req.AgentProfile,
+		ProfileType:  profileType,
 		State:        StateCreating,
 		CreatedAt:    time.Now(),
 	}

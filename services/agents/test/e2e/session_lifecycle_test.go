@@ -372,7 +372,7 @@ func TestReconnect_RingBufferReplayed(t *testing.T) {
 			return
 		}
 		defer conn.CloseNow()
-		_ = ptyMgr.ServeTerminal(r.Context(), sess.ID, conn)
+		_ = ptyMgr.ServeTerminal(r.Context(), sess.ID, conn, false)
 	})
 	httpSrv := &http.Server{Handler: mux}
 	go httpSrv.Serve(ln)

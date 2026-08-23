@@ -90,6 +90,11 @@ type Session struct {
 	// captured at session creation time and persisted so that on daemon
 	// restart the PTY can be reconnected by re-opening the slave device.
 	PTYSlavePath string
+	// ProfileType is the type of the agent profile ("agent" or "shell").
+	// "agent" (default) means a TUI session; ring buffer replay is skipped on
+	// reconnect and SIGWINCH is sent instead. "shell" sessions replay the ring
+	// buffer on reconnect.
+	ProfileType string
 	// restoredFromDisk marks a session loaded from persistent storage on daemon
 	// startup. Ephemeral: never serialized. Used by reconcile() to avoid
 	// incorrectly stopping a restored Running session whose process is alive

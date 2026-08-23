@@ -39,6 +39,7 @@ type sessionRecord struct {
 	RepoURL      string       `json:"repo_url,omitempty"`
 	BaseRef      string       `json:"base_ref,omitempty"`
 	PTYSlavePath string       `json:"pty_slave_path,omitempty"`
+	ProfileType  string       `json:"profile_type,omitempty"`
 }
 
 func sessionToRecord(s Session) sessionRecord {
@@ -56,10 +57,15 @@ func sessionToRecord(s Session) sessionRecord {
 		RepoURL:      s.RepoURL,
 		BaseRef:      s.BaseRef,
 		PTYSlavePath: s.PTYSlavePath,
+		ProfileType:  s.ProfileType,
 	}
 }
 
 func recordToSession(r sessionRecord) *Session {
+	profileType := r.ProfileType
+	if profileType != "agent" && profileType != "shell" {
+		profileType = "agent" // default for unknown/empty values
+	}
 	return &Session{
 		ID:           r.ID,
 		Name:         r.Name,
@@ -74,6 +80,7 @@ func recordToSession(r sessionRecord) *Session {
 		RepoURL:      r.RepoURL,
 		BaseRef:      r.BaseRef,
 		PTYSlavePath: r.PTYSlavePath,
+		ProfileType:  profileType,
 	}
 }
 

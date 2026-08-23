@@ -472,6 +472,16 @@ type diagnosticsSummary struct {
 	ErrorCount         int `json:"error_count"`
 }
 
+// IsShellSession returns true if the session is a shell-type profile.
+// Returns false for agent/TUI sessions and on any lookup error.
+func (d *Dispatcher) IsShellSession(sessionID string) bool {
+	sess, err := d.manager.Get(sessionID)
+	if err != nil {
+		return false
+	}
+	return sess.ProfileType == "shell"
+}
+
 // SendInput handles the sendInput JSON-RPC method.
 // It writes the given text to the PTY master for the specified session.
 func (d *Dispatcher) SendInput(params json.RawMessage) (json.RawMessage, *rpcError) {

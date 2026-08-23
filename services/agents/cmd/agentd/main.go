@@ -155,7 +155,11 @@ func main() {
 				slog.Warn("websocket accept failed", "error", err)
 				return
 			}
-			if err := ptyManager.ServeTerminal(r.Context(), sessionID, conn); err != nil {
+			skipReplay := true // default: TUI sessions skip ring buffer replay
+			if sess, lookupErr := manager.Get(sessionID); lookupErr == nil {
+				skipReplay = sess.ProfileType != "shell"
+			}
+			if err := ptyManager.ServeTerminal(r.Context(), sessionID, conn, skipReplay); err != nil {
 				slog.Warn("terminal session ended with error", "session_id", sessionID, "error", err)
 			}
 		})))

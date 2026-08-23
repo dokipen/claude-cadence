@@ -42,6 +42,9 @@ type SessionDispatcher interface {
 	GetTerminalEndpoint(params json.RawMessage) (json.RawMessage, *rpcError)
 	GetDiagnostics(ctx context.Context, params json.RawMessage) (json.RawMessage, *rpcError)
 	SendInput(params json.RawMessage) (json.RawMessage, *rpcError)
+	// IsShellSession returns true if the session is a shell-type profile.
+	// Shell sessions replay the ring buffer on reconnect; agent/TUI sessions do not.
+	IsShellSession(sessionID string) bool
 }
 
 // Client manages the WebSocket connection from agentd to the hub.
@@ -357,8 +360,9 @@ func (c *Client) dispatchSessionAsync(ctx context.Context, conn *websocket.Conn,
 		if err := json.Unmarshal(resp.Result, &result); err == nil && result.Relay {
 			var p getTerminalEndpointParams
 			if err := json.Unmarshal(req.Params, &p); err == nil {
+				skipReplay := !c.dispatcher.IsShellSession(p.SessionID)
 				relayCtx, relayCancel := context.WithCancel(ctx)
-				go c.runTerminalRelay(relayCtx, relayCancel, conn, p.SessionID, c.ptyMgr)
+				go c.runTerminalRelay(relayCtx, relayCancel, conn, p.SessionID, c.ptyMgr, skipReplay)
 			}
 		}
 	}

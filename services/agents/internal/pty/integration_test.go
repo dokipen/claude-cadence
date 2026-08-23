@@ -59,7 +59,7 @@ func TestServeTerminal_BufferReplay(t *testing.T) {
 			return
 		}
 		defer conn.CloseNow()
-		_ = m.ServeTerminal(r.Context(), "replay-test", conn)
+		_ = m.ServeTerminal(r.Context(), "replay-test", conn, false)
 	})
 	srv := &http.Server{Handler: mux}
 	go srv.Serve(ln)
@@ -109,6 +109,146 @@ func TestServeTerminal_BufferReplay(t *testing.T) {
 	}
 }
 
+// TestServeTerminal_SkipReplay_TUISession verifies that when skipReplay=true,
+// the ring buffer snapshot is NOT sent to the client on connect. This covers
+// the TUI session reconnect fix: replaying state-dependent escape sequences
+// (cursor movement, color codes) from a TUI buffer produces garbled output,
+// so agent/TUI sessions skip replay and send SIGWINCH instead.
+func TestServeTerminal_SkipReplay_TUISession(t *testing.T) {
+	m := internalpty.NewPTYManager(internalpty.PTYConfig{})
+
+	err := m.Create("tui-skip-replay-test", t.TempDir(),
+		[]string{"sh", "-c", "echo 'REPLAY_MARKER'; sleep 30"},
+		nil, 80, 24)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	t.Cleanup(func() { m.Destroy("tui-skip-replay-test") })
+
+	// Poll until REPLAY_MARKER appears in the ring buffer.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		buf, readErr := m.ReadBuffer("tui-skip-replay-test")
+		if readErr != nil {
+			t.Fatalf("ReadBuffer failed: %v", readErr)
+		}
+		if strings.Contains(string(buf), "REPLAY_MARKER") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for REPLAY_MARKER in ring buffer")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen failed: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws/terminal", func(w http.ResponseWriter, r *http.Request) {
+		conn, acceptErr := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+		if acceptErr != nil {
+			return
+		}
+		defer conn.CloseNow()
+		_ = m.ServeTerminal(r.Context(), "tui-skip-replay-test", conn, true)
+	})
+	srv := &http.Server{Handler: mux}
+	go srv.Serve(ln)
+	t.Cleanup(func() { srv.Close() })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	conn, _, dialErr := websocket.Dial(ctx, "ws://"+ln.Addr().String()+"/ws/terminal", nil)
+	if dialErr != nil {
+		t.Fatalf("dial failed: %v", dialErr)
+	}
+	defer conn.CloseNow()
+
+	// Collect whatever the server sends during the connect window.
+	var received strings.Builder
+	for {
+		_, data, readErr := conn.Read(ctx)
+		if readErr != nil {
+			break // timeout or close
+		}
+		if len(data) > 1 && data[0] == '0' {
+			received.Write(data[1:])
+		}
+	}
+
+	if strings.Contains(received.String(), "REPLAY_MARKER") {
+		t.Errorf("skipReplay=true: ring buffer was replayed but should have been skipped; got: %q", received.String())
+	}
+}
+
+// TestServeTerminal_SkipReplay_SIGWINCH verifies that when skipReplay=true,
+// SIGWINCH is delivered to the PTY process on connect. The process is a shell
+// with a WINCH trap that prints a sentinel; the sentinel must appear after
+// ServeTerminal connects.
+func TestServeTerminal_SkipReplay_SIGWINCH(t *testing.T) {
+	m := internalpty.NewPTYManager(internalpty.PTYConfig{})
+
+	err := m.Create("sigwinch-test", t.TempDir(),
+		[]string{"sh", "-c", "trap 'printf SIGWINCH_RECEIVED' WINCH; while true; do sleep 0.1; done"},
+		nil, 80, 24)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	t.Cleanup(func() { m.Destroy("sigwinch-test") })
+
+	// Wait briefly for the shell to reach its event loop before connecting.
+	time.Sleep(100 * time.Millisecond)
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen failed: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws/terminal", func(w http.ResponseWriter, r *http.Request) {
+		conn, acceptErr := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+		if acceptErr != nil {
+			return
+		}
+		defer conn.CloseNow()
+		_ = m.ServeTerminal(r.Context(), "sigwinch-test", conn, true)
+	})
+	srv := &http.Server{Handler: mux}
+	go srv.Serve(ln)
+	t.Cleanup(func() { srv.Close() })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, _, dialErr := websocket.Dial(ctx, "ws://"+ln.Addr().String()+"/ws/terminal", nil)
+	if dialErr != nil {
+		t.Fatalf("dial failed: %v", dialErr)
+	}
+	defer conn.CloseNow()
+
+	var received strings.Builder
+	for {
+		_, data, readErr := conn.Read(ctx)
+		if readErr != nil {
+			break
+		}
+		if len(data) > 1 && data[0] == '0' {
+			received.Write(data[1:])
+		}
+		if strings.Contains(received.String(), "SIGWINCH_RECEIVED") {
+			break
+		}
+	}
+
+	if !strings.Contains(received.String(), "SIGWINCH_RECEIVED") {
+		t.Errorf("skipReplay=true: SIGWINCH not delivered to PTY process; got: %q", received.String())
+	}
+}
+
 // TestServeTerminal_ResizeClamped verifies that sending an oversized resize frame
 // does not crash or panic the session — the session must remain usable afterwards.
 func TestServeTerminal_ResizeClamped(t *testing.T) {
@@ -137,7 +277,7 @@ func TestServeTerminal_ResizeClamped(t *testing.T) {
 			return
 		}
 		defer conn.CloseNow()
-		_ = m.ServeTerminal(r.Context(), "resize-clamp-test", conn)
+		_ = m.ServeTerminal(r.Context(), "resize-clamp-test", conn, false)
 	})
 	srv := &http.Server{Handler: mux}
 	go srv.Serve(ln)
@@ -220,7 +360,7 @@ func TestServeTerminal_BinaryFrameType(t *testing.T) {
 			return
 		}
 		defer conn.CloseNow()
-		_ = m.ServeTerminal(r.Context(), "binary-frame-test", conn)
+		_ = m.ServeTerminal(r.Context(), "binary-frame-test", conn, false)
 	})
 	srv := &http.Server{Handler: mux}
 	go srv.Serve(ln)
@@ -295,7 +435,7 @@ func TestServeTerminal_ConcurrentReconnect_WriterSurvives(t *testing.T) {
 			return
 		}
 		defer conn.CloseNow()
-		_ = m.ServeTerminal(r.Context(), "reconnect-race-test", conn)
+		_ = m.ServeTerminal(r.Context(), "reconnect-race-test", conn, false)
 	})
 	srv := &http.Server{Handler: mux}
 	go srv.Serve(ln) //nolint:errcheck
@@ -454,7 +594,7 @@ func TestServeTerminal_LargeSnapshotReplay(t *testing.T) {
 			return
 		}
 		defer conn.CloseNow()
-		_ = m.ServeTerminal(r.Context(), "large-snapshot-test", conn)
+		_ = m.ServeTerminal(r.Context(), "large-snapshot-test", conn, false)
 	})
 	srv := &http.Server{Handler: mux}
 	go srv.Serve(ln) //nolint:errcheck
@@ -589,7 +729,7 @@ func startVimTestServer(t *testing.T, sessionID string, m *internalpty.PTYManage
 			return
 		}
 		defer conn.CloseNow()
-		_ = m.ServeTerminal(r.Context(), sessionID, conn)
+		_ = m.ServeTerminal(r.Context(), sessionID, conn, false)
 	})
 	srv := &http.Server{Handler: mux}
 	go srv.Serve(ln) //nolint:errcheck
