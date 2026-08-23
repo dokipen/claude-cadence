@@ -15,10 +15,15 @@
 #   0 - checks passed and merge succeeded
 #   1 - checks failed (merge not attempted)
 #   2 - wait for checks timed out (merge not attempted)
+#   3 - neither gtimeout nor timeout found on PATH
 
 set -euo pipefail
 
-TIMEOUT_CMD=$(command -v gtimeout || command -v timeout)
+TIMEOUT_CMD=$(command -v gtimeout || command -v timeout || true)
+if [ -z "$TIMEOUT_CMD" ]; then
+  echo "Error: neither gtimeout nor timeout found on PATH. On macOS, install via: brew install coreutils" >&2
+  exit 3
+fi
 
 set +e
 "$TIMEOUT_CMD" 600 gh pr checks --watch --fail-fast
