@@ -953,29 +953,67 @@ func TestHandleAgentConnection_OversizedTextFrame(t *testing.T) {
 		t.Fatalf("write large text frame: %v", err)
 	}
 
-	// On current (buggy) code the hub closes the connection synchronously in
-	// the oversized-frame branch, but websocket.Conn.Close can take several
-	// seconds to complete its handshake before markOfflineIfCurrent runs. A
-	// short sleep would let this test pass for the wrong reason (checking
-	// before the offline transition happens), so poll for several seconds
-	// and fail the instant the agent goes offline.
-	deadline := time.Now().Add(6 * time.Second)
+	// Deterministic liveness proof: perform a real hub->agent RPC round-trip
+	// over the same connection AFTER the large frame was read by the hub.
+	// The hub processes frames sequentially in its read loop, so if the
+	// large frame had caused the hub to close the connection (the old
+	// size-based close), the ping request below would never reach the raw
+	// agent and h.Call would fail with a timeout or write error. This is
+	// strictly stronger than polling Status() for a fixed interval, and
+	// completes in milliseconds on the happy path.
+	//
+	// The raw agent replies to every request it receives (including any
+	// heartbeat ping) so the round-trip cannot be confused by other traffic.
+	readErr := make(chan error, 1)
+	go func() {
+		for {
+			_, data, err := conn.Read(context.Background())
+			if err != nil {
+				readErr <- err
+				return
+			}
+			var req Request
+			if err := json.Unmarshal(data, &req); err != nil || req.Method == "" {
+				continue
+			}
+			result, _ := json.Marshal(map[string]string{"pong": "ok"})
+			resp := &Response{JSONRPC: "2.0", ID: req.ID, Result: result}
+			respData, _ := json.Marshal(resp)
+			if err := conn.Write(context.Background(), websocket.MessageText, respData); err != nil {
+				readErr <- err
+				return
+			}
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	result, err := h.Call(ctx, agent, "ping", nil)
+	if err != nil {
+		select {
+		case rerr := <-readErr:
+			t.Fatalf("RPC round-trip after large text frame failed (%v); agent-side read error: %v — hub closed the connection on message size", err, rerr)
+		default:
+			t.Fatalf("RPC round-trip after large text frame failed: %v — hub closed or stalled the connection on message size", err)
+		}
+	}
+	var pong map[string]string
+	if err := json.Unmarshal(result, &pong); err != nil || pong["pong"] != "ok" {
+		t.Fatalf("unexpected ping result after large text frame: %s", result)
+	}
+
+	// Belt-and-braces: the agent must still be online. The round-trip above
+	// already proves the connection is open, so a short poll suffices to
+	// catch a delayed offline transition.
+	deadline := time.Now().Add(300 * time.Millisecond)
 	for time.Now().Before(deadline) {
 		if agent.Status() != StatusOnline {
 			t.Fatalf("agent went offline after large text frame (status=%s) — message size must never mark an agent offline", agent.Status())
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(25 * time.Millisecond)
 	}
-
 	if agent.Status() != StatusOnline {
 		t.Errorf("expected agent to remain online after large text frame, got %s", agent.Status())
-	}
-
-	// Confirm the connection is still usable.
-	pingReq, _ := NewRequest("ping-check", "ping", nil)
-	pingData, _ := json.Marshal(pingReq)
-	if err := conn.Write(context.Background(), websocket.MessageText, pingData); err != nil {
-		t.Fatalf("write after large text frame failed — connection was closed: %v", err)
 	}
 }
 

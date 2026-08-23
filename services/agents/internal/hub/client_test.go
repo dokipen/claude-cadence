@@ -433,6 +433,16 @@ func TestClientRegisterNegotiatesMaxMessageBytes(t *testing.T) {
 			result: map[string]interface{}{},
 			want:   defaultMaxMessageBytes,
 		},
+		{
+			name:   "explicit zero falls back to default",
+			result: map[string]interface{}{"accepted": true, "max_message_bytes": 0},
+			want:   defaultMaxMessageBytes,
+		},
+		{
+			name:   "negative value falls back to default",
+			result: map[string]interface{}{"accepted": true, "max_message_bytes": -1},
+			want:   defaultMaxMessageBytes,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -504,8 +514,9 @@ func TestPrepareResponseFrame(t *testing.T) {
 		method        string
 		result        json.RawMessage
 		wantErr       bool
-		wantSessions  int  // sessions expected in a successful frame
-		wantPromptCtx bool // whether prompt_context must be present
+		wantErrMsg    string // substring expected in the error message (default: size-limit message)
+		wantSessions  int    // sessions expected in a successful frame
+		wantPromptCtx bool   // whether prompt_context must be present
 	}{
 		{
 			name:          "small listSessions passes through",
@@ -538,6 +549,16 @@ func TestPrepareResponseFrame(t *testing.T) {
 			result:  json.RawMessage(`{"blob":"` + strings.Repeat("z", 4096) + `"}`),
 			wantErr: true,
 		},
+		{
+			// A malformed RawMessage makes the initial json.Marshal(resp) fail;
+			// the frame must still be a well-formed JSON-RPC error for the
+			// same id rather than an empty/garbage payload.
+			name:       "malformed result becomes encode error",
+			method:     "listSessions",
+			result:     json.RawMessage("{not json"),
+			wantErr:    true,
+			wantErrMsg: "failed to encode response",
+		},
 	}
 
 	for _, tt := range tests {
@@ -569,8 +590,12 @@ func TestPrepareResponseFrame(t *testing.T) {
 				if got.Error.Code != rpcErrInternal {
 					t.Errorf("error code = %d, want %d", got.Error.Code, rpcErrInternal)
 				}
-				if !strings.Contains(got.Error.Message, "exceeds hub message limit") {
-					t.Errorf("error message = %q, want size-limit message", got.Error.Message)
+				wantMsg := tt.wantErrMsg
+				if wantMsg == "" {
+					wantMsg = "exceeds hub message limit"
+				}
+				if !strings.Contains(got.Error.Message, wantMsg) {
+					t.Errorf("error message = %q, want it to contain %q", got.Error.Message, wantMsg)
 				}
 				return
 			}

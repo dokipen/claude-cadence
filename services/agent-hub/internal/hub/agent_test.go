@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -83,5 +84,73 @@ func TestTerminalRelayCloseIsIdempotent(t *testing.T) {
 	cleanupC() // must not panic
 	if _, open := <-chC; open {
 		t.Fatal("expected chC closed after CloseTerminalChannel")
+	}
+}
+
+// TestDeliverTerminalFrame_NoRaceWithClose hammers DeliverTerminalFrame from
+// one goroutine while another goroutine concurrently registers, cleans up,
+// and bulk-closes relays for the same session. Sends and closes are
+// serialized by terminalMu, so this must never panic with
+// "send on closed channel". Run under -race.
+func TestDeliverTerminalFrame_NoRaceWithClose(t *testing.T) {
+	sessionUUID := uuid.New()
+	a := &ConnectedAgent{
+		terminalChannels: make(map[uuid.UUID]*terminalRelay),
+	}
+
+	const iterations = 2000
+	payload := []byte("frame")
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Sender: deliver frames as fast as possible.
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			a.DeliverTerminalFrame(sessionUUID, payload)
+		}
+	}()
+
+	// Closer: churn registrations and closes for the same session, cycling
+	// through every close path (cleanup, CloseTerminalChannel,
+	// CloseTerminalChannels).
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			ch, cleanup := a.RegisterTerminalRelay(sessionUUID)
+			switch i % 3 {
+			case 0:
+				cleanup()
+			case 1:
+				a.CloseTerminalChannel(sessionUUID)
+				cleanup()
+			case 2:
+				a.CloseTerminalChannels()
+				cleanup()
+			}
+			// Drain so a closed, non-empty channel is observed as closed.
+			for range ch {
+			}
+		}
+	}()
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out: goroutines did not finish (deadlock?)")
+	}
+
+	a.terminalMu.Lock()
+	n := len(a.terminalChannels)
+	a.terminalMu.Unlock()
+	if n != 0 {
+		t.Errorf("expected no relays left registered, got %d", n)
 	}
 }
