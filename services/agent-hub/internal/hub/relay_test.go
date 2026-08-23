@@ -60,7 +60,8 @@ func TestDecodeTerminalFrame_WrongTypeByte(t *testing.T) {
 	// Build a valid-length frame but with a wrong type byte.
 	frame := make([]byte, sharedrelay.TerminalFrameHeaderLen+4)
 	frame[0] = 0x02 // wrong type
-	id := uuid.New(); copy(frame[1:17], id[:])
+	id := uuid.New()
+	copy(frame[1:17], id[:])
 	copy(frame[17:], []byte("data"))
 
 	_, _, err := DecodeTerminalFrame(frame)

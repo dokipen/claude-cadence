@@ -45,7 +45,6 @@ const rateLimiterMaxEntries = 300
 // without inserting the new IP into the map or touching any existing entry.
 var allProtectedLimiter = rate.NewLimiter(0, 0)
 
-
 // tokenAuth returns middleware that validates Bearer token authentication.
 func tokenAuth(token string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -117,7 +116,7 @@ func rateLimiterInternal(cfg config.RateLimitConfig, nowFn func() time.Time) (le
 	// once the burst has had time to fully replenish, the entry offers no
 	// stronger protection against a fresh connection than a brand-new entry
 	// would, so there is no reason to keep it pinned past that point.
-	deniedProtectionWindow := time.Duration(float64(cfg.Burst)/cfg.RequestsPerSecond * float64(time.Second))
+	deniedProtectionWindow := time.Duration(float64(cfg.Burst) / cfg.RequestsPerSecond * float64(time.Second))
 
 	var mu sync.Mutex
 	limiters := make(map[string]*lruEntry)
@@ -240,6 +239,12 @@ func bodyReadDeadlineMiddleware(timeout time.Duration) func(http.Handler) http.H
 
 // MaxRestBodySize is the maximum number of bytes accepted in a REST request body (1 MiB).
 const MaxRestBodySize = 1 << 20 // 1 MiB
+
+// MaxSessionRequestBodySize caps the body of per-session REST requests
+// (create session, send input), whose payloads are small (a session ID, a
+// profile name, a line of input). It is a REST-local limit, independent of
+// the agent WebSocket read backstop (hub.AgentMaxMessageSize).
+const MaxSessionRequestBodySize = 512 << 10 // 512 KiB
 
 // maxBodyMiddleware limits the size of request bodies to MaxRestBodySize bytes.
 // Requests that exceed the limit will receive HTTP 413 Request Entity Too Large.

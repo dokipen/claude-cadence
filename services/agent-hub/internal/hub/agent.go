@@ -30,15 +30,33 @@ type ConnectedAgent struct {
 	Profiles   map[string]ProfileInfo `json:"profiles"`
 	TtydConfig TtydInfo               `json:"ttyd"`
 
-	mu                    sync.Mutex
-	status                AgentStatus
-	lastSeen              time.Time
-	conn                  *websocket.Conn
-	pending               map[string]chan *Response
+	mu                     sync.Mutex
+	status                 AgentStatus
+	lastSeen               time.Time
+	conn                   *websocket.Conn
+	pending                map[string]chan *Response
 	consecutiveRPCFailures int
 
 	terminalMu       sync.Mutex
-	terminalChannels map[uuid.UUID]chan []byte
+	terminalChannels map[uuid.UUID]*terminalRelay
+}
+
+// terminalRelay is one registered relay channel. The close-once guard makes
+// closing idempotent across all closers (the registration's cleanup func,
+// CloseTerminalChannel, and CloseTerminalChannels), so a relay that the hub
+// tore down on disconnect can still be cleaned up by its owner without a
+// double-close panic.
+//
+// Invariant: relay channels are only ever closed while holding terminalMu,
+// and DeliverTerminalFrame performs its (non-blocking) send while holding
+// terminalMu, so a send can never race a close and panic.
+type terminalRelay struct {
+	ch        chan []byte
+	closeOnce sync.Once
+}
+
+func (r *terminalRelay) close() {
+	r.closeOnce.Do(func() { close(r.ch) })
 }
 
 // NewConnectedAgent creates a new agent entry.
@@ -51,7 +69,7 @@ func NewConnectedAgent(name string, conn *websocket.Conn, params *RegisterParams
 		lastSeen:         time.Now(),
 		conn:             conn,
 		pending:          make(map[string]chan *Response),
-		terminalChannels: make(map[uuid.UUID]chan []byte),
+		terminalChannels: make(map[uuid.UUID]*terminalRelay),
 	}
 }
 
@@ -110,34 +128,40 @@ func (a *ConnectedAgent) Touch() {
 // removes the registration and closes the channel. Calling the cleanup
 // function more than once is safe.
 func (a *ConnectedAgent) RegisterTerminalRelay(sessionID uuid.UUID) (<-chan []byte, func()) {
-	ch := make(chan []byte, terminalChannelBufSize)
+	relay := &terminalRelay{ch: make(chan []byte, terminalChannelBufSize)}
 
 	a.terminalMu.Lock()
-	a.terminalChannels[sessionID] = ch
+	a.terminalChannels[sessionID] = relay
 	a.terminalMu.Unlock()
 
-	var once sync.Once
 	cleanup := func() {
-		once.Do(func() {
-			a.terminalMu.Lock()
-			// Only delete if the map still points to OUR channel.
-			if a.terminalChannels[sessionID] == ch {
-				delete(a.terminalChannels, sessionID)
-			}
-			a.terminalMu.Unlock()
-			close(ch)
-		})
+		a.terminalMu.Lock()
+		defer a.terminalMu.Unlock()
+		// Only delete if the map still points to OUR relay.
+		if a.terminalChannels[sessionID] == relay {
+			delete(a.terminalChannels, sessionID)
+		}
+		// Close under terminalMu (see terminalRelay invariant) so it cannot
+		// race a concurrent DeliverTerminalFrame send. Idempotent: safe even
+		// if CloseTerminalChannel(s) already closed it.
+		relay.close()
 	}
-	return ch, cleanup
+	return relay.ch, cleanup
 }
 
 // DeliverTerminalFrame routes a decoded frame payload to the channel registered
-// for sessionID. Returns false if no relay is registered for that session.
+// for sessionID. Returns false if no relay is registered for that session, or
+// if the relay's buffer is full and the frame was dropped.
+//
+// The lookup, payload copy, and non-blocking send all happen while holding
+// terminalMu. Channels are only closed while holding terminalMu, so the send
+// can never race a close. The send is non-blocking (select/default), so
+// holding the lock across it cannot stall other terminalMu users.
 func (a *ConnectedAgent) DeliverTerminalFrame(sessionID uuid.UUID, payload []byte) bool {
 	a.terminalMu.Lock()
-	ch, ok := a.terminalChannels[sessionID]
-	a.terminalMu.Unlock()
+	defer a.terminalMu.Unlock()
 
+	relay, ok := a.terminalChannels[sessionID]
 	if !ok {
 		return false
 	}
@@ -147,7 +171,7 @@ func (a *ConnectedAgent) DeliverTerminalFrame(sessionID uuid.UUID, payload []byt
 	copy(buf, payload)
 
 	select {
-	case ch <- buf:
+	case relay.ch <- buf:
 		return true
 	default:
 		// Channel full — drop the frame rather than blocking the read loop.
@@ -161,24 +185,26 @@ func (a *ConnectedAgent) DeliverTerminalFrame(sessionID uuid.UUID, payload []byt
 
 // CloseTerminalChannel closes the relay channel for a single session and removes
 // it from the map. Safe to call when no relay is registered for the session.
+// The close happens under terminalMu (see terminalRelay invariant).
 func (a *ConnectedAgent) CloseTerminalChannel(sessionID uuid.UUID) {
 	a.terminalMu.Lock()
 	defer a.terminalMu.Unlock()
-	if ch, ok := a.terminalChannels[sessionID]; ok {
-		close(ch)
+	if relay, ok := a.terminalChannels[sessionID]; ok {
+		relay.close()
 		delete(a.terminalChannels, sessionID)
 	}
 }
 
 // CloseTerminalChannels closes all terminal relay channels and clears the map.
 // This unblocks any relay goroutines waiting on the channels, causing them to
-// see ok=false and clean up.
+// see ok=false and clean up. Closes happen under terminalMu (see terminalRelay
+// invariant).
 func (a *ConnectedAgent) CloseTerminalChannels() {
 	a.terminalMu.Lock()
 	defer a.terminalMu.Unlock()
 
-	for id, ch := range a.terminalChannels {
-		close(ch)
+	for id, relay := range a.terminalChannels {
+		relay.close()
 		delete(a.terminalChannels, id)
 	}
 }

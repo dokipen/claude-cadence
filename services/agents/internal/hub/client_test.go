@@ -366,3 +366,360 @@ func TestRegisterRelaySession_StaleCleanupDoesNotClobberLiveRegistration(t *test
 		t.Fatal("relayCh entry still present after cleanup2()")
 	}
 }
+
+// startRegisterAckServer runs a fake hub that answers the register request
+// with the given result object, then holds the connection open until the test
+// ends. It returns the ws:// URL to dial.
+func startRegisterAckServer(t *testing.T, result map[string]interface{}) string {
+	t.Helper()
+	connHold := make(chan struct{})
+	t.Cleanup(func() { close(connHold) })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+		if err != nil {
+			return
+		}
+		defer conn.CloseNow()
+
+		_, data, err := conn.Read(r.Context())
+		if err != nil {
+			return
+		}
+		var req struct {
+			ID string `json:"id"`
+		}
+		if jsonErr := json.Unmarshal(data, &req); jsonErr != nil {
+			return
+		}
+		ack, _ := json.Marshal(map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      req.ID,
+			"result":  result,
+		})
+		if writeErr := conn.Write(r.Context(), websocket.MessageText, ack); writeErr != nil {
+			return
+		}
+		select {
+		case <-connHold:
+		case <-r.Context().Done():
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return "ws" + strings.TrimPrefix(srv.URL, "http")
+}
+
+// TestClientRegisterNegotiatesMaxMessageBytes verifies that the register
+// acknowledgement's max_message_bytes is adopted as the client's message
+// limit, and that an ack without the field (older hub) yields the default.
+func TestClientRegisterNegotiatesMaxMessageBytes(t *testing.T) {
+	tests := []struct {
+		name   string
+		result map[string]interface{}
+		want   int64
+	}{
+		{
+			name:   "hub advertises limit",
+			result: map[string]interface{}{"accepted": true, "max_message_bytes": 16 << 20},
+			want:   16 << 20,
+		},
+		{
+			name:   "older hub omits field",
+			result: map[string]interface{}{"accepted": true},
+			want:   defaultMaxMessageBytes,
+		},
+		{
+			name:   "empty result object",
+			result: map[string]interface{}{},
+			want:   defaultMaxMessageBytes,
+		},
+		{
+			name:   "explicit zero falls back to default",
+			result: map[string]interface{}{"accepted": true, "max_message_bytes": 0},
+			want:   defaultMaxMessageBytes,
+		},
+		{
+			name:   "negative value falls back to default",
+			result: map[string]interface{}{"accepted": true, "max_message_bytes": -1},
+			want:   defaultMaxMessageBytes,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hubURL := startRegisterAckServer(t, tt.result)
+			cfg := config.HubConfig{
+				URL:               hubURL,
+				Name:              "test-agent",
+				Token:             "test-token",
+				ReconnectInterval: 50 * time.Millisecond,
+			}
+			client := NewClient(cfg, map[string]config.Profile{}, config.TtydConfig{}, &stubDispatcher{})
+
+			// Before any connection the default applies.
+			if got := client.MaxMessageBytes(); got != defaultMaxMessageBytes {
+				t.Fatalf("pre-connect MaxMessageBytes = %d, want default %d", got, defaultMaxMessageBytes)
+			}
+
+			client.Start()
+			t.Cleanup(client.Stop)
+
+			deadline := time.Now().Add(2 * time.Second)
+			for time.Now().Before(deadline) {
+				if client.maxMessageBytes.Load() != 0 {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			if got := client.MaxMessageBytes(); got != tt.want {
+				t.Fatalf("MaxMessageBytes = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+// bigSessionsResult builds a listSessions-style result with n sessions, each
+// carrying a prompt_context of ctxLen bytes.
+func bigSessionsResult(t *testing.T, n, ctxLen int) json.RawMessage {
+	t.Helper()
+	infos := make([]sessionInfo, n)
+	for i := range infos {
+		infos[i] = sessionInfo{
+			ID:              uuid.New().String(),
+			Name:            "sess",
+			AgentProfile:    "profile",
+			State:           "running",
+			CreatedAt:       "2026-08-23T00:00:00Z",
+			WaitingForInput: true,
+			PromptContext:   strings.Repeat("x", ctxLen),
+			PromptType:      "question",
+		}
+	}
+	b, err := json.Marshal(sessionsJSON{Sessions: infos})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+// TestPrepareResponseFrame covers the sender-side size guard: responses under
+// the limit pass through untouched, oversized shrinkable results are sent
+// without prompt_context, and anything still too large (or not shrinkable)
+// becomes a JSON-RPC error for the same id. No returned frame may exceed the
+// limit.
+func TestPrepareResponseFrame(t *testing.T) {
+	const limit = 2 * 1024
+
+	tests := []struct {
+		name          string
+		method        string
+		result        json.RawMessage
+		wantErr       bool
+		wantErrMsg    string // substring expected in the error message (default: size-limit message)
+		wantSessions  int    // sessions expected in a successful frame
+		wantPromptCtx bool   // whether prompt_context must be present
+	}{
+		{
+			name:          "small listSessions passes through",
+			method:        "listSessions",
+			result:        bigSessionsResult(t, 1, 64),
+			wantSessions:  1,
+			wantPromptCtx: true,
+		},
+		{
+			name:         "oversized listSessions drops prompt_context",
+			method:       "listSessions",
+			result:       bigSessionsResult(t, 3, 4096),
+			wantSessions: 3,
+		},
+		{
+			name:    "oversized listSessions still too big after shrink becomes error",
+			method:  "listSessions",
+			result:  bigSessionsResult(t, 40, 1024), // ~40 × 200 B metadata > 2 KiB even shrunk
+			wantErr: true,
+		},
+		{
+			name:    "oversized non-shrinkable result becomes error",
+			method:  "getDiagnostics",
+			result:  json.RawMessage(`{"events":"` + strings.Repeat("y", 4096) + `"}`),
+			wantErr: true,
+		},
+		{
+			name:    "oversized result with no method context becomes error",
+			method:  "",
+			result:  json.RawMessage(`{"blob":"` + strings.Repeat("z", 4096) + `"}`),
+			wantErr: true,
+		},
+		{
+			// A malformed RawMessage makes the initial json.Marshal(resp) fail;
+			// the frame must still be a well-formed JSON-RPC error for the
+			// same id rather than an empty/garbage payload.
+			name:       "malformed result becomes encode error",
+			method:     "listSessions",
+			result:     json.RawMessage("{not json"),
+			wantErr:    true,
+			wantErrMsg: "failed to encode response",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := &response{JSONRPC: "2.0", ID: "req-42", Result: tt.result}
+			frame := prepareResponseFrame(tt.method, resp, limit, shrinkableFor(tt.method))
+
+			if int64(len(frame)) > limit {
+				t.Fatalf("frame size %d exceeds limit %d", len(frame), limit)
+			}
+
+			var got struct {
+				JSONRPC string          `json:"jsonrpc"`
+				ID      string          `json:"id"`
+				Result  json.RawMessage `json:"result"`
+				Error   *rpcError       `json:"error"`
+			}
+			if err := json.Unmarshal(frame, &got); err != nil {
+				t.Fatalf("frame is not valid JSON-RPC: %v", err)
+			}
+			if got.ID != "req-42" || got.JSONRPC != "2.0" {
+				t.Fatalf("envelope = id %q jsonrpc %q, want req-42 / 2.0", got.ID, got.JSONRPC)
+			}
+
+			if tt.wantErr {
+				if got.Error == nil {
+					t.Fatal("expected JSON-RPC error, got result")
+				}
+				if got.Error.Code != rpcErrInternal {
+					t.Errorf("error code = %d, want %d", got.Error.Code, rpcErrInternal)
+				}
+				wantMsg := tt.wantErrMsg
+				if wantMsg == "" {
+					wantMsg = "exceeds hub message limit"
+				}
+				if !strings.Contains(got.Error.Message, wantMsg) {
+					t.Errorf("error message = %q, want it to contain %q", got.Error.Message, wantMsg)
+				}
+				return
+			}
+
+			if got.Error != nil {
+				t.Fatalf("unexpected error: %+v", got.Error)
+			}
+			var sessions struct {
+				Sessions []map[string]json.RawMessage `json:"sessions"`
+			}
+			if err := json.Unmarshal(got.Result, &sessions); err != nil {
+				t.Fatalf("result is not a sessions list: %v", err)
+			}
+			if len(sessions.Sessions) != tt.wantSessions {
+				t.Fatalf("got %d sessions, want %d", len(sessions.Sessions), tt.wantSessions)
+			}
+			for i, s := range sessions.Sessions {
+				_, hasCtx := s["prompt_context"]
+				_, hasType := s["prompt_type"]
+				if hasCtx != tt.wantPromptCtx || hasType != tt.wantPromptCtx {
+					t.Errorf("session %d: prompt_context=%v prompt_type=%v, want both %v", i, hasCtx, hasType, tt.wantPromptCtx)
+				}
+				if _, ok := s["id"]; !ok {
+					t.Errorf("session %d lost its metadata", i)
+				}
+			}
+		})
+	}
+}
+
+// TestPrepareResponseFrame_SingleSession verifies the getSession/createSession
+// result type degrades the same way as listSessions.
+func TestPrepareResponseFrame_SingleSession(t *testing.T) {
+	const limit = 1024
+	result, err := json.Marshal(sessionJSON{Session: sessionInfo{
+		ID:            uuid.New().String(),
+		Name:          "sess",
+		AgentProfile:  "profile",
+		State:         "running",
+		CreatedAt:     "2026-08-23T00:00:00Z",
+		PromptContext: strings.Repeat("x", 4096),
+		PromptType:    "question",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, method := range []string{"getSession", "createSession"} {
+		t.Run(method, func(t *testing.T) {
+			resp := &response{JSONRPC: "2.0", ID: "req-7", Result: result}
+			frame := prepareResponseFrame(method, resp, limit, shrinkableFor(method))
+			if int64(len(frame)) > limit {
+				t.Fatalf("frame size %d exceeds limit %d", len(frame), limit)
+			}
+			var got struct {
+				ID     string `json:"id"`
+				Result struct {
+					Session map[string]json.RawMessage `json:"session"`
+				} `json:"result"`
+				Error *rpcError `json:"error"`
+			}
+			if err := json.Unmarshal(frame, &got); err != nil {
+				t.Fatal(err)
+			}
+			if got.Error != nil {
+				t.Fatalf("unexpected error: %+v", got.Error)
+			}
+			if got.ID != "req-7" {
+				t.Errorf("id = %q, want req-7", got.ID)
+			}
+			if _, ok := got.Result.Session["prompt_context"]; ok {
+				t.Error("prompt_context still present after degrade")
+			}
+			if _, ok := got.Result.Session["id"]; !ok {
+				t.Error("session metadata lost")
+			}
+		})
+	}
+}
+
+// TestPrepareResponseFrame_ErrorResponsePassesThrough verifies that a
+// dispatcher error response is never treated as shrinkable and is forwarded
+// unchanged when it fits.
+func TestPrepareResponseFrame_ErrorResponsePassesThrough(t *testing.T) {
+	resp := &response{JSONRPC: "2.0", ID: "req-9", Error: &rpcError{Code: rpcErrNotFound, Message: "no such session"}}
+	frame := prepareResponseFrame("getSession", resp, 2048, shrinkableFor("getSession"))
+	var got response
+	if err := json.Unmarshal(frame, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Error == nil || got.Error.Code != rpcErrNotFound || got.Error.Message != "no such session" {
+		t.Fatalf("error response altered: %s", frame)
+	}
+}
+
+// TestShrink covers the Shrink implementations directly, including the
+// "nothing to remove" signal that lets the caller skip a re-marshal.
+func TestShrink(t *testing.T) {
+	t.Run("sessionsJSON", func(t *testing.T) {
+		r := &sessionsJSON{Sessions: []sessionInfo{
+			{ID: "a", PromptContext: "ctx", PromptType: "question"},
+			{ID: "b"},
+		}}
+		if !r.Shrink() {
+			t.Fatal("Shrink() = false, want true when prompt payload present")
+		}
+		for _, s := range r.Sessions {
+			if s.PromptContext != "" || s.PromptType != "" {
+				t.Errorf("session %s still carries prompt payload", s.ID)
+			}
+		}
+		if r.Shrink() {
+			t.Error("second Shrink() = true, want false (nothing left to remove)")
+		}
+	})
+	t.Run("sessionJSON", func(t *testing.T) {
+		r := &sessionJSON{Session: sessionInfo{ID: "a", PromptType: "question"}}
+		if !r.Shrink() {
+			t.Fatal("Shrink() = false, want true")
+		}
+		if r.Session.PromptType != "" {
+			t.Error("prompt_type not cleared")
+		}
+		if (&sessionJSON{}).Shrink() {
+			t.Error("Shrink() on empty session = true, want false")
+		}
+	})
+}

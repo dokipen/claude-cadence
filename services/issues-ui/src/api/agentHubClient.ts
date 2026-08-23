@@ -117,6 +117,25 @@ export async function fetchAllSessions(): Promise<AgentSessions[]> {
   return hubFetch("/sessions", undefined, validateAllSessionsResponse);
 }
 
+function validateSessionEnvelope(data: unknown): Session {
+  if (!isRecord(data) || !isRecord(data.session)) {
+    throw new HubError(502, 'Invalid session response: expected object with "session" key');
+  }
+  return parseSession(data.session);
+}
+
+/**
+ * Fetch a single session. Unlike the bulk list (which is metadata-only, see
+ * issue #685), this response includes promptContext/promptType.
+ */
+export async function fetchSession(agentName: string, sessionId: string): Promise<Session> {
+  return hubFetch(
+    `/agents/${encodeURIComponent(agentName)}/sessions/${encodeURIComponent(sessionId)}`,
+    undefined,
+    validateSessionEnvelope,
+  );
+}
+
 export async function deleteSession(agentName: string, sessionId: string): Promise<void> {
   try {
     await hubFetch(
@@ -157,11 +176,6 @@ export async function createSession(
   return hubFetch(
     `/agents/${encodeURIComponent(agentName)}/sessions`,
     { method: "POST", body: JSON.stringify(body) },
-    (data) => {
-      if (!isRecord(data) || !isRecord(data.session)) {
-        throw new HubError(502, 'Invalid session response: expected object with "session" key');
-      }
-      return parseSession(data.session);
-    },
+    validateSessionEnvelope,
   );
 }

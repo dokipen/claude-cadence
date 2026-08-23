@@ -116,7 +116,7 @@ func (c *Client) runTerminalRelay(
 		// pastes (e.g. base64 payloads) would exceed the default 32 KB limit and
 		// silently kill the ServeTerminal read loop. The loopback listener is
 		// process-internal and not reachable from external hosts.
-		conn.SetReadLimit(int64(ptyMgr.BufferSize() + 1))
+		conn.SetReadLimit(int64(ptyMgr.BufferSize() + sharedrelay.TtydFramePrefixLen))
 		defer conn.CloseNow()
 		_ = ptyMgr.ServeTerminal(r.Context(), ptySessID, conn)
 	})
@@ -139,8 +139,10 @@ func (c *Client) runTerminalRelay(
 
 	// ServeTerminal replays the full ring-buffer snapshot on connect, which can
 	// exceed coder/websocket's default 32 KB read limit. Set the read limit to
-	// the configured buffer size + 1 byte (for the ttyd frame prefix).
-	localConn.SetReadLimit(int64(ptyMgr.BufferSize() + 1))
+	// the configured buffer size + the ttyd frame prefix. This is the local
+	// (ttyd-framed) size; on the hub link the frame additionally carries the
+	// relay header, for a worst case of sharedrelay.MaxSnapshotFrameSize.
+	localConn.SetReadLimit(int64(ptyMgr.BufferSize() + sharedrelay.TtydFramePrefixLen))
 
 	slog.Debug("relay: terminal relay started", "session_id", ptySessID)
 

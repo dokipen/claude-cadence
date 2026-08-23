@@ -161,7 +161,6 @@ func TestFilterAgentsByRepo(t *testing.T) {
 		}
 	})
 
-
 	t.Run("non-GitHub HTTPS host matches full URL", func(t *testing.T) {
 		gitlabAgents := []hub.AgentInfo{
 			{
@@ -370,7 +369,7 @@ func TestHandleSendInput_BodyTooLargeReturns413(t *testing.T) {
 
 	handler := handleSendInput(h)
 
-	oversizedBody := strings.Repeat("x", hub.RPCMaxMessageSize+1)
+	oversizedBody := strings.Repeat("x", MaxSessionRequestBodySize+1)
 	req := httptest.NewRequest("POST", "/api/v1/agents/big-body-agent/sessions/sess-1/input", strings.NewReader(oversizedBody))
 	req.SetPathValue("name", "big-body-agent")
 	req.SetPathValue("id", "sess-1")
@@ -538,5 +537,66 @@ func TestProfileName_ExposedInGetAgent(t *testing.T) {
 	}
 	if profile.Name != "Named Get Profile" {
 		t.Errorf("expected profile Name %q, got %q", "Named Get Profile", profile.Name)
+	}
+}
+
+// TestHandleAgentWebSocket_RegisterAdvertisesMaxMessageBytes verifies that
+// the register acknowledgment carries max_message_bytes equal to the hub's
+// agent-connection read backstop, so agentd can size outgoing messages
+// against the hub it is actually talking to (issue #685, Layer 2).
+func TestHandleAgentWebSocket_RegisterAdvertisesMaxMessageBytes(t *testing.T) {
+	h := hub.New(30*time.Second, 5*time.Second, 0, 5*time.Minute, 0)
+	h.Start()
+	t.Cleanup(h.Stop)
+
+	agentToken := "test-agent-token"
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ws/agent", handleAgentWebSocket(h, agentToken))
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws/agent"
+	conn, _, err := websocket.Dial(context.Background(), wsURL, &websocket.DialOptions{
+		HTTPHeader: http.Header{"Authorization": {"Bearer " + agentToken}},
+	})
+	if err != nil {
+		t.Fatalf("dial agent ws: %v", err)
+	}
+	t.Cleanup(func() { conn.Close(websocket.StatusNormalClosure, "test done") })
+
+	regReq, _ := hub.NewRequest("reg-1", "register", &hub.RegisterParams{
+		Name: "limit-agent",
+		Profiles: map[string]hub.ProfileInfo{
+			"default": {Description: "test", Repo: "https://github.com/test/repo"},
+		},
+	})
+	data, _ := json.Marshal(regReq)
+	if err := conn.Write(context.Background(), websocket.MessageText, data); err != nil {
+		t.Fatalf("write register: %v", err)
+	}
+	_, ack, err := conn.Read(context.Background())
+	if err != nil {
+		t.Fatalf("read register ack: %v", err)
+	}
+
+	// Decode the raw wire JSON rather than hub.RegisterResult so a renamed or
+	// dropped json tag is caught.
+	var resp struct {
+		Result struct {
+			Accepted        bool   `json:"accepted"`
+			MaxMessageBytes *int64 `json:"max_message_bytes"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(ack, &resp); err != nil {
+		t.Fatalf("unmarshal register ack %s: %v", ack, err)
+	}
+	if !resp.Result.Accepted {
+		t.Fatalf("expected accepted=true in register ack: %s", ack)
+	}
+	if resp.Result.MaxMessageBytes == nil {
+		t.Fatalf("register ack missing max_message_bytes: %s", ack)
+	}
+	if got := *resp.Result.MaxMessageBytes; got != hub.AgentMaxMessageSize {
+		t.Errorf("max_message_bytes = %d, want hub.AgentMaxMessageSize (%d)", got, hub.AgentMaxMessageSize)
 	}
 }

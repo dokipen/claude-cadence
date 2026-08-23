@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	sharedrelay "github.com/dokipen/claude-cadence/services/shared/relay"
 )
 
 func validProfiles() map[string]Profile {
@@ -109,8 +111,6 @@ func TestValidate_InvalidAuthMode(t *testing.T) {
 		t.Fatal("expected error for invalid auth mode")
 	}
 }
-
-
 
 func TestResolveToken_ReturnsTokenWhenNoEnvVar(t *testing.T) {
 	a := &AuthConfig{Token: "hardcoded"}
@@ -366,6 +366,35 @@ func TestValidate_AdvertiseAddressEmptyAllowed(t *testing.T) {
 	}
 }
 
+func TestPTYConfig_Validate_BufferSize(t *testing.T) {
+	tests := []struct {
+		name       string
+		bufferSize int
+		wantErr    bool
+	}{
+		{name: "at shared max", bufferSize: sharedrelay.MaxPTYBufferSize, wantErr: false},
+		{name: "one over shared max", bufferSize: sharedrelay.MaxPTYBufferSize + 1, wantErr: true},
+		{name: "zero uses default", bufferSize: 0, wantErr: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				Auth:     AuthConfig{Mode: "none"},
+				Profiles: validProfiles(),
+				Cleanup:  validCleanup(),
+				PTY:      PTYConfig{WebSocketScheme: "ws", BufferSize: tt.bufferSize},
+			}
+			err := validate(cfg)
+			if tt.wantErr && err == nil {
+				t.Fatalf("expected error for buffer_size %d", tt.bufferSize)
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error for buffer_size %d: %v", tt.bufferSize, err)
+			}
+		})
+	}
+}
+
 func TestPTYConfig_Validate_NegativeMaxSessions(t *testing.T) {
 	cfg := &Config{
 		Auth:     AuthConfig{Mode: "none"},
@@ -385,7 +414,7 @@ func TestPTYConfig_Validate_NegativeMaxSessions(t *testing.T) {
 
 func TestCleanupConfig_Validate_NegativeCreatingSessionTTL(t *testing.T) {
 	cfg := &Config{
-		Auth:    AuthConfig{Mode: "none"},
+		Auth:     AuthConfig{Mode: "none"},
 		Profiles: validProfiles(),
 		Cleanup: CleanupConfig{
 			StaleSessionTTL:    time.Hour,

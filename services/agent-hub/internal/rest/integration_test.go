@@ -16,6 +16,8 @@ import (
 	"github.com/dokipen/claude-cadence/services/agent-hub/internal/config"
 	"github.com/dokipen/claude-cadence/services/agent-hub/internal/hub"
 	"github.com/dokipen/claude-cadence/services/agent-hub/internal/rest"
+	sharedrelay "github.com/dokipen/claude-cadence/services/shared/relay"
+	"github.com/google/uuid"
 )
 
 // testConfig returns a minimal config for integration tests.
@@ -743,9 +745,9 @@ func TestIntegration_OversizedBody(t *testing.T) {
 	simulateAgent(t, baseURL, agentToken, "test-agent")
 	waitForAgent(t, h, "test-agent")
 
-	// handleCreateSession caps the body at RPCMaxMessageSize (64 KiB), tighter
-	// than the global REST limit. Build a body that exceeds it by 1 byte.
-	oversizedBody := strings.NewReader(strings.Repeat("x", hub.RPCMaxMessageSize+1))
+	// handleCreateSession caps the body at rest.MaxSessionRequestBodySize,
+	// tighter than the global REST limit. Build a body that exceeds it by 1 byte.
+	oversizedBody := strings.NewReader(strings.Repeat("x", rest.MaxSessionRequestBodySize+1))
 
 	req, _ := http.NewRequest("POST", baseURL+"/api/v1/agents/test-agent/sessions", oversizedBody)
 	req.Header.Set("Authorization", "Bearer "+apiToken)
@@ -1132,5 +1134,189 @@ func TestIntegration_RejectInvalidProfileType(t *testing.T) {
 	json.NewDecoder(resp.Body).Decode(&agentsBody)
 	if len(agentsBody["agents"]) != 0 {
 		t.Fatalf("expected 0 agents after invalid type rejection, got %d", len(agentsBody["agents"]))
+	}
+}
+
+// simulateAgentWithLargeListSessions connects a fake agent whose listSessions
+// reply is a JSON document of roughly payloadSize bytes. It returns the agent
+// connection so the test can also push relay frames through it.
+func simulateAgentWithLargeListSessions(t *testing.T, baseURL, agentToken, name string, payloadSize int) *websocket.Conn {
+	t.Helper()
+
+	wsURL := "ws" + strings.TrimPrefix(baseURL, "http") + "/ws/agent"
+	ctx := context.Background()
+
+	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+		HTTPHeader: http.Header{
+			"Authorization": {"Bearer " + agentToken},
+		},
+	})
+	if err != nil {
+		t.Fatalf("dial hub: %v", err)
+	}
+	t.Cleanup(func() { conn.Close(websocket.StatusNormalClosure, "test done") })
+
+	regReq, _ := hub.NewRequest("reg-1", "register", &hub.RegisterParams{
+		Name: name,
+		Profiles: map[string]hub.ProfileInfo{
+			"default": {Description: "test profile", Repo: "https://github.com/test/repo"},
+		},
+	})
+	data, _ := json.Marshal(regReq)
+	if err := conn.Write(ctx, websocket.MessageText, data); err != nil {
+		t.Fatalf("write register: %v", err)
+	}
+
+	_, ack, err := conn.Read(ctx)
+	if err != nil {
+		t.Fatalf("read register ack: %v", err)
+	}
+	var ackResp struct {
+		Result hub.RegisterResult `json:"result"`
+	}
+	if err := json.Unmarshal(ack, &ackResp); err != nil {
+		t.Fatalf("unmarshal register ack: %v", err)
+	}
+	if ackResp.Result.MaxMessageBytes != hub.AgentMaxMessageSize {
+		t.Fatalf("register ack max_message_bytes = %d, want %d", ackResp.Result.MaxMessageBytes, hub.AgentMaxMessageSize)
+	}
+
+	// Pre-build the oversized listSessions result: a sessions array whose
+	// single entry carries a prompt_context blob of the requested size.
+	padding := strings.Repeat("x", payloadSize)
+	largeResult, _ := json.Marshal(map[string]any{
+		"sessions": []map[string]any{{
+			"id":             "sess-1",
+			"prompt_context": padding,
+		}},
+	})
+
+	go func() {
+		for {
+			_, data, err := conn.Read(context.Background())
+			if err != nil {
+				return
+			}
+			var req hub.Request
+			json.Unmarshal(data, &req)
+
+			var respData []byte
+			switch req.Method {
+			case "listSessions":
+				resp := &hub.Response{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage(largeResult)}
+				respData, _ = json.Marshal(resp)
+			case "ping":
+				resp, _ := hub.NewResponse(req.ID, map[string]bool{"pong": true})
+				respData, _ = json.Marshal(resp)
+			default:
+				resp, _ := hub.NewResponse(req.ID, map[string]string{"echo": req.Method})
+				respData, _ = json.Marshal(resp)
+			}
+			conn.Write(context.Background(), websocket.MessageText, respData)
+		}
+	}()
+
+	return conn
+}
+
+// TestIntegration_MultiMiBListSessionsKeepsAgentOnline verifies Layer 1 of
+// issue #685: a multi-MiB listSessions reply (well above the old 512 KiB RPC
+// cap, well below the 16 MiB read backstop) is delivered to the REST caller
+// unchanged, and the agent is neither closed nor marked offline. A terminal
+// relay registered before the call must still be open and deliverable
+// afterwards — previously the oversized-frame path closed every relay.
+func TestIntegration_MultiMiBListSessionsKeepsAgentOnline(t *testing.T) {
+	const payloadSize = 3 << 20 // 3 MiB
+	if payloadSize >= sharedrelay.AgentMaxMessageSize {
+		t.Fatalf("test setup: payload %d must be under the backstop %d", payloadSize, sharedrelay.AgentMaxMessageSize)
+	}
+
+	apiToken := "test-api-token"
+	agentToken := "test-agent-token"
+	cfg := testConfig(apiToken, agentToken)
+
+	h, baseURL := startIntegrationServer(t, cfg)
+	agentConn := simulateAgentWithLargeListSessions(t, baseURL, agentToken, "fat-agent", payloadSize)
+	waitForAgent(t, h, "fat-agent")
+
+	agent, ok := h.Get("fat-agent")
+	if !ok {
+		t.Fatal("agent not found after registration")
+	}
+
+	// Open a terminal relay so we can prove terminals survive the large RPC.
+	sessionID := uuid.New()
+	relayCh, cleanup, err := h.OpenTerminalRelay(context.Background(), "fat-agent", sessionID)
+	if err != nil {
+		t.Fatalf("OpenTerminalRelay: %v", err)
+	}
+	defer cleanup()
+
+	req, _ := http.NewRequest("GET", baseURL+"/api/v1/agents/fat-agent/sessions", nil)
+	req.Header.Set("Authorization", "Bearer "+apiToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("list sessions: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %.200s", resp.StatusCode, body)
+	}
+	if len(body) < payloadSize {
+		t.Fatalf("expected passthrough body of at least %d bytes, got %d", payloadSize, len(body))
+	}
+	var result struct {
+		Sessions []struct {
+			ID            string `json:"id"`
+			PromptContext string `json:"prompt_context"`
+		} `json:"sessions"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		t.Fatalf("unmarshal passthrough body: %v", err)
+	}
+	if len(result.Sessions) != 1 || result.Sessions[0].ID != "sess-1" || len(result.Sessions[0].PromptContext) != payloadSize {
+		t.Fatalf("passthrough body altered: sessions=%d", len(result.Sessions))
+	}
+
+	// The agent must still be online; poll briefly so a delayed offline
+	// transition (close handshake) cannot slip past the check.
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if agent.Status() != hub.StatusOnline {
+			t.Fatalf("agent went offline after multi-MiB listSessions reply (status=%s)", agent.Status())
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	// The relay channel must still be registered and open: push a frame
+	// through the agent connection and expect it on the channel.
+	select {
+	case _, open := <-relayCh:
+		if !open {
+			t.Fatal("terminal relay channel was closed by the large listSessions reply")
+		}
+		t.Fatal("unexpected frame on relay channel before any was sent")
+	default:
+	}
+	frame := hub.EncodeTerminalFrame(sessionID, []byte("0hello"))
+	if err := agentConn.Write(context.Background(), websocket.MessageBinary, frame); err != nil {
+		t.Fatalf("write relay frame after large reply — agent connection closed: %v", err)
+	}
+	select {
+	case payload, open := <-relayCh:
+		if !open {
+			t.Fatal("terminal relay channel closed after large listSessions reply")
+		}
+		if string(payload) != "0hello" {
+			t.Errorf("relay payload = %q, want %q", payload, "0hello")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for relay frame after large listSessions reply")
 	}
 }

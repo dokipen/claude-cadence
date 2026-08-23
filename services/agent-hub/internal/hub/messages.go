@@ -28,9 +28,9 @@ type RPCError struct {
 
 // RegisterParams is sent by agentd when it connects.
 type RegisterParams struct {
-	Name     string                    `json:"name"`
-	Profiles map[string]ProfileInfo    `json:"profiles"`
-	Ttyd     TtydInfo                  `json:"ttyd"`
+	Name     string                 `json:"name"`
+	Profiles map[string]ProfileInfo `json:"profiles"`
+	Ttyd     TtydInfo               `json:"ttyd"`
 }
 
 // ProfileInfo describes an agent profile.
@@ -53,6 +53,10 @@ type TtydInfo struct {
 // RegisterResult is returned by the hub to acknowledge registration.
 type RegisterResult struct {
 	Accepted bool `json:"accepted"`
+	// MaxMessageBytes advertises the hub's agent-connection read limit
+	// (AgentMaxMessageSize) so agentd can size outgoing messages against the
+	// hub it is actually talking to instead of a compiled-in constant.
+	MaxMessageBytes int64 `json:"max_message_bytes,omitempty"`
 }
 
 // PongResult is returned by agentd in response to a ping.

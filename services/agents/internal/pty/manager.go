@@ -13,19 +13,26 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/creack/pty"
+
+	sharedrelay "github.com/dokipen/claude-cadence/services/shared/relay"
 )
 
-// defaultBufferSize is 1 byte less than 1 MB so that a ttyd replay frame
-// (1-byte type prefix + buffer contents) fits within the hub proxy's
-// MaxMessageSize (1 << 20) read limit.
-const defaultBufferSize = 1<<20 - 1
+// defaultBufferSize is the ring buffer capacity (and the maximum pty.buffer_size
+// config accepts). A full-buffer snapshot replay over the hub relay is framed
+// as: ttyd type prefix (sharedrelay.TtydFramePrefixLen = 1) + buffer contents
+// + relay header (sharedrelay.TerminalFrameHeaderLen = 17), i.e.
+// sharedrelay.MaxSnapshotFrameSize bytes. The hub's agent-connection read
+// limit (sharedrelay.AgentMaxMessageSize) must exceed that frame size, or a
+// single replay closes the whole agent connection (issue #685).
+const defaultBufferSize = sharedrelay.MaxPTYBufferSize
 
 const maxResizeDimension uint16 = 500
 
 // PTYConfig holds configuration for PTYManager.
 type PTYConfig struct {
-	// BufferSize is the ring buffer capacity in bytes. Defaults to (1<<20)-1
-	// to leave room for the ttyd frame prefix within the hub proxy's 1 MB limit.
+	// BufferSize is the ring buffer capacity in bytes. Defaults to
+	// defaultBufferSize (sharedrelay.MaxPTYBufferSize); see that constant for
+	// how it relates to the hub relay frame size.
 	BufferSize int
 	// MaxSessions is the maximum number of concurrent sessions. Zero means unlimited.
 	MaxSessions int
@@ -33,18 +40,18 @@ type PTYConfig struct {
 
 // session holds per-session PTY state.
 type session struct {
-	id         string
-	cmd        *exec.Cmd
-	master     *os.File    // PTY master
-	rb         *RingBuffer
-	writers    []io.Writer  // active WS writers (stub for future broadcast)
-	writerGen  uint64       // incremented each time a new writer is registered; used to avoid stale cleanup
-	done       chan struct{} // closed when PTY read goroutine exits AND cmd.Wait() has returned
-	waitOnce   sync.Once   // ensures cmd.Wait() is called exactly once
-	waitErr    error       // result of cmd.Wait(), set by waitOnce
-	closeOnce  sync.Once   // ensures master.Close() is called exactly once (idempotent across Destroy and Reattach goroutine)
-	mu         sync.Mutex
-	slavePath  string      // /dev/pts/N path of the slave side of the PTY
+	id        string
+	cmd       *exec.Cmd
+	master    *os.File // PTY master
+	rb        *RingBuffer
+	writers   []io.Writer   // active WS writers (stub for future broadcast)
+	writerGen uint64        // incremented each time a new writer is registered; used to avoid stale cleanup
+	done      chan struct{} // closed when PTY read goroutine exits AND cmd.Wait() has returned
+	waitOnce  sync.Once     // ensures cmd.Wait() is called exactly once
+	waitErr   error         // result of cmd.Wait(), set by waitOnce
+	closeOnce sync.Once     // ensures master.Close() is called exactly once (idempotent across Destroy and Reattach goroutine)
+	mu        sync.Mutex
+	slavePath string // /dev/pts/N path of the slave side of the PTY
 }
 
 // closeMaster closes the PTY master fd idempotently. The second and subsequent

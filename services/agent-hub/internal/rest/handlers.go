@@ -274,9 +274,9 @@ func handleCreateSession(h *hub.Hub) http.HandlerFunc {
 			return
 		}
 
-		// CreateSession params are small (session ID + profile name); cap at RPC
-		// frame limit rather than the global REST body limit (1 MiB).
-		r.Body = http.MaxBytesReader(w, r.Body, hub.RPCMaxMessageSize)
+		// CreateSession params are small (session ID + profile name); cap
+		// tighter than the global REST body limit (1 MiB).
+		r.Body = http.MaxBytesReader(w, r.Body, MaxSessionRequestBodySize)
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -361,7 +361,7 @@ func handleSendInput(h *hub.Hub) http.HandlerFunc {
 
 		sessionID := r.PathValue("id")
 
-		r.Body = http.MaxBytesReader(w, r.Body, hub.RPCMaxMessageSize)
+		r.Body = http.MaxBytesReader(w, r.Body, MaxSessionRequestBodySize)
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -683,9 +683,10 @@ func handleAgentWebSocket(h *hub.Hub, agentToken string) http.HandlerFunc {
 			return
 		}
 
-		// The register message is a JSON-RPC text frame; apply the RPC limit.
-		// HandleAgentConnection raises this to MaxMessageSize for relay frames.
-		conn.SetReadLimit(hub.RPCMaxMessageSize)
+		// Apply the agent-link read backstop before the first read. This is
+		// the same limit HandleAgentConnection uses for the connection's
+		// lifetime; message size is never a reason to drop an agent.
+		conn.SetReadLimit(hub.AgentMaxMessageSize)
 
 		// Read the first message, which must be a register request.
 		_, data, err := conn.Read(r.Context())
@@ -741,7 +742,10 @@ func handleAgentWebSocket(h *hub.Hub, agentToken string) http.HandlerFunc {
 			slog.Warn("agent registration rejected", "agent", params.Name, "error", regErr)
 			resp = hub.NewErrorResponse(req.ID, hub.RPCErrFailedPrecondition, "registration rejected")
 		} else {
-			resp, err = hub.NewResponse(req.ID, &hub.RegisterResult{Accepted: true})
+			resp, err = hub.NewResponse(req.ID, &hub.RegisterResult{
+				Accepted:        true,
+				MaxMessageBytes: hub.AgentMaxMessageSize,
+			})
 			if err != nil {
 				slog.Error("failed to create register response", "error", err)
 				conn.Close(websocket.StatusInternalError, "internal error")

@@ -11,6 +11,7 @@ import (
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
 	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
 	"github.com/dokipen/claude-cadence/services/agents/internal/session"
+	sharedrelay "github.com/dokipen/claude-cadence/services/shared/relay"
 )
 
 // newFakeManager creates a session.Manager backed by an in-memory store
@@ -62,6 +63,167 @@ func TestDispatcher_ListSessions_Empty(t *testing.T) {
 	}
 	if len(out.Sessions) != 0 {
 		t.Errorf("expected 0 sessions, got %d", len(out.Sessions))
+	}
+}
+
+// TestDispatcher_ListSessions_OmitsPromptContext verifies the Layer 3 contract
+// from issue #685: listSessions is metadata-only (no prompt_context/prompt_type
+// keys at all, but still waiting_for_input/idle_since so callers know which
+// sessions to fetch), while getSession for the same id carries the prompt
+// payload. Assertions are on raw JSON keys because omitempty makes an absent
+// key and an empty string indistinguishable once decoded into sessionInfo.
+func TestDispatcher_ListSessions_OmitsPromptContext(t *testing.T) {
+	const id = "550e8400-e29b-41d4-a716-446655440010"
+	idle := time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)
+	store := session.NewStore()
+	store.Add(&session.Session{
+		ID:              id,
+		Name:            "prompt-session",
+		AgentProfile:    "default",
+		State:           session.StateRunning,
+		WaitingForInput: true,
+		IdleSince:       &idle,
+		PromptContext:   "Do you want to proceed? (y/n)",
+		PromptType:      "yes_no",
+	})
+	mgr := session.NewManager(store, nil, nil, nil, map[string]config.Profile{}, 0)
+	d := NewDispatcher(mgr, "127.0.0.1", "ws", "", nil)
+
+	decodeKeys := func(t *testing.T, raw json.RawMessage) map[string]any {
+		t.Helper()
+		var m map[string]any
+		if err := json.Unmarshal(raw, &m); err != nil {
+			t.Fatalf("unmarshal into map: %v", err)
+		}
+		return m
+	}
+
+	// listSessions: metadata only.
+	listRaw, rpcErr := d.ListSessions(json.RawMessage(`{}`))
+	if rpcErr != nil {
+		t.Fatalf("ListSessions: unexpected error: %v", rpcErr)
+	}
+	for _, key := range []string{"prompt_context", "prompt_type"} {
+		if strings.Contains(string(listRaw), `"`+key+`"`) {
+			t.Errorf("ListSessions JSON must not contain key %q, got: %s", key, listRaw)
+		}
+	}
+	listSessions, ok := decodeKeys(t, listRaw)["sessions"].([]any)
+	if !ok || len(listSessions) != 1 {
+		t.Fatalf("expected 1 session in list, got: %s", listRaw)
+	}
+	listEntry := listSessions[0].(map[string]any)
+	if v, ok := listEntry["waiting_for_input"].(bool); !ok || !v {
+		t.Errorf("ListSessions entry must carry waiting_for_input=true, got: %v", listEntry["waiting_for_input"])
+	}
+	if _, ok := listEntry["idle_since"].(string); !ok {
+		t.Errorf("ListSessions entry must carry idle_since, got: %v", listEntry["idle_since"])
+	}
+	if _, present := listEntry["prompt_context"]; present {
+		t.Error("ListSessions entry must not have prompt_context key")
+	}
+	if _, present := listEntry["prompt_type"]; present {
+		t.Error("ListSessions entry must not have prompt_type key")
+	}
+
+	// getSession: full per-session payload.
+	getRaw, rpcErr := d.GetSession(json.RawMessage(fmt.Sprintf(`{"session_id":%q}`, id)))
+	if rpcErr != nil {
+		t.Fatalf("GetSession: unexpected error: %v", rpcErr)
+	}
+	getEntry, ok := decodeKeys(t, getRaw)["session"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected session object, got: %s", getRaw)
+	}
+	if got, _ := getEntry["prompt_context"].(string); got != "Do you want to proceed? (y/n)" {
+		t.Errorf("GetSession prompt_context = %q, want stored value", got)
+	}
+	if got, _ := getEntry["prompt_type"].(string); got != "yes_no" {
+		t.Errorf("GetSession prompt_type = %q, want stored value", got)
+	}
+	if v, ok := getEntry["waiting_for_input"].(bool); !ok || !v {
+		t.Errorf("GetSession must carry waiting_for_input=true, got: %v", getEntry["waiting_for_input"])
+	}
+}
+
+// Worst-case sizing for the bounded listSessions payload test. These are
+// deliberately generous upper bounds on each metadata field so the test fails
+// loudly if a future field addition (or an unbounded field leaking back into
+// the list) blows the budget. Real values are far smaller: IDs are 36-char
+// UUIDs, names/profiles are short slugs, paths and URLs are a few hundred
+// bytes at most.
+const (
+	// listSessionsWorstCaseSessions is the number of sessions in the
+	// synthetic list. pty.max_sessions is configurable (0 = unlimited), so
+	// this is a realistic operational ceiling rather than a hard cap.
+	listSessionsWorstCaseSessions = 200
+	// listSessionsWorstCaseShortField bounds short identifiers: id, name,
+	// agent_profile, state, base_ref, created_at, idle_since.
+	listSessionsWorstCaseShortField = 256
+	// listSessionsWorstCaseLongField bounds the longer free-form strings:
+	// worktree_path, repo_url, websocket_url, error_message.
+	listSessionsWorstCaseLongField = 1024
+	// listSessionsWorstCasePerSession is the budget for one serialized
+	// session: 7 short fields + 4 long fields + JSON framing (keys, quotes,
+	// commas, the agent_pid int and waiting_for_input bool). Keep this in
+	// sync with sessionInfo; adding a field to the list response must be
+	// accounted for here.
+	listSessionsWorstCasePerSession = 7*listSessionsWorstCaseShortField + 4*listSessionsWorstCaseLongField + 512
+)
+
+// TestListSessions_WorstCasePayloadBounded asserts that a listSessions
+// response at a realistic upper bound (many sessions, every metadata field at
+// a generous worst-case length) stays comfortably under the hub's agent
+// message limit. This is the bound that makes listSessions "bounded by
+// construction" per issue #685: the only unbounded field (prompt_context) is
+// never present in the list, so the size is N * (small constant).
+func TestListSessions_WorstCasePayloadBounded(t *testing.T) {
+	short := strings.Repeat("s", listSessionsWorstCaseShortField)
+	long := strings.Repeat("L", listSessionsWorstCaseLongField)
+
+	infos := make([]sessionInfo, listSessionsWorstCaseSessions)
+	for i := range infos {
+		idle := short
+		infos[i] = sessionInfo{
+			ID:              short,
+			Name:            short,
+			AgentProfile:    short,
+			State:           short,
+			WorktreePath:    long,
+			RepoURL:         long,
+			BaseRef:         short,
+			CreatedAt:       short,
+			ErrorMessage:    long,
+			AgentPID:        2147483647,
+			WebsocketURL:    long,
+			WaitingForInput: true,
+			IdleSince:       &idle,
+			// PromptContext/PromptType intentionally absent: ListSessions
+			// never populates them (see toSessionInfo includePrompt=false).
+		}
+	}
+
+	b, err := json.Marshal(sessionsJSON{Sessions: infos})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	size := len(b)
+	budget := listSessionsWorstCaseSessions * listSessionsWorstCasePerSession
+	limit := sharedrelay.AgentMaxMessageSize / 4
+	t.Logf("worst-case listSessions payload: sessions=%d size=%d bytes (per-session budget=%d, total budget=%d, hub limit/4=%d)",
+		listSessionsWorstCaseSessions, size, listSessionsWorstCasePerSession, budget, limit)
+
+	if size > budget {
+		t.Errorf("serialized size %d exceeds per-session budget total %d; a field was added to sessionInfo without updating listSessionsWorstCasePerSession", size, budget)
+	}
+	if size >= limit {
+		t.Errorf("serialized size %d must be < AgentMaxMessageSize/4 (%d)", size, limit)
+	}
+
+	// The per-session budget must itself be meaningful: a sessionsJSON made
+	// of these sessions must not be able to carry the unbounded field.
+	if strings.Contains(string(b), `"prompt_context"`) {
+		t.Error("worst-case list payload must not contain prompt_context")
 	}
 }
 

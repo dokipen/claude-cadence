@@ -737,7 +737,6 @@ func TestAgentCount(t *testing.T) {
 	}
 }
 
-
 // TestRegister_RejectChangedAdvertiseAddress verifies that Hub.Register rejects
 // re-registration when the AdvertiseAddress differs from the original.
 // The first agent is registered via a real WebSocket connection (using
@@ -918,9 +917,13 @@ func connectRawAgent(t *testing.T, url, name string) *websocket.Conn {
 	return conn
 }
 
-// TestHandleAgentConnection_OversizedTextFrame verifies that a text frame
-// larger than RPCMaxMessageSize causes the hub to close the connection and
-// mark the agent offline.
+// TestHandleAgentConnection_OversizedTextFrame verifies that a large text
+// (JSON-RPC) frame does NOT cause the hub to close the connection or mark
+// the agent offline. Per issue #685, message size alone must never be
+// treated as a dead-peer signal — only the connection-level read limit
+// backstop may close the connection, and no legitimate RPC message should
+// ever approach it. This uses a 600 KiB frame, comfortably larger than the
+// old (deleted) RPC size check but far below the hub's read limit.
 func TestHandleAgentConnection_OversizedTextFrame(t *testing.T) {
 	h, url := startTestHub(t)
 
@@ -932,41 +935,172 @@ func TestHandleAgentConnection_OversizedTextFrame(t *testing.T) {
 		t.Fatalf("expected agent to start online, got %s", agent.Status())
 	}
 
-	// Send a text frame one byte larger than RPCMaxMessageSize.
-	oversized := make([]byte, RPCMaxMessageSize+1)
-	for i := range oversized {
-		oversized[i] = 'x'
+	// Build a 600 KiB JSON-RPC-shaped text frame (padding embedded in the
+	// result field). This is larger than the old, now-deleted
+	// 512 KiB post-read RPC frame cap but must be handled without closing the
+	// connection.
+	const frameSize = 600 * 1024
+	const prefix = `{"jsonrpc":"2.0","id":"x","result":"`
+	const suffix = `"}`
+	padding := make([]byte, frameSize-len(prefix)-len(suffix))
+	for i := range padding {
+		padding[i] = 'x'
 	}
-	// Write may succeed (the close may happen on the hub side during Read).
-	_ = conn.Write(context.Background(), websocket.MessageText, oversized)
+	oversized := append([]byte(prefix), padding...)
+	oversized = append(oversized, []byte(suffix)...)
 
-	// The next Read on the client side should fail — the hub closed the
-	// connection after detecting the oversized text frame.
+	if err := conn.Write(context.Background(), websocket.MessageText, oversized); err != nil {
+		t.Fatalf("write large text frame: %v", err)
+	}
+
+	// Deterministic liveness proof: perform a real hub->agent RPC round-trip
+	// over the same connection AFTER the large frame was read by the hub.
+	// The hub processes frames sequentially in its read loop, so if the
+	// large frame had caused the hub to close the connection (the old
+	// size-based close), the ping request below would never reach the raw
+	// agent and h.Call would fail with a timeout or write error. This is
+	// strictly stronger than polling Status() for a fixed interval, and
+	// completes in milliseconds on the happy path.
+	//
+	// The raw agent replies to every request it receives (including any
+	// heartbeat ping) so the round-trip cannot be confused by other traffic.
+	readErr := make(chan error, 1)
+	go func() {
+		for {
+			_, data, err := conn.Read(context.Background())
+			if err != nil {
+				readErr <- err
+				return
+			}
+			var req Request
+			if err := json.Unmarshal(data, &req); err != nil || req.Method == "" {
+				continue
+			}
+			result, _ := json.Marshal(map[string]string{"pong": "ok"})
+			resp := &Response{JSONRPC: "2.0", ID: req.ID, Result: result}
+			respData, _ := json.Marshal(resp)
+			if err := conn.Write(context.Background(), websocket.MessageText, respData); err != nil {
+				readErr <- err
+				return
+			}
+		}
+	}()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	_, _, readErr := conn.Read(ctx)
-	if readErr == nil {
-		t.Fatal("expected connection to be closed by hub after oversized text frame")
+	result, err := h.Call(ctx, agent, "ping", nil)
+	if err != nil {
+		select {
+		case rerr := <-readErr:
+			t.Fatalf("RPC round-trip after large text frame failed (%v); agent-side read error: %v — hub closed the connection on message size", err, rerr)
+		default:
+			t.Fatalf("RPC round-trip after large text frame failed: %v — hub closed or stalled the connection on message size", err)
+		}
+	}
+	var pong map[string]string
+	if err := json.Unmarshal(result, &pong); err != nil || pong["pong"] != "ok" {
+		t.Fatalf("unexpected ping result after large text frame: %s", result)
 	}
 
-	// Poll until the hub marks the agent offline.
-	deadline := time.Now().Add(2 * time.Second)
+	// Belt-and-braces: the agent must still be online. The round-trip above
+	// already proves the connection is open, so a short poll suffices to
+	// catch a delayed offline transition.
+	deadline := time.Now().Add(300 * time.Millisecond)
 	for time.Now().Before(deadline) {
-		if agent.Status() == StatusOffline {
-			break
+		if agent.Status() != StatusOnline {
+			t.Fatalf("agent went offline after large text frame (status=%s) — message size must never mark an agent offline", agent.Status())
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(25 * time.Millisecond)
 	}
-	if agent.Status() != StatusOffline {
-		t.Errorf("expected agent to be marked offline after oversized text frame, got %s", agent.Status())
+	if agent.Status() != StatusOnline {
+		t.Errorf("expected agent to remain online after large text frame, got %s", agent.Status())
 	}
 }
 
-// TestHandleAgentConnection_AtLimitBinaryFrame verifies that a binary relay
-// frame does NOT close the connection. Binary frames are allowed up to
-// MaxMessageSize (1 MiB); the hub logs a warning about the invalid frame
-// header and continues the read loop. The RPC size check must not apply
-// to binary frames.
+// TestHandleAgentConnection_FullBufferSnapshotFrame verifies that a binary
+// relay frame carrying a full PTY ring-buffer snapshot replay (the exact
+// scenario that caused the 2026-08-23 outage in issue #685) does not close
+// the agent connection or mark the agent offline, and that the frame is
+// delivered intact to the registered terminal relay channel.
+//
+// Frame size is exactly sharedrelay.MaxSnapshotFrameSize (1,048,593 bytes):
+// ring buffer (1<<20 - 1) + ttyd '0' prefix (1) + relay header (17). The
+// hub's former agent-connection read limit (1<<20 = 1,048,576) was 17 bytes
+// too small for this frame, so coder/websocket closed the connection with
+// StatusMessageTooBig before HandleAgentConnection ever saw the data.
+func TestHandleAgentConnection_FullBufferSnapshotFrame(t *testing.T) {
+	h, url := startTestHub(t)
+
+	conn := connectRawAgent(t, url, "snapshot-agent")
+	defer conn.CloseNow()
+
+	agent := waitForAgent(t, h, "snapshot-agent")
+	if agent.Status() != StatusOnline {
+		t.Fatalf("expected agent to start online, got %s", agent.Status())
+	}
+
+	sessionID := uuid.New()
+	relayCh, cleanup, err := h.OpenTerminalRelay(context.Background(), "snapshot-agent", sessionID)
+	if err != nil {
+		t.Fatalf("OpenTerminalRelay: %v", err)
+	}
+	// On current (buggy) code the hub closes the agent connection and calls
+	// CloseTerminalChannels internally, which already closes this relay
+	// channel. Guard against a double-close panic from our own cleanup call
+	// so the test reports the real failure (frame not delivered / agent
+	// offline) instead of crashing the test binary.
+	defer func() {
+		defer func() { _ = recover() }()
+		cleanup()
+	}()
+
+	// Build the ttyd-prefixed payload: '0' output-type byte + ring buffer
+	// worth of PTY output.
+	ttydPayload := make([]byte, sharedrelay.MaxPTYBufferSize+sharedrelay.TtydFramePrefixLen)
+	ttydPayload[0] = '0'
+	for i := sharedrelay.TtydFramePrefixLen; i < len(ttydPayload); i++ {
+		ttydPayload[i] = byte('a' + i%26)
+	}
+	if len(ttydPayload) != sharedrelay.MaxSnapshotFrameSize-sharedrelay.TerminalFrameHeaderLen {
+		t.Fatalf("test setup: unexpected ttyd payload length %d", len(ttydPayload))
+	}
+
+	frame := EncodeTerminalFrame(sessionID, ttydPayload)
+	if len(frame) != sharedrelay.MaxSnapshotFrameSize {
+		t.Fatalf("test setup: expected frame of %d bytes, got %d", sharedrelay.MaxSnapshotFrameSize, len(frame))
+	}
+
+	if err := conn.Write(context.Background(), websocket.MessageBinary, frame); err != nil {
+		t.Fatalf("write full-buffer snapshot frame: %v", err)
+	}
+
+	// The frame should be delivered intact to the relay channel.
+	select {
+	case delivered := <-relayCh:
+		if len(delivered) != len(ttydPayload) {
+			t.Errorf("expected delivered payload of %d bytes, got %d", len(ttydPayload), len(delivered))
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for full-buffer snapshot frame to be delivered — connection likely closed by SetReadLimit")
+	}
+
+	// Give the hub's read loop a moment; the connection must still be open.
+	time.Sleep(100 * time.Millisecond)
+	if agent.Status() != StatusOnline {
+		t.Errorf("expected agent to remain online after full-buffer snapshot frame, got %s", agent.Status())
+	}
+
+	// Confirm the connection is still usable for further frames.
+	pingReq, _ := NewRequest("ping-check", "ping", nil)
+	pingData, _ := json.Marshal(pingReq)
+	if err := conn.Write(context.Background(), websocket.MessageText, pingData); err != nil {
+		t.Fatalf("write after snapshot frame failed — connection was closed: %v", err)
+	}
+}
+
+// TestHandleAgentConnection_AtLimitBinaryFrame verifies that a large binary
+// relay frame with an invalid header does NOT close the connection: the hub
+// logs a warning about the invalid frame and continues the read loop.
 func TestHandleAgentConnection_AtLimitBinaryFrame(t *testing.T) {
 	h, url := startTestHub(t)
 
@@ -978,12 +1112,11 @@ func TestHandleAgentConnection_AtLimitBinaryFrame(t *testing.T) {
 		t.Fatalf("expected agent to start online, got %s", agent.Status())
 	}
 
-	// Send a binary frame of exactly MaxMessageSize bytes. The frame header
-	// will be invalid (no 0x01 type byte in the right position), so
+	// Send a half-snapshot-sized binary frame. The frame header will be
+	// invalid (no 0x01 type byte in the right position), so
 	// DecodeTerminalFrame returns an error — but the hub logs a warning and
 	// continues the loop without closing the connection.
-	// Use half the relay limit to avoid any boundary behavior from WebSocket framing overhead.
-	atLimit := make([]byte, MaxMessageSize/2)
+	atLimit := make([]byte, sharedrelay.MaxSnapshotFrameSize/2)
 	if err := conn.Write(context.Background(), websocket.MessageBinary, atLimit); err != nil {
 		t.Fatalf("write binary frame: %v", err)
 	}
@@ -1008,13 +1141,16 @@ func TestHandleAgentConnection_AtLimitBinaryFrame(t *testing.T) {
 	}
 }
 
-// TestMaxMessageSizeConstants asserts that RPCMaxMessageSize is strictly less
-// than MaxMessageSize. If someone changes one constant without the other this
-// test will fail, preventing an accidental inversion.
+// TestMaxMessageSizeConstants asserts the invariant that protects against
+// issue #685: the largest legitimate relay frame the hub can receive
+// (sharedrelay.MaxSnapshotFrameSize, a full PTY ring-buffer snapshot replay)
+// must be strictly less than the hub's agent-connection read limit. If this
+// inversion ever creeps back in, coder/websocket closes the whole agent
+// connection on a routine snapshot replay instead of delivering the frame.
 func TestMaxMessageSizeConstants(t *testing.T) {
-	if RPCMaxMessageSize >= MaxMessageSize {
-		t.Errorf("RPCMaxMessageSize (%d) must be < MaxMessageSize (%d)",
-			RPCMaxMessageSize, MaxMessageSize)
+	if sharedrelay.MaxSnapshotFrameSize >= AgentMaxMessageSize {
+		t.Errorf("sharedrelay.MaxSnapshotFrameSize (%d) must be < AgentMaxMessageSize (%d) — a full ring-buffer snapshot replay would close the agent connection (issue #685)",
+			sharedrelay.MaxSnapshotFrameSize, AgentMaxMessageSize)
 	}
 }
 
@@ -1025,7 +1161,7 @@ func TestCloseTerminalChannel(t *testing.T) {
 		Name:             "test-agent",
 		status:           StatusOnline,
 		pending:          make(map[string]chan *Response),
-		terminalChannels: make(map[uuid.UUID]chan []byte),
+		terminalChannels: make(map[uuid.UUID]*terminalRelay),
 	}
 
 	sessA := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
