@@ -304,7 +304,7 @@ describe("NotificationDropdown — idle duration", () => {
 // ---------------------------------------------------------------------------
 
 describe("NotificationDropdown — yesno prompt", () => {
-  it("Yes button calls sendSessionInput with 'y\\n'", async () => {
+  it("Yes button calls sendSessionInput with 'y\\r'", async () => {
     const agentName = "lead";
     const sessionId = "sess-yesno";
     const sessions = [
@@ -323,11 +323,11 @@ describe("NotificationDropdown — yesno prompt", () => {
 
     // sendSessionInput is async; wait for it to be called
     await vi.waitFor(() => {
-      expect(sendSessionInput).toHaveBeenCalledWith(agentName, sessionId, "y\n");
+      expect(sendSessionInput).toHaveBeenCalledWith(agentName, sessionId, "y\r");
     });
   });
 
-  it("No button calls sendSessionInput with 'n\\n'", async () => {
+  it("No button calls sendSessionInput with 'n\\r'", async () => {
     const agentName = "lead";
     const sessionId = "sess-yesno";
     const sessions = [
@@ -345,7 +345,7 @@ describe("NotificationDropdown — yesno prompt", () => {
     fireEvent.click(getByTestId("btn-no"));
 
     await vi.waitFor(() => {
-      expect(sendSessionInput).toHaveBeenCalledWith(agentName, sessionId, "n\n");
+      expect(sendSessionInput).toHaveBeenCalledWith(agentName, sessionId, "n\r");
     });
   });
 });
@@ -445,7 +445,7 @@ describe("NotificationDropdown — text input prompt", () => {
     expect(getByTestId("btn-send")).toBeTruthy();
   });
 
-  it("Send button calls sendSessionInput with typed text + \\n", async () => {
+  it("Send button calls sendSessionInput with typed text + \\r", async () => {
     const agentName = "lead";
     const sessionId = "sess-text";
     const sessions = [
@@ -465,7 +465,7 @@ describe("NotificationDropdown — text input prompt", () => {
     fireEvent.click(getByTestId("btn-send"));
 
     await vi.waitFor(() => {
-      expect(sendSessionInput).toHaveBeenCalledWith(agentName, sessionId, "typed text\n");
+      expect(sendSessionInput).toHaveBeenCalledWith(agentName, sessionId, "typed text\r");
     });
   });
 });
@@ -760,7 +760,7 @@ describe("NotificationDropdown — select prompt delta variants", () => {
 
 
 describe("NotificationDropdown — text input Enter key submission", () => {
-  it("pressing Enter in the text input calls sendSessionInput with typed text + \\n", async () => {
+  it("pressing Enter in the text input calls sendSessionInput with typed text + \\r", async () => {
     const agentName = "lead";
     const sessionId = "sess-enter";
     const sessions = [
@@ -780,7 +780,7 @@ describe("NotificationDropdown — text input Enter key submission", () => {
     fireEvent.keyDown(input, { key: "Enter" });
 
     await vi.waitFor(() => {
-      expect(sendSessionInput).toHaveBeenCalledWith(agentName, sessionId, "hello\n");
+      expect(sendSessionInput).toHaveBeenCalledWith(agentName, sessionId, "hello\r");
     });
   });
 });

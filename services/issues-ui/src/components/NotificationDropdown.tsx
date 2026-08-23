@@ -149,7 +149,7 @@ function NotificationItem({ ws, projectId, projectName, onClose }: NotificationI
           <button
             className={`${layoutStyles.notificationControlBtn} ${layoutStyles.notificationControlBtnPrimary}`}
             disabled={sent}
-            onClick={() => void handleSend("y\n")}
+            onClick={() => void handleSend("y\r")}
             data-testid="btn-yes"
           >
             {sent ? "Sent" : "Yes"}
@@ -157,7 +157,7 @@ function NotificationItem({ ws, projectId, projectName, onClose }: NotificationI
           <button
             className={layoutStyles.notificationControlBtn}
             disabled={sent}
-            onClick={() => void handleSend("n\n")}
+            onClick={() => void handleSend("n\r")}
             data-testid="btn-no"
           >
             {sent ? "Sent" : "No"}
@@ -189,7 +189,7 @@ function NotificationItem({ ws, projectId, projectName, onClose }: NotificationI
             onChange={(e) => { setTextInput(e.target.value); setError(null); }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
-                void handleSend(textInput + "\n");
+                void handleSend(textInput + "\r");
                 setTextInput("");
               }
             }}
@@ -199,7 +199,7 @@ function NotificationItem({ ws, projectId, projectName, onClose }: NotificationI
             className={layoutStyles.notificationControlBtn}
             disabled={sent}
             onClick={() => {
-              void handleSend(textInput + "\n");
+              void handleSend(textInput + "\r");
               setTextInput("");
             }}
             data-testid="btn-send"
