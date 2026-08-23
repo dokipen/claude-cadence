@@ -53,6 +53,22 @@ describe("normalizeRepo", () => {
       "git@gitlab.com:owner/repo",
     );
   });
+
+  it("treats case-mismatched repo slugs as equal", () => {
+    expect(normalizeRepo("Owner/Repo")).toBe(normalizeRepo("owner/repo"));
+  });
+
+  it("lowercases a mixed-case repo slug", () => {
+    expect(normalizeRepo("Owner/Repo")).toBe("owner/repo");
+  });
+
+  it("treats a trailing-slash repo slug as equal to one without", () => {
+    expect(normalizeRepo("owner/repo/")).toBe(normalizeRepo("owner/repo"));
+  });
+
+  it("treats a whitespace-padded repo slug as equal to a trimmed one", () => {
+    expect(normalizeRepo("  owner/repo  ")).toBe(normalizeRepo("owner/repo"));
+  });
 });
 
 describe("normalizeRepo - nullish inputs from recovered sessions", () => {

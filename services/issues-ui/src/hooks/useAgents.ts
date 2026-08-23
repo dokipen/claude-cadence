@@ -98,9 +98,12 @@ export interface AgentProfileEntry {
 export function normalizeRepo(repo: string | undefined): string {
   if (!repo) return "";
   return repo
+    .trim()
+    .toLowerCase()
+    .replace(/\.git$/, "")
+    .replace(/\/$/, "")
     .replace(/^git@github\.com:/, "") // SSH: git@github.com:owner/repo
-    .replace(/^https?:\/\/github\.com\//, "") // HTTPS/HTTP: https://github.com/owner/repo
-    .replace(/\.git$/, "");
+    .replace(/^https?:\/\/github\.com\//, ""); // HTTPS/HTTP: https://github.com/owner/repo
 }
 
 export function useAgentProfiles(
