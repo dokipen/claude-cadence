@@ -62,12 +62,32 @@ describe("normalizeRepo", () => {
     expect(normalizeRepo("Owner/Repo")).toBe("owner/repo");
   });
 
-  it("treats a trailing-slash repo slug as equal to one without", () => {
-    expect(normalizeRepo("owner/repo/")).toBe(normalizeRepo("owner/repo"));
+  it("strips a trailing slash from a repo slug", () => {
+    expect(normalizeRepo("owner/repo/")).toBe("owner/repo");
   });
 
-  it("treats a whitespace-padded repo slug as equal to a trimmed one", () => {
-    expect(normalizeRepo("  owner/repo  ")).toBe(normalizeRepo("owner/repo"));
+  it("trims a whitespace-padded repo slug", () => {
+    expect(normalizeRepo("  owner/repo  ")).toBe("owner/repo");
+  });
+
+  it("handles combined case, whitespace, trailing slash, and .git suffix", () => {
+    expect(normalizeRepo("  Owner/Repo.GIT/  ")).toBe("owner/repo");
+  });
+
+  it("strips a trailing slash after a .git suffix", () => {
+    expect(normalizeRepo("https://github.com/owner/repo.git/")).toBe(
+      "owner/repo",
+    );
+  });
+
+  it("lowercases an uppercase SSH prefix", () => {
+    expect(normalizeRepo("GIT@GITHUB.COM:owner/repo")).toBe("owner/repo");
+  });
+
+  it("lowercases an uppercase HTTPS prefix", () => {
+    expect(normalizeRepo("HTTPS://GITHUB.COM/owner/repo")).toBe(
+      "owner/repo",
+    );
   });
 });
 
