@@ -236,6 +236,8 @@ func TestClientResetsBackoffAfterStableConnection(t *testing.T) {
 
 	var connCount atomic.Int64
 	var mu sync.Mutex
+	var acceptTime1 time.Time
+	var acceptTime2 time.Time
 	var closeTime3 time.Time
 	var acceptTime4 time.Time
 	conn4Seen := make(chan struct{})
@@ -245,6 +247,18 @@ func TestClientResetsBackoffAfterStableConnection(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		n := connCount.Add(1)
+
+		if n == 1 {
+			mu.Lock()
+			acceptTime1 = time.Now()
+			mu.Unlock()
+		}
+
+		if n == 2 {
+			mu.Lock()
+			acceptTime2 = time.Now()
+			mu.Unlock()
+		}
 
 		if n == 4 {
 			mu.Lock()
@@ -318,15 +332,38 @@ func TestClientResetsBackoffAfterStableConnection(t *testing.T) {
 	client.Start()
 	t.Cleanup(client.Stop)
 
+	// Widened from 5s: flakiness runs (~130 iterations, some with -race)
+	// showed occasional stalls of ~5.3-5.4s before this point, well within
+	// the old 5s bound's margin of error. The stall happens in the initial
+	// dial/registration round-trip, before the timed portion below, so
+	// widening this doesn't affect what the test measures.
 	select {
 	case <-conn4Seen:
-	case <-time.After(5 * time.Second):
+	case <-time.After(25 * time.Second):
 		t.Fatalf("timed out waiting for 4th connection attempt, saw %d connection(s)", connCount.Load())
 	}
 
 	mu.Lock()
+	gap12 := acceptTime2.Sub(acceptTime1)
 	gap := acceptTime4.Sub(closeTime3)
 	mu.Unlock()
+
+	// Acceptance criterion (b): rapid connect/disconnect cycles still back
+	// off. Connection #1 fails immediately, so the delay before connection
+	// #2 is dialed reflects backoff(attempt=1, reconnectInterval) -- roughly
+	// 2x the base interval -- not backoff(attempt=0, reconnectInterval),
+	// which would be roughly 1x. With ±25% jitter, attempt=0 tops out at
+	// 1.25x base while attempt=1 bottoms out at 1.5x base, so a threshold of
+	// 1.4x base cleanly distinguishes the two. A regression that reset
+	// attempt unconditionally on every failure (rather than only after a
+	// stable connection) would collapse this gap back into the attempt=0
+	// range, so assert it's meaningfully larger than that.
+	minWant12 := time.Duration(1.4 * float64(reconnectInterval))
+	if gap12 < minWant12 {
+		t.Fatalf("reconnect delay before 2nd connection attempt = %v, want >= %v (roughly 2x base reconnect interval with jitter); "+
+			"this indicates a failed connection attempt is not being backed off (issue #692 acceptance criterion b)",
+			gap12, minWant12)
+	}
 
 	// A correctly-reset attempt counter yields a delay close to the base
 	// reconnectInterval (up to ±25% jitter, i.e. <= 1.25x). Give a generous

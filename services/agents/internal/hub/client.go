@@ -127,10 +127,17 @@ func (c *Client) connectLoop(ctx context.Context) {
 			if ctx.Err() != nil {
 				return
 			}
-			if time.Since(connStart) >= c.cfg.ReconnectInterval {
+			stableThreshold := c.cfg.ReconnectInterval
+			if stableThreshold <= 0 {
+				// Match backoff()'s floor: an unset/misconfigured
+				// ReconnectInterval must not make every disconnect look
+				// "stable" and disable backoff entirely.
+				stableThreshold = time.Second
+			}
+			if time.Since(connStart) >= stableThreshold {
 				// The connection stayed up long enough to be considered stable;
 				// treat this disconnect as fresh and reset the backoff.
-				slog.Warn("hub connection failed after stable period, resetting backoff", "error", err)
+				slog.Warn("hub connection failed after stable period, resetting backoff", "error", err, "attempt", attempt)
 				attempt = 0
 			} else {
 				slog.Warn("hub connection failed", "error", err, "attempt", attempt)
