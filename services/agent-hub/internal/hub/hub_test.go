@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -234,6 +235,222 @@ func TestHeartbeatTimeout(t *testing.T) {
 	if agent.Status() != StatusOffline {
 		t.Errorf("expected agent to be marked offline after heartbeat timeout, got %s", agent.Status())
 	}
+}
+
+// TestHeartbeatTimeoutClosesConnection covers issue #691: a heartbeat
+// timeout marks the agent offline via markOfflineIfCurrent, which must also
+// close the underlying websocket connection. Otherwise HandleAgentConnection's
+// read loop would stay alive and keep calling Touch() on the "offline" agent,
+// and the client-side connection would remain usable, preventing the agent
+// from ever reconnecting. This test asserts the fixed behavior: once the
+// agent is marked offline, the original connection is closed — a write from
+// the original client connection fails, and LastSeen no longer advances.
+func TestHeartbeatTimeoutClosesConnection(t *testing.T) {
+	h, url := startTestHubWithHeartbeat(t, 50*time.Millisecond, 50*time.Millisecond)
+
+	conn := connectRawAgent(t, url, "raw-silent-agent")
+	defer conn.CloseNow()
+
+	agent := waitForAgent(t, h, "raw-silent-agent")
+
+	if agent.Status() != StatusOnline {
+		t.Fatalf("expected agent to start online, got %s", agent.Status())
+	}
+
+	// Poll until the agent is marked offline by the heartbeat timeout. The
+	// client never reads or responds to the hub's heartbeat ping, so the
+	// heartbeat loop's timeout branch will fire and call markOfflineIfCurrent.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if agent.Status() == StatusOffline {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if agent.Status() != StatusOffline {
+		t.Fatalf("expected agent to be marked offline after heartbeat timeout, got %s", agent.Status())
+	}
+
+	lastSeenBeforeWrite := agent.LastSeen()
+
+	// The underlying websocket connection must have been closed when the
+	// agent was marked offline. Prove this by writing a message from the
+	// original client connection: either the write itself fails immediately
+	// (connection already closed locally), or the hub's read loop has
+	// exited and never processes the message, so LastSeen must not advance.
+	req, err := NewRequest("post-offline-1", "noop", nil)
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	data, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	writeErr := conn.Write(context.Background(), websocket.MessageText, data)
+
+	touchDeadline := time.Now().Add(1 * time.Second)
+	touched := false
+	for time.Now().Before(touchDeadline) {
+		if agent.LastSeen().After(lastSeenBeforeWrite) {
+			touched = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if touched {
+		t.Fatalf("expected hub's read loop to have exited after the agent went offline, but LastSeen advanced after a post-offline write")
+	}
+
+	if writeErr == nil {
+		// The local write may briefly succeed if it races the close
+		// handshake, but the connection must observe the close shortly
+		// after: poll with bounded per-attempt reads until Read reports an
+		// error (the expected outcome), or the deadline is reached.
+		readDeadline := time.Now().Add(1 * time.Second)
+		closed := false
+		for time.Now().Before(readDeadline) {
+			readCtx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			_, _, readErr := conn.Read(readCtx)
+			cancel()
+			if readErr != nil && !errors.Is(readErr, context.DeadlineExceeded) {
+				closed = true
+				break
+			}
+		}
+		if !closed {
+			t.Fatalf("expected connection to be closed after agent marked offline, but reads kept succeeding or timing out")
+		}
+	}
+
+	if agent.Status() != StatusOffline {
+		t.Fatalf("expected agent to remain marked offline, got %s", agent.Status())
+	}
+}
+
+// dialAndRegisterNoFatal dials the test server and registers under name,
+// without using t.Fatalf (safe to call from a background goroutine, unlike
+// t.Fatalf/FailNow which must only be called from the test's own goroutine).
+func dialAndRegisterNoFatal(url, name string) (*websocket.Conn, error) {
+	wsURL := "ws" + strings.TrimPrefix(url, "http")
+	conn, _, err := websocket.Dial(context.Background(), wsURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("dial: %w", err)
+	}
+
+	regReq, err := NewRequest("reg-1", "register", &RegisterParams{
+		Name:     name,
+		Profiles: map[string]ProfileInfo{"default": {Description: "test", Repo: "https://github.com/test/repo"}},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("build register request: %w", err)
+	}
+	data, err := json.Marshal(regReq)
+	if err != nil {
+		return nil, fmt.Errorf("marshal register request: %w", err)
+	}
+	if err := conn.Write(context.Background(), websocket.MessageText, data); err != nil {
+		return nil, fmt.Errorf("write register: %w", err)
+	}
+	if _, _, err := conn.Read(context.Background()); err != nil {
+		return nil, fmt.Errorf("read register ack: %w", err)
+	}
+	return conn, nil
+}
+
+// connectReconnectingAgent dials and registers under name, then behaves like
+// connectSilentAgent (never responding to heartbeat pings) until its
+// connection is closed by the hub. At that point it redials and re-registers
+// under the same name, and from then on behaves like connectAgent (echoing
+// responses to every request, including heartbeat pings), simulating how a
+// real agentd process reconnects after being dropped.
+func connectReconnectingAgent(t *testing.T, url, name string) *websocket.Conn {
+	t.Helper()
+
+	conn, err := dialAndRegisterNoFatal(url, name)
+	if err != nil {
+		t.Fatalf("initial connect: %v", err)
+	}
+
+	go func() {
+		// Silent phase: consume messages without replying, so heartbeat
+		// pings time out and the hub closes this connection.
+		for {
+			if _, _, err := conn.Read(context.Background()); err != nil {
+				break
+			}
+		}
+
+		// Reconnect under the same name and answer normally from here on.
+		reconnected, err := dialAndRegisterNoFatal(url, name)
+		if err != nil {
+			t.Logf("reconnect failed: %v", err)
+			return
+		}
+		for {
+			_, data, err := reconnected.Read(context.Background())
+			if err != nil {
+				return
+			}
+			var req Request
+			if err := json.Unmarshal(data, &req); err != nil {
+				continue
+			}
+			result, _ := json.Marshal(map[string]string{"echo": req.Method})
+			resp := &Response{JSONRPC: "2.0", ID: req.ID, Result: result}
+			respData, err := json.Marshal(resp)
+			if err != nil {
+				continue
+			}
+			if err := reconnected.Write(context.Background(), websocket.MessageText, respData); err != nil {
+				return
+			}
+		}
+	}()
+
+	return conn
+}
+
+// TestHeartbeatTimeoutThenReconnectRestoresOnline covers the acceptance
+// criteria for issue #691: after a heartbeat timeout marks an agent offline
+// and closes its connection, the agent must be able to reconnect and be
+// restored to online status. Before the fix, the stale connection was never
+// closed, so a reconnect attempt under the same name would only replace the
+// map entry while the old read loop kept running against a "phantom" agent —
+// this test guards against that regressing.
+func TestHeartbeatTimeoutThenReconnectRestoresOnline(t *testing.T) {
+	h, url := startTestHubWithHeartbeat(t, 50*time.Millisecond, 50*time.Millisecond)
+
+	connectReconnectingAgent(t, url, "reconnecting-agent")
+
+	agent := waitForAgent(t, h, "reconnecting-agent")
+	if agent.Status() != StatusOnline {
+		t.Fatalf("expected agent to start online, got %s", agent.Status())
+	}
+
+	// Poll until the heartbeat timeout marks the agent offline.
+	offlineDeadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(offlineDeadline) {
+		if agent.Status() == StatusOffline {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if agent.Status() != StatusOffline {
+		t.Fatalf("expected agent to be marked offline after heartbeat timeout, got %s", agent.Status())
+	}
+
+	// Poll until the reconnect completes and the agent is restored online.
+	// Register() replaces the map entry, so re-fetch via h.Get rather than
+	// reusing the (now stale) agent pointer.
+	onlineDeadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(onlineDeadline) {
+		if current, ok := h.Get("reconnecting-agent"); ok && current.Status() == StatusOnline {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("expected agent to be restored online after reconnect")
 }
 
 // TestWSKeepaliveLoop_Disabled verifies that a zero keepalive interval does not
