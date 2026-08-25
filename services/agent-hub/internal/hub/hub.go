@@ -210,6 +210,9 @@ func (h *Hub) markOfflineIfCurrent(name string, expected *ConnectedAgent) {
 
 	if ok && current == expected {
 		expected.SetStatus(StatusOffline)
+		if conn := expected.Conn(); conn != nil {
+			conn.Close(websocket.StatusGoingAway, "liveness check failed")
+		}
 		slog.Info("agent marked offline", "agent", name)
 	}
 }
@@ -508,6 +511,9 @@ func (h *Hub) reaper(ctx context.Context) {
 			for name, agent := range h.agents {
 				if agent.Status() == StatusOffline && now.Sub(agent.LastSeen()) > h.agentTTL {
 					slog.Info("reaping stale agent", "agent", name, "last_seen", agent.LastSeen())
+					if conn := agent.Conn(); conn != nil {
+						conn.Close(websocket.StatusGoingAway, "reaped: stale agent")
+					}
 					delete(h.agents, name)
 				}
 			}
