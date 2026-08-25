@@ -121,16 +121,28 @@ func (c *Client) connectLoop(ctx context.Context) {
 		default:
 		}
 
+		connStart := time.Now()
 		err := c.connect(ctx)
 		if err != nil {
 			if ctx.Err() != nil {
 				return
 			}
-			slog.Warn("hub connection failed", "error", err, "attempt", attempt)
-			attempt++
-		} else {
-			// Reset backoff after a successful connection that later disconnected.
-			attempt = 0
+			stableThreshold := c.cfg.ReconnectInterval
+			if stableThreshold <= 0 {
+				// Match backoff()'s floor: an unset/misconfigured
+				// ReconnectInterval must not make every disconnect look
+				// "stable" and disable backoff entirely.
+				stableThreshold = time.Second
+			}
+			if time.Since(connStart) >= stableThreshold {
+				// The connection stayed up long enough to be considered stable;
+				// treat this disconnect as fresh and reset the backoff.
+				slog.Warn("hub connection failed after stable period, resetting backoff", "error", err, "attempt", attempt)
+				attempt = 0
+			} else {
+				slog.Warn("hub connection failed", "error", err, "attempt", attempt)
+				attempt++
+			}
 		}
 
 		// Exponential backoff with jitter: 1s → 30s max.

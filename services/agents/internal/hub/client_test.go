@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -208,6 +209,172 @@ func TestClientNoKeepaliveWhenDisabled(t *testing.T) {
 
 	if got := connectionCount.Load(); got != 1 {
 		t.Fatalf("expected exactly 1 connection with keepalive disabled, got %d", got)
+	}
+}
+
+// TestClientResetsBackoffAfterStableConnection reproduces issue #692: the
+// connectLoop's attempt counter is supposed to reset to 0 after a successful,
+// stable connection, but connect() never returns nil (readLoop always returns
+// a non-nil error once the connection ends), so the reset branch is dead code
+// and attempt only ever accumulates.
+//
+// The fake hub scripts four connection attempts:
+//  1. fails immediately (before completing registration)
+//  2. fails immediately
+//  3. completes registration, stays up for several multiples of
+//     ReconnectInterval (a "stable" connection), then disconnects
+//  4. completes registration and is held open until the test ends
+//
+// By connection #3, attempt has been incremented to 2 by the two prior
+// failures. If the attempt counter correctly reset to 0 after connection #3's
+// stable run, the delay before dialing connection #4 would be close to the
+// base ReconnectInterval (± jitter). With the bug, attempt is instead 3 by
+// then, producing a delay roughly 2^3 = 8x larger.
+func TestClientResetsBackoffAfterStableConnection(t *testing.T) {
+	const reconnectInterval = 30 * time.Millisecond
+	const stableDuration = 150 * time.Millisecond // 5x reconnectInterval
+
+	var connCount atomic.Int64
+	var mu sync.Mutex
+	var acceptTime1 time.Time
+	var acceptTime2 time.Time
+	var closeTime3 time.Time
+	var acceptTime4 time.Time
+	conn4Seen := make(chan struct{})
+
+	connHold := make(chan struct{})
+	t.Cleanup(func() { close(connHold) })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := connCount.Add(1)
+
+		if n == 1 {
+			mu.Lock()
+			acceptTime1 = time.Now()
+			mu.Unlock()
+		}
+
+		if n == 2 {
+			mu.Lock()
+			acceptTime2 = time.Now()
+			mu.Unlock()
+		}
+
+		if n == 4 {
+			mu.Lock()
+			acceptTime4 = time.Now()
+			mu.Unlock()
+		}
+
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+		if err != nil {
+			return
+		}
+		defer conn.CloseNow()
+
+		if n == 1 || n == 2 {
+			// Fail immediately, without completing registration, to build up
+			// the attempt counter before the "stable" connection.
+			return
+		}
+
+		// Connections 3+ complete registration normally.
+		_, data, err := conn.Read(r.Context())
+		if err != nil {
+			return
+		}
+		var req struct {
+			ID string `json:"id"`
+		}
+		if jsonErr := json.Unmarshal(data, &req); jsonErr != nil {
+			return
+		}
+		ack, _ := json.Marshal(map[string]interface{}{
+			"jsonrpc": "2.0",
+			"id":      req.ID,
+			"result":  map[string]interface{}{},
+		})
+		if writeErr := conn.Write(r.Context(), websocket.MessageText, ack); writeErr != nil {
+			return
+		}
+
+		if n == 3 {
+			// Stay up long enough to be a "stable" connection, then disconnect.
+			time.Sleep(stableDuration)
+			mu.Lock()
+			closeTime3 = time.Now()
+			mu.Unlock()
+			return // conn.CloseNow() via defer tears down the connection
+		}
+
+		if n == 4 {
+			close(conn4Seen)
+		}
+
+		// Hold connections beyond #4 open until the test ends.
+		select {
+		case <-connHold:
+		case <-r.Context().Done():
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	hubURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+
+	cfg := config.HubConfig{
+		URL:               hubURL,
+		Name:              "test-agent",
+		Token:             "test-token",
+		ReconnectInterval: reconnectInterval,
+	}
+
+	client := NewClient(cfg, map[string]config.Profile{}, config.TtydConfig{}, &stubDispatcher{})
+	client.Start()
+	t.Cleanup(client.Stop)
+
+	// Widened from 5s: flakiness runs (~130 iterations, some with -race)
+	// showed occasional stalls of ~5.3-5.4s before this point, well within
+	// the old 5s bound's margin of error. The stall happens in the initial
+	// dial/registration round-trip, before the timed portion below, so
+	// widening this doesn't affect what the test measures.
+	select {
+	case <-conn4Seen:
+	case <-time.After(25 * time.Second):
+		t.Fatalf("timed out waiting for 4th connection attempt, saw %d connection(s)", connCount.Load())
+	}
+
+	mu.Lock()
+	gap12 := acceptTime2.Sub(acceptTime1)
+	gap := acceptTime4.Sub(closeTime3)
+	mu.Unlock()
+
+	// Acceptance criterion (b): rapid connect/disconnect cycles still back
+	// off. Connection #1 fails immediately, so the delay before connection
+	// #2 is dialed reflects backoff(attempt=1, reconnectInterval) -- roughly
+	// 2x the base interval -- not backoff(attempt=0, reconnectInterval),
+	// which would be roughly 1x. With ±25% jitter, attempt=0 tops out at
+	// 1.25x base while attempt=1 bottoms out at 1.5x base, so a threshold of
+	// 1.4x base cleanly distinguishes the two. A regression that reset
+	// attempt unconditionally on every failure (rather than only after a
+	// stable connection) would collapse this gap back into the attempt=0
+	// range, so assert it's meaningfully larger than that.
+	minWant12 := time.Duration(1.4 * float64(reconnectInterval))
+	if gap12 < minWant12 {
+		t.Fatalf("reconnect delay before 2nd connection attempt = %v, want >= %v (roughly 2x base reconnect interval with jitter); "+
+			"this indicates a failed connection attempt is not being backed off (issue #692 acceptance criterion b)",
+			gap12, minWant12)
+	}
+
+	// A correctly-reset attempt counter yields a delay close to the base
+	// reconnectInterval (up to ±25% jitter, i.e. <= 1.25x). Give a generous
+	// margin above that before treating the delay as "not reset". The
+	// accumulated-backoff delay this test expects to observe under the bug is
+	// roughly 8x the base interval, well above this bound.
+	maxWant := 2 * reconnectInterval
+	if gap > maxWant {
+		t.Fatalf("reconnect delay after a stable connection = %v, want <= %v (base reconnect interval with jitter); "+
+			"this indicates the attempt counter was not reset to 0 after a successful, stable connection (issue #692)",
+			gap, maxWant)
 	}
 }
 
