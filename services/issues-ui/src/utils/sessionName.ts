@@ -1,9 +1,11 @@
-import { normalizeRepo } from "../hooks/useAgents";
+import { normalizeRepo } from "./normalizeRepo";
 
 // Session names are formatted as "{projectId}-{sessionName}" where projectId is a 25-char CUID.
 // Strip the prefix for display; preserve the full name for internal API usage.
+const PROJECT_PREFIX_RE = /^[a-z0-9]{25}-/;
+
 export function stripProjectPrefix(name: string): string {
-  if (name.length > 26 && name[25] === "-") {
+  if (name.length > 26 && PROJECT_PREFIX_RE.test(name)) {
     return name.slice(26);
   }
   return name;
@@ -45,7 +47,7 @@ const TICKET_SESSION_RE = /(?:^|-)(lead|refine|discuss)-(\d+)$/;
  * `<profile>-<uuid>`) yield no `kind`/`ticketNumber`.
  */
 export function parseSessionName(name: string): ParsedSessionName {
-  const hasPrefix = name.length > 26 && name[25] === "-";
+  const hasPrefix = name.length > 26 && PROJECT_PREFIX_RE.test(name);
   const projectId = hasPrefix ? name.slice(0, 25) : undefined;
   const match = stripProjectPrefix(name).match(TICKET_SESSION_RE);
   if (!match) return projectId ? { projectId } : {};
@@ -60,7 +62,7 @@ export function parseSessionName(name: string): ParsedSessionName {
  * Whether a session belongs to the given ticket. The ticket number must match;
  * a prefixed name must carry the ticket's project id; an unprefixed name
  * matches when the session's repo equals the project's repository, or when no
- * project repository is known.
+ * project context is given at all.
  */
 export function sessionMatchesTicket(
   session: { name: string; repoUrl?: string },
@@ -71,6 +73,9 @@ export function sessionMatchesTicket(
   const parsed = parseSessionName(session.name);
   if (parsed.ticketNumber !== ticketNumber) return false;
   if (parsed.projectId) return !projectId || parsed.projectId === projectId;
-  if (!projectRepoUrl) return true;
+  // Unprefixed names are only trusted via a repo match. With a project in play
+  // but no repository (or no session repoUrl) we fail closed to avoid
+  // cross-project false positives.
+  if (!projectRepoUrl) return !projectId;
   return !!session.repoUrl && normalizeRepo(session.repoUrl) === normalizeRepo(projectRepoUrl);
 }

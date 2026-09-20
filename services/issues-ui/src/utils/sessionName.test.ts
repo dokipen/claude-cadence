@@ -153,6 +153,17 @@ describe("parseSessionName", () => {
     expect(parseSessionName(`${CUID}-discuss-7`)).toEqual({ projectId: CUID, kind: "discuss", ticketNumber: 7 });
   });
 
+  it("does not treat a dash at index 25 of a non-CUID name as a project prefix", () => {
+    const name = "resume-abcdefgh-123456789-lead-5";
+    expect(name[25]).toBe("-");
+    expect(parseSessionName(name)).toEqual({ kind: "lead", ticketNumber: 5 });
+    expect(stripProjectPrefix(name)).toBe(name);
+  });
+
+  it("returns only the project id for prefixed non-ticket names", () => {
+    expect(parseSessionName(`${CUID}-refine-all-1`)).toEqual({ projectId: CUID });
+  });
+
   it.each([
     "refine-all-1700000000",
     "resume-abcd1234-1700000000",
@@ -188,7 +199,15 @@ describe("sessionMatchesTicket", () => {
     expect(sessionMatchesTicket(s, 680, CUID, repo)).toBe(false);
   });
 
-  it("matches an unprefixed name when no project repo is known", () => {
-    expect(sessionMatchesTicket({ name: "lead-680" }, 680, CUID)).toBe(true);
+  it("matches an unprefixed name when no project context is given", () => {
+    expect(sessionMatchesTicket({ name: "lead-680" }, 680)).toBe(true);
+  });
+
+  it("rejects an unprefixed name when the project has no known repo", () => {
+    expect(sessionMatchesTicket({ name: "lead-680", repoUrl: repo }, 680, CUID)).toBe(false);
+  });
+
+  it("rejects an unprefixed name when the session has no repoUrl but the project repo is known", () => {
+    expect(sessionMatchesTicket({ name: "lead-680" }, 680, CUID, repo)).toBe(false);
   });
 });

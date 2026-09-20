@@ -73,7 +73,7 @@ const mockUseProjects = useProjects as ReturnType<typeof vi.fn>;
 const mockUseTicket = useTicket as ReturnType<typeof vi.fn>;
 const mockUseParams = useParams as ReturnType<typeof vi.fn>;
 
-const KNOWN_PROJECT: Project = { id: "proj-known", name: "Known Project" };
+const KNOWN_PROJECT: Project = { id: "cmprojknown00000000000000", name: "Known Project" };
 const UNKNOWN_PROJECT_ID = "proj-unknown-xyz";
 const KNOWN_PROJECT_TICKET_ID = "ticket-1";
 const KNOWN_PROJECT_TICKET_NUMBER = 42;
