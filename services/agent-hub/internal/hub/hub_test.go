@@ -1767,4 +1767,9 @@ func TestRegister_MaxAgentConnections(t *testing.T) {
 	if _, err := h.Register("c", nil, newParams("c")); err != nil {
 		t.Fatalf("c after b offline: %v", err)
 	}
+
+	// b is offline and the hub is full again (a, c): b returning must be rejected.
+	if _, err := h.Register("b", nil, newParams("b")); !errors.Is(err, ErrMaxAgentConnections) {
+		t.Fatalf("offline b re-registering at cap: expected ErrMaxAgentConnections, got: %v", err)
+	}
 }

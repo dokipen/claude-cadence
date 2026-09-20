@@ -60,7 +60,8 @@ type Hub struct {
 	termSessions        map[string]context.CancelFunc
 	maxTerminalSessions int
 
-	// maxAgentConnections caps concurrently online agents; 0 means unlimited.
+	// maxAgentConnections caps concurrently online agents; 0 means unlimited
+	// at the Hub level (config maps 0 to the default of 32).
 	// Each connection may hold up to AgentMaxMessageSize of transient read
 	// buffer, so this bounds worst-case memory. Set via SetMaxAgentConnections
 	// before the hub accepts connections.
@@ -186,23 +187,22 @@ func (h *Hub) Register(name string, conn *websocket.Conn, params *RegisterParams
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if existing, ok := h.agents[name]; ok {
-		if params.Ttyd.AdvertiseAddress != existing.TtydConfig.AdvertiseAddress {
-			slog.Warn("rejecting re-registration: AdvertiseAddress changed",
-				"agent", name,
-				"existing", existing.TtydConfig.AdvertiseAddress,
-				"requested", params.Ttyd.AdvertiseAddress,
-			)
-			return nil, ErrAdvertiseAddressChanged
-		}
-		slog.Warn("replacing existing agent connection", "agent", name)
-		existing.Conn().Close(websocket.StatusGoingAway, "replaced by new connection")
+	existing, exists := h.agents[name]
+	if exists && params.Ttyd.AdvertiseAddress != existing.TtydConfig.AdvertiseAddress {
+		slog.Warn("rejecting re-registration: AdvertiseAddress changed",
+			"agent", name,
+			"existing", existing.TtydConfig.AdvertiseAddress,
+			"requested", params.Ttyd.AdvertiseAddress,
+		)
+		return nil, ErrAdvertiseAddressChanged
 	}
 
-	// Re-registration of an existing name replaces its connection and never
-	// grows the count, so the cap only gates genuinely new agents. Offline
-	// entries hold no live connection and do not count.
-	if _, replacing := h.agents[name]; !replacing && h.maxAgentConnections > 0 {
+	// Replacing an online agent leaves the online count unchanged, so only
+	// new names and offline names (which become online) are gated. Offline
+	// entries hold no live connection and do not count toward the cap. The
+	// check precedes closing the existing connection so a rejected
+	// registration never disturbs a live one.
+	if h.maxAgentConnections > 0 && !(exists && existing.Status() == StatusOnline) {
 		online := 0
 		for _, a := range h.agents {
 			if a.Status() == StatusOnline {
@@ -214,6 +214,11 @@ func (h *Hub) Register(name string, conn *websocket.Conn, params *RegisterParams
 				"agent", name, "online", online, "max", h.maxAgentConnections)
 			return nil, ErrMaxAgentConnections
 		}
+	}
+
+	if exists {
+		slog.Warn("replacing existing agent connection", "agent", name)
+		existing.Conn().Close(websocket.StatusGoingAway, "replaced by new connection")
 	}
 
 	agent := NewConnectedAgent(name, conn, params)
