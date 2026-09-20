@@ -1716,3 +1716,55 @@ func TestRPCCanceledDoesNotDemoteAgent(t *testing.T) {
 			agent.consecutiveRPCFailures)
 	}
 }
+
+func TestRegister_MaxAgentConnections(t *testing.T) {
+	h, url := startTestHub(t)
+	h.SetMaxAgentConnections(2)
+
+	waitFor := func(name string) {
+		t.Helper()
+		deadline := time.Now().Add(2 * time.Second)
+		for time.Now().Before(deadline) {
+			if _, ok := h.Get(name); ok {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		t.Fatalf("%s did not register in time", name)
+	}
+	newParams := func(name string) *RegisterParams {
+		return &RegisterParams{Name: name, Profiles: map[string]ProfileInfo{}}
+	}
+
+	// Real connections so replacement can close the old conn safely.
+	connectAgent(t, url, "a")
+	waitFor("a")
+	connectAgent(t, url, "b")
+	waitFor("b")
+
+	if _, err := h.Register("c", nil, newParams("c")); !errors.Is(err, ErrMaxAgentConnections) {
+		t.Fatalf("expected ErrMaxAgentConnections, got: %v", err)
+	}
+	if _, ok := h.Get("c"); ok {
+		t.Fatal("rejected agent must not be registered")
+	}
+
+	// Agents registered below have nil conns; drop them so Hub.Stop doesn't close nil.
+	defer func() {
+		h.mu.Lock()
+		delete(h.agents, "a")
+		delete(h.agents, "c")
+		h.mu.Unlock()
+	}()
+
+	// Re-registering an existing name replaces it and must succeed at the cap.
+	if _, err := h.Register("a", nil, newParams("a")); err != nil {
+		t.Fatalf("re-register at cap: %v", err)
+	}
+
+	// Offline agents free a slot.
+	h.MarkOffline("b")
+	if _, err := h.Register("c", nil, newParams("c")); err != nil {
+		t.Fatalf("c after b offline: %v", err)
+	}
+}

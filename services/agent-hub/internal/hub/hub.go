@@ -19,6 +19,10 @@ import (
 // to change its AdvertiseAddress.
 var ErrAdvertiseAddressChanged = errors.New("advertise address changed on re-registration")
 
+// ErrMaxAgentConnections is returned when a new agent tries to register while
+// the hub already holds the configured maximum number of online agents.
+var ErrMaxAgentConnections = errors.New("maximum agent connections reached")
+
 // maxConsecutiveRPCFailures is the number of consecutive RPC timeout/deadline
 // failures before the agent is demoted to offline. Only deadline-exceeded errors
 // count; business-logic errors (e.g. rpcErrNotFound) do not.
@@ -56,6 +60,12 @@ type Hub struct {
 	termSessions        map[string]context.CancelFunc
 	maxTerminalSessions int
 
+	// maxAgentConnections caps concurrently online agents; 0 means unlimited.
+	// Each connection may hold up to AgentMaxMessageSize of transient read
+	// buffer, so this bounds worst-case memory. Set via SetMaxAgentConnections
+	// before the hub accepts connections.
+	maxAgentConnections int
+
 	heartbeatInterval time.Duration
 	heartbeatTimeout  time.Duration
 	keepaliveInterval time.Duration
@@ -78,6 +88,14 @@ func New(heartbeatInterval, heartbeatTimeout, keepaliveInterval, agentTTL time.D
 		agentTTL:            agentTTL,
 		done:                make(chan struct{}),
 	}
+}
+
+// SetMaxAgentConnections sets the maximum number of concurrently online
+// agents; 0 means unlimited. Call before the hub accepts connections.
+func (h *Hub) SetMaxAgentConnections(n int) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.maxAgentConnections = n
 }
 
 // Start begins the background reaper goroutine that removes stale agents.
@@ -179,6 +197,23 @@ func (h *Hub) Register(name string, conn *websocket.Conn, params *RegisterParams
 		}
 		slog.Warn("replacing existing agent connection", "agent", name)
 		existing.Conn().Close(websocket.StatusGoingAway, "replaced by new connection")
+	}
+
+	// Re-registration of an existing name replaces its connection and never
+	// grows the count, so the cap only gates genuinely new agents. Offline
+	// entries hold no live connection and do not count.
+	if _, replacing := h.agents[name]; !replacing && h.maxAgentConnections > 0 {
+		online := 0
+		for _, a := range h.agents {
+			if a.Status() == StatusOnline {
+				online++
+			}
+		}
+		if online >= h.maxAgentConnections {
+			slog.Warn("rejecting agent registration: max agent connections reached",
+				"agent", name, "online", online, "max", h.maxAgentConnections)
+			return nil, ErrMaxAgentConnections
+		}
 	}
 
 	agent := NewConnectedAgent(name, conn, params)
