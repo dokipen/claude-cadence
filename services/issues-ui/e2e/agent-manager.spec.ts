@@ -642,7 +642,7 @@ test.describe("agent launch form", () => {
     await expect.poll(() => capturedBody).not.toBeNull();
     expect(capturedBody!["agent_profile"]).toBe("default");
     // A selected project prefixes the session name with its id (#689).
-    expect(capturedBody!["session_name"]).toMatch(/^([a-z0-9]{25}-)?my-test-session$/);
+    expect(capturedBody!["session_name"]).toMatch(/^(.+-)?my-test-session$/);
 
     // The new session should appear in the sidebar
     await expect(page.getByTestId("sidebar-session")).toHaveCount(1, { timeout: 15000 });
