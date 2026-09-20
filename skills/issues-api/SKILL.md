@@ -164,6 +164,28 @@ mcp__issues__ticket_unassign
   ticketId: "<TICKET_CUID>"   # Required
 ```
 
+### Blocking Operations
+
+Identify each ticket by CUID (`blockerId`/`blockedId`) or by project-scoped number (`blockerNumber`/`blockedNumber`, resolved against `projectId`, `projectName`, or `ISSUES_PROJECT_ID`). Both tools return the blocked ticket with its updated `blockedBy` and `blocks` lists.
+
+#### Add a blocker
+
+```
+mcp__issues__ticket_block_add
+  blockerNumber: 147           # Ticket that blocks (or blockerId: "<CUID>")
+  blockedNumber: 148           # Ticket being blocked (or blockedId: "<CUID>")
+  projectName: "PROJECT"       # Needed when using numbers, unless ISSUES_PROJECT_ID is set
+```
+
+#### Remove a blocker
+
+```
+mcp__issues__ticket_block_remove
+  blockerNumber: 147
+  blockedNumber: 148
+  projectName: "PROJECT"
+```
+
 ### Comment Operations
 
 #### Add a comment

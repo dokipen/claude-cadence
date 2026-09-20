@@ -70,6 +70,8 @@ Replace `/path/to/services/issues-mcp` with the absolute path on your machine.
 | `label_add` | Add a label to a ticket by CUID |
 | `label_remove` | Remove a label from a ticket by CUID |
 | `comment_add` | Add a comment to a ticket |
+| `ticket_block_add` | Record that one ticket blocks another (by CUID or ticket number; number lookup requires projectId/projectName) |
+| `ticket_block_remove` | Remove a blocking relationship (same inputs as `ticket_block_add`) |
 
 ## Getting a Token
 

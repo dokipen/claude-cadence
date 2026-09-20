@@ -19,6 +19,7 @@ import {
 } from "./tools/tickets.js";
 import { labelList, labelAdd, labelRemove } from "./tools/labels.js";
 import { commentAdd } from "./tools/comments.js";
+import { ticketBlockAdd, ticketBlockRemove } from "./tools/blocks.js";
 
 // --- Lazy initialization ---
 //
@@ -277,6 +278,53 @@ const TOOLS = [
       required: ["ticketId"],
     },
   },
+  {
+    name: "ticket_block_add",
+    description:
+      "Record that one ticket blocks another. Identify each ticket by CUID (`blockerId`/`blockedId`) " +
+      "or by project-scoped number (`blockerNumber`/`blockedNumber`, which needs projectId, projectName, or ISSUES_PROJECT_ID). " +
+      "Returns the blocked ticket with its updated `blockedBy` and `blocks` lists.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        blockerId: { type: "string", description: "CUID of the ticket that blocks. Provide blockerId OR blockerNumber." },
+        blockerNumber: { type: "number", description: "Number of the ticket that blocks. Provide blockerNumber OR blockerId." },
+        blockedId: { type: "string", description: "CUID of the ticket being blocked. Provide blockedId OR blockedNumber." },
+        blockedNumber: { type: "number", description: "Number of the ticket being blocked. Provide blockedNumber OR blockedId." },
+        projectId: {
+          type: "string",
+          description: "Project CUID for resolving ticket numbers (takes precedence over projectName; falls back to ISSUES_PROJECT_ID)",
+        },
+        projectName: {
+          type: "string",
+          description: "Project name for resolving ticket numbers (resolved to CUID if projectId is not provided)",
+        },
+      },
+    },
+  },
+  {
+    name: "ticket_block_remove",
+    description:
+      "Remove a blocking relationship between two tickets. Takes the same inputs as `ticket_block_add`. " +
+      "Returns the blocked ticket with its updated `blockedBy` and `blocks` lists.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        blockerId: { type: "string", description: "CUID of the ticket that blocks. Provide blockerId OR blockerNumber." },
+        blockerNumber: { type: "number", description: "Number of the ticket that blocks. Provide blockerNumber OR blockerId." },
+        blockedId: { type: "string", description: "CUID of the ticket being blocked. Provide blockedId OR blockedNumber." },
+        blockedNumber: { type: "number", description: "Number of the ticket being blocked. Provide blockedNumber OR blockedId." },
+        projectId: {
+          type: "string",
+          description: "Project CUID for resolving ticket numbers (takes precedence over projectName; falls back to ISSUES_PROJECT_ID)",
+        },
+        projectName: {
+          type: "string",
+          description: "Project name for resolving ticket numbers (resolved to CUID if projectId is not provided)",
+        },
+      },
+    },
+  },
 ] as const;
 
 // --- Server setup ---
@@ -388,6 +436,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return ticketUnassign({
         ticketId: params.ticketId as string,
       });
+
+    case "ticket_block_add":
+    case "ticket_block_remove": {
+      const blockParams = {
+        blockerId: params.blockerId as string | undefined,
+        blockerNumber: params.blockerNumber as number | undefined,
+        blockedId: params.blockedId as string | undefined,
+        blockedNumber: params.blockedNumber as number | undefined,
+        projectId: params.projectId as string | undefined,
+        projectName: params.projectName as string | undefined,
+      };
+      return name === "ticket_block_add" ? ticketBlockAdd(blockParams) : ticketBlockRemove(blockParams);
+    }
 
     default:
       return {

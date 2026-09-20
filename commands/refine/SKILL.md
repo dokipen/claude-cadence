@@ -129,7 +129,7 @@ An issue is refined when it has ALL of:
 | Estimate | `estimate:N` label (1-13) | Story points field (`--points N`) |
 | Priority | `priority:high`, `priority:medium`, or `priority:low` label | Priority field (`--priority N`) |
 | Type label | Label by name: bug, enhancement, etc. | Label by ID (use `mcp__issues__label_list` or `issues label list --json` to resolve) |
-| Blockers linked | Via GitHub dependencies API | `issues block add --blocker X --blocked Y --json` |
+| Blockers linked | Via GitHub dependencies API | `mcp__issues__ticket_block_add` (`blockerNumber`, `blockedNumber`, `projectName`); never leave the relationship only in a comment |
 | Blocked label | `blocked` label if open blockers exist | Blocked tickets auto-tracked; cannot transition to `IN_PROGRESS` |
 | Refined | `refined` label added after all criteria met | Transition to `REFINED` state |
 

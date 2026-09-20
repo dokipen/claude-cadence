@@ -90,7 +90,7 @@ A refined ticket must have ALL of the following:
 | Estimate | `gh issue view N --json labels --jq '.labels[].name \| select(startswith("estimate:"))'` | `issues ticket view N --project $PROJECT --json` (read `storyPoints` field) |
 | Priority | `gh issue view N --json labels --jq '.labels[].name \| select(startswith("priority:"))'` | `issues ticket view N --project $PROJECT --json` (read `priority` field) |
 | Type label | `gh issue view N --json labels --jq '.labels[].name \| select(. == "bug" or . == "enhancement" or . == "documentation" or . == "testing" or . == "performance")'` | `issues ticket view N --project $PROJECT --json` (read `labels` array) |
-| Blockers linked (if any) | Check via GitHub dependencies API | `issues ticket view N --project $PROJECT --json` (read `blockedBy` array) |
+| Blockers linked (if any) | Check via GitHub dependencies API | `mcp__issues__ticket_get` (read `blockedBy` array); if a blocker is missing, add it with `mcp__issues__ticket_block_add` |
 | Blocked status correct | See "Blocked Label Logic" below | Enforced via state machine (no label needed) |
 
 ### Issues API Native Fields
@@ -142,7 +142,7 @@ When assessing priority, consider: Does this block other work? Is there a securi
 3. **Check each criterion** using the provider-appropriate commands above
 4. **Evaluate acceptance criteria quality** — specific, testable, checkbox format?
 5. **Evaluate title** — clear and descriptive?
-6. **Check blockers** — GitHub: linked via dependencies API? Issues API: check Blocked By section?
+6. **Check blockers** — GitHub: linked via dependencies API? Issues API: check `blockedBy`, and record any missing relationship with `mcp__issues__ticket_block_add` (do not just note it in a comment)
 
 ## Output Format
 
