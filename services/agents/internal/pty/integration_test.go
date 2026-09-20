@@ -1010,3 +1010,68 @@ func TestServeTerminal_WriterNeverNilDuringHandoff(t *testing.T) {
 		t.Log("PASS: client B received output after handoff")
 	}
 }
+
+// TestServeTerminal_SkipReplay_RepaintAfterClientResize verifies that for TUI
+// sessions the repaint bump/restore happens after the client's initial resize
+// is applied: the process must see rows+1 then the restored rows, both at the
+// client's dimensions (30x100), not the initial 24x80.
+func TestServeTerminal_SkipReplay_RepaintAfterClientResize(t *testing.T) {
+	// A wide gap keeps the shell's trap from coalescing the two SIGWINCHs under load.
+	t.Cleanup(internalpty.SetRepaintGapForTest(300 * time.Millisecond))
+	m := internalpty.NewPTYManager(internalpty.PTYConfig{})
+
+	err := m.Create("repaint-order-test", t.TempDir(),
+		[]string{"sh", "-c", "trap 'printf \"[%s]\" \"$(stty size)\"' WINCH; while true; do sleep 0.01; done"},
+		nil, 80, 24)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	t.Cleanup(func() { m.Destroy("repaint-order-test") })
+	time.Sleep(100 * time.Millisecond)
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen failed: %v", err)
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws/terminal", func(w http.ResponseWriter, r *http.Request) {
+		conn, acceptErr := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+		if acceptErr != nil {
+			return
+		}
+		defer conn.CloseNow()
+		_ = m.ServeTerminal(r.Context(), "repaint-order-test", conn, true)
+	})
+	srv := &http.Server{Handler: mux}
+	go srv.Serve(ln)
+	t.Cleanup(func() { srv.Close() })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, _, dialErr := websocket.Dial(ctx, "ws://"+ln.Addr().String()+"/ws/terminal", nil)
+	if dialErr != nil {
+		t.Fatalf("dial failed: %v", dialErr)
+	}
+	defer conn.CloseNow()
+
+	if err := conn.Write(ctx, websocket.MessageBinary, []byte(`1{"columns":100,"rows":30}`)); err != nil {
+		t.Fatalf("resize write failed: %v", err)
+	}
+
+	// stty size prints "rows cols". Expect client size, bump, restore — in order.
+	want := "[31 100][30 100]"
+	var received strings.Builder
+	for {
+		_, data, readErr := conn.Read(ctx)
+		if readErr != nil {
+			break
+		}
+		if len(data) > 1 && data[0] == '0' {
+			received.Write(data[1:])
+		}
+		if strings.Contains(received.String(), want) {
+			return
+		}
+	}
+	t.Errorf("repaint not sequenced after client resize; want %q in output, got: %q", want, received.String())
+}
