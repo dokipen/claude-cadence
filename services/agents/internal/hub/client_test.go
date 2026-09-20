@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -925,6 +926,9 @@ func TestConnectFailsOnStalledHandshake(t *testing.T) {
 	case err := <-errCh:
 		if err == nil {
 			t.Fatal("connect() returned nil, want dial error")
+		}
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("connect() error = %v, want context.DeadlineExceeded", err)
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("connect() did not return after dial timeout")
