@@ -633,3 +633,25 @@ func TestHubAuthConfig_ResolveToken_EmptyEnvVarFallback(t *testing.T) {
 		t.Errorf("expected %q, got %q", "hub-fallback", got)
 	}
 }
+
+func TestLoad_MaxAgentConnections(t *testing.T) {
+	cfg, err := Load(writeConfig(t, validYAML()))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.MaxAgentConnections != 32 {
+		t.Errorf("default max_agent_connections = %d, want 32", cfg.MaxAgentConnections)
+	}
+
+	cfg, err = Load(writeConfig(t, validYAML()+"max_agent_connections: 5\n"))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.MaxAgentConnections != 5 {
+		t.Errorf("max_agent_connections = %d, want 5", cfg.MaxAgentConnections)
+	}
+
+	if _, err := Load(writeConfig(t, validYAML()+"max_agent_connections: -1\n")); err == nil {
+		t.Error("expected error for negative max_agent_connections")
+	}
+}

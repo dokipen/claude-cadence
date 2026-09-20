@@ -194,6 +194,25 @@ describe("AgentLaunchForm", () => {
     expect(options).not.toContain("offline-profile");
   });
 
+  it("prefixes the session name with projectId when provided", async () => {
+    vi.mocked(createSession).mockResolvedValue({} as never);
+    const agents = [makeAgent("host-a", "online", { "profile-a": "https://github.com/org/repo-a" })];
+    const { getByTestId } = render(
+      <AgentLaunchForm agents={agents} onLaunched={vi.fn()} projectId="cmproj0000000000000000000" />,
+    );
+    await act(async () => {
+      fireEvent.change(getByTestId("host-select"), { target: { value: "host-a" } });
+    });
+    await act(async () => {
+      fireEvent.change(getByTestId("profile-select"), { target: { value: "profile-a" } });
+      fireEvent.change(getByTestId("name-input"), { target: { value: "My Task" } });
+    });
+    await act(async () => {
+      fireEvent.submit(getByTestId("agent-launch-form"));
+    });
+    expect(createSession).toHaveBeenCalledWith("host-a", "profile-a", "cmproj0000000000000000000-my-task");
+  });
+
   it("name input has autocomplete=off", () => {
     const agents = [
       makeAgent("host-a", "online", {

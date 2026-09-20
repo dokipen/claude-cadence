@@ -60,8 +60,10 @@ type session struct {
 	waitErr   error         // result of cmd.Wait(), set by waitOnce
 	closeOnce sync.Once     // ensures master.Close() is called exactly once (idempotent across Destroy and Reattach goroutine)
 	mu        sync.Mutex
-	slavePath string     // /dev/pts/N path of the slave side of the PTY
-	sizeMu    sync.Mutex // serialises PTY resizes (client resizes and repaint) across connections
+	ioctlMu   sync.RWMutex // held for read around ioctls on master; held for write while closing it
+	closed    bool         // set under ioctlMu when master is closed; guards ioctls against fd teardown
+	slavePath string       // /dev/pts/N path of the slave side of the PTY
+	sizeMu    sync.Mutex   // serialises PTY resizes (client resizes and repaint) across connections
 }
 
 // closeMaster closes the PTY master fd idempotently. The second and subsequent
@@ -70,7 +72,35 @@ type session struct {
 // the close; the other is a guaranteed no-op rather than a silently-discarded
 // ErrClosed return.
 func (s *session) closeMaster() {
-	s.closeOnce.Do(func() { _ = s.master.Close() })
+	s.closeOnce.Do(func() {
+		s.ioctlMu.Lock()
+		defer s.ioctlMu.Unlock()
+		s.closed = true
+		_ = s.master.Close()
+	})
+}
+
+// setsize resizes the PTY, returning os.ErrClosed if the master has been closed.
+// pty.Setsize reads the os.File's fd field, which races with the fd teardown
+// that follows Close, so ioctls are serialized against closeMaster. PTY reads
+// and writes do not take this lock.
+func (s *session) setsize(ws *pty.Winsize) error {
+	s.ioctlMu.RLock()
+	defer s.ioctlMu.RUnlock()
+	if s.closed {
+		return os.ErrClosed
+	}
+	return pty.Setsize(s.master, ws)
+}
+
+// getsize returns the PTY window size; see setsize for the locking rationale.
+func (s *session) getsize() (*pty.Winsize, error) {
+	s.ioctlMu.RLock()
+	defer s.ioctlMu.RUnlock()
+	if s.closed {
+		return nil, os.ErrClosed
+	}
+	return pty.GetsizeFull(s.master)
 }
 
 // PTYManager manages PTY sessions.
@@ -453,7 +483,7 @@ func (m *PTYManager) ServeTerminal(ctx context.Context, id string, conn *websock
 				return
 			}
 			sess.sizeMu.Lock()
-			size, sizeErr := pty.GetsizeFull(sess.master)
+			size, sizeErr := sess.getsize()
 			if sizeErr != nil {
 				sess.sizeMu.Unlock()
 				return
@@ -461,7 +491,7 @@ func (m *PTYManager) ServeTerminal(ctx context.Context, id string, conn *websock
 			orig := *size
 			bump := orig
 			bump.Rows++
-			_ = pty.Setsize(sess.master, &bump)
+			_ = sess.setsize(&bump)
 			sess.sizeMu.Unlock()
 
 			// Do not hold the lock across the gap so client resizes are not blocked.
@@ -476,8 +506,8 @@ func (m *PTYManager) ServeTerminal(ctx context.Context, id string, conn *websock
 			// intervened, the client's size wins and must not be overwritten.
 			// Runs even when cancelled so the PTY is never left bumped.
 			sess.sizeMu.Lock()
-			if cur, err := pty.GetsizeFull(sess.master); err == nil && cur.Rows == bump.Rows && cur.Cols == bump.Cols {
-				_ = pty.Setsize(sess.master, &orig)
+			if cur, err := sess.getsize(); err == nil && cur.Rows == bump.Rows && cur.Cols == bump.Cols {
+				_ = sess.setsize(&orig)
 			}
 			sess.sizeMu.Unlock()
 		}()
@@ -509,7 +539,7 @@ func (m *PTYManager) ServeTerminal(ctx context.Context, id string, conn *websock
 						resize.Rows = maxResizeDimension
 					}
 					sess.sizeMu.Lock()
-					_ = pty.Setsize(sess.master, &pty.Winsize{
+					_ = sess.setsize(&pty.Winsize{
 						Rows: resize.Rows,
 						Cols: resize.Columns,
 					})

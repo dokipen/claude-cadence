@@ -19,6 +19,10 @@ import (
 // to change its AdvertiseAddress.
 var ErrAdvertiseAddressChanged = errors.New("advertise address changed on re-registration")
 
+// ErrMaxAgentConnections is returned when a new agent tries to register while
+// the hub already holds the configured maximum number of online agents.
+var ErrMaxAgentConnections = errors.New("maximum agent connections reached")
+
 // maxConsecutiveRPCFailures is the number of consecutive RPC timeout/deadline
 // failures before the agent is demoted to offline. Only deadline-exceeded errors
 // count; business-logic errors (e.g. rpcErrNotFound) do not.
@@ -56,6 +60,13 @@ type Hub struct {
 	termSessions        map[string]context.CancelFunc
 	maxTerminalSessions int
 
+	// maxAgentConnections caps concurrently online agents; 0 means unlimited
+	// at the Hub level (config maps 0 to the default of 32).
+	// Each connection may hold up to AgentMaxMessageSize of transient read
+	// buffer, so this bounds worst-case memory. Set via SetMaxAgentConnections
+	// before the hub accepts connections.
+	maxAgentConnections int
+
 	heartbeatInterval time.Duration
 	heartbeatTimeout  time.Duration
 	keepaliveInterval time.Duration
@@ -78,6 +89,14 @@ func New(heartbeatInterval, heartbeatTimeout, keepaliveInterval, agentTTL time.D
 		agentTTL:            agentTTL,
 		done:                make(chan struct{}),
 	}
+}
+
+// SetMaxAgentConnections sets the maximum number of concurrently online
+// agents; 0 means unlimited. Call before the hub accepts connections.
+func (h *Hub) SetMaxAgentConnections(n int) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.maxAgentConnections = n
 }
 
 // Start begins the background reaper goroutine that removes stale agents.
@@ -168,15 +187,36 @@ func (h *Hub) Register(name string, conn *websocket.Conn, params *RegisterParams
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if existing, ok := h.agents[name]; ok {
-		if params.Ttyd.AdvertiseAddress != existing.TtydConfig.AdvertiseAddress {
-			slog.Warn("rejecting re-registration: AdvertiseAddress changed",
-				"agent", name,
-				"existing", existing.TtydConfig.AdvertiseAddress,
-				"requested", params.Ttyd.AdvertiseAddress,
-			)
-			return nil, ErrAdvertiseAddressChanged
+	existing, exists := h.agents[name]
+	if exists && params.Ttyd.AdvertiseAddress != existing.TtydConfig.AdvertiseAddress {
+		slog.Warn("rejecting re-registration: AdvertiseAddress changed",
+			"agent", name,
+			"existing", existing.TtydConfig.AdvertiseAddress,
+			"requested", params.Ttyd.AdvertiseAddress,
+		)
+		return nil, ErrAdvertiseAddressChanged
+	}
+
+	// Replacing an online agent leaves the online count unchanged, so only
+	// new names and offline names (which become online) are gated. Offline
+	// entries hold no live connection and do not count toward the cap. The
+	// check precedes closing the existing connection so a rejected
+	// registration never disturbs a live one.
+	if h.maxAgentConnections > 0 && !(exists && existing.Status() == StatusOnline) {
+		online := 0
+		for _, a := range h.agents {
+			if a.Status() == StatusOnline {
+				online++
+			}
 		}
+		if online >= h.maxAgentConnections {
+			slog.Warn("rejecting agent registration: max agent connections reached",
+				"agent", name, "online", online, "max", h.maxAgentConnections)
+			return nil, ErrMaxAgentConnections
+		}
+	}
+
+	if exists {
 		slog.Warn("replacing existing agent connection", "agent", name)
 		existing.Conn().Close(websocket.StatusGoingAway, "replaced by new connection")
 	}

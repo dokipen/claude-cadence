@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -890,4 +891,103 @@ func TestShrink(t *testing.T) {
 			t.Error("Shrink() on empty session = true, want false")
 		}
 	})
+}
+
+// TestConnectFailsOnStalledHandshake verifies that connect() returns an error
+// within the dial timeout when the server accepts the TCP connection but never
+// completes the WebSocket upgrade, so the reconnect loop can retry.
+func TestConnectFailsOnStalledHandshake(t *testing.T) {
+	orig := dialTimeout
+	dialTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { dialTimeout = orig })
+
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	}))
+	t.Cleanup(func() {
+		close(release)
+		srv.Close()
+	})
+
+	c := NewClient(config.HubConfig{
+		URL:   "ws" + strings.TrimPrefix(srv.URL, "http"),
+		Name:  "stalled",
+		Token: "tok",
+	}, nil, config.TtydConfig{}, &stubDispatcher{})
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- c.connect(context.Background()) }()
+
+	select {
+	case err := <-errCh:
+		if err == nil {
+			t.Fatal("connect() returned nil, want dial error")
+		}
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("connect() error = %v, want context.DeadlineExceeded", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("connect() did not return after dial timeout")
+	}
+}
+
+// TestConnectEnforcesHubReadLimit verifies agentd applies its explicit read
+// limit: a frame within the limit is tolerated (and ignored as invalid JSON),
+// while a frame over hubReadLimit terminates the connection with a "message too big" error.
+func TestConnectEnforcesHubReadLimit(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+		if err != nil {
+			return
+		}
+		defer conn.CloseNow()
+		// The hub side must be allowed to write big frames; reads are small.
+		_, data, err := conn.Read(r.Context())
+		if err != nil {
+			return
+		}
+		var req struct {
+			ID string `json:"id"`
+		}
+		if json.Unmarshal(data, &req) != nil {
+			return
+		}
+		ack, _ := json.Marshal(map[string]interface{}{"jsonrpc": "2.0", "id": req.ID, "result": map[string]interface{}{"accepted": true}})
+		if conn.Write(r.Context(), websocket.MessageText, ack) != nil {
+			return
+		}
+		// Well over the 32 KiB default, under hubReadLimit: must be tolerated.
+		if conn.Write(r.Context(), websocket.MessageText, []byte(strings.Repeat("x", 1<<20))) != nil {
+			return
+		}
+		// One byte over the limit: must kill the connection.
+		_ = conn.Write(r.Context(), websocket.MessageText, []byte(strings.Repeat("x", hubReadLimit+1)))
+		<-r.Context().Done()
+	}))
+	t.Cleanup(srv.Close)
+
+	c := NewClient(config.HubConfig{
+		URL:   "ws" + strings.TrimPrefix(srv.URL, "http"),
+		Name:  "limit-test",
+		Token: "tok",
+	}, nil, config.TtydConfig{}, &stubDispatcher{})
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- c.connect(context.Background()) }()
+
+	select {
+	case err := <-errCh:
+		if err == nil {
+			t.Fatal("connect() returned nil, want read-limit error")
+		}
+		if !strings.Contains(err.Error(), "message too big") {
+			t.Fatalf("connect() error = %v, want message too big", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("connect() did not fail on over-limit frame")
+	}
 }

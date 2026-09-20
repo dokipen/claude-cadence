@@ -5,7 +5,7 @@ import { useTicketByNumber } from "../hooks/useTicketByNumber";
 import { useSessionPromptContext } from "../hooks/useSessionPromptContext";
 import { sendSessionInput } from "../api/agentHubClient";
 import layoutStyles from "../styles/layout.module.css";
-import { stripProjectPrefix } from "../utils/sessionName";
+import { parseSessionName, stripProjectPrefix } from "../utils/sessionName";
 
 interface NotificationDropdownProps {
   waitingSessions: AgentSession[];
@@ -23,12 +23,14 @@ function formatIdleDuration(idleSince: string | undefined): string {
   return `${hours}h ${minutes % 60}m`;
 }
 
-// Match any session name ending with -N (e.g. lead-42, refine-42, tester-42).
+// Prefer the shared parser; fall back to any name ending with -N (e.g. tester-42).
 // If no real ticket exists for the extracted number, useTicketByNumber returns null
 // and the UI falls back to displaying the session name — so over-matching is safe.
-function parseTicketNumber(sessionName: string): number | null {
+function parseTicketRef(sessionName: string): { projectId?: string; ticketNumber?: number } {
+  const parsed = parseSessionName(sessionName);
+  if (parsed.ticketNumber !== undefined) return parsed;
   const match = sessionName.match(/-(\d+)$/);
-  return match ? parseInt(match[1], 10) : null;
+  return { projectId: parsed.projectId, ticketNumber: match ? parseInt(match[1], 10) : undefined };
 }
 
 function parseSelectPrompt(context: string): { question: string; options: string[]; currentIndex: number } {
@@ -55,8 +57,8 @@ function NotificationItem({ ws, projectId, projectName, onClose }: NotificationI
   const [error, setError] = useState<string | null>(null);
   const sentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const ticketNumber = parseTicketNumber(ws.session.name);
-  const { ticket } = useTicketByNumber(projectId, ticketNumber ?? undefined);
+  const parsedName = parseTicketRef(ws.session.name);
+  const { ticket } = useTicketByNumber(parsedName.projectId ?? projectId, parsedName.ticketNumber);
 
   const linkTo = `/agents?session=${encodeURIComponent(ws.agentName)}:${encodeURIComponent(ws.session.id)}`;
 

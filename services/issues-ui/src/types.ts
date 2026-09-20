@@ -79,4 +79,5 @@ export interface ActiveSessionInfo {
   state: SessionState;
   sessionId?: string;   // the session UUID, for fetching output
   agentName?: string;   // the agentd instance name, for fetching output
+  repoUrl?: string;     // repo the session was launched against, for unprefixed-name matching
 }

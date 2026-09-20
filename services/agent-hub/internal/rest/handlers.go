@@ -740,7 +740,11 @@ func handleAgentWebSocket(h *hub.Hub, agentToken string) http.HandlerFunc {
 		var resp *hub.Response
 		if regErr != nil {
 			slog.Warn("agent registration rejected", "agent", params.Name, "error", regErr)
-			resp = hub.NewErrorResponse(req.ID, hub.RPCErrFailedPrecondition, "registration rejected")
+			msg := "registration rejected"
+			if errors.Is(regErr, hub.ErrMaxAgentConnections) {
+				msg = "registration rejected: hub at maximum agent connections"
+			}
+			resp = hub.NewErrorResponse(req.ID, hub.RPCErrFailedPrecondition, msg)
 		} else {
 			resp, err = hub.NewResponse(req.ID, &hub.RegisterResult{
 				Accepted:        true,
