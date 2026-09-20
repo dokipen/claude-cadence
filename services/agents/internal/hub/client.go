@@ -25,6 +25,12 @@ import (
 // dropping frames or blocking the hub read loop.
 const terminalRelayChannelBufSize = 256
 
+// dialTimeout bounds the WebSocket dial (TCP connect plus upgrade handshake)
+// so a hub that accepts the connection but never completes the handshake
+// fails fast and lets connectLoop back off and retry. It is a variable so
+// tests can shorten it.
+var dialTimeout = 15 * time.Second
+
 // defaultMaxMessageBytes is the RPC message limit assumed when the hub's
 // register acknowledgement does not carry max_message_bytes. Hubs predating
 // issue #685 enforced a 512 KiB RPCMaxMessageSize on text frames and closed
@@ -165,9 +171,13 @@ func (c *Client) connect(ctx context.Context) error {
 
 	dialURL := c.cfg.URL + "?" + url.Values{"name": {c.cfg.Name}}.Encode()
 
-	conn, _, err := websocket.Dial(ctx, dialURL, &websocket.DialOptions{
+	// The timeout context covers only the dial; the established connection is
+	// not bound to it (websocket.Dial uses ctx for the handshake only).
+	dialCtx, dialCancel := context.WithTimeout(ctx, dialTimeout)
+	conn, _, err := websocket.Dial(dialCtx, dialURL, &websocket.DialOptions{
 		HTTPHeader: headers,
 	})
+	dialCancel()
 	if err != nil {
 		return fmt.Errorf("dial hub: %w", err)
 	}
