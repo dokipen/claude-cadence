@@ -23,6 +23,9 @@ type Config struct {
 	RateLimit      RateLimitConfig `yaml:"rate_limit"`
 	Log            LogConfig       `yaml:"log"`
 	Terminal       TerminalConfig  `yaml:"terminal"`
+	// MaxAgentConnections caps concurrently online agent connections. Each may
+	// hold up to 16 MiB of transient read buffer. Default 32.
+	MaxAgentConnections int `yaml:"max_agent_connections"`
 }
 
 // TerminalConfig holds terminal proxy settings.
@@ -153,6 +156,9 @@ func applyDefaults(cfg *Config) {
 	if cfg.RateLimit.Burst == 0 {
 		cfg.RateLimit.Burst = 200
 	}
+	if cfg.MaxAgentConnections == 0 {
+		cfg.MaxAgentConnections = 32
+	}
 	if cfg.Log.Level == "" {
 		cfg.Log.Level = "info"
 	}
@@ -211,6 +217,9 @@ func isLoopbackHost(host string) bool {
 }
 
 func validate(cfg *Config) error {
+	if cfg.MaxAgentConnections < 0 {
+		return fmt.Errorf("max_agent_connections must not be negative")
+	}
 	// Require authentication for non-loopback bindings.
 	if !isLoopbackHost(cfg.Host) {
 		if cfg.Auth.Mode == "none" {

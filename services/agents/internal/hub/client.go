@@ -39,6 +39,17 @@ var dialTimeout = 15 * time.Second
 // (much larger) backstop in the register result, which takes precedence.
 const defaultMaxMessageBytes = 512 * 1024
 
+// hubReadLimit is the largest single WebSocket message agentd accepts from the
+// hub (text RPC requests and binary relay frames). It is set explicitly rather
+// than relying on coder/websocket's 32 KiB default. RPC requests are bounded by
+// the hub's REST body caps (rest.MaxSessionRequestBodySize, 512 KiB, for
+// createSession/sendInput params; rest.MaxRestBodySize, 1 MiB, elsewhere), and
+// browser→PTY relay frames by the hub's BrowserMaxMessageSize (1 MiB), so 4 MiB
+// leaves 4x margin over the largest legitimate message while still bounding
+// per-message allocation. Exceeding it closes the connection with
+// StatusMessageTooBig and the connect loop reconnects.
+const hubReadLimit = 4 << 20
+
 // SessionDispatcher handles session CRUD and terminal operations dispatched from the hub.
 type SessionDispatcher interface {
 	CreateSession(params json.RawMessage) (json.RawMessage, *rpcError)
@@ -181,6 +192,8 @@ func (c *Client) connect(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("dial hub: %w", err)
 	}
+
+	conn.SetReadLimit(hubReadLimit)
 
 	c.mu.Lock()
 	c.conn = conn
