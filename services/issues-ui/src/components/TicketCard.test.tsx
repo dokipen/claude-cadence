@@ -200,6 +200,9 @@ const makeTicket = (overrides: Partial<Ticket> = {}): Ticket => ({
 // hasActiveSession — pure function tests (no DOM needed)
 // ---------------------------------------------------------------------------
 
+const PROJ = "cmmryin270000ny01dc2msx3t";
+const OTHER_PROJ = "cmotherproj0000000000000x";
+
 describe("hasActiveSession", () => {
   it("returns null when sessions array is empty", () => {
     expect(hasActiveSession([], 5)).toBeNull();
@@ -254,13 +257,26 @@ describe("hasActiveSession", () => {
   });
 
   it("matches prefixed session names when projectId is provided", () => {
-    expect(hasActiveSession([makeSession("myproject-lead-5", "running")], 5, "myproject")).not.toBeNull();
-    expect(hasActiveSession([makeSession("myproject-refine-5", "running")], 5, "myproject")).not.toBeNull();
-    expect(hasActiveSession([makeSession("myproject-discuss-5", "running")], 5, "myproject")).not.toBeNull();
+    expect(hasActiveSession([makeSession(`${PROJ}-lead-5`, "running")], 5, PROJ)).not.toBeNull();
+    expect(hasActiveSession([makeSession(`${PROJ}-refine-5`, "running")], 5, PROJ)).not.toBeNull();
+    expect(hasActiveSession([makeSession(`${PROJ}-discuss-5`, "running")], 5, PROJ)).not.toBeNull();
   });
 
   it("does not match a session from a different project when projectId is provided", () => {
-    expect(hasActiveSession([makeSession("other-lead-5", "running")], 5, "myproject")).toBeNull();
+    expect(hasActiveSession([makeSession(`${OTHER_PROJ}-lead-5`, "running")], 5, PROJ)).toBeNull();
+  });
+});
+
+describe("hasActiveSession — unprefixed names with repo matching", () => {
+  const repo = "https://github.com/org/repo";
+  const withRepo = (name: string, repoUrl: string) => ({ ...makeSession(name, "running"), repoUrl });
+
+  it("matches unprefixed lead-N when the session repo matches the project repo", () => {
+    expect(hasActiveSession([withRepo("lead-5", "https://github.com/org/repo.git")], 5, "proj", repo)).not.toBeNull();
+  });
+
+  it("does not match unprefixed lead-N from a different repo", () => {
+    expect(hasActiveSession([withRepo("lead-5", "https://github.com/org/other")], 5, "proj", repo)).toBeNull();
   });
 });
 
@@ -326,14 +342,14 @@ describe("getActiveSessions", () => {
 
   it("handles projectId prefix correctly", () => {
     const sessions = [
-      makeSession("myproject-lead-5", "running"),
-      makeSession("myproject-refine-5", "running"),
-      makeSession("lead-5", "running"),
+      makeSession(`${PROJ}-lead-5`, "running"),
+      makeSession(`${PROJ}-refine-5`, "running"),
+      makeSession(`${OTHER_PROJ}-lead-5`, "running"),
     ];
-    const result = getActiveSessions(sessions, 5, "myproject");
+    const result = getActiveSessions(sessions, 5, PROJ);
     expect(result).toHaveLength(2);
     expect(result.map((s) => s.name)).toEqual(
-      expect.arrayContaining(["myproject-lead-5", "myproject-refine-5"]),
+      expect.arrayContaining([`${PROJ}-lead-5`, `${PROJ}-refine-5`]),
     );
   });
 });

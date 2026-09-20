@@ -106,6 +106,7 @@ export function SessionList({ agents, sessions, openKeys, minimizedKeys, onSessi
                           state: as.session.state as SessionState,
                           sessionId: as.session.id,
                           agentName: as.agentName,
+                          repoUrl: as.session.repoUrl,
                         }
                       : null;
                   const sessionContent = (
