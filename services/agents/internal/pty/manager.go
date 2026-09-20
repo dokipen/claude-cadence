@@ -60,7 +60,8 @@ type session struct {
 	waitErr   error         // result of cmd.Wait(), set by waitOnce
 	closeOnce sync.Once     // ensures master.Close() is called exactly once (idempotent across Destroy and Reattach goroutine)
 	mu        sync.Mutex
-	slavePath string // /dev/pts/N path of the slave side of the PTY
+	slavePath string     // /dev/pts/N path of the slave side of the PTY
+	sizeMu    sync.Mutex // serialises PTY resizes (client resizes and repaint) across connections
 }
 
 // closeMaster closes the PTY master fd idempotently. The second and subsequent
@@ -421,7 +422,9 @@ func (m *PTYManager) ServeTerminal(ctx context.Context, id string, conn *websock
 	myGen := sess.writerGen
 	sess.writers = []io.Writer{wf}
 	sess.mu.Unlock()
+	rctx, cancel := context.WithCancel(ctx)
 	defer func() {
+		cancel()
 		sess.mu.Lock()
 		if sess.writerGen == myGen {
 			sess.writers = nil
@@ -429,8 +432,6 @@ func (m *PTYManager) ServeTerminal(ctx context.Context, id string, conn *websock
 		sess.mu.Unlock()
 	}()
 
-	// sizeMu serialises PTY resizes between the client resize handler and the repaint goroutine.
-	var sizeMu sync.Mutex
 	firstResize := make(chan struct{})
 	var firstResizeOnce sync.Once
 
@@ -440,29 +441,45 @@ func (m *PTYManager) ServeTerminal(ctx context.Context, id string, conn *websock
 		// runs after the client's initial resize (or a short timeout) so it happens
 		// at the final size while the client's terminal is listening, and the two
 		// Setsize calls are separated by a gap so the TUI handles both signals.
+		// Read the timing vars here, not in the goroutine, so it never races with test overrides.
+		resizeWait, gapDur := repaintResizeWait, repaintGap
 		go func() {
-			timer := time.NewTimer(repaintResizeWait)
+			timer := time.NewTimer(resizeWait)
 			defer timer.Stop()
 			select {
 			case <-firstResize:
 			case <-timer.C:
-			case <-ctx.Done():
+			case <-rctx.Done():
 				return
 			}
-			sizeMu.Lock()
-			defer sizeMu.Unlock()
+			sess.sizeMu.Lock()
 			size, sizeErr := pty.GetsizeFull(sess.master)
 			if sizeErr != nil {
+				sess.sizeMu.Unlock()
 				return
 			}
-			bump := *size
+			orig := *size
+			bump := orig
 			bump.Rows++
 			_ = pty.Setsize(sess.master, &bump)
+			sess.sizeMu.Unlock()
+
+			// Do not hold the lock across the gap so client resizes are not blocked.
+			gap := time.NewTimer(gapDur)
 			select {
-			case <-time.After(repaintGap):
-			case <-ctx.Done():
+			case <-gap.C:
+			case <-rctx.Done():
+				gap.Stop()
 			}
-			_ = pty.Setsize(sess.master, size)
+
+			// Restore only if the size is still our bump: if a client resize
+			// intervened, the client's size wins and must not be overwritten.
+			// Runs even when cancelled so the PTY is never left bumped.
+			sess.sizeMu.Lock()
+			if cur, err := pty.GetsizeFull(sess.master); err == nil && cur.Rows == bump.Rows && cur.Cols == bump.Cols {
+				_ = pty.Setsize(sess.master, &orig)
+			}
+			sess.sizeMu.Unlock()
 		}()
 	} else if len(snapshot) > 0 {
 		// Shell sessions: replay buffered output to give the client recent context.
@@ -491,12 +508,12 @@ func (m *PTYManager) ServeTerminal(ctx context.Context, id string, conn *websock
 					if resize.Rows > maxResizeDimension {
 						resize.Rows = maxResizeDimension
 					}
-					sizeMu.Lock()
+					sess.sizeMu.Lock()
 					_ = pty.Setsize(sess.master, &pty.Winsize{
 						Rows: resize.Rows,
 						Cols: resize.Columns,
 					})
-					sizeMu.Unlock()
+					sess.sizeMu.Unlock()
 					firstResizeOnce.Do(func() { close(firstResize) })
 				}
 			}

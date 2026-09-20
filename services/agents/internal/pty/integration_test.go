@@ -1075,3 +1075,108 @@ func TestServeTerminal_SkipReplay_RepaintAfterClientResize(t *testing.T) {
 	}
 	t.Errorf("repaint not sequenced after client resize; want %q in output, got: %q", want, received.String())
 }
+
+// startRepaintTestServer serves ServeTerminal for session id and returns a dialed client conn.
+func startRepaintTestServer(t *testing.T, m *internalpty.PTYManager, id string, skipReplay bool) (*websocket.Conn, context.Context) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen failed: %v", err)
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws/terminal", func(w http.ResponseWriter, r *http.Request) {
+		conn, acceptErr := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+		if acceptErr != nil {
+			return
+		}
+		defer conn.CloseNow()
+		_ = m.ServeTerminal(r.Context(), id, conn, skipReplay)
+	})
+	srv := &http.Server{Handler: mux}
+	go srv.Serve(ln)
+	t.Cleanup(func() { srv.Close() })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
+	conn, _, dialErr := websocket.Dial(ctx, "ws://"+ln.Addr().String()+"/ws/terminal", nil)
+	if dialErr != nil {
+		t.Fatalf("dial failed: %v", dialErr)
+	}
+	t.Cleanup(func() { conn.CloseNow() })
+	return conn, ctx
+}
+
+// TestServeTerminal_SkipReplay_RepaintOnResizeTimeout verifies that when the
+// client never sends a resize, the repaint still fires after the timeout at
+// the PTY's original size (25 then 24 rows at 80 cols).
+func TestServeTerminal_SkipReplay_RepaintOnResizeTimeout(t *testing.T) {
+	t.Cleanup(internalpty.SetRepaintGapForTest(300 * time.Millisecond))
+	t.Cleanup(internalpty.SetRepaintResizeWaitForTest(50 * time.Millisecond))
+	m := internalpty.NewPTYManager(internalpty.PTYConfig{})
+
+	err := m.Create("repaint-timeout-test", t.TempDir(),
+		[]string{"sh", "-c", "trap 'printf \"[%s]\" \"$(stty size)\"' WINCH; while true; do sleep 0.01; done"},
+		nil, 80, 24)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	t.Cleanup(func() { m.Destroy("repaint-timeout-test") })
+	time.Sleep(100 * time.Millisecond)
+
+	conn, ctx := startRepaintTestServer(t, m, "repaint-timeout-test", true)
+
+	want := "[25 80][24 80]"
+	var received strings.Builder
+	for {
+		_, data, readErr := conn.Read(ctx)
+		if readErr != nil {
+			break
+		}
+		if len(data) > 1 && data[0] == '0' {
+			received.Write(data[1:])
+		}
+		if strings.Contains(received.String(), want) {
+			return
+		}
+	}
+	t.Errorf("timeout repaint missing; want %q in output, got: %q", want, received.String())
+}
+
+// TestServeTerminal_ShellSession_NoRepaint verifies that with skipReplay=false
+// the snapshot is replayed and no repaint (WINCH) is triggered on connect.
+func TestServeTerminal_ShellSession_NoRepaint(t *testing.T) {
+	t.Cleanup(internalpty.SetRepaintGapForTest(50 * time.Millisecond))
+	t.Cleanup(internalpty.SetRepaintResizeWaitForTest(50 * time.Millisecond))
+	m := internalpty.NewPTYManager(internalpty.PTYConfig{})
+
+	err := m.Create("repaint-shell-test", t.TempDir(),
+		[]string{"sh", "-c", "trap 'printf \"[WINCH %s]\" \"$(stty size)\"' WINCH; echo SNAPSHOT_MARK; while true; do sleep 0.01; done"},
+		nil, 80, 24)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	t.Cleanup(func() { m.Destroy("repaint-shell-test") })
+	time.Sleep(200 * time.Millisecond)
+
+	conn, ctx := startRepaintTestServer(t, m, "repaint-shell-test", false)
+
+	// Read for long enough that a repaint (50ms wait + 50ms gap) would have shown up.
+	readCtx, cancel := context.WithTimeout(ctx, 600*time.Millisecond)
+	defer cancel()
+	var received strings.Builder
+	for {
+		_, data, readErr := conn.Read(readCtx)
+		if readErr != nil {
+			break
+		}
+		if len(data) > 1 && data[0] == '0' {
+			received.Write(data[1:])
+		}
+	}
+	if !strings.Contains(received.String(), "SNAPSHOT_MARK") {
+		t.Errorf("snapshot not replayed; got: %q", received.String())
+	}
+	if strings.Contains(received.String(), "WINCH") {
+		t.Errorf("unexpected repaint on shell session; got: %q", received.String())
+	}
+}
