@@ -25,6 +25,7 @@ vi.mock("../projects.js", () => ({
 }));
 
 const { ticketBlockAdd, ticketBlockRemove } = await import("./blocks.js");
+const { resolveProjectName } = await import("../projects.js");
 
 function text(result: { content: Array<{ type: string; text?: string }> }): string {
   return result.content[0].text ?? "";
@@ -33,6 +34,7 @@ function text(result: { content: Array<{ type: string; text?: string }> }): stri
 describe("ticketBlockAdd", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(resolveProjectName).mockResolvedValue("proj-resolved");
   });
 
   it("passes CUIDs straight through and returns the updated ticket", async () => {
@@ -99,11 +101,83 @@ describe("ticketBlockAdd", () => {
     expect(result.isError).toBe(true);
     expect(text(result)).toContain("A ticket cannot block itself");
   });
+
+  it("returns a clear error when the blocked ticket number is not found", async () => {
+    mockRequest.mockResolvedValueOnce({ ticketByNumber: null });
+
+    const result = await ticketBlockAdd({ blockerId: "a", blockedNumber: 998 });
+
+    expect(result.isError).toBe(true);
+    expect(text(result)).toContain("Blocked ticket #998 not found");
+  });
+
+  it("errors when the blocked side has neither id nor number", async () => {
+    const result = await ticketBlockAdd({ blockerId: "a" });
+
+    expect(result.isError).toBe(true);
+    expect(text(result)).toContain("blockedId or blockedNumber is required");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("errors when the blocked side has both id and number", async () => {
+    const result = await ticketBlockAdd({ blockerId: "a", blockedId: "b", blockedNumber: 2 });
+
+    expect(result.isError).toBe(true);
+    expect(text(result)).toContain("blockedId OR blockedNumber");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects floats without calling the API", async () => {
+    const result = await ticketBlockAdd({ blockerNumber: 1.5, blockedId: "b" });
+
+    expect(result.isError).toBe(true);
+    expect(text(result)).toContain("must be an integer");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects an empty id without calling the API", async () => {
+    const result = await ticketBlockAdd({ blockerId: "", blockedId: "b" });
+
+    expect(result.isError).toBe(true);
+    expect(text(result)).toContain("blockerId must be a non-empty string");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("uses an explicit projectId over the default", async () => {
+    mockRequest
+      .mockResolvedValueOnce({ ticketByNumber: { id: "x" } })
+      .mockResolvedValueOnce({ addBlockRelation: {} });
+
+    await ticketBlockAdd({ blockerNumber: 1, blockedId: "b", projectId: "proj-explicit" });
+
+    expect(mockRequest.mock.calls[0][1]).toEqual({ projectId: "proj-explicit", number: 1 });
+  });
+
+  it("resolves projectName when projectId is absent", async () => {
+    mockRequest
+      .mockResolvedValueOnce({ ticketByNumber: { id: "x" } })
+      .mockResolvedValueOnce({ addBlockRelation: {} });
+
+    await ticketBlockAdd({ blockerNumber: 1, blockedId: "b", projectName: "my-proj" });
+
+    expect(resolveProjectName).toHaveBeenCalledWith("my-proj");
+    expect(mockRequest.mock.calls[0][1]).toEqual({ projectId: "proj-resolved", number: 1 });
+  });
+
+  it("stringifies non-Error rejections", async () => {
+    mockRequest.mockRejectedValue("boom");
+
+    const result = await ticketBlockAdd({ blockerId: "a", blockedId: "b" });
+
+    expect(result.isError).toBe(true);
+    expect(text(result)).toContain("boom");
+  });
 });
 
 describe("ticketBlockRemove", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(resolveProjectName).mockResolvedValue("proj-resolved");
   });
 
   it("calls removeBlockRelation and returns the updated ticket", async () => {
@@ -113,5 +187,18 @@ describe("ticketBlockRemove", () => {
 
     expect(mockRequest.mock.calls[0][0]).toContain("removeBlockRelation");
     expect(JSON.parse(text(result)).blockedBy).toEqual([]);
+  });
+
+  it("resolves numbers and surfaces errors", async () => {
+    mockRequest
+      .mockResolvedValueOnce({ ticketByNumber: { id: "id-1" } })
+      .mockResolvedValueOnce({ ticketByNumber: { id: "id-2" } })
+      .mockRejectedValueOnce(new Error("Relation not found"));
+
+    const result = await ticketBlockRemove({ blockerNumber: 1, blockedNumber: 2 });
+
+    expect(mockRequest.mock.calls[2][1]).toEqual({ blockerId: "id-1", blockedId: "id-2" });
+    expect(result.isError).toBe(true);
+    expect(text(result)).toContain("Relation not found");
   });
 });

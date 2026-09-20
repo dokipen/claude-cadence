@@ -91,7 +91,10 @@ async function resolveTicket(
   if (id !== undefined && number !== undefined) {
     return err(`Provide ${role}Id OR ${role}Number, not both`);
   }
-  if (id !== undefined) return id;
+  if (id !== undefined) {
+    if (typeof id !== "string" || id.trim() === "") return err(`${role}Id must be a non-empty string`);
+    return id;
+  }
   if (number === undefined) {
     return err(`${role}Id or ${role}Number is required`);
   }
