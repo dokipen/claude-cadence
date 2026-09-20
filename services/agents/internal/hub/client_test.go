@@ -891,3 +891,42 @@ func TestShrink(t *testing.T) {
 		}
 	})
 }
+
+// TestConnectFailsOnStalledHandshake verifies that connect() returns an error
+// within the dial timeout when the server accepts the TCP connection but never
+// completes the WebSocket upgrade, so the reconnect loop can retry.
+func TestConnectFailsOnStalledHandshake(t *testing.T) {
+	orig := dialTimeout
+	dialTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { dialTimeout = orig })
+
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	}))
+	t.Cleanup(func() {
+		close(release)
+		srv.Close()
+	})
+
+	c := NewClient(config.HubConfig{
+		URL:   "ws" + strings.TrimPrefix(srv.URL, "http"),
+		Name:  "stalled",
+		Token: "tok",
+	}, nil, config.TtydConfig{}, &stubDispatcher{})
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- c.connect(context.Background()) }()
+
+	select {
+	case err := <-errCh:
+		if err == nil {
+			t.Fatal("connect() returned nil, want dial error")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("connect() did not return after dial timeout")
+	}
+}
