@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/coder/websocket"
 	"github.com/creack/pty"
@@ -27,6 +28,14 @@ import (
 const defaultBufferSize = sharedrelay.MaxPTYBufferSize
 
 const maxResizeDimension uint16 = 500
+
+// Timing for the TUI repaint issued on connect (see ServeTerminal). Vars so tests can shorten them.
+var (
+	// repaintResizeWait bounds how long the repaint waits for the client's initial resize frame.
+	repaintResizeWait = 500 * time.Millisecond
+	// repaintGap separates the two Setsize calls so the TUI handles each SIGWINCH distinctly.
+	repaintGap = 50 * time.Millisecond
+)
 
 // PTYConfig holds configuration for PTYManager.
 type PTYConfig struct {
@@ -54,6 +63,7 @@ type session struct {
 	ioctlMu   sync.RWMutex // held for read around ioctls on master; held for write while closing it
 	closed    bool         // set under ioctlMu when master is closed; guards ioctls against fd teardown
 	slavePath string       // /dev/pts/N path of the slave side of the PTY
+	sizeMu    sync.Mutex   // serialises PTY resizes (client resizes and repaint) across connections
 }
 
 // closeMaster closes the PTY master fd idempotently. The second and subsequent
@@ -401,8 +411,9 @@ func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
 // the client on connect to restore recent context. When skipReplay is true (TUI/agent
 // sessions), the snapshot is not replayed because TUI escape sequences are
 // state-dependent and produce garbled output when replayed out of context. Instead,
-// SIGWINCH is sent by re-applying the current PTY dimensions, prompting the TUI to
-// perform a full repaint.
+// once the client's initial resize has been applied (or a short timeout elapses),
+// the PTY row count is bumped and restored with a gap between, prompting the TUI
+// to perform a full repaint at the final size.
 //
 // A new connection displaces any prior active connection on the same session.
 func (m *PTYManager) ServeTerminal(ctx context.Context, id string, conn *websocket.Conn, skipReplay bool) error {
@@ -441,7 +452,9 @@ func (m *PTYManager) ServeTerminal(ctx context.Context, id string, conn *websock
 	myGen := sess.writerGen
 	sess.writers = []io.Writer{wf}
 	sess.mu.Unlock()
+	rctx, cancel := context.WithCancel(ctx)
 	defer func() {
+		cancel()
 		sess.mu.Lock()
 		if sess.writerGen == myGen {
 			sess.writers = nil
@@ -449,19 +462,55 @@ func (m *PTYManager) ServeTerminal(ctx context.Context, id string, conn *websock
 		sess.mu.Unlock()
 	}()
 
+	firstResize := make(chan struct{})
+	var firstResizeOnce sync.Once
+
 	if skipReplay {
-		// TUI sessions: skip ring buffer replay and trigger a full repaint via
-		// SIGWINCH. The kernel sends SIGWINCH only when terminal dimensions change,
-		// so we momentarily bump the row count by 1 then restore it. This sends
-		// two SIGWINCHs: the first clears any stale render state, the second causes
-		// the TUI to repaint at the correct size. Replaying the ring buffer would
-		// produce garbled output because TUI escape sequences are state-dependent.
-		if size, sizeErr := sess.getsize(); sizeErr == nil {
-			bump := *size
+		// TUI sessions: skip ring buffer replay (state-dependent escape sequences
+		// garble when replayed) and force a full repaint via SIGWINCH. The repaint
+		// runs after the client's initial resize (or a short timeout) so it happens
+		// at the final size while the client's terminal is listening, and the two
+		// Setsize calls are separated by a gap so the TUI handles both signals.
+		// Read the timing vars here, not in the goroutine, so it never races with test overrides.
+		resizeWait, gapDur := repaintResizeWait, repaintGap
+		go func() {
+			timer := time.NewTimer(resizeWait)
+			defer timer.Stop()
+			select {
+			case <-firstResize:
+			case <-timer.C:
+			case <-rctx.Done():
+				return
+			}
+			sess.sizeMu.Lock()
+			size, sizeErr := sess.getsize()
+			if sizeErr != nil {
+				sess.sizeMu.Unlock()
+				return
+			}
+			orig := *size
+			bump := orig
 			bump.Rows++
 			_ = sess.setsize(&bump)
-			_ = sess.setsize(size)
-		}
+			sess.sizeMu.Unlock()
+
+			// Do not hold the lock across the gap so client resizes are not blocked.
+			gap := time.NewTimer(gapDur)
+			select {
+			case <-gap.C:
+			case <-rctx.Done():
+				gap.Stop()
+			}
+
+			// Restore only if the size is still our bump: if a client resize
+			// intervened, the client's size wins and must not be overwritten.
+			// Runs even when cancelled so the PTY is never left bumped.
+			sess.sizeMu.Lock()
+			if cur, err := sess.getsize(); err == nil && cur.Rows == bump.Rows && cur.Cols == bump.Cols {
+				_ = sess.setsize(&orig)
+			}
+			sess.sizeMu.Unlock()
+		}()
 	} else if len(snapshot) > 0 {
 		// Shell sessions: replay buffered output to give the client recent context.
 		_ = writeFrame(snapshot) // best-effort
@@ -489,10 +538,13 @@ func (m *PTYManager) ServeTerminal(ctx context.Context, id string, conn *websock
 					if resize.Rows > maxResizeDimension {
 						resize.Rows = maxResizeDimension
 					}
+					sess.sizeMu.Lock()
 					_ = sess.setsize(&pty.Winsize{
 						Rows: resize.Rows,
 						Cols: resize.Columns,
 					})
+					sess.sizeMu.Unlock()
+					firstResizeOnce.Do(func() { close(firstResize) })
 				}
 			}
 		}
