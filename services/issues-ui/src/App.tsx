@@ -128,6 +128,7 @@ export function AppShell() {
     state: s.session.state as SessionState,
     sessionId: s.session.id,
     agentName: s.agentName,
+    repoUrl: s.session.repoUrl,
   }));
   const handleProjectChange = useCallback((id: string) => {
     if (!projects.some((p) => p.id === id)) return;

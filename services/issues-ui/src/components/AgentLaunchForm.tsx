@@ -9,9 +9,10 @@ interface AgentLaunchFormProps {
   agents: Agent[];
   onLaunched: (session: Session, agentName: string) => void;
   repoUrl?: string;
+  projectId?: string;
 }
 
-export function AgentLaunchForm({ agents, onLaunched, repoUrl }: AgentLaunchFormProps) {
+export function AgentLaunchForm({ agents, onLaunched, repoUrl, projectId }: AgentLaunchFormProps) {
   const [selectedHost, setSelectedHost] = useState<string>("");
   const [selectedProfile, setSelectedProfile] = useState<string>("");
   const [name, setName] = useState<string>("");
@@ -62,7 +63,7 @@ export function AgentLaunchForm({ agents, onLaunched, repoUrl }: AgentLaunchForm
       setError(null);
 
       try {
-        const session = await createSession(selectedHost, selectedProfile, normalized);
+        const session = await createSession(selectedHost, selectedProfile, projectId ? `${projectId}-${normalized}` : normalized);
         onLaunched(session, selectedHost);
         setSelectedHost("");
         setSelectedProfile("");
@@ -75,7 +76,7 @@ export function AgentLaunchForm({ agents, onLaunched, repoUrl }: AgentLaunchForm
         setLaunching(false);
       }
     },
-    [selectedHost, selectedProfile, name, onLaunched],
+    [selectedHost, selectedProfile, name, onLaunched, projectId],
   );
 
   return (

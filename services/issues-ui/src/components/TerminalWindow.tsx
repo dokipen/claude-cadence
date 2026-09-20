@@ -7,7 +7,7 @@ import { useSessionsContext } from "../hooks/SessionsContext";
 import type { Session } from "../types";
 import styles from "../styles/agents.module.css";
 import { validateSessionId, validateAgentProfile } from "../utils/validateSession";
-import { stripProjectPrefix } from "../utils/sessionName";
+import { parseSessionName, stripProjectPrefix } from "../utils/sessionName";
 
 interface TerminalWindowProps {
   session: Session;
@@ -48,9 +48,8 @@ export function TerminalWindow({
   isMaximized,
   onMaximize,
 }: TerminalWindowProps) {
-  const ticketMatch = session.name.match(/(?:^|-)lead-(\d+)$/);
-  const ticketNumber = ticketMatch ? Number(ticketMatch[1]) : undefined;
-  const { ticket } = useTicketByNumber(projectId, ticketNumber);
+  const parsedName = parseSessionName(session.name);
+  const { ticket } = useTicketByNumber(parsedName.projectId ?? projectId, parsedName.ticketNumber);
 
   const resumeCallback = useCallback(async () => {
     if (!validateSessionId(session.id) || !validateAgentProfile(session.agentProfile)) {
@@ -147,8 +146,8 @@ export function TerminalWindow({
             >
               {ticket.title}
             </a>
-          ) : ticketMatch ? (
-            <span className={styles.tileTicketLink}>#{ticketMatch[1]}</span>
+          ) : parsedName.ticketNumber !== undefined ? (
+            <span className={styles.tileTicketLink}>#{parsedName.ticketNumber}</span>
           ) : null}
         </span>
         <div className={styles.tileControls}>

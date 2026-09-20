@@ -154,7 +154,12 @@ export function TicketDetail({ sessions = [] }: TicketDetailProps) {
   }
 
   const stateConfig = STATE_LABELS[ticket.state];
-  const activeSessions = getActiveSessions(sessions, ticket.number, ticket.project.id);
+  const activeSessions = getActiveSessions(
+    sessions,
+    ticket.number,
+    ticket.project.id,
+    projects.find((p) => p.id === ticket.project.id)?.repository,
+  );
   const displaySessions = activeSessions.filter(s => s.sessionId && s.agentName);
 
   return (

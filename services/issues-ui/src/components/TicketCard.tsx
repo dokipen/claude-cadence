@@ -14,22 +14,21 @@ import styles from "../styles/card.module.css";
 import agentStyles from "../styles/agents.module.css";
 import { AnimatedCadenceIcon } from "./AnimatedCadenceIcon";
 import { SessionOutputTooltip } from "./SessionOutputTooltip";
+import { sessionMatchesTicket } from "../utils/sessionName";
 import { validateAgentProfile, validateSessionId } from "../utils/validateSession";
 import { HubError, deleteSession, sendSessionInput } from "../api/agentHubClient";
 
-export function hasActiveSession(sessions: ActiveSessionInfo[], ticketNumber: number, projectId?: string): ActiveSessionInfo | null {
-  const prefix = projectId ? `${projectId}-` : "";
-  const prefixes = [`${prefix}lead-${ticketNumber}`, `${prefix}refine-${ticketNumber}`, `${prefix}discuss-${ticketNumber}`];
+const LIVE_STATES = ["running", "creating", "destroying"];
+
+export function hasActiveSession(sessions: ActiveSessionInfo[], ticketNumber: number, projectId?: string, repoUrl?: string): ActiveSessionInfo | null {
   return sessions.find(
-    (s) => prefixes.includes(s.name) && (s.state === "running" || s.state === "creating" || s.state === "destroying")
+    (s) => LIVE_STATES.includes(s.state) && sessionMatchesTicket(s, ticketNumber, projectId, repoUrl)
   ) ?? null;
 }
 
-export function getActiveSessions(sessions: ActiveSessionInfo[], ticketNumber: number, projectId?: string): ActiveSessionInfo[] {
-  const prefix = projectId ? `${projectId}-` : "";
-  const prefixes = [`${prefix}lead-${ticketNumber}`, `${prefix}refine-${ticketNumber}`, `${prefix}discuss-${ticketNumber}`];
+export function getActiveSessions(sessions: ActiveSessionInfo[], ticketNumber: number, projectId?: string, repoUrl?: string): ActiveSessionInfo[] {
   return sessions.filter(
-    (s) => prefixes.includes(s.name) && (s.state === "running" || s.state === "creating" || s.state === "destroying")
+    (s) => LIVE_STATES.includes(s.state) && sessionMatchesTicket(s, ticketNumber, projectId, repoUrl)
   );
 }
 
@@ -61,7 +60,7 @@ export function TicketCard({
   const { optimisticSetDestroying, optimisticResetState } = useSessionsContext();
 
   const launchButtonLabel = getLaunchConfig(ticket.state).buttonLabel;
-  const activeSession = hasActiveSession(sessions ?? [], ticket.number, projectId);
+  const activeSession = hasActiveSession(sessions ?? [], ticket.number, projectId, repoUrl);
   const canClose = ticket.state === "BACKLOG" || ticket.state === "REFINED" ||
     (ticket.state === "IN_PROGRESS" && !activeSession);
 
