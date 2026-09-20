@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/creack/pty"
 	sharedrelay "github.com/dokipen/claude-cadence/services/shared/relay"
 )
 
@@ -198,6 +199,36 @@ func TestSession_closeMaster_idempotent(t *testing.T) {
 
 	// Second call must be a no-op (no panic, no error propagation).
 	sess.closeMaster()
+}
+
+// TestSession_setsize_closeMasterRace runs setsize concurrently with
+// closeMaster; under -race this fails if ioctls are not serialized against
+// the fd teardown (#686). After close, setsize must return os.ErrClosed.
+func TestSession_setsize_closeMasterRace(t *testing.T) {
+	m := NewPTYManager(PTYConfig{})
+	id := "setsize-close-race"
+	if err := m.Create(id, t.TempDir(), []string{"sh", "-c", "sleep 30"}, nil, 80, 24); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	t.Cleanup(func() { m.Destroy(id) })
+	sess, err := m.Get(id)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 200; i++ {
+			_ = sess.setsize(&pty.Winsize{Rows: 24, Cols: uint16(80 + i%10)})
+		}
+	}()
+	sess.closeMaster()
+	<-done
+
+	if err := sess.setsize(&pty.Winsize{Rows: 24, Cols: 80}); !errors.Is(err, os.ErrClosed) {
+		t.Errorf("setsize after close = %v, want os.ErrClosed", err)
+	}
 }
 
 // TestDefaultBufferSize_FitsWithFramePrefix verifies that a full ring buffer
