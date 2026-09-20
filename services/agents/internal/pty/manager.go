@@ -51,7 +51,9 @@ type session struct {
 	waitErr   error         // result of cmd.Wait(), set by waitOnce
 	closeOnce sync.Once     // ensures master.Close() is called exactly once (idempotent across Destroy and Reattach goroutine)
 	mu        sync.Mutex
-	slavePath string // /dev/pts/N path of the slave side of the PTY
+	ioctlMu   sync.RWMutex // held for read around ioctls on master; held for write while closing it
+	closed    bool         // set under ioctlMu when master is closed; guards ioctls against fd teardown
+	slavePath string       // /dev/pts/N path of the slave side of the PTY
 }
 
 // closeMaster closes the PTY master fd idempotently. The second and subsequent
@@ -60,7 +62,35 @@ type session struct {
 // the close; the other is a guaranteed no-op rather than a silently-discarded
 // ErrClosed return.
 func (s *session) closeMaster() {
-	s.closeOnce.Do(func() { _ = s.master.Close() })
+	s.closeOnce.Do(func() {
+		s.ioctlMu.Lock()
+		defer s.ioctlMu.Unlock()
+		s.closed = true
+		_ = s.master.Close()
+	})
+}
+
+// setsize resizes the PTY, returning os.ErrClosed if the master has been closed.
+// pty.Setsize reads the os.File's fd field, which races with the fd teardown
+// that follows Close, so ioctls are serialized against closeMaster. PTY reads
+// and writes do not take this lock.
+func (s *session) setsize(ws *pty.Winsize) error {
+	s.ioctlMu.RLock()
+	defer s.ioctlMu.RUnlock()
+	if s.closed {
+		return os.ErrClosed
+	}
+	return pty.Setsize(s.master, ws)
+}
+
+// getsize returns the PTY window size; see setsize for the locking rationale.
+func (s *session) getsize() (*pty.Winsize, error) {
+	s.ioctlMu.RLock()
+	defer s.ioctlMu.RUnlock()
+	if s.closed {
+		return nil, os.ErrClosed
+	}
+	return pty.GetsizeFull(s.master)
 }
 
 // PTYManager manages PTY sessions.
@@ -426,11 +456,11 @@ func (m *PTYManager) ServeTerminal(ctx context.Context, id string, conn *websock
 		// two SIGWINCHs: the first clears any stale render state, the second causes
 		// the TUI to repaint at the correct size. Replaying the ring buffer would
 		// produce garbled output because TUI escape sequences are state-dependent.
-		if size, sizeErr := pty.GetsizeFull(sess.master); sizeErr == nil {
+		if size, sizeErr := sess.getsize(); sizeErr == nil {
 			bump := *size
 			bump.Rows++
-			_ = pty.Setsize(sess.master, &bump)
-			_ = pty.Setsize(sess.master, size)
+			_ = sess.setsize(&bump)
+			_ = sess.setsize(size)
 		}
 	} else if len(snapshot) > 0 {
 		// Shell sessions: replay buffered output to give the client recent context.
@@ -459,7 +489,7 @@ func (m *PTYManager) ServeTerminal(ctx context.Context, id string, conn *websock
 					if resize.Rows > maxResizeDimension {
 						resize.Rows = maxResizeDimension
 					}
-					_ = pty.Setsize(sess.master, &pty.Winsize{
+					_ = sess.setsize(&pty.Winsize{
 						Rows: resize.Rows,
 						Cols: resize.Columns,
 					})
