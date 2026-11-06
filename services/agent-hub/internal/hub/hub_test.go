@@ -1001,6 +1001,9 @@ func TestRegister_OfflineEntryAllowsChangedAdvertiseAddress(t *testing.T) {
 	if agent.TtydConfig.AdvertiseAddress != "" {
 		t.Errorf("AdvertiseAddress = %q, want empty", agent.TtydConfig.AdvertiseAddress)
 	}
+	if agent.Status() != StatusOnline {
+		t.Errorf("Status = %v, want online", agent.Status())
+	}
 }
 
 // TestRegister_RejectChangedAdvertiseAddress verifies that Hub.Register rejects
