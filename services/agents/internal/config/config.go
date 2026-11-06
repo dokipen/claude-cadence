@@ -96,7 +96,7 @@ type SessionConfig struct {
 // Config is the top-level agentd configuration.
 type Config struct {
 	RootDir  string             `yaml:"root_dir"`
-	Ttyd     TtydConfig         `yaml:"ttyd"` // Most fields deprecated after PTY migration; advertise_address is still active
+	Ttyd     TtydConfig         `yaml:"ttyd"` // Most fields deprecated after PTY migration; advertise_address is deprecated (direct mode, backward-compat only)
 	PTY      PTYConfig          `yaml:"pty"`
 	Log      LogConfig          `yaml:"log"`
 	Profiles map[string]Profile `yaml:"profiles"`
@@ -384,5 +384,8 @@ func (c *Config) LogDeprecations(log *slog.Logger) {
 	}
 	if c.Ttyd.BindAddress != "" {
 		log.Warn("config key ttyd.bind_address is deprecated and has no effect; remove it from your config")
+	}
+	if c.Ttyd.AdvertiseAddress != "" {
+		log.Warn("config key ttyd.advertise_address is deprecated; terminal connections use the hub relay by default. Remove it from your config")
 	}
 }

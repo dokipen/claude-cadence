@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -117,19 +118,26 @@ func main() {
 	monitor := session.NewMonitor(manager, ptyManager, 5*time.Second)
 	monitor.Start()
 
+	// Bind the legacy direct-terminal listener (if configured) before the hub
+	// client starts, so a failed bind falls back to relay mode instead of
+	// advertising an endpoint nothing serves.
+	terminalLn, advertiseAddr := bindTerminalListener(cfg.Ttyd.AdvertiseAddress)
+	ttydCfg := cfg.Ttyd
+	ttydCfg.AdvertiseAddress = advertiseAddr
+
 	// Start hub client if configured.
 	var hubClient *hub.Client
 	if cfg.Hub != nil {
-		dispatcher := hub.NewDispatcher(manager, cfg.Ttyd.AdvertiseAddress, cfg.PTY.WebSocketScheme, cfg.Log.Path, ptyManager)
-		hubClient = hub.NewClient(*cfg.Hub, cfg.Profiles, cfg.Ttyd, dispatcher, ptyManager)
+		dispatcher := hub.NewDispatcher(manager, advertiseAddr, cfg.PTY.WebSocketScheme, cfg.Log.Path, ptyManager)
+		hubClient = hub.NewClient(*cfg.Hub, cfg.Profiles, ttydCfg, dispatcher, ptyManager)
 		hubClient.Start()
 		slog.Info("hub client started", "url", cfg.Hub.URL, "name", cfg.Hub.Name)
 	}
 
-	// Start HTTP terminal server only when advertise_address is set.
-	// When advertise_address is empty, agentd uses the relay path through the
-	// existing hub WebSocket connection instead.
-	if cfg.Ttyd.AdvertiseAddress != "" {
+	// Serve the HTTP terminal only when the listener bound successfully.
+	// Otherwise agentd uses the relay path through the existing hub
+	// WebSocket connection instead.
+	if terminalLn != nil {
 		var expectedToken string
 		if cfg.Auth.Mode == "token" {
 			expectedToken = cfg.Auth.ResolveToken()
@@ -164,8 +172,8 @@ func main() {
 			}
 		})))
 		go func() {
-			slog.Info("starting HTTP terminal server", "addr", cfg.Ttyd.AdvertiseAddress)
-			if httpErr := http.ListenAndServe(cfg.Ttyd.AdvertiseAddress, mux); httpErr != nil {
+			slog.Info("starting HTTP terminal server", "addr", terminalLn.Addr().String())
+			if httpErr := http.Serve(terminalLn, mux); httpErr != nil {
 				slog.Warn("HTTP terminal server stopped", "error", httpErr)
 			}
 		}()
@@ -186,4 +194,21 @@ func main() {
 		persister.Stop()
 	}
 	slog.Info("agentd stopped")
+}
+
+// bindTerminalListener binds the legacy direct-terminal listener on addr.
+// It returns the listener and the address that should be advertised to the
+// hub. If addr is empty, or the bind fails, it returns (nil, "") so the
+// caller uses relay mode; a failed bind is logged at ERROR.
+func bindTerminalListener(addr string) (net.Listener, string) {
+	if addr == "" {
+		return nil, ""
+	}
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		slog.Error("cannot bind ttyd.advertise_address; falling back to relay mode (remove the deprecated ttyd.advertise_address from your config)",
+			"addr", addr, "error", err)
+		return nil, ""
+	}
+	return ln, addr
 }
