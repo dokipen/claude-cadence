@@ -26,6 +26,23 @@ LABEL="com.cadence.agentd"
 
 info()  { printf "\033[1;34m==>\033[0m %s\n" "$1"; }
 warn()  { printf "\033[1;33mWarning:\033[0m %s\n" "$1"; }
+
+# strip_ttyd_block FILE — remove a deprecated top-level `ttyd:` block (the key
+# line plus its indented/blank/comment continuation lines) from FILE, keeping a
+# .bak copy. Direct terminal mode via ttyd.advertise_address is deprecated; a
+# stale value silently breaks terminal connects (see #682). Relay is the default.
+strip_ttyd_block() {
+    local file="$1"
+    grep -q '^ttyd:' "$file" 2>/dev/null || return 0
+    warn "Deprecated 'ttyd:' block (e.g. ttyd.advertise_address) found in $file; removing it so terminal connections use the hub relay. Backup: $file.bak"
+    cp "$file" "$file.bak"
+    awk '
+        /^ttyd:/ { skip=1; next }
+        skip && /^([[:space:]]|#|$)/ { next }
+        { skip=0; print }
+    ' "$file.bak" > "$file.tmp" && mv "$file.tmp" "$file"
+}
+
 error() { printf "\033[1;31mError:\033[0m %s\n" "$1" >&2; exit 1; }
 
 sed_escape() {
@@ -121,6 +138,11 @@ deploy_remote() {
         } | ssh "$HOST" "sudo tee \"${remote_env}.tmp\" > /dev/null && sudo chmod 600 \"${remote_env}.tmp\" && sudo mv \"${remote_env}.tmp\" \"$remote_env\""
     else
         printf 'HUB_AGENT_TOKEN=%s\n' "$HUB_AGENT_TOKEN" | ssh "$HOST" "sudo tee \"$remote_env\" > /dev/null && sudo chmod 600 \"$remote_env\""
+    fi
+
+    # Warn about a deprecated ttyd: block (not auto-stripped over ssh)
+    if ssh "$HOST" "sudo grep -q '^ttyd:' \"$remote_config\" 2>/dev/null"; then
+        warn "Deprecated 'ttyd:' block (e.g. ttyd.advertise_address) found in $HOST:$remote_config. Remove it so terminal connections use the hub relay; a stale address breaks terminal connects."
     fi
 
     # Add hub section to config if missing
@@ -219,6 +241,7 @@ deploy_local() {
 
     # Write config if missing
     if [[ -f "$config_file" ]]; then
+        strip_ttyd_block "$config_file"
         # Add hub section if missing
         if grep -q '^hub:' "$config_file" 2>/dev/null; then
             info "Hub config already present in $config_file"

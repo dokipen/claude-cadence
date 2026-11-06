@@ -128,6 +128,11 @@ profiles:
 - At least one profile must be defined.
 - Every profile must have a non-empty `command`.
 - A profile with `vault_secret` set requires a `vault` block in the config.
+- `ttyd.advertise_address` (and the whole `ttyd:` block) is **deprecated**. Terminal
+  connections use the hub relay by default; remove `ttyd:` from configs carried over
+  from older installs. A stale address (e.g. an old DHCP lease) used to break terminal
+  connects. If the address cannot be bound, agentd now logs an error and falls back to
+  relay mode. `install/deploy.sh` strips the block on local deploys and warns on remote ones.
 
 ---
 
