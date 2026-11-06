@@ -12,7 +12,7 @@ cd services/issues
 This will:
 - Generate a `.env` file with a random `JWT_SECRET` (if one doesn't exist)
 - Build and start the Docker Compose stack
-- Register a system service (launchd on macOS, systemd on Linux) so the service starts on login
+- Register a service: on Linux a system-level systemd unit (requires sudo, starts at boot, independent of login sessions); on macOS a launchd agent (starts on login). See [RUNBOOK.md](RUNBOOK.md)
 - Install the `issues` CLI globally
 
 The service will be available at `http://localhost:4000`.
