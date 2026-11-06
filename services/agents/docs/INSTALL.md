@@ -378,7 +378,7 @@ On Linux, write the token to the environment file (default `/etc/agentd/env`):
 ```bash
 echo "HUB_AGENT_TOKEN=your-token-here" | sudo tee /etc/agentd/env
 sudo chmod 600 /etc/agentd/env
-sudo systemctl restart agentd
+sudo systemctl restart agentd   # terminates all live sessions
 ```
 
 ### Security: allowed_origins (required for production)
@@ -421,8 +421,14 @@ process exits), the session transitions to a stopped state. The cleanup subsyste
 runs on a configurable interval and destroys stopped sessions that have been idle
 longer than `stale_session_ttl`.
 
-On restart, agentd reconciles its internal state with the running PTY sessions,
-recovering any sessions that are still running.
+**Restarting agentd terminates all live sessions.** Agent processes are children
+of the daemon's PTYs, so they die when agentd exits (`systemctl restart`,
+`launchctl kickstart -k`, `deploy.sh`, `install.sh`). On startup agentd restores
+persisted session records, but any session whose process is gone is
+auto-destroyed; running sessions are not recovered. `deploy.sh` and `install.sh`
+detect live sessions (from the persisted session files under `session.dir`) and
+refuse to proceed unless `--force` is given. agentd also logs a warning listing
+live sessions when it receives a shutdown signal.
 
 ```yaml
 cleanup:
@@ -444,7 +450,7 @@ manual setups, use the templates in `install/`.
 launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.cadence.agentd.plist
 
 # Start / stop
-launchctl kickstart -k "gui/$(id -u)/com.cadence.agentd"
+launchctl kickstart -k "gui/$(id -u)/com.cadence.agentd"   # terminates all live sessions
 launchctl bootout "gui/$(id -u)/com.cadence.agentd"
 
 # View logs (launchd redirects stdout/stderr to files configured in the plist)
@@ -463,7 +469,7 @@ sudo systemctl start agentd
 
 # Control
 sudo systemctl stop agentd
-sudo systemctl restart agentd
+sudo systemctl restart agentd   # terminates all live sessions
 
 # View logs
 journalctl -u agentd -f
@@ -532,5 +538,5 @@ even though the host is otherwise reachable on the LAN.
 After granting permission, restart the service:
 
 ```bash
-launchctl kickstart -k "gui/$(id -u)/com.cadence.agentd"
+launchctl kickstart -k "gui/$(id -u)/com.cadence.agentd"   # terminates all live sessions
 ```

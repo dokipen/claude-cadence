@@ -12,6 +12,8 @@ set -euo pipefail
 #   --hub-env    Path to agent-hub env file to read HUB_AGENT_TOKEN from.
 #                For remote: reads from --hub-host:/etc/agent-hub/env
 #   --hub-host   SSH host where agent-hub runs, for reading tokens (default: bootsy)
+#   --force      Proceed even if live agent sessions exist. Restarting agentd
+#                terminates all live sessions; without --force the deploy refuses.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SERVICE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -20,6 +22,7 @@ NAME=""
 HOST=""
 HUB_URL=""
 HUB_HOST="bootsy"
+FORCE="false"
 LABEL="com.cadence.agentd"
 
 # --- Helpers ---
@@ -27,6 +30,9 @@ LABEL="com.cadence.agentd"
 info()  { printf "\033[1;34m==>\033[0m %s\n" "$1"; }
 warn()  { printf "\033[1;33mWarning:\033[0m %s\n" "$1"; }
 error() { printf "\033[1;31mError:\033[0m %s\n" "$1" >&2; exit 1; }
+
+# shellcheck source=lib-sessions.sh
+source "$SCRIPT_DIR/lib-sessions.sh"
 
 sed_escape() {
     printf '%s' "$1" | sed 's/[&/|\\]/\\&/g'
@@ -47,8 +53,9 @@ while [[ $# -gt 0 ]]; do
         --host) HOST="$2"; shift 2 ;;
         --hub-url) HUB_URL="$2"; shift 2 ;;
         --hub-host) HUB_HOST="$2"; shift 2 ;;
+        --force) FORCE="true"; shift ;;
         -h|--help)
-            echo "Usage: $(basename "$0") --name <agent-name> [--host <ssh-host>] [--hub-url <ws-url>] [--hub-host <ssh-host>]"
+            echo "Usage: $(basename "$0") --name <agent-name> [--host <ssh-host>] [--hub-url <ws-url>] [--hub-host <ssh-host>] [--force]"
             exit 0
             ;;
         *) error "Unknown argument: $1" ;;
@@ -99,6 +106,12 @@ deploy_remote() {
     local remote_config_dir="/etc/agentd"
     local remote_config="$remote_config_dir/config.yaml"
     local remote_env="$remote_config_dir/env"
+
+    # Refuse to kill live sessions unless --force
+    info "Checking for live sessions on $HOST..."
+    local live status=0
+    live="$(ssh "$HOST" "$(declare -f live_sessions); live_sessions \"$remote_config\" sudo")" || status=$?
+    guard_live_sessions "$FORCE" "$HOST" "$live" "$status"
 
     # Stop service
     info "Stopping agentd on $HOST..."
@@ -186,6 +199,12 @@ deploy_local() {
 
     # Create directories
     mkdir -p "$bin_dir" "$config_dir" "$root_dir" "$plist_dir"
+
+    # Refuse to kill live sessions unless --force
+    info "Checking for live sessions..."
+    local live status=0
+    live="$(live_sessions "$config_file")" || status=$?
+    guard_live_sessions "$FORCE" "localhost" "$live" "$status"
 
     # Kill stale agentd processes (port conflict prevention)
     info "Checking for stale agentd processes..."

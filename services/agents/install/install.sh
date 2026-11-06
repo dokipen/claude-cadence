@@ -14,6 +14,8 @@ DEFAULT_LOG_DIR=""
 INSTALL_DIR="/usr/local/bin"
 DAEMON_PATH=""
 
+FORCE="false"
+
 # --- Helpers ---
 
 info()  { printf "\033[1;34m==>\033[0m %s\n" "$1"; }
@@ -33,6 +35,22 @@ validate_username() {
     if [[ ! "$name" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; then
         error "Invalid username '$name'. Must match [a-z_][a-z0-9_-]{0,31}."
     fi
+}
+
+SCRIPT_DIR_LIB="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=lib-sessions.sh
+source "$SCRIPT_DIR_LIB/lib-sessions.sh"
+
+# Refuse to replace a running agentd while it has live sessions (unless --force).
+check_live_sessions() {
+    local os="$1"
+    local config_path="$AGENTD_CONFIG_DIR/config.yaml"
+    # Fresh install: nothing running, nothing to protect.
+    [[ -e "$INSTALL_DIR/$BINARY_NAME" ]] || return 0
+    local sudo_arg="sudo" live status=0
+    [[ "$os" == "darwin" ]] && sudo_arg=""
+    live="$(live_sessions "$config_path" "$sudo_arg")" || status=$?
+    guard_live_sessions "$FORCE" "this host" "$live" "$status"
 }
 
 confirm() {
@@ -460,6 +478,18 @@ health_check() {
 # --- Main ---
 
 main() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --force) FORCE="true"; shift ;;
+            -h|--help)
+                echo "Usage: $(basename "$0") [--force]"
+                echo "  --force  Proceed even if live agent sessions exist (restart terminates them)."
+                exit 0
+                ;;
+            *) error "Unknown argument: $1" ;;
+        esac
+    done
+
     info "agentd installer"
     echo
 
@@ -471,6 +501,7 @@ main() {
     setup_user "$os"
 
     setup_directories "$os"
+    check_live_sessions "$os"
     setup_hub
     install_binary
     install_cleanup_binary

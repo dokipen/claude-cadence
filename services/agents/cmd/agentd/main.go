@@ -177,6 +177,12 @@ func main() {
 	sig := <-sigCh
 	slog.Info("received signal, shutting down", "signal", sig)
 
+	if sessions, err := manager.List(""); err == nil {
+		if live := session.LiveSessions(sessions); len(live) > 0 {
+			slog.Warn("shutting down with live sessions; they will be terminated", "count", len(live), "sessions", live)
+		}
+	}
+
 	if hubClient != nil {
 		hubClient.Stop()
 	}
