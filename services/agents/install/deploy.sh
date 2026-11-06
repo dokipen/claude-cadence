@@ -35,12 +35,15 @@ strip_ttyd_block() {
     local file="$1"
     grep -q '^ttyd:' "$file" 2>/dev/null || return 0
     warn "Deprecated 'ttyd:' block (e.g. ttyd.advertise_address) found in $file; removing it so terminal connections use the hub relay. Backup: $file.bak"
-    cp "$file" "$file.bak"
+    cp -p "$file" "$file.bak"
+    # Only indented lines belong to the block; a column-0 comment or blank line
+    # ends it. Write back in place (cat >) to preserve the file's mode/owner.
     awk '
         /^ttyd:/ { skip=1; next }
-        skip && /^([[:space:]]|#|$)/ { next }
+        skip && /^[[:space:]]+[^[:space:]]/ { next }
+        skip && /^[[:space:]]*$/ { next }
         { skip=0; print }
-    ' "$file.bak" > "$file.tmp" && mv "$file.tmp" "$file"
+    ' "$file.bak" > "$file.tmp" && cat "$file.tmp" > "$file" && rm -f "$file.tmp"
 }
 
 error() { printf "\033[1;31mError:\033[0m %s\n" "$1" >&2; exit 1; }
