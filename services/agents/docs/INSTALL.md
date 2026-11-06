@@ -424,10 +424,15 @@ longer than `stale_session_ttl`.
 **Restarting agentd terminates all live sessions.** Agent processes are children
 of the daemon's PTYs, so they die when agentd exits (`systemctl restart`,
 `launchctl kickstart -k`, `deploy.sh`, `install.sh`). On startup agentd restores
-persisted session records, but any session whose process is gone is
-auto-destroyed; running sessions are not recovered. `deploy.sh` and `install.sh`
-detect live sessions (from the persisted session files under `session.dir`) and
-refuse to proceed unless `--force` is given. agentd also logs a warning listing
+persisted session records: sessions whose process is gone are marked stopped
+(and later removed by the stale-session cleanup after `stale_session_ttl`), and
+sessions interrupted mid-create are marked as errors. Do not rely on running
+sessions being recovered. `deploy.sh` and `install.sh` detect live sessions
+(from the persisted session files under `session.dir`) and refuse to proceed
+unless `--force` is given. If the probe itself fails (for example ssh or sudo
+errors) they also refuse unless `--force` is given; if `session.dir` is not
+configured they warn and continue. Set `session.dir` to an absolute path:
+`~/` paths cannot be resolved when the service user differs from the invoker. agentd also logs a warning listing
 live sessions when it receives a shutdown signal.
 
 ```yaml

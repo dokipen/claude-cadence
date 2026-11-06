@@ -110,7 +110,8 @@ deploy_remote() {
     # Refuse to kill live sessions unless --force
     info "Checking for live sessions on $HOST..."
     local live status=0
-    live="$(ssh "$HOST" "$(declare -f live_sessions); live_sessions \"$remote_config\" sudo")" || status=$?
+    live="$(printf '%s\nlive_sessions %q sudo\n' "$(declare -f live_sessions)" "$remote_config" | ssh -- "$HOST" bash -s)" || status=$?
+    # ssh exit 255 means the connection itself failed: guard treats it as a probe failure.
     guard_live_sessions "$FORCE" "$HOST" "$live" "$status"
 
     # Stop service
