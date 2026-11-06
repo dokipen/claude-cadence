@@ -26,6 +26,8 @@
 
 ## Migrating from the user unit
 
-Re-run `./install.sh`. It detects `~/.config/systemd/user/com.claude-cadence.issues.service`, runs `systemctl --user disable --now` on it (without `compose down`), removes the file, reloads the user manager, and then installs and enables the system unit. `./install.sh uninstall` also cleans up a leftover legacy unit.
+Re-run `./install.sh`. It detects `~/.config/systemd/user/com.claude-cadence.issues.service`, runs `systemctl --user disable` on it (deliberately without `--now`, since the old unit's `ExecStop` is `compose stop`), removes the file, reloads the user manager, and then installs and enables the system unit. The new unit's `up -d --force-recreate` recreates the container, so expect a brief restart during migration; it is not zero-downtime.
+
+Run `./install.sh` as your normal user, not as root and not via `sudo ./install.sh`; the script refuses to run as root and calls `sudo` itself only where needed. The service runs as that user, who must be in the `docker` group. The checkout and `.env` must not be writable by other users, since the unit executes from them and `.env` holds `JWT_SECRET`. `./install.sh uninstall` also cleans up a leftover legacy unit.
 
 The `loginctl enable-linger` mitigation is superseded. After migrating you can disable it: `loginctl disable-linger <user>`.

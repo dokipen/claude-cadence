@@ -5,6 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVICE_NAME="com.claude-cadence.issues"
 COMPOSE_FILE="$SCRIPT_DIR/docker-compose.yml"
 ENV_FILE="$SCRIPT_DIR/.env"
+# Resolved from the invoking user's PATH and baked into the unit (which runs as
+# that same user), so it carries no more privilege than the user already has.
 DOCKER_BIN="$(command -v docker 2>/dev/null || echo "/usr/bin/docker")"
 
 # --- Helpers ---
@@ -148,14 +150,38 @@ as_root() {
   fi
 }
 
-# Remove the legacy `systemd --user` unit (if any) without tearing down the stack.
+# Refuse to run as root: the unit must run as the invoking non-root user, and
+# the script elevates itself (via sudo) only for the steps that need it.
+ensure_not_root() {
+  if [ "$(id -u)" -eq 0 ]; then
+    if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+      err "do not run 'sudo ./install.sh'. Run it as your normal user ($SUDO_USER); the script uses sudo only where needed."
+    fi
+    err "do not run this script as root. Run it as your normal user; the script uses sudo only where needed."
+  fi
+}
+
+# Reject values that would break (or inject into) the generated unit file.
+# Characters rejected: double quote, newline, %, $, backslash.
+reject_unsafe_unit_value() {
+  local name="$1" value="$2"
+  case "$value" in
+    *\"*|*$'\n'*|*%*|*\$*|*\\*)
+      err "$name contains an unsupported character (one of: double quote, newline, %, \$, backslash): $value" ;;
+  esac
+}
+
+# Remove the legacy `systemd --user` unit (if any). Does NOT stop containers:
+# the old unit's ExecStop is `compose stop`, so `disable --now` would stop them.
+# The new unit's `up -d --force-recreate` recreates the container (brief restart).
 systemd_migrate_legacy() {
   local legacy
   legacy=$(systemd_legacy_unit_path)
   if [ -f "$legacy" ]; then
     log "Migrating legacy systemd user unit to a system unit..."
-    # Never run compose down here: the containers keep running.
-    systemctl --user disable --now "$SERVICE_NAME" 2>/dev/null || true
+    # No --now: disabling only removes the enablement symlinks and does not
+    # run the old unit's ExecStop (`compose stop`).
+    systemctl --user disable "$SERVICE_NAME" 2>/dev/null || true
     rm -f "$legacy"
     systemctl --user daemon-reload 2>/dev/null || true
     log "Legacy user unit removed. 'loginctl enable-linger' is no longer needed."
@@ -165,10 +191,18 @@ systemd_migrate_legacy() {
 systemd_install() {
   local unit run_user run_group run_home
   unit=$(systemd_unit_path)
-  run_user="${SUDO_USER:-$(id -un)}"
+  ensure_not_root
+  run_user=$(id -un)
+  [[ "$run_user" =~ ^[a-z_][a-z0-9_-]*\$ ]] || err "unsupported user name: $run_user"
+  id -u "$run_user" >/dev/null 2>&1 || err "cannot resolve user: $run_user"
   run_group=$(id -gn "$run_user")
-  run_home=$(getent passwd "$run_user" | cut -d: -f6)
-  [ -n "$run_home" ] || run_home="$HOME"
+  run_home="$HOME"
+
+  reject_unsafe_unit_value SCRIPT_DIR "$SCRIPT_DIR"
+  reject_unsafe_unit_value DOCKER_BIN "$DOCKER_BIN"
+  reject_unsafe_unit_value ENV_FILE "$ENV_FILE"
+  reject_unsafe_unit_value COMPOSE_FILE "$COMPOSE_FILE"
+  reject_unsafe_unit_value run_home "$run_home"
 
   systemd_migrate_legacy
 
@@ -184,7 +218,7 @@ Type=oneshot
 RemainAfterExit=yes
 User=${run_user}
 Group=${run_group}
-Environment=HOME=${run_home}
+Environment="HOME=${run_home}"
 WorkingDirectory="${SCRIPT_DIR}"
 ExecStart="${DOCKER_BIN}" compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --force-recreate --wait
 # Stopping the unit must NOT tear down the stack. The container uses
@@ -207,12 +241,14 @@ UNIT
 systemd_uninstall() {
   local unit
   unit=$(systemd_unit_path)
+  ensure_not_root
   systemd_migrate_legacy
   if [ -f "$unit" ]; then
     as_root systemctl disable --now "$SERVICE_NAME" 2>/dev/null || true
     as_root rm -f "$unit"
     as_root systemctl daemon-reload
-    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" down 2>/dev/null || true
+    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" down \
+      || log "Warning: 'docker compose down' failed; containers may still be running"
     log "systemd service uninstalled"
   else
     log "Service not installed"
@@ -278,6 +314,10 @@ Usage: $(basename "$0") [install|uninstall|status]
 
 Manage the Claude Cadence issues microservice.
 
+Run as your normal user, NOT as root and NOT via 'sudo ./install.sh'. On Linux
+the script invokes sudo itself only for the steps that need it, and the
+service runs as the invoking user (who must be in the docker group).
+
 Commands:
   install     Install and start the service (default)
   uninstall   Stop and remove the service and tear down the stack
@@ -288,7 +328,8 @@ The install command:
   - Builds and starts the Docker Compose stack
   - Registers a launchd user agent (macOS, starts on login) or a system-level
     systemd unit (Linux, starts at boot; requires sudo)
-  - Migrates any legacy 'systemd --user' unit to the system unit
+  - Migrates any legacy 'systemd --user' unit to the system unit (the
+    container is recreated, so expect a brief restart)
   - Installs the issues CLI to ~/.local
 EOF
 }
