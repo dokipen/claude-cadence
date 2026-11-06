@@ -14,8 +14,11 @@ The netdev collector reads `/proc/net/dev`, and `/proc/net` is `/proc/self/net`
 does not change that, so a bridged exporter only sees its own container NIC
 (`eth0`/`lo`). Host networking exposes the real host interfaces (e.g. `enp3s0`).
 `pid: host` is also set. Port 9100 binds directly on the host; Prometheus scrapes
-`host.docker.internal:9100` (via `extra_hosts: host-gateway`). Firewall 9100 from
-untrusted networks, since it is no longer limited to the compose network.
+`host.docker.internal:9100` (via `extra_hosts: host-gateway`). Requires Docker 20.10+ for `host-gateway`. Firewall 9100 from
+untrusted networks (it is no longer limited to the compose network), but allow
+the compose bridge subnet to reach it, or the `node` target will be DOWN under a
+default-deny INPUT policy. veth/bridge devices are excluded from netdev metrics.
+Set `GRAFANA_ADMIN_PASSWORD` in the environment (default `admin`).
 
 ## Verify
 
