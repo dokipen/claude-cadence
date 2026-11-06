@@ -1,0 +1,44 @@
+{
+  "uid": "host-bandwidth",
+  "title": "Host Bandwidth",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-24h", "to": "now" },
+  "refresh": "1m",
+  "templating": {
+    "list": [
+      {
+        "name": "device",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(node_network_transmit_bytes_total, device)",
+        "current": { "text": "enp3s0", "value": "enp3s0" },
+        "refresh": 2
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Host TX bandwidth ($device)",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "Bps" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "rate(node_network_transmit_bytes_total{device=\"$device\"}[5m])", "legendFormat": "TX {{device}}" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Host RX bandwidth ($device)",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "Bps" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "rate(node_network_receive_bytes_total{device=\"$device\"}[5m])", "legendFormat": "RX {{device}}" }
+      ]
+    }
+  ]
+}
