@@ -954,6 +954,55 @@ func TestAgentCount(t *testing.T) {
 	}
 }
 
+// TestRegister_OfflineEntryAllowsChangedAdvertiseAddress verifies that an
+// offline cached entry does not block re-registration with a new
+// AdvertiseAddress (hijack protection only applies to online entries).
+func TestRegister_OfflineEntryAllowsChangedAdvertiseAddress(t *testing.T) {
+	h, url := startTestHub(t)
+	t.Cleanup(func() {
+		h.mu.Lock()
+		for name, a := range h.agents {
+			if a.Conn() == nil {
+				delete(h.agents, name)
+			}
+		}
+		h.mu.Unlock()
+	})
+
+	connectAgent(t, url, "agent-off")
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, ok := h.Get("agent-off"); ok {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, ok := h.Get("agent-off"); !ok {
+		t.Fatal("agent-off did not register in time")
+	}
+
+	h.mu.Lock()
+	h.agents["agent-off"].TtydConfig = TtydInfo{AdvertiseAddress: "10.0.0.1", BasePort: 7681}
+	h.mu.Unlock()
+	h.MarkOffline("agent-off")
+
+	_, err := h.Register("agent-off", nil, &RegisterParams{
+		Name:     "agent-off",
+		Profiles: map[string]ProfileInfo{},
+		Ttyd:     TtydInfo{AdvertiseAddress: "", BasePort: 7681},
+	})
+	if err != nil {
+		t.Fatalf("expected offline entry to be replaced, got: %v", err)
+	}
+	agent, ok := h.Get("agent-off")
+	if !ok {
+		t.Fatal("agent-off missing after re-registration")
+	}
+	if agent.TtydConfig.AdvertiseAddress != "" {
+		t.Errorf("AdvertiseAddress = %q, want empty", agent.TtydConfig.AdvertiseAddress)
+	}
+}
+
 // TestRegister_RejectChangedAdvertiseAddress verifies that Hub.Register rejects
 // re-registration when the AdvertiseAddress differs from the original.
 // The first agent is registered via a real WebSocket connection (using

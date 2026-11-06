@@ -743,6 +743,8 @@ func handleAgentWebSocket(h *hub.Hub, agentToken string) http.HandlerFunc {
 			msg := "registration rejected"
 			if errors.Is(regErr, hub.ErrMaxAgentConnections) {
 				msg = "registration rejected: hub at maximum agent connections"
+			} else if errors.Is(regErr, hub.ErrAdvertiseAddressChanged) {
+				msg = "registration rejected: advertise address changed while agent name is held by an online connection"
 			}
 			resp = hub.NewErrorResponse(req.ID, hub.RPCErrFailedPrecondition, msg)
 		} else {
