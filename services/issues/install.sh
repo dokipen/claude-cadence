@@ -193,7 +193,7 @@ systemd_install() {
   unit=$(systemd_unit_path)
   ensure_not_root
   run_user=$(id -un)
-  [[ "$run_user" =~ ^[a-z_][a-z0-9_-]*\$ ]] || err "unsupported user name: $run_user"
+  [[ "$run_user" =~ ^[a-z_][a-z0-9_-]*$ ]] || err "unsupported user name: $run_user"
   id -u "$run_user" >/dev/null 2>&1 || err "cannot resolve user: $run_user"
   run_group=$(id -gn "$run_user")
   run_home="$HOME"
@@ -219,7 +219,7 @@ RemainAfterExit=yes
 User=${run_user}
 Group=${run_group}
 Environment="HOME=${run_home}"
-WorkingDirectory="${SCRIPT_DIR}"
+WorkingDirectory=${SCRIPT_DIR}
 ExecStart="${DOCKER_BIN}" compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --force-recreate --wait
 # Stopping the unit must NOT tear down the stack. The container uses
 # restart: unless-stopped; explicit teardown is only done by './install.sh uninstall'.
