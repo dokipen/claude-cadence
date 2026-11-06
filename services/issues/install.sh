@@ -162,13 +162,17 @@ ensure_not_root() {
 }
 
 # Reject values that would break (or inject into) the generated unit file.
-# Characters rejected: double quote, newline, %, $, backslash.
+# Characters rejected: double quote, %, $, backslash, and all control characters
+# (newline, CR, tab, ...).
 reject_unsafe_unit_value() {
   local name="$1" value="$2"
   case "$value" in
     *\"*|*$'\n'*|*%*|*\$*|*\\*)
       err "$name contains an unsupported character (one of: double quote, newline, %, \$, backslash): $value" ;;
   esac
+  if [[ "$value" =~ [[:cntrl:]] ]]; then
+    err "$name contains an unsupported control character: $value"
+  fi
 }
 
 # Remove the legacy `systemd --user` unit (if any). Does NOT stop containers:
@@ -193,7 +197,7 @@ systemd_install() {
   unit=$(systemd_unit_path)
   ensure_not_root
   run_user=$(id -un)
-  [[ "$run_user" =~ ^[a-z_][a-z0-9_-]*\$ ]] || err "unsupported user name: $run_user"
+  [[ "$run_user" =~ ^[a-z_][a-z0-9_-]*$ ]] || err "unsupported user name: $run_user (only lowercase letters, digits, _ and - are supported)"
   id -u "$run_user" >/dev/null 2>&1 || err "cannot resolve user: $run_user"
   run_group=$(id -gn "$run_user")
   run_home="$HOME"
@@ -203,6 +207,7 @@ systemd_install() {
   reject_unsafe_unit_value ENV_FILE "$ENV_FILE"
   reject_unsafe_unit_value COMPOSE_FILE "$COMPOSE_FILE"
   reject_unsafe_unit_value run_home "$run_home"
+  reject_unsafe_unit_value run_group "$run_group"
 
   systemd_migrate_legacy
 
@@ -219,7 +224,7 @@ RemainAfterExit=yes
 User=${run_user}
 Group=${run_group}
 Environment="HOME=${run_home}"
-WorkingDirectory="${SCRIPT_DIR}"
+WorkingDirectory=${SCRIPT_DIR}
 ExecStart="${DOCKER_BIN}" compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --force-recreate --wait
 # Stopping the unit must NOT tear down the stack. The container uses
 # restart: unless-stopped; explicit teardown is only done by './install.sh uninstall'.
@@ -270,39 +275,53 @@ systemd_status() {
 
 # --- CLI installation ---
 
+# Each step is checked explicitly: 'set -e' is ignored inside an 'if !' context.
+install_cli_steps() {
+  local cli_dir="$1" prefix="$2"
+  mkdir -p "$prefix/lib" "$prefix/bin" || return 1
+  cd "$cli_dir" || return 1
+  npm install || return 1
+  npm run build || return 1
+  npm install -g . --prefix "$prefix" || return 1
+}
+
 install_cli() {
   local cli_dir="$SCRIPT_DIR/../issues-cli"
-  if [ -d "$cli_dir" ]; then
-    log "Installing issues CLI..."
-    (cd "$cli_dir" && npm install && npm run build)
-    # Install to a user-local prefix to avoid privilege escalation.
-    local prefix="$HOME/.local"
-    mkdir -p "$prefix/lib"
-    (cd "$cli_dir" && npm link --prefix "$prefix") \
-      || err "npm link --prefix \"$prefix\" failed in $cli_dir"
-    if [[ ":$PATH:" != *":$prefix/bin:"* ]]; then
-      log ""
-      log "Add $prefix/bin to your PATH so the 'issues' command is available:"
-      case "$(basename "$SHELL")" in
-        bash) log "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc" ;;
-        zsh)  log "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc" ;;
-        *)    log "  Add \$HOME/.local/bin to your shell's PATH configuration" ;;
-      esac
-      log ""
-    fi
-    log "CLI installed. Run 'issues --help' to verify."
-  else
+  if [ ! -d "$cli_dir" ]; then
     log "Warning: issues-cli directory not found at $cli_dir, skipping CLI install"
+    return 0
   fi
+  log "Installing issues CLI..."
+  # Install to a user-local prefix to avoid privilege escalation.
+  local prefix="$HOME/.local"
+  # 'npm link --prefix' breaks on npm 11.x (treats --prefix as the project dir),
+  # so install the built package globally from its directory instead.
+  if ! install_cli_steps "$cli_dir" "$prefix"; then
+    log "Warning: CLI install failed; the service install will continue."
+    log "Install it later with: (cd \"$cli_dir\" && npm install && npm run build && npm install -g . --prefix \"$prefix\")"
+    return 0
+  fi
+  if [[ ":$PATH:" != *":$prefix/bin:"* ]]; then
+    log ""
+    log "Add $prefix/bin to your PATH so the 'issues' command is available:"
+    case "$(basename "$SHELL")" in
+      bash) log "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc" ;;
+      zsh)  log "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc" ;;
+      *)    log "  Add \$HOME/.local/bin to your shell's PATH configuration" ;;
+    esac
+    log ""
+  fi
+  log "CLI installed. Run 'issues --help' to verify."
 }
 
 uninstall_cli() {
   local cli_dir="$SCRIPT_DIR/../issues-cli"
   if [ -d "$cli_dir" ]; then
-    log "Unlinking issues CLI..."
+    log "Uninstalling issues CLI..."
     local prefix="$HOME/.local"
+    npm uninstall -g @claude-cadence/issues-cli --prefix "$prefix" || true
     rm -f "$prefix/bin/issues"
-    log "CLI unlinked"
+    log "CLI uninstalled"
   fi
 }
 
@@ -340,6 +359,7 @@ case "$cmd" in
   install)
     ensure_docker
     ensure_env
+    ensure_not_root
     install_cli
     build_image
     os=$(detect_os)
