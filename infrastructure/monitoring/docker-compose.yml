@@ -1,0 +1,56 @@
+# Monitoring stack (compose project: monitoring).
+#
+# node-exporter runs with network_mode: host so the netdev collector reads the
+# HOST's /proc/net/dev (enp3s0, etc.). /proc/net is /proc/self/net, i.e. the
+# netns of the reading process, so bind-mounting the host /proc is not enough.
+# With host networking the exporter binds :9100 on the host directly, so there
+# is no `ports:` mapping and Prometheus scrapes it via host.docker.internal.
+
+services:
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: node-exporter
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro,rslave
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: prometheus
+    restart: unless-stopped
+    networks: [monitoring]
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: grafana
+    restart: unless-stopped
+    networks: [monitoring]
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+
+networks:
+  monitoring:
+
+volumes:
+  prometheus-data:
+  grafana-data:

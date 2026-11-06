@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # node-exporter uses host networking, so it is reached through the host
+  # gateway (see extra_hosts on the prometheus service), not a compose service name.
+  - job_name: node
+    static_configs:
+      - targets: ["host.docker.internal:9100"]
