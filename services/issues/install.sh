@@ -272,28 +272,38 @@ systemd_status() {
 
 install_cli() {
   local cli_dir="$SCRIPT_DIR/../issues-cli"
-  if [ -d "$cli_dir" ]; then
-    log "Installing issues CLI..."
-    (cd "$cli_dir" && npm install && npm run build)
-    # Install to a user-local prefix to avoid privilege escalation.
-    local prefix="$HOME/.local"
-    mkdir -p "$prefix/lib"
-    (cd "$cli_dir" && npm link --prefix "$prefix") \
-      || err "npm link --prefix \"$prefix\" failed in $cli_dir"
-    if [[ ":$PATH:" != *":$prefix/bin:"* ]]; then
-      log ""
-      log "Add $prefix/bin to your PATH so the 'issues' command is available:"
-      case "$(basename "$SHELL")" in
-        bash) log "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc" ;;
-        zsh)  log "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc" ;;
-        *)    log "  Add \$HOME/.local/bin to your shell's PATH configuration" ;;
-      esac
-      log ""
-    fi
-    log "CLI installed. Run 'issues --help' to verify."
-  else
+  if [ ! -d "$cli_dir" ]; then
     log "Warning: issues-cli directory not found at $cli_dir, skipping CLI install"
+    return 0
   fi
+  log "Installing issues CLI..."
+  # Install to a user-local prefix to avoid privilege escalation.
+  local prefix="$HOME/.local"
+  # 'npm link --prefix' breaks on npm 11.x (treats --prefix as the project dir),
+  # so install the built package globally from its directory instead.
+  if ! (
+    set -e
+    mkdir -p "$prefix/lib" "$prefix/bin"
+    cd "$cli_dir"
+    npm install
+    npm run build
+    npm install -g . --prefix "$prefix"
+  ); then
+    log "Warning: CLI install failed; the service install will continue."
+    log "Install it later with: (cd \"$cli_dir\" && npm install && npm run build && npm install -g . --prefix \"$prefix\")"
+    return 0
+  fi
+  if [[ ":$PATH:" != *":$prefix/bin:"* ]]; then
+    log ""
+    log "Add $prefix/bin to your PATH so the 'issues' command is available:"
+    case "$(basename "$SHELL")" in
+      bash) log "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc" ;;
+      zsh)  log "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc" ;;
+      *)    log "  Add \$HOME/.local/bin to your shell's PATH configuration" ;;
+    esac
+    log ""
+  fi
+  log "CLI installed. Run 'issues --help' to verify."
 }
 
 uninstall_cli() {
