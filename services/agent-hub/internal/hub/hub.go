@@ -180,21 +180,29 @@ func (h *Hub) OnlineAgentCount() int {
 }
 
 // Register adds or re-registers an agent. If an agent with the same name
-// already exists, the old connection is closed and replaced — but only if
-// the AdvertiseAddress has not changed. A changed AdvertiseAddress is
-// rejected with ErrAdvertiseAddressChanged.
+// already exists, the old connection is closed and replaced. If the existing
+// entry is online, a changed AdvertiseAddress is rejected with
+// ErrAdvertiseAddressChanged; an offline entry is replaced regardless.
 func (h *Hub) Register(name string, conn *websocket.Conn, params *RegisterParams) (*ConnectedAgent, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	existing, exists := h.agents[name]
 	if exists && params.Ttyd.AdvertiseAddress != existing.TtydConfig.AdvertiseAddress {
-		slog.Warn("rejecting re-registration: AdvertiseAddress changed",
+		if existing.Status() == StatusOnline {
+			slog.Warn("rejecting re-registration: AdvertiseAddress changed",
+				"agent", name,
+				"existing", existing.TtydConfig.AdvertiseAddress,
+				"requested", params.Ttyd.AdvertiseAddress,
+			)
+			return nil, ErrAdvertiseAddressChanged
+		}
+		// An offline entry serves nothing, so the hijack guard does not apply.
+		slog.Info("AdvertiseAddress changed on reconnect; replacing offline entry",
 			"agent", name,
 			"existing", existing.TtydConfig.AdvertiseAddress,
 			"requested", params.Ttyd.AdvertiseAddress,
 		)
-		return nil, ErrAdvertiseAddressChanged
 	}
 
 	// Replacing an online agent leaves the online count unchanged, so only
