@@ -162,13 +162,17 @@ ensure_not_root() {
 }
 
 # Reject values that would break (or inject into) the generated unit file.
-# Characters rejected: double quote, newline, %, $, backslash.
+# Characters rejected: double quote, %, $, backslash, and all control characters
+# (newline, CR, tab, ...).
 reject_unsafe_unit_value() {
   local name="$1" value="$2"
   case "$value" in
     *\"*|*$'\n'*|*%*|*\$*|*\\*)
       err "$name contains an unsupported character (one of: double quote, newline, %, \$, backslash): $value" ;;
   esac
+  if [[ "$value" =~ [[:cntrl:]] ]]; then
+    err "$name contains an unsupported control character: $value"
+  fi
 }
 
 # Remove the legacy `systemd --user` unit (if any). Does NOT stop containers:
@@ -193,7 +197,7 @@ systemd_install() {
   unit=$(systemd_unit_path)
   ensure_not_root
   run_user=$(id -un)
-  [[ "$run_user" =~ ^[a-z_][a-z0-9_-]*$ ]] || err "unsupported user name: $run_user"
+  [[ "$run_user" =~ ^[a-z_][a-z0-9_-]*$ ]] || err "unsupported user name: $run_user (only lowercase letters, digits, _ and - are supported)"
   id -u "$run_user" >/dev/null 2>&1 || err "cannot resolve user: $run_user"
   run_group=$(id -gn "$run_user")
   run_home="$HOME"
@@ -203,6 +207,7 @@ systemd_install() {
   reject_unsafe_unit_value ENV_FILE "$ENV_FILE"
   reject_unsafe_unit_value COMPOSE_FILE "$COMPOSE_FILE"
   reject_unsafe_unit_value run_home "$run_home"
+  reject_unsafe_unit_value run_group "$run_group"
 
   systemd_migrate_legacy
 
@@ -270,6 +275,16 @@ systemd_status() {
 
 # --- CLI installation ---
 
+# Each step is checked explicitly: 'set -e' is ignored inside an 'if !' context.
+install_cli_steps() {
+  local cli_dir="$1" prefix="$2"
+  mkdir -p "$prefix/lib" "$prefix/bin" || return 1
+  cd "$cli_dir" || return 1
+  npm install || return 1
+  npm run build || return 1
+  npm install -g . --prefix "$prefix" || return 1
+}
+
 install_cli() {
   local cli_dir="$SCRIPT_DIR/../issues-cli"
   if [ ! -d "$cli_dir" ]; then
@@ -281,14 +296,7 @@ install_cli() {
   local prefix="$HOME/.local"
   # 'npm link --prefix' breaks on npm 11.x (treats --prefix as the project dir),
   # so install the built package globally from its directory instead.
-  if ! (
-    set -e
-    mkdir -p "$prefix/lib" "$prefix/bin"
-    cd "$cli_dir"
-    npm install
-    npm run build
-    npm install -g . --prefix "$prefix"
-  ); then
+  if ! install_cli_steps "$cli_dir" "$prefix"; then
     log "Warning: CLI install failed; the service install will continue."
     log "Install it later with: (cd \"$cli_dir\" && npm install && npm run build && npm install -g . --prefix \"$prefix\")"
     return 0
@@ -309,10 +317,11 @@ install_cli() {
 uninstall_cli() {
   local cli_dir="$SCRIPT_DIR/../issues-cli"
   if [ -d "$cli_dir" ]; then
-    log "Unlinking issues CLI..."
+    log "Uninstalling issues CLI..."
     local prefix="$HOME/.local"
+    npm uninstall -g @claude-cadence/issues-cli --prefix "$prefix" || true
     rm -f "$prefix/bin/issues"
-    log "CLI unlinked"
+    log "CLI uninstalled"
   fi
 }
 
@@ -350,6 +359,7 @@ case "$cmd" in
   install)
     ensure_docker
     ensure_env
+    ensure_not_root
     install_cli
     build_image
     os=$(detect_os)
