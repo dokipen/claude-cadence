@@ -391,11 +391,19 @@ func (m *Manager) Create(req CreateRequest) (*Session, error) {
 
 	slog.Debug("session command running", "session", sessionID, "name", req.SessionName, "pid", pid)
 
-	_ = m.store.Transition(sessionID, StateRunning, func(s *Session) {
+	if err := m.store.Transition(sessionID, StateRunning, func(s *Session) {
 		s.AgentPID = pid
 		s.WebsocketURL = ""
 		s.PTYSlavePath = ptySlavePath
-	})
+	}); err != nil {
+		// Something else (Destroy, Cleaner) took ownership of the session; it
+		// is responsible for store cleanup. Never return a nil-error stopped
+		// session while the PTY process is alive.
+		slog.Error("create: failed to transition session to running",
+			"id", sessionID, "name", req.SessionName, "pid", pid, "error", err)
+		_ = m.pty.Destroy(sessionID)
+		return nil, &Error{Code: ErrInternal, Message: fmt.Sprintf("session %s failed to reach running state: %v", sessionID, err)}
+	}
 
 	sess, getErr := m.mustGet(sessionID)
 	if getErr != nil {
@@ -492,6 +500,15 @@ func (m *Manager) SetWorktreePath(id, path string) error {
 
 func (m *Manager) reconcile(sess *Session) {
 	if sess.State != StateRunning && sess.State != StateCreating {
+		return
+	}
+
+	// A StateCreating session with no PID yet is exclusively owned by the
+	// in-flight Create goroutine (it has not reached pty.Create). Reconciling
+	// it would move it to StateStopped and make Create's Creating -> Running
+	// transition fail. Stuck creates are handled by the Cleaner via
+	// creating_session_ttl.
+	if sess.State == StateCreating && sess.AgentPID == 0 {
 		return
 	}
 

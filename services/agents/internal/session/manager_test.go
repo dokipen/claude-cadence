@@ -9,8 +9,10 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/dokipen/claude-cadence/services/agents/internal/config"
+	"github.com/dokipen/claude-cadence/services/agents/internal/pty"
 	"github.com/dokipen/claude-cadence/services/agents/internal/vault"
 )
 
@@ -855,5 +857,311 @@ func TestCreate_VaultNullByteValueSkipped(t *testing.T) {
 
 	if gotInvalidArg {
 		t.Error("vault value with null byte should be skipped with a warning, not rejected with ErrInvalidArgument")
+	}
+}
+
+// addInFlightCreatingSession registers a session exactly as Manager.Create()
+// does after store.TryAdd and before pty.Create: StateCreating with no
+// AgentPID, no PTY handle and no PTYSlavePath. The Create goroutine exclusively
+// owns such a session until it transitions it to running/error/stopped.
+func addInFlightCreatingSession(t *testing.T, m *Manager, id string) {
+	t.Helper()
+	if err := m.store.TryAdd(&Session{
+		ID:           id,
+		Name:         id,
+		AgentProfile: "default",
+		ProfileType:  "agent",
+		State:        StateCreating,
+		CreatedAt:    time.Now(),
+	}, 0); err != nil {
+		t.Fatalf("store.TryAdd(%q): %v", id, err)
+	}
+}
+
+// assertInFlightSessionStillCreating verifies that the in-flight session is
+// still StateCreating in the store and that Create() can still complete its
+// Creating -> Running transition, which is what Create() does after
+// pty.Create returns. op names the Manager method that was just called.
+func assertInFlightSessionStillCreating(t *testing.T, m *Manager, id, op string) {
+	t.Helper()
+	stored, ok := m.store.Get(id)
+	if !ok {
+		t.Fatalf("%s removed in-flight session %q from the store", op, id)
+	}
+	if stored.State != StateCreating {
+		t.Errorf("%s moved in-flight session to %s; Create() can no longer reach running", op, stored.State)
+	}
+	if err := m.store.Transition(id, StateRunning, func(s *Session) {
+		s.AgentPID = 4242
+		s.PTYSlavePath = "/dev/ttys999"
+	}); err != nil {
+		t.Errorf("Create()'s Creating -> Running transition failed after %s: %v", op, err)
+	}
+}
+
+// TestList_DoesNotReapInFlightCreatingSession reproduces #699: Manager.List()
+// reconciles every session, and for a session that Create() has registered as
+// StateCreating but has not yet handed to pty.Create (AgentPID == 0, no PTY),
+// reconcile() sees "no PTY" and moves it Creating -> Stopped. Create() then
+// fails its Creating -> Running transition. The in-flight session belongs to
+// the Create goroutine (and, for stuck creates, the Cleaner's
+// creating_session_ttl); List() must leave it alone.
+func TestList_DoesNotReapInFlightCreatingSession(t *testing.T) {
+	m := newCreateTestManager(nil) // ptyHasSession always returns false
+	const id = "in-flight-list"
+	addInFlightCreatingSession(t, m, id)
+
+	got, err := m.List("")
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("List() returned %d sessions, want 1", len(got))
+	}
+	if got[0].ID != id {
+		t.Fatalf("List() returned session %q, want %q", got[0].ID, id)
+	}
+	if got[0].State != StateCreating {
+		t.Errorf("List() returned in-flight session with state %s, want %s", got[0].State, StateCreating)
+	}
+
+	assertInFlightSessionStillCreating(t, m, id, "List()")
+}
+
+// TestGet_DoesNotReapInFlightCreatingSession is the Manager.Get() sibling of
+// TestList_DoesNotReapInFlightCreatingSession (#699).
+func TestGet_DoesNotReapInFlightCreatingSession(t *testing.T) {
+	m := newCreateTestManager(nil) // ptyHasSession always returns false
+	const id = "in-flight-get"
+	addInFlightCreatingSession(t, m, id)
+
+	got, err := m.Get(id)
+	if err != nil {
+		t.Fatalf("Get() error: %v", err)
+	}
+	if got.State != StateCreating {
+		t.Errorf("Get() returned in-flight session with state %s, want %s", got.State, StateCreating)
+	}
+
+	assertInFlightSessionStillCreating(t, m, id, "Get()")
+}
+
+// TestDestroy_ForceDestroysInFlightCreatingSession is a guard for the #699 fix
+// rather than a reproduction: a force Destroy of an in-flight creating session
+// must still succeed (Creating -> Destroying is a valid edge) and tear down the
+// PTY, even once reconcile() stops touching in-flight sessions. It passes both
+// before and after the fix.
+func TestDestroy_ForceDestroysInFlightCreatingSession(t *testing.T) {
+	m := newCreateTestManager(nil)
+	const id = "in-flight-destroy"
+	addInFlightCreatingSession(t, m, id)
+
+	var destroyed []string
+	m.ptyDestroy = func(id string) error {
+		destroyed = append(destroyed, id)
+		return nil
+	}
+
+	if err := m.Destroy(id, true /*force*/); err != nil {
+		t.Fatalf("Destroy(force=true) of in-flight creating session: %v", err)
+	}
+	if _, ok := m.store.Get(id); ok {
+		t.Error("session still in the store after Destroy(force=true)")
+	}
+	if len(destroyed) != 1 || destroyed[0] != id {
+		t.Errorf("ptyDestroy calls = %v, want exactly [%q]", destroyed, id)
+	}
+}
+
+// stalledVaultHTTPServer is like fakeVaultHTTPServer, but the secret handler
+// blocks until release is called, holding the caller of vault.GetSecret (and so
+// Manager.Create(), between store.TryAdd and pty.Create) in StateCreating.
+//
+// entered is closed the first time the secret handler is reached. release is
+// idempotent and is also registered as a cleanup that runs before the server
+// is closed, so the handler can never keep the server (or the test) from
+// shutting down. A handler whose client has gone away is released as well.
+func stalledVaultHTTPServer(t *testing.T, secretPath string, data map[string]interface{}) (srv *httptest.Server, entered <-chan struct{}, release func()) {
+	t.Helper()
+	enteredCh := make(chan struct{})
+	gate := make(chan struct{})
+	var enterOnce, releaseOnce sync.Once
+
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/v1/")
+		if trimmed != secretPath {
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, `{"errors":["not found"]}`)
+			return
+		}
+		enterOnce.Do(func() { close(enteredCh) })
+		select {
+		case <-gate:
+		case <-r.Context().Done():
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": map[string]interface{}{"data": data},
+		})
+	}))
+	release = func() { releaseOnce.Do(func() { close(gate) }) }
+
+	// Cleanups run LIFO: registering Close first means release runs before it.
+	t.Cleanup(srv.Close)
+	t.Cleanup(release)
+	return srv, enteredCh, release
+}
+
+// TestCreate_ListDuringCreateLeavesSessionRunning is the end-to-end
+// reproduction of #699. Create() is held in StateCreating (after store.TryAdd,
+// before pty.Create) by a stalled Vault fetch; a List() call - the hub's
+// 10-second listSessions poll - lands in that window; Vault is then released.
+// Create() must still return a running session carrying the real AgentPID and
+// PTYSlavePath instead of a nil-error "stopped" session with AgentPID == 0
+// whose PTY process is alive.
+func TestCreate_ListDuringCreateLeavesSessionRunning(t *testing.T) {
+	const (
+		secretPath  = "secret/data/test"
+		waitTimeout = 10 * time.Second
+	)
+	srv, vaultEntered, releaseVault := stalledVaultHTTPServer(t, secretPath, map[string]interface{}{
+		"some_key": "some-value",
+	})
+
+	vaultClient, err := vault.NewClient(&config.VaultConfig{
+		Address:    srv.URL,
+		AuthMethod: "token",
+		Token:      "unused",
+	})
+	if err != nil {
+		t.Fatalf("vault.NewClient: %v", err)
+	}
+
+	ptyMgr := pty.NewPTYManager(pty.PTYConfig{})
+	store := NewStore()
+	profiles := map[string]config.Profile{
+		"stalled-vault": {
+			// exec so the PTY child is the sleep itself and Destroy's kill
+			// cannot orphan a bash-forked sleep.
+			Command:     "exec sleep 3600",
+			VaultSecret: secretPath,
+		},
+	}
+	m := NewManager(store, ptyMgr, nil, vaultClient, profiles, 0)
+
+	type createResult struct {
+		sess *Session
+		err  error
+	}
+	resultCh := make(chan createResult, 1)
+	createDone := make(chan struct{})
+
+	// Registered after stalledVaultHTTPServer's cleanups, so it runs first:
+	// unblock Vault, let any in-flight Create() finish (so it cannot start a
+	// PTY after the teardown below), then kill every PTY process we started.
+	t.Cleanup(func() {
+		releaseVault()
+		select {
+		case <-createDone:
+		case <-time.After(waitTimeout):
+			t.Errorf("Create() did not return within %v of releasing Vault", waitTimeout)
+		}
+		for _, s := range store.List() {
+			_ = ptyMgr.Destroy(s.ID)
+		}
+	})
+
+	go func() {
+		defer close(createDone)
+		sess, err := m.Create(CreateRequest{
+			AgentProfile: "stalled-vault",
+			SessionName:  "list-during-create",
+		})
+		resultCh <- createResult{sess: sess, err: err}
+	}()
+
+	// Wait until Create() is blocked inside the Vault fetch, i.e. after
+	// store.TryAdd and before pty.Create.
+	select {
+	case <-vaultEntered:
+	case r := <-resultCh:
+		t.Fatalf("Create() returned before reaching the Vault fetch: sess=%+v err=%v", r.sess, r.err)
+	case <-time.After(waitTimeout):
+		t.Fatalf("timed out after %v waiting for Create() to reach the Vault fetch", waitTimeout)
+	}
+
+	// Poll for the session to show up in StateCreating. It is registered before
+	// the Vault request is made, so this should hold immediately.
+	var sessionID string
+	deadline := time.Now().Add(waitTimeout)
+	for {
+		for _, s := range store.List() {
+			if s.State == StateCreating {
+				sessionID = s.ID
+			}
+		}
+		if sessionID != "" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out after %v waiting for a StateCreating session in the store", waitTimeout)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	// The listSessions poll lands while Create() is stalled before pty.Create.
+	listed, err := m.List("")
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	if len(listed) != 1 {
+		t.Fatalf("List() returned %d sessions, want 1", len(listed))
+	}
+	t.Logf("List() during Create() reported session %s as %s", listed[0].ID, listed[0].State)
+
+	releaseVault()
+
+	var res createResult
+	select {
+	case res = <-resultCh:
+	case <-time.After(waitTimeout):
+		t.Fatalf("timed out after %v waiting for Create() to return after releasing Vault", waitTimeout)
+	}
+	if res.err != nil {
+		t.Fatalf("Create() error: %v", res.err)
+	}
+	if res.sess == nil {
+		t.Fatal("Create() returned a nil session and a nil error")
+	}
+	sess := res.sess
+
+	// The PTY manager is the ground truth for whether the process is alive.
+	ptyPID, ptyErr := ptyMgr.PID(sess.ID)
+	ptyAlive := ptyErr == nil && isProcessAlive(ptyPID)
+
+	if sess.State != StateRunning || sess.AgentPID == 0 {
+		if ptyAlive {
+			t.Errorf("Create() returned state=%s agent_pid=%d while PTY process %d is alive", sess.State, sess.AgentPID, ptyPID)
+		} else {
+			t.Errorf("Create() returned state=%s agent_pid=%d (PTY pid=%d, pty error=%v)", sess.State, sess.AgentPID, ptyPID, ptyErr)
+		}
+	}
+	if sess.AgentPID > 0 && !isProcessAlive(sess.AgentPID) {
+		t.Errorf("Create() returned agent_pid=%d but that process is not alive", sess.AgentPID)
+	}
+	if sess.AgentPID > 0 && ptyAlive && sess.AgentPID != ptyPID {
+		t.Errorf("Create() returned agent_pid=%d, want PTY child pid %d", sess.AgentPID, ptyPID)
+	}
+	if sess.PTYSlavePath == "" {
+		t.Error("Create() returned an empty PTYSlavePath")
+	}
+
+	// The store must agree with the returned session.
+	stored, ok := store.Get(sess.ID)
+	if !ok {
+		t.Fatalf("session %q missing from the store after Create()", sess.ID)
+	}
+	if stored.State != StateRunning {
+		t.Errorf("store state after Create() = %s, want %s", stored.State, StateRunning)
 	}
 }
